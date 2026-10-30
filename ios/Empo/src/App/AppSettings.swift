@@ -220,16 +220,15 @@ class AppSettings {
     /// launch only.
     nonisolated static let rubyGameRunnerThisLaunch: GameRunner = {
         let raw = UserDefaults.standard.string(forKey: DefaultsKey.rubyGameRunner) ?? ""
-        return gameProcessIsAvailable ? GameRunner(rawValue: raw) ?? .app : .app
+        return gameProcessIsAvailable && DataDirectory.isInAppGroup ? GameRunner(rawValue: raw) ?? .app : .app
     }()
 
     /// The game process needs a core that cannot kill its session, and
-    /// the games and the saves in the app group folder. A sideload tool
-    /// can remove the extension to save an App ID.
+    /// an app group for the games and the saves. A sideload tool can
+    /// remove the extensions to save App IDs.
     nonisolated static var gameProcessIsAvailable: Bool {
         !GameCores.gameProcessCores.isEmpty
-            && DataDirectory.appGroupURL.map { DataDirectory.documentsRootURL.path.hasPrefix($0.path) }
-                == true
+            && DataDirectory.appGroupURL != nil
             && FileManager.default.fileExists(
                 atPath: Bundle.main.bundleURL.appendingPathComponent("Extensions/GameProcess.appex").path)
     }

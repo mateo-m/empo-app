@@ -39,21 +39,31 @@ enum DataDirectory {
     /// rescue buckets. The base the recovery ledger's `directory`
     /// paths are relative to.
     ///
-    /// The folder that the Files add-on (`FilesProvider`) shows, in the
-    /// app group, because the game process cannot open the app's
-    /// Documents. The system names it "File Provider Storage"
-    /// (`NSFileProviderManager.documentStorageURL`). Documents is the
-    /// fallback for a build that has no app group.
+    /// Documents, until the player turns on the game process. The game
+    /// process cannot open the app's Documents, so the next launch moves
+    /// the data to the folder that the Files add-on (`FilesProvider`)
+    /// shows, in the app group. The system names it "File Provider
+    /// Storage" (`NSFileProviderManager.documentStorageURL`). The data
+    /// never moves back, so the app keeps that folder when it has items.
     static let documentsRootURL: URL = {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         guard let group = appGroupURL else { return documents }
         let storage = group.appendingPathComponent("File Provider Storage", isDirectory: true)
+        let runner = UserDefaults.standard.string(forKey: DefaultsKey.rubyGameRunner)
+        let wantsGameProcess = AppSettings.gameProcessIsAvailable && runner == GameRunner.gameProcess.rawValue
+        let hasData = ((try? FileManager.default.contentsOfDirectory(atPath: storage.path)) ?? [])
+            .contains { !$0.hasPrefix(".") }
+        guard wantsGameProcess || hasData else { return documents }
         guard
             (try? FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)) != nil
         else { return documents }
         moveItems(of: documents, to: storage)
         return storage
     }()
+
+    static var isInAppGroup: Bool {
+        appGroupURL.map { documentsRootURL.path.hasPrefix($0.path) } == true
+    }
 
     static func filesAppURL(for path: String) -> URL? {
         let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
