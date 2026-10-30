@@ -182,6 +182,7 @@ class AppState {
     }
 
     @ObservationIgnored private var quitOnPause = false
+    @ObservationIgnored private var quitTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
 
     /// Pauses the game, so the library comes back the same way, and
@@ -196,6 +197,27 @@ class AppState {
         guard canQuitGame else { return }
         quitOnPause = true
         requestPause()
+        // A Ruby game pauses only between two frames, so a game that
+        // runs a long script never pauses. It then ends without the pause.
+        quitTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, !Task.isCancelled, quitOnPause, phase == .playing else { return }
+            endQuitGame()
+        }
+    }
+
+    private func endQuitGame() {
+        session.note("The player quit the game.")
+        let game = selectedGame
+        // The phase changes first, in the same transaction. A change
+        // made before an animated phase change makes SwiftUI draw
+        // inside the phase's willSet, with `.playing`, and the screen
+        // can keep the game controls after the quit.
+        withAnimation(Motion.snappy) {
+            phase = nil
+            session.killSession(of: game)
+            clearEndedGame()
+        }
     }
 
     private var activeSessionGame: GameEntry? {
@@ -239,17 +261,7 @@ class AppState {
         // A quit can meet a background pause: the app went to the
         // background before the game paused for the quit.
         if quitOnPause {
-            session.note("The player quit the game.")
-            let game = selectedGame
-            // The phase changes first, in the same transaction. A change
-            // made before an animated phase change makes SwiftUI draw
-            // inside the phase's willSet, with `.playing`, and the screen
-            // can keep the game controls after the quit.
-            withAnimation(Motion.snappy) {
-                phase = nil
-                session.killSession(of: game)
-                clearEndedGame()
-            }
+            endQuitGame()
             return
         }
         if EngineState.shared.isBackgroundPause { return }
@@ -361,6 +373,8 @@ extension AppState: EngineSessionCoordinatorDelegate {
 
     private func clearEndedGame() {
         quitOnPause = false
+        quitTask?.cancel()
+        quitTask = nil
         resumeTask?.cancel()
         resumeTask = nil
         selectedGame = nil
