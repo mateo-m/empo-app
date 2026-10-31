@@ -413,14 +413,14 @@ struct GameLibraryView: View {
                 // surface a spinner during archive/root
                 // inspection before any progress card exists.
                 phase: importPipeline.importButtonPhase,
-                collapsedCenter: sensorStripEdge.map { edge in { railSlotCenter(1, edge: edge, in: $0) } },
+                collapsedCenter: hasSensorStrip ? { railSlotCenter(1, in: $0) } : nil,
                 onRequestCancelValidation: { showCancelValidationAlert = true }
             )
         }
     }
 
-    private var sensorStripEdge: HorizontalEdge? {
-        windowInsets.sensorStripEdge(minWidth: AppSize.toolbarButton + 2 * Spacing.xs)
+    private var hasSensorStrip: Bool {
+        windowInsets.sensorStripEdge(minWidth: AppSize.toolbarButton + 2 * Spacing.xs) != nil
     }
 
     private static let railSlotCount = 4
@@ -428,20 +428,17 @@ struct GameLibraryView: View {
     /// Center of a slot in the sensor strip column, in the space of
     /// the overlays on `libraryScene`. That space stops at the strip,
     /// so the strip lies just past its leading or trailing edge.
-    private func railSlotCenter(_ slot: Int, edge: HorizontalEdge, in size: CGSize) -> CGPoint {
-        let pitch = AppSize.toolbarButton + Spacing.md
-        let length = CGFloat(Self.railSlotCount) * pitch - Spacing.md
-        let windowWidth = size.width + windowInsets.leading + windowInsets.trailing
-        let windowHeight = size.height + windowInsets.top + windowInsets.bottom
-        let strip =
-            edge == .trailing
-            ? CGRect(
-                x: windowWidth - windowInsets.trailing, y: 0, width: windowInsets.trailing,
-                height: windowHeight)
-            : CGRect(x: 0, y: 0, width: windowInsets.leading, height: windowHeight)
-        let x = sensorStripColumnX(strip: strip, occluded: AppWindow.occludedRects) - windowInsets.leading
-        let y = (size.height - length + AppSize.toolbarButton) / 2 + CGFloat(slot) * pitch
-        return CGPoint(x: x, y: y)
+    private func railSlotCenter(_ slot: Int, in size: CGSize) -> CGPoint {
+        let window = CGSize(
+            width: size.width + windowInsets.leading + windowInsets.trailing,
+            height: size.height + windowInsets.top + windowInsets.bottom)
+        let column = ControlsZone.toolbarPlacement(
+            safeArea: windowInsets, geoSize: window, occluded: AppWindow.occludedRects,
+            btnSize: AppSize.toolbarButton, gap: Spacing.md, count: CGFloat(Self.railSlotCount))
+        let firstSlotY = column.center.y - column.length / 2 + AppSize.toolbarButton / 2
+        return CGPoint(
+            x: column.center.x - windowInsets.leading,
+            y: firstSlotY + CGFloat(slot) * (AppSize.toolbarButton + Spacing.md) - windowInsets.top)
     }
 
     /// On a sensor strip (iPhone Duo), the header and search bar
@@ -449,18 +446,18 @@ struct GameLibraryView: View {
     /// the import button flies into it.
     @ViewBuilder
     private var sensorStripRail: some View {
-        if let edge = sensorStripEdge {
+        if hasSensorStrip {
             GeometryReader { geo in
                 Group {
                     if !selectionMode {
                         IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
-                            .position(railSlotCenter(0, edge: edge, in: geo.size))
+                            .position(railSlotCenter(0, in: geo.size))
                     }
                     if !library.games.isEmpty {
                         LibrarySortButton(showSortSheet: $showSortSheet)
-                            .position(railSlotCenter(2, edge: edge, in: geo.size))
+                            .position(railSlotCenter(2, in: geo.size))
                         LibraryDisplayModeButton(onToggle: toggleDisplayMode)
-                            .position(railSlotCenter(3, edge: edge, in: geo.size))
+                            .position(railSlotCenter(3, in: geo.size))
                     }
                 }
                 .tint(.primary)
@@ -533,7 +530,7 @@ struct GameLibraryView: View {
                     .font(.body.weight(.semibold))
                     .tint(.brand)
             } else {
-                if sensorStripEdge == nil {
+                if !hasSensorStrip {
                     IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
                 } else {
                     Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
@@ -563,7 +560,7 @@ struct GameLibraryView: View {
         LibrarySearchBar(
             searchText: $searchText,
             showSortSheet: $showSortSheet,
-            showsActions: sensorStripEdge == nil,
+            showsActions: !hasSensorStrip,
             onDisplayModeToggle: toggleDisplayMode
         )
     }
