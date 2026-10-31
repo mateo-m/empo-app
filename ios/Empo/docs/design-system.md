@@ -198,6 +198,8 @@ and the haptics. A sheet over a running game passes `surface: .material`.
 
 - `StandardSheet` fits its content. When the content is taller than the screen, only the
   content scrolls: the title block stays at the top and the `footer` stays at the bottom.
+  When the title block and the footer take more than half of the sheet (large text on a
+  short screen), they scroll with the content.
   The content fades out at an edge as far as it runs past that edge, up to 24 pt. When the
   user pulls past the detent, the content stays at the top and the footer at the bottom. A sheet that does
   not use `StandardSheet` uses the `intrinsicSheetContent` and `intrinsicSheetDetent`

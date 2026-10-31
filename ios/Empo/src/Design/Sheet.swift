@@ -77,6 +77,7 @@ struct StandardSheet<Content: View, Footer: View>: View {
     @State private var contentSize = IntrinsicSheetSize()
     @State private var footerSize = IntrinsicSheetSize()
     @State private var fade = ScrollEdgeFade()
+    @State private var bodyHeight: CGFloat = 0
 
     /// An identity-block sheet with no toolbar action has an empty
     /// bar. Hiding it lets the sheet hug its content.
@@ -85,6 +86,30 @@ struct StandardSheet<Content: View, Footer: View>: View {
     }
 
     private var hasFooter: Bool { Footer.self != EmptyView.self }
+
+    /// Large text on a short screen can make the header and the footer
+    /// too tall to stay in place. They then scroll with the content.
+    private var pinsEdges: Bool {
+        headerSize.height + footerSize.height <= bodyHeight / 2
+    }
+
+    @ViewBuilder private var header: some View {
+        if let emblem {
+            SheetIdentityBlock(systemName: emblem, title: title)
+                .padding(Spacing.xl)
+                .intrinsicSheetContent(size: $headerSize)
+        }
+    }
+
+    @ViewBuilder private var footerBlock: some View {
+        if hasFooter {
+            VStack(spacing: 0) {
+                footer
+            }
+            .padding(Spacing.xl)
+            .intrinsicSheetContent(size: $footerSize)
+        }
+    }
 
     var body: some View {
         switch surface {
@@ -98,24 +123,24 @@ struct StandardSheet<Content: View, Footer: View>: View {
     private var core: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let emblem {
-                    SheetIdentityBlock(systemName: emblem, title: title)
-                        .padding(Spacing.xl)
-                        .intrinsicSheetContent(size: $headerSize)
-                }
+                if pinsEdges { header }
                 // Content taller than the screen scrolls, and a sheet
                 // pulled past its detent keeps the content at the top
                 // and the footer at the bottom.
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Spacing.xl) {
-                        content
+                    VStack(spacing: 0) {
+                        if !pinsEdges { header }
+                        VStack(alignment: .leading, spacing: Spacing.xl) {
+                            content
+                        }
+                        .padding(.horizontal, Spacing.xl)
+                        // The header and the footer hold the gaps to the
+                        // content, so scrolled content keeps clear of them.
+                        .padding(.top, emblem == nil ? Spacing.xl : 0)
+                        .padding(.bottom, hasFooter ? 0 : Spacing.xl)
+                        .intrinsicSheetContent(size: $contentSize)
+                        if !pinsEdges { footerBlock }
                     }
-                    .padding(.horizontal, Spacing.xl)
-                    // The gaps to the header and the footer stay outside the
-                    // scroll view, so scrolled content keeps clear of them.
-                    .padding(.top, emblem == nil ? Spacing.xl : 0)
-                    .padding(.bottom, hasFooter ? 0 : Spacing.xl)
-                    .intrinsicSheetContent(size: $contentSize)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .onScrollGeometryChange(for: ScrollEdgeFade.self, of: ScrollEdgeFade.init) { _, new in
@@ -124,13 +149,12 @@ struct StandardSheet<Content: View, Footer: View>: View {
                 // The content stays visible under the bar and the home
                 // indicator, as in any scroll view.
                 .mask { ScrollEdgeFadeMask(fade: fade).ignoresSafeArea() }
-                if hasFooter {
-                    VStack(spacing: 0) {
-                        footer
-                    }
-                    .padding(Spacing.xl)
-                    .intrinsicSheetContent(size: $footerSize)
-                }
+                if pinsEdges { footerBlock }
+            }
+            .onGeometryChange(for: CGFloat.self) {
+                $0.size.height
+            } action: {
+                bodyHeight = $0
             }
             .navigationTitle(emblem == nil ? Text(title) : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
