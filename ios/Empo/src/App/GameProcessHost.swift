@@ -37,12 +37,15 @@ enum GameProcessHost {
             // quits.
             await previousExit?.value
             guard current == session else { return }
-            guard let identity = await identity() else {
+            let identity = await identity()
+            // A newer session can start while the monitor loads. A lost
+            // process then ends that session, not this one.
+            guard current == session else { return }
+            guard let identity else {
                 EngineSessionCoordinator.shared.note("The GameProcess extension is not in the app.")
                 EmpoGameProcessClient.processLost()
                 return
             }
-            guard current == session else { return }
             show(identity)
         }
     }
