@@ -24,6 +24,7 @@ struct GameLibraryView: View {
     @Environment(\.pauseManager) private var pauseManager
     @State private var showImporter = false
     @State private var showSettings = false
+    @State private var settingsScrollTarget: SettingsSection?
     @State private var errorMessage: String?
     @State private var errorTitle = String(localized: "Couldn't delete this game")
     @State private var showErrorAlert = false
@@ -243,10 +244,16 @@ struct GameLibraryView: View {
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )
-            .modifier(WhatsNewPresentation(active: splashDismissed))
+            .modifier(
+                WhatsNewPresentation(active: splashDismissed) { section in
+                    settingsScrollTarget = section
+                    showSettings = true
+                }
+            )
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
+                    settingsScrollTarget: $settingsScrollTarget,
                     showImporter: $showImporter,
                     gameForSettings: $gameForSettings,
                     gameForInfo: $gameForInfo,
@@ -1417,6 +1424,7 @@ private struct ImportReplaceAlert: ViewModifier {
 
 private struct LibrarySheetPresentation: ViewModifier {
     @Binding var showSettings: Bool
+    @Binding var settingsScrollTarget: SettingsSection?
     @Binding var showImporter: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
@@ -1428,9 +1436,11 @@ private struct LibrarySheetPresentation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-            }
+            .sheet(
+                isPresented: $showSettings,
+                onDismiss: { settingsScrollTarget = nil },
+                content: { SettingsView(scrollTarget: settingsScrollTarget) }
+            )
             .sheet(isPresented: $showImporter) {
                 DocumentPickerView { urls in
                     onImportPicked(urls)
