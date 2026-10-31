@@ -5768,6 +5768,65 @@
         }
       }
     },
+    "Couldn't move your games and saves, so this setting isn't on yet. Your files didn't change. %@ tries again each time you open it." : {
+      "comment" : "The placeholder is the app name, Empo. Shown under the Quit and switch games setting when the app could not move the player's files.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Spiele und Spielstände konnten nicht verschoben werden, deshalb ist diese Einstellung noch nicht aktiv. An deinen Dateien hat sich nichts geändert. %@ versucht es bei jedem Öffnen erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron mover tus juegos y partidas guardadas, así que este ajuste aún no está activo. Tus archivos no cambiaron. %@ lo vuelve a intentar cada vez que lo abres."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de déplacer tes jeux et tes sauvegardes, donc ce réglage n'est pas encore actif. Tes fichiers n'ont pas changé. %@ réessaie à chaque fois que tu l'ouvres."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non è stato possibile spostare i tuoi giochi e salvataggi, quindi questa impostazione non è ancora attiva. I tuoi file non sono cambiati. %@ riprova ogni volta che lo apri."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームとセーブデータを移動できなかったため、この設定はまだ有効になっていません。ファイルは変更されていません。%@は開くたびにもう一度試します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임과 저장 파일을 옮기지 못해서 이 설정은 아직 켜지지 않았어요. 파일은 바뀌지 않았어요. %@는 열 때마다 다시 시도해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível mover seus jogos e saves, então esta opção ainda não está ativa. Seus arquivos não mudaram. O %@ tenta de novo toda vez que você o abre."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось перенести ваши игры и сохранения, поэтому эта настройка пока не работает. Ваши файлы не изменились. %@ попробует снова при каждом запуске."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法移动你的游戏和存档，所以此设置尚未生效。你的文件没有变化。每次打开 %@ 时都会再试一次。"
+          }
+        }
+      }
+    },
     "Create" : {
       "localizations" : {
         "de" : {

@@ -31,6 +31,14 @@ struct ExperimentalSection: View {
                     )
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                } else if settings.rubyGameRunner == .gameProcess, DataDirectory.unmovedItem != nil {
+                    Label(
+                        "Couldn't move your games and saves, so this setting isn't on yet. Your files didn't change. \(AppInfo.name) tries again each time you open it.",
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.warning)
+                    .transition(.opacity)
                 } else if settings.rubyGameRunner != AppSettings.rubyGameRunnerThisLaunch {
                     Label(
                         "Close \(AppInfo.name) from the app switcher and open it again to apply this change.",

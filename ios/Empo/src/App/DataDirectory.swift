@@ -45,21 +45,27 @@ enum DataDirectory {
     /// shows, in the app group. The system names it "File Provider
     /// Storage" (`NSFileProviderManager.documentStorageURL`). The data
     /// never moves back, so the app keeps that folder when it has items.
-    static let documentsRootURL: URL = {
+    static var documentsRootURL: URL { root.url }
+
+    /// The item that the first move to the app group could not move at
+    /// this launch. Documents stays the root until it moves.
+    static var unmovedItem: String? { root.unmovedItem }
+
+    private static let root: (url: URL, unmovedItem: String?) = {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        guard let group = appGroupURL else { return documents }
+        guard let group = appGroupURL else { return (documents, nil) }
         let storage = group.appendingPathComponent("File Provider Storage", isDirectory: true)
         let runner = UserDefaults.standard.string(forKey: DefaultsKey.rubyGameRunner)
         let wantsGameProcess = AppSettings.gameProcessIsAvailable && runner == GameRunner.gameProcess.rawValue
         let hasData = ((try? FileManager.default.contentsOfDirectory(atPath: storage.path)) ?? [])
             .contains { !$0.hasPrefix(".") }
-        guard wantsGameProcess || hasData else { return documents }
+        guard wantsGameProcess || hasData else { return (documents, nil) }
         guard
             (try? FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)) != nil
-        else { return documents }
-        guard hasData || moveAll(of: documents, to: storage) else { return documents }
+        else { return (documents, nil) }
+        if !hasData, let unmoved = moveAll(of: documents, to: storage) { return (documents, unmoved) }
         moveItems(of: documents, to: storage)
-        return storage
+        return (storage, nil)
     }()
 
     static var isInAppGroup: Bool {
@@ -95,8 +101,9 @@ enum DataDirectory {
     /// can move without its saves, and the player saves again in the app
     /// group. Then the next launch keeps the new save, and the old one
     /// becomes a displaced copy. Items that are in both folders, only
-    /// hidden ones here, go to `moveItems`.
-    static func moveAll(of documents: URL, to storage: URL) -> Bool {
+    /// hidden ones here, go to `moveItems`. Returns the item that cannot
+    /// move, if any.
+    static func moveAll(of documents: URL, to storage: URL) -> String? {
         let fm = FileManager.default
         let names = ((try? fm.contentsOfDirectory(atPath: documents.path)) ?? [])
             .filter { $0 != "Inbox" && !exists(storage.appendingPathComponent($0), fm: fm) }
@@ -118,10 +125,10 @@ enum DataDirectory {
                         NSLog("[DataDirectory] Cannot move %@ back to Documents: %@", name, "\(error)")
                     }
                 }
-                return false
+                return name
             }
         }
-        return true
+        return nil
     }
 
     /// Moves the items of Documents, from before the app group, into

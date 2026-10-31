@@ -34,7 +34,7 @@ final class DataDirectoryTests: XCTestCase {
     }
 
     func testFirstMoveMovesEveryItem() throws {
-        XCTAssertTrue(DataDirectory.moveAll(of: documents, to: storage))
+        XCTAssertNil(DataDirectory.moveAll(of: documents, to: storage))
 
         XCTAssertEqual(try fm.contentsOfDirectory(atPath: documents.path), [])
         XCTAssertEqual(
@@ -49,7 +49,7 @@ final class DataDirectoryTests: XCTestCase {
         try fm.setAttributes(
             [.posixPermissions: 0o555], ofItemAtPath: documents.appendingPathComponent(last).path)
 
-        XCTAssertFalse(DataDirectory.moveAll(of: documents, to: storage))
+        XCTAssertEqual(DataDirectory.moveAll(of: documents, to: storage), last)
 
         XCTAssertEqual(
             try Set(fm.contentsOfDirectory(atPath: documents.path)), ["Data", "Games", "Fonts", "Profiles"])
