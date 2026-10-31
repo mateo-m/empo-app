@@ -132,8 +132,8 @@ have this limit. To stop one of them, tap More, then Quit.
 To quit an RPG Maker XP, VX, VX Ace or PSDK game without closing Empo, turn on **Settings → Experimental → Quit and switch games**,
 and then close and open Empo once. Each game then runs in its own process, and **More → Quit** works.
 Empo also moves your games and saves to **Empo** under **Locations** in the Files app. See [Saves](/saves).
-The setting is still in testing. It is not available when the tool that installed Empo left out
-the part that it needs.
+The setting is still in testing. Empo 0.9.1 and later do not have it for now, because SideStore
+and AltStore cannot install the part that it needs.
 
 The engine keeps one Ruby interpreter for the lifetime of the process, and the interpreter
 cannot restart cleanly. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains the constraint in full.
