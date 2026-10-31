@@ -111,9 +111,13 @@ struct SettingsView: View {
                 } header: {
                     Text("Files")
                 } footer: {
-                    Text(
-                        "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo."
-                    )
+                    if DataDirectory.isInAppGroup {
+                        Text(
+                            "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo."
+                        )
+                    } else {
+                        Text("Your games, saves, and logs are in the Files app.")
+                    }
                 }
 
                 Section {

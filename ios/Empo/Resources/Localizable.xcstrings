@@ -33383,6 +33383,64 @@
         }
       }
     },
+    "Your games, saves, and logs are in the Files app." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Spiele, Spielstände und Logs sind in der Dateien-App."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus juegos, partidas guardadas y registros están en la app Archivos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tes jeux, sauvegardes et journaux sont dans l'app Fichiers."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi giochi, salvataggi e log sono nell'app File."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲーム、セーブデータ、ログは“ファイル”Appにあります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임, 저장 파일, 로그는 파일 앱에 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seus jogos, saves e logs ficam no app Arquivos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваши игры, сохранения и логи — в приложении «Файлы»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的游戏、存档和日志在“文件” App 中。"
+          }
+        }
+      }
+    },
     "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo." : {
       "localizations" : {
         "de" : {
