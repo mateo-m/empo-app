@@ -1,66 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "A new experimental setting lets you quit a game and start another one without closing Empo." : {
-      "comment" : "Text of an item in the What's new sheet after an update.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mit einer neuen experimentellen Einstellung kannst du ein Spiel beenden und ein anderes starten, ohne Empo zu schließen."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Un nuevo ajuste experimental te permite salir de un juego y empezar otro sin cerrar Empo."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Un nouveau réglage expérimental te permet de quitter un jeu et d'en lancer un autre sans fermer Empo."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una nuova impostazione sperimentale ti permette di uscire da un gioco e avviarne un altro senza chiudere Empo."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新しい実験的な設定で、Empoを閉じずにゲームを終了して別のゲームを始められます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "새 실험 기능 설정으로 Empo를 닫지 않고 게임을 종료하고 다른 게임을 시작할 수 있어요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Um novo ajuste experimental permite sair de um jogo e começar outro sem fechar o Empo."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Новая экспериментальная настройка позволяет выйти из игры и запустить другую, не закрывая Empo."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新的实验性设置让你无需关闭 Empo 即可退出游戏并开始另一个。"
-          }
-        }
-      }
-    },
     "Controls that fit the game" : {
       "comment" : "Title of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
@@ -537,66 +477,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "游戏核心"
-          }
-        }
-      }
-    },
-    "Quit and switch games" : {
-      "comment" : "Title of an item in the What's new sheet after an update.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spiele beenden und wechseln"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Salir y cambiar de juego"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quitter et changer de jeu"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esci e cambia gioco"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "終了してゲームを切り替え"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "종료하고 게임 바꾸기"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sair e trocar de jogo"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выход и смена игры"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "退出并切换游戏"
           }
         }
       }
