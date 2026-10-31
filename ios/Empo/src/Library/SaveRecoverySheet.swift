@@ -111,7 +111,7 @@ private struct SaveRecoverySheet: View {
             SheetFootnote(
                 "Empo kept the renamed copies as backups. If a restored save isn't the one you wanted, tap Files on that game to find them."
             )
-
+        } footer: {
             SheetPrimaryButton("Done") { isPresented = false }
         }
         // This sheet announces a rare, good outcome (recovered
