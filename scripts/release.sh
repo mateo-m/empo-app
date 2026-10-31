@@ -310,6 +310,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         exit 1
     fi
 
+    # SideStore and AltStore give an extension in Extensions/ no new
+    # bundle ID, and iOS then refuses to install the whole app.
+    rm -rf "$APP_PATH/Extensions"
+
     echo "==> ad-hoc signing with entitlements"
     "$REPO_ROOT/scripts/sign-app.sh" "$APP_PATH"
 

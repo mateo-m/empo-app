@@ -302,6 +302,9 @@ jobs:
         id: package
         run: |
           set -e
+          # SideStore and AltStore give an extension in Extensions/ no new
+          # bundle ID, and iOS then refuses to install the whole app.
+          rm -rf build/Release-iphoneos/Empo.app/Extensions
           scripts/sign-app.sh build/Release-iphoneos/Empo.app
           scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
           mkdir -p build/ipa/Payload
