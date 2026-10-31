@@ -8,7 +8,7 @@ enum SettingsSection: String, Decodable {
 
     var isShown: Bool {
         switch self {
-        case .experimental: !GameCores.gameProcessCores.isEmpty
+        case .experimental: AppSettings.gameProcessIsAvailable
         }
     }
 }
