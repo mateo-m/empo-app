@@ -3,13 +3,8 @@
 
 import SwiftUI
 
-/// Features in testing. Shown only in a build with a core in
-/// `GameCores.gameProcessCores`, because the one feature here is the
-/// game process for those cores.
 struct ExperimentalSection: View {
     @Environment(\.appSettings) private var settings
-
-    private let isAvailable = AppSettings.gameProcessIsAvailable
 
     var body: some View {
         Section {
@@ -17,21 +12,13 @@ struct ExperimentalSection: View {
                 SettingsToggle(
                     title: "Quit and switch games",
                     isOn: Binding(
-                        get: { isAvailable && settings.rubyGameRunner == .gameProcess },
+                        get: { settings.rubyGameRunner == .gameProcess },
                         set: { settings.rubyGameRunner = $0 ? .gameProcess : .app }
                     ),
                     description:
                         "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.gameProcessGamesName)."
                 )
-                .disabled(!isAvailable)
-                if !isAvailable {
-                    Label(
-                        "Not available. The tool that installed \(AppInfo.name) left out a part that this feature needs.",
-                        systemImage: "info.circle"
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                } else if settings.rubyGameRunner == .gameProcess, DataDirectory.unmovedItem != nil {
+                if settings.rubyGameRunner == .gameProcess, DataDirectory.unmovedItem != nil {
                     Label(
                         "Couldn't move your games and saves, so this setting isn't on yet. Your files didn't change. \(AppInfo.name) tries again each time you open it.",
                         systemImage: "exclamationmark.triangle"

@@ -287,7 +287,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     echo "==> building unsigned ipa"
     BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
-    rm -rf "$BUILD_DIR"
+    DERIVED_DATA="$PROJECT_DIR/build/DerivedData"
+    # Xcode does not write Extensions/Empo.appexpt again when the old
+    # build data says the step is done, also when the file is gone.
+    rm -rf "$BUILD_DIR" "$DERIVED_DATA"
     # A -target build cannot find the module map of the json5cpp package
     # target on Xcode 27, so build the scheme, as release.yml does.
     xcodebuild \
@@ -295,6 +298,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         -scheme Empo \
         -destination 'generic/platform=iOS' \
         -configuration Release \
+        -derivedDataPath "$DERIVED_DATA" \
         CODE_SIGNING_ALLOWED=NO \
         CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
         ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
@@ -305,6 +309,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         echo "error: build failed - Empo.app not found at $BUILD_DIR"
         exit 1
     fi
+
+    # SideStore and AltStore give an extension in Extensions/ no new
+    # bundle ID, and iOS then refuses to install the whole app.
+    rm -rf "$APP_PATH/Extensions"
 
     echo "==> ad-hoc signing with entitlements"
     "$REPO_ROOT/scripts/sign-app.sh" "$APP_PATH"

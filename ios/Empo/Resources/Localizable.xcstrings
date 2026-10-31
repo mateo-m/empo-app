@@ -17838,65 +17838,6 @@
         }
       }
     },
-    "Not available. The tool that installed %@ left out a part that this feature needs." : {
-      "comment" : "The placeholder is the app name, Empo.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht verfügbar. Das Tool, mit dem du %@ installiert hast, hat einen Teil weggelassen, den diese Funktion braucht."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No disponible. La herramienta que instaló %@ dejó fuera una parte que esta función necesita."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Indisponible. L'outil qui a installé %@ a omis une partie dont cette fonction a besoin."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Non disponibile. Lo strumento che ha installato %@ ha tralasciato una parte che serve a questa funzione."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "利用できません。%@をインストールしたツールが、この機能に必要な部分を省きました。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "사용할 수 없어요. %@를 설치한 도구가 이 기능에 필요한 부분을 빼먹었어요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Indisponível. A ferramenta que instalou o %@ deixou de fora uma parte de que este recurso precisa."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Недоступно. Программа, которая установила %@, не добавила часть, нужную для этой функции."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不可用。安装 %@ 的工具漏掉了此功能需要的部分。"
-          }
-        }
-      }
-    },
     "Not enough space to import. Free up space on your device and try again." : {
       "localizations" : {
         "de" : {
