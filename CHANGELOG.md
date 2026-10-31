@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1 - 2026-10-31
+
+### Release
+
+- Leave quit and switch games out of the release so SideStore and AltStore can install it (#216) ([`117e0e0`](https://github.com/mateo-m/empo-app/commit/117e0e025149521a8961439a3083894368b732f7))
+
 ## 0.9.0 - 2026-10-31
 
 ### Bug Fixes
