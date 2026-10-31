@@ -1,5 +1,17 @@
 [
   {
+    "version": 5,
+    "appVersion": "0.9.0",
+    "items": [
+      {
+        "symbol": "arrow.left.arrow.right",
+        "title": "Quit and switch games",
+        "detail": "A new experimental setting lets you quit a game and start another one without closing Empo.",
+        "settingsSection": "experimental"
+      }
+    ]
+  },
+  {
     "version": 4,
     "appVersion": "0.8.1",
     "items": [

@@ -38,6 +38,7 @@ struct WhatsNewItem: Decodable {
     let symbol: String
     let title: String
     let detail: String
+    var settingsSection: SettingsSection?
 }
 
 /// Shows the news once after an update. Any dismissal marks it as
@@ -46,6 +47,7 @@ struct WhatsNewItem: Decodable {
 struct WhatsNewPresentation: ViewModifier {
     /// False while the splash is still up.
     var active: Bool = true
+    let onOpenSettings: (SettingsSection) -> Void
 
     @Environment(\.appSettings) private var settings
     /// True when another one-time notice waits at launch. The news
@@ -55,6 +57,9 @@ struct WhatsNewPresentation: ViewModifier {
     /// Read once, because the dismissal marks every item as read
     /// while the sheet still animates out.
     @State private var items: [WhatsNewItem] = []
+    /// Settings opens after the sheet is gone, because SwiftUI shows
+    /// no new sheet while another one animates out.
+    @State private var settingsToOpen: SettingsSection?
 
     private var isPresented: Binding<Bool> {
         Binding(
@@ -73,14 +78,29 @@ struct WhatsNewPresentation: ViewModifier {
                     !DataDirectory.pendingSaveRecoveries().isEmpty
                     || !GameContainerMigration.pendingDuplicateNoticeNames().isEmpty
             }
-            .sheet(isPresented: isPresented) {
-                WhatsNewSheet(items: items) { isPresented.wrappedValue = false }
-            }
+            .sheet(
+                isPresented: isPresented,
+                onDismiss: {
+                    if let settingsToOpen { onOpenSettings(settingsToOpen) }
+                    settingsToOpen = nil
+                },
+                content: {
+                    WhatsNewSheet(
+                        items: items,
+                        onOpenSettings: { section in
+                            settingsToOpen = section
+                            isPresented.wrappedValue = false
+                        },
+                        onContinue: { isPresented.wrappedValue = false }
+                    )
+                }
+            )
     }
 }
 
 struct WhatsNewSheet: View {
     let items: [WhatsNewItem]
+    let onOpenSettings: (SettingsSection) -> Void
     let onContinue: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -94,7 +114,7 @@ struct WhatsNewSheet: View {
                     // on the whole row also catches the layout pass of
                     // the opening sheet, and SwiftUI shows a moved Text
                     // as glyphs that fade across the gap.
-                    WhatsNewRow(item: item)
+                    WhatsNewRow(item: item, onOpenSettings: onOpenSettings)
                         .animation(Motion.standard.delay(0.1 + Double(index) * 0.1)) {
                             $0.opacity(entered ? 1 : 0)
                                 .offset(y: entered || reduceMotion ? 0 : 8)
@@ -126,6 +146,7 @@ struct WhatsNewSheet: View {
 
 private struct WhatsNewRow: View {
     let item: WhatsNewItem
+    let onOpenSettings: (SettingsSection) -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -153,6 +174,12 @@ private struct WhatsNewRow: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let section = item.settingsSection, section.isShown {
+                    Button("Turn it on in Settings") { onOpenSettings(section) }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: AppSize.minTapTarget)
+                        .contentShape(.rect)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
