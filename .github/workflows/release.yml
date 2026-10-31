@@ -52,11 +52,6 @@ on:
         description: "dry-run only: ref to build (tag, branch, or sha)"
         required: false
         default: "main"
-      runner:
-        description: "dry-run only: where to build (self = your registered Mac; hosted = GitHub runners). Tag releases always build hosted."
-        type: choice
-        options: [hosted, self]
-        default: hosted
 
 permissions:
   contents: write
@@ -193,10 +188,9 @@ jobs:
   build:
     name: Build + audit .ipa
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run')
-    # Tag releases always build on hosted runners (laptop-independent
-    # releases are the point). Dry runs may opt into the self-hosted
-    # Mac for speed.
-    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.runner == 'self') && fromJSON('["self-hosted", "macOS"]') || 'macos-latest' }}
+    # The app needs the iOS 27.1 SDK, and the hosted runners have only
+    # Xcode 26.
+    runs-on: ${{ fromJSON(vars.MACOS_RUNNER) }}
     timeout-minutes: 90
     outputs:
       version: ${{ steps.meta.outputs.version }}
