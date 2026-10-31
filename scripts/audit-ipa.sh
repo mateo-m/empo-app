@@ -213,6 +213,8 @@ GAME_PROCESS="$APP/Extensions/GameProcess.appex"
 POINT=$(/usr/libexec/PlistBuddy -c "Print :EXAppExtensionAttributes:EXExtensionPointIdentifier" "$GAME_PROCESS/Info.plist")
 [[ "$POINT" == "$BUNDLE_ID.game-process" ]] ||
     fail "GameProcess.appex extension point $POINT != $BUNDLE_ID.game-process"
+/usr/libexec/PlistBuddy -c "Print :$BUNDLE_ID.game-process" "$APP/Extensions/Empo.appexpt" >/dev/null 2>&1 ||
+    fail "Extensions/Empo.appexpt does not define $BUNDLE_ID.game-process"
 
 if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
     fail "Info.plist version $VERSION != expected $EXPECTED_VERSION"

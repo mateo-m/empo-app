@@ -279,6 +279,9 @@ jobs:
         # GeneratedModuleMaps-iphoneos/json5cpp.modulemap not found",
         # reported on hosted runners as unresolvable _DarwinFoundation
         # module dependencies.
+        # The build data lives in build/, which the checkout empties. With
+        # the build data of an earlier run, Xcode does not write
+        # Extensions/Empo.appexpt again, and the game process cannot start.
         run: |
           set -o pipefail
           xcodebuild \
@@ -286,6 +289,7 @@ jobs:
             -scheme Empo \
             -destination 'generic/platform=iOS' \
             -configuration Release \
+            -derivedDataPath "$PWD/build/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
             build 2>&1 | tail -n 40
