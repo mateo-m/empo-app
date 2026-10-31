@@ -50,6 +50,7 @@ struct PlayerView: View {
     /// cheats / fast-forward / debug-overlay so the toolbar itself
     /// stays trimmed to keyboard / edit / hide / more.
     @State private var showMoreSheet = false
+    @State private var sheetAction: SheetAction?
     @State private var showControllerRemap = false
     @State private var showLayoutProfilePicker = false
 
@@ -413,7 +414,7 @@ struct PlayerView: View {
                 startSnapshotFade()
             }
         }
-        .sheet(isPresented: $showMoreSheet) {
+        .sheet(isPresented: $showMoreSheet, onDismiss: runSheetAction) {
             PlayerMoreSheet(
                 gameTitle: appState.selectedGame?.title,
                 showDebugOverlay: $showDebugOverlay,
@@ -426,8 +427,8 @@ struct PlayerView: View {
                 core: EngineSessionCoordinator.shared.openedCore,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
-                onPause: { appState.requestPause() },
-                onQuit: { appState.quitGame() },
+                onPause: { sheetAction = .pause },
+                onQuit: appState.canQuitGame ? { sheetAction = .quit } : nil,
                 onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
             )
         }
@@ -730,6 +731,23 @@ struct PlayerView: View {
         .position(x: bounds.midX, y: bounds.midY)
         .allowsHitTesting(false)
         .transition(.opacity)
+    }
+
+    private enum SheetAction {
+        case pause, quit
+    }
+
+    /// The pause and the quit remove this view. When they run while
+    /// the More sheet is still on screen, SwiftUI can keep the view
+    /// after the game ended, so they wait until the sheet is gone.
+    private func runSheetAction() {
+        let action = sheetAction
+        sheetAction = nil
+        switch action {
+        case .pause: appState.requestPause()
+        case .quit: appState.quitGame()
+        case nil: break
+        }
     }
 
     private func toggleEditMode() {

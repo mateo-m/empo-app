@@ -1,5 +1,5 @@
-# Read cores/GameCore.h and print one dlsym forwarder for
-# every gamecore_* function it declares.
+# Read cores/GameCore.h and print one GAMECORE_FUNCTION or
+# GAMECORE_VOID line for every gamecore_* function it declares.
 # tools/gamecore/generate-core-forwarders.sh runs this.
 
 /^[ \t]*#/ {
@@ -90,18 +90,11 @@
         args = (args == "") ? arg : args ", " arg
     }
 
-    printf "%s %s(%s) {\n", ret, name, params
-    printf "    static %s (*fn)(%s);\n", ret, params
-    printf "    static unsigned generation;\n"
-    printf "    if (fn == NULL || generation != gCoreGeneration) {\n"
-    printf "        fn = coreSymbol(\"%s\");\n", name
-    printf "        generation = gCoreGeneration;\n"
-    printf "    }\n"
+    sub(/^gamecore_/, "", name)
     if (ret == "void") {
-        printf "    fn(%s);\n", args
+        printf "GAMECORE_VOID(%s, (%s), (%s))\n", name, params, args
     } else {
-        printf "    return fn(%s);\n", args
+        printf "GAMECORE_FUNCTION(%s, %s, (%s), (%s))\n", ret, name, params, args
     }
-    printf "}\n\n"
     buf = ""
 }

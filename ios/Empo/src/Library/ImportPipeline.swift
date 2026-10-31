@@ -505,10 +505,12 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: String(
-                        localized:
-                            "This game is still running. Close Empo from the app switcher, reopen it, then import again."
-                    )
+                    message: EngineSessionCoordinator.shared.canEndGame
+                        ? String(localized: "This game is open. Quit it, then import again.")
+                        : String(
+                            localized:
+                                "This game is still running. Close Empo from the app switcher, reopen it, then import again."
+                        )
                 )
             }
         }

@@ -32,7 +32,9 @@ struct PlayerMoreSheet: View {
     let onControllerRemap: () -> Void
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
-    let onQuit: () -> Void
+    /// Nil hides the Quit row, for a game that can't end without
+    /// closing Empo.
+    let onQuit: (() -> Void)?
     let onCheats: () -> Void
 
     @Environment(\.appSettings) private var settings
@@ -124,7 +126,7 @@ struct PlayerMoreSheet: View {
                                 onPause()
                                 dismiss()
                             }
-                            if core?.canKillSession == true {
+                            if onQuit != nil {
                                 MenuRow(icon: "xmark", label: quitLabel, role: .destructive) {
                                     confirmQuit = true
                                 }
@@ -136,7 +138,7 @@ struct PlayerMoreSheet: View {
                 .alert(quitQuestion, isPresented: $confirmQuit) {
                     Button("Cancel", role: .cancel) {}
                     Button("Quit", role: .destructive) {
-                        onQuit()
+                        onQuit?()
                         dismiss()
                     }
                 } message: {
@@ -220,6 +222,7 @@ private struct MenuRow: View {
                     .frame(width: 24)
                 Text(label)
                     .foregroundStyle(role == .destructive ? .red : .primary)
+                    .multilineTextAlignment(.leading)
                 Spacer()
             }
             .padding(.horizontal, Spacing.lg)

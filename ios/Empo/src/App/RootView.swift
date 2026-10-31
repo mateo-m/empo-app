@@ -42,6 +42,9 @@ struct RootView: View {
     /// root background for the zoom transition, and a fade in over
     /// that colour reads as a white flash.
     @State private var libraryFaded = false
+    /// The report that the share sheet sends, after an alert's Share
+    /// Report button.
+    @State private var sharedReport: GameReport?
 
     init() {
         let recovering = AppState.shared.pendingCrashRecovery
@@ -160,29 +163,38 @@ struct RootView: View {
             }
         }
         .alert(
-            (engineHung || appState.phase != nil) ? Text("Restart Empo") : Text("Last session ended early"),
+            errorAlertTitle,
             isPresented: showErrorAlert
         ) {
             Button("Got it") {
-                dismissErrorAlert()
-                if engineHung {
-                    return
+                closeErrorAlert()
+            }
+            if let report = GameReport.last, report.isShareable {
+                Button("Share Report") {
+                    closeErrorAlert()
+                    sharedReport = report
                 }
-                if appState.phase != nil {
-                    return
-                }
-                appState.dismissCrashRecovery()
             }
         } message: {
             if engineHung {
-                Text("The game stopped responding. Close Empo from the app switcher, then reopen it.")
+                Text(
+                    appState.canEndStuckGame
+                        ? "It stopped responding and will close. Progress you haven't saved will be lost."
+                        : "The game stopped responding. Close Empo from the app switcher, then reopen it."
+                )
             } else if appState.phase != nil {
                 Text(
-                    "\(appState.errorMessage ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
+                    appState.canEndStuckGame
+                        ? appState.errorMessage
+                            ?? String(localized: "Something went wrong while it was running.")
+                        : "\(appState.errorMessage ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
                 )
             } else {
                 Text(appState.errorMessage ?? "")
             }
+        }
+        .sheet(item: $sharedReport) { report in
+            ReportShareSheet(report: report)
         }
         .alert(
             infoAlertTitle,
@@ -242,6 +254,17 @@ struct RootView: View {
                 AppWindow.setAllowKeyWindow(false)
             }
         }
+    }
+
+    private var errorAlertTitle: Text {
+        guard engineHung || appState.phase != nil else { return Text("Last session ended early") }
+        return appState.canEndStuckGame ? Text("The game stopped") : Text("Restart Empo")
+    }
+
+    private func closeErrorAlert() {
+        let hung = engineHung
+        dismissErrorAlert()
+        if hung { appState.endStuckGame() }
     }
 
     private var showErrorAlert: Binding<Bool> {
@@ -496,6 +519,44 @@ private struct PixelDitherPattern: View {
                     )
                     .tag(0)
             }
+        }
+    }
+}
+
+/// The system share sheet for a game report.
+private struct ReportShareSheet: UIViewControllerRepresentable {
+    let report: GameReport
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(
+            activityItems: [ReportItemProvider(report: report, header: report.header())],
+            applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+/// The share sheet reads `item` on a background thread, after the person
+/// picks where to send the report. The log can be large.
+private final class ReportItemProvider: UIActivityItemProvider, @unchecked Sendable {
+    private let report: GameReport
+    private let header: String
+
+    init(report: GameReport, header: String) {
+        self.report = report
+        self.header = header
+        super.init(
+            placeholderItem: FileManager.default.temporaryDirectory.appendingPathComponent("report.txt"))
+    }
+
+    override var item: Any {
+        do {
+            return try report.write(header: header)
+        } catch {
+            // The placeholder is a file, so some share targets take only a file.
+            let text = "\(header)\nThe report file could not be written: \(error.localizedDescription)\n"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("report.txt")
+            return (try? Data(text.utf8).write(to: url)) != nil ? url : text
         }
     }
 }
