@@ -169,6 +169,7 @@ StandardSheet(title: "Saves recovered", emblem: "checkmark.seal") {
     SheetBodyText("What happened and why.")
     SheetCard { /* rows, with SheetRowSeparator between them */ }
     SheetFootnote("The fine print.")
+} footer: {
     SheetPrimaryButton("Done") { dismiss() }
 }
 ```
@@ -195,8 +196,10 @@ and the haptics. A sheet over a running game passes `surface: .material`.
 
 ### Height
 
-- `StandardSheet` fits its content, scrolls when the content is taller than the screen,
-  and keeps the content at the top when the user pulls past the detent. A sheet that does
+- `StandardSheet` fits its content. When the content is taller than the screen, only the
+  content scrolls: the title block stays at the top and the `footer` stays at the bottom.
+  The content fades out at an edge as far as it runs past that edge, up to 24 pt. When the
+  user pulls past the detent, the content stays at the top and the footer at the bottom. A sheet that does
   not use `StandardSheet` uses the `intrinsicSheetContent` and `intrinsicSheetDetent`
   modifiers in `IntrinsicSheet.swift`.
 - A sheet with long content (settings, game info) uses the standard detents.
@@ -216,7 +219,8 @@ From top to bottom. Each part is optional, except the action.
    column, then a trailing action (`SecondaryButtonStyle(size: .sm)`). The divider between
    rows starts after the thumbnail (`Spacing.lg + 44 + Spacing.lg`).
 4. **Footer.** `footnote` secondary, aligned to the leading edge.
-5. **Primary action.** One full-width button at the bottom (`SheetPrimaryButton`). A
+5. **Primary action.** One full-width button at the bottom (`SheetPrimaryButton`), in the
+   `footer` of `StandardSheet`. A
    secondary action, such as a link, goes under it as centered `subheadline` brand text
    with a 44 pt tap target (`WhatsNewSheet`). A
    destructive action goes in its own card above it, never in a red primary button. A

@@ -19,6 +19,7 @@ import SwiftUI
 ///     SheetBodyText("What happened and why.")
 ///     SheetCard { /* rows */ }
 ///     SheetFootnote("The fine print.")
+/// } footer: {
 ///     SheetPrimaryButton("Done") { dismiss() }
 /// }
 /// ```
@@ -56,7 +57,7 @@ enum SheetSurface {
 ///     identity block at the top of the content (welcome-sheet
 ///     style). Splitting them - a bar title plus a floating
 ///     symbol - reads as two competing anchors. Never do that.
-struct StandardSheet<Content: View>: View {
+struct StandardSheet<Content: View, Footer: View>: View {
     let title: LocalizedStringResource
     /// SF Symbol name for the identity block. A nil value keeps the
     /// title in the navigation bar.
@@ -69,14 +70,21 @@ struct StandardSheet<Content: View>: View {
     /// Optional top-trailing toolbar action.
     var trailingButton: SheetBarAction?
     @ViewBuilder var content: Content
+    /// Stays at the bottom while the content scrolls.
+    @ViewBuilder var footer: Footer
 
-    @State private var sheetSize = IntrinsicSheetSize()
+    @State private var headerSize = IntrinsicSheetSize()
+    @State private var contentSize = IntrinsicSheetSize()
+    @State private var footerSize = IntrinsicSheetSize()
+    @State private var fade = ScrollEdgeFade()
 
     /// An identity-block sheet with no toolbar action has an empty
     /// bar. Hiding it lets the sheet hug its content.
     private var barHidden: Bool {
         emblem != nil && trailingButton == nil
     }
+
+    private var hasFooter: Bool { Footer.self != EmptyView.self }
 
     var body: some View {
         switch surface {
@@ -89,22 +97,41 @@ struct StandardSheet<Content: View>: View {
 
     private var core: some View {
         NavigationStack {
-            // The scroll container does two jobs: content taller
-            // than the screen scrolls instead of clipping, and a
-            // sheet pulled past its detent keeps the content
-            // pinned to the top (a bare VStack centers in the
-            // stretched space).
-            ScrollView {
-                VStack(alignment: .leading, spacing: Spacing.xl) {
-                    if let emblem {
-                        SheetIdentityBlock(systemName: emblem, title: title)
-                    }
-                    content
+            VStack(spacing: 0) {
+                if let emblem {
+                    SheetIdentityBlock(systemName: emblem, title: title)
+                        .padding(Spacing.xl)
+                        .intrinsicSheetContent(size: $headerSize)
                 }
-                .padding(Spacing.xl)
-                .intrinsicSheetContent(size: $sheetSize)
+                // Content taller than the screen scrolls, and a sheet
+                // pulled past its detent keeps the content at the top
+                // and the footer at the bottom.
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Spacing.xl) {
+                        content
+                    }
+                    .padding(.horizontal, Spacing.xl)
+                    // The gaps to the header and the footer stay outside the
+                    // scroll view, so scrolled content keeps clear of them.
+                    .padding(.top, emblem == nil ? Spacing.xl : 0)
+                    .padding(.bottom, hasFooter ? 0 : Spacing.xl)
+                    .intrinsicSheetContent(size: $contentSize)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .onScrollGeometryChange(for: ScrollEdgeFade.self, of: ScrollEdgeFade.init) { _, new in
+                    fade = new
+                }
+                // The content stays visible under the bar and the home
+                // indicator, as in any scroll view.
+                .mask { ScrollEdgeFadeMask(fade: fade).ignoresSafeArea() }
+                if hasFooter {
+                    VStack(spacing: 0) {
+                        footer
+                    }
+                    .padding(Spacing.xl)
+                    .intrinsicSheetContent(size: $footerSize)
+                }
             }
-            .scrollBounceBehavior(.basedOnSize)
             .navigationTitle(emblem == nil ? Text(title) : Text(verbatim: ""))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(barHidden ? .hidden : .automatic, for: .navigationBar)
@@ -116,11 +143,74 @@ struct StandardSheet<Content: View>: View {
                 }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            headerSize.width = width
+            contentSize.width = width
+            footerSize.width = width
+        }
         .intrinsicSheetDetent(
-            size: $sheetSize,
+            measuredHeight: contentSize.height > 0
+                ? headerSize.height + contentSize.height + footerSize.height : 0,
             chromeAllowance: chromeAllowance ?? (barHidden ? 28 : 64)
         )
         .tint(.brand)
+    }
+}
+
+extension StandardSheet where Footer == EmptyView {
+    init(
+        title: LocalizedStringResource,
+        emblem: String? = nil,
+        surface: SheetSurface = .grouped,
+        chromeAllowance: CGFloat? = nil,
+        trailingButton: SheetBarAction? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title: title, emblem: emblem, surface: surface, chromeAllowance: chromeAllowance,
+            trailingButton: trailingButton, content: content, footer: { EmptyView() })
+    }
+}
+
+/// How far the content runs past each edge of a sheet's scroll view,
+/// from 0 at the edge to 1 at `length` points or more.
+private struct ScrollEdgeFade: Equatable {
+    static let length: CGFloat = 24
+
+    var top: CGFloat = 0
+    var bottom: CGFloat = 0
+
+    init() {}
+
+    init(_ geometry: ScrollGeometry) {
+        // `visibleRect` includes the safe area insets, and
+        // `containerSize` does not.
+        let hiddenAbove = geometry.visibleRect.minY
+        let hiddenBelow = geometry.contentSize.height - geometry.visibleRect.maxY
+        top = min(max(hiddenAbove / Self.length, 0), 1)
+        bottom = min(max(hiddenBelow / Self.length, 0), 1)
+    }
+}
+
+/// Fades the content out at an edge only as far as it runs past that
+/// edge, so the fade grows as the user scrolls.
+private struct ScrollEdgeFadeMask: View {
+    let fade: ScrollEdgeFade
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [.black.opacity(1 - fade.top), .black], startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: ScrollEdgeFade.length)
+            Rectangle()
+            LinearGradient(
+                colors: [.black, .black.opacity(1 - fade.bottom)], startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: ScrollEdgeFade.length)
+        }
     }
 }
 
