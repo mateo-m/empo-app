@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.9.0",
+          "buildVersion": "779",
+          "date": "2026-10-31",
+          "localizedDescription": "New\n• Put the toolbar buttons in the iPhone Duo side strip\n• Run each Ruby game in its own process behind an experimental setting\n• Announce quit and switch games in What's new, with a button to the setting\n\nFixed\n• Adopt the UIScene life cycle in the test host for the iOS 27 SDK\n• Keep the sheet title and footer in place while the content scrolls\n• Put the iPhone Duo strip buttons under the Wi-Fi icon\n• The language menu crash at the start of Pokémon GS Vitro",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.9.0/Empo-0.9.0-unsigned.ipa",
+          "size": 65578158,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.8.1",
           "buildVersion": "770",
           "date": "2026-10-24",
