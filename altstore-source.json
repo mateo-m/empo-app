@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.9.1",
+          "buildVersion": "783",
+          "date": "2026-10-31",
+          "localizedDescription": "Other changes\n• Leave quit and switch games out of the release so SideStore and AltStore can install it",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.9.1/Empo-0.9.1-unsigned.ipa",
+          "size": 65457726,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.9.0",
           "buildVersion": "779",
           "date": "2026-10-31",
