@@ -102,25 +102,23 @@ struct WhatsNewSheet: View {
                 }
             }
             .padding(.vertical, Spacing.md)
+        } footer: {
+            SheetPrimaryButton("Continue", action: onContinue)
 
-            VStack(spacing: 0) {
-                SheetPrimaryButton("Continue", action: onContinue)
-
-                Link(destination: WhatsNew.releasesURL) {
-                    Text(
-                        "See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))",
-                        comment:
-                            "Link to the release notes. The placeholder is an arrow icon. Keep it at the end."
-                    )
-                    .font(.subheadline)
-                    .multilineTextAlignment(.center)
-                    .accessibilityLabel("See all changes on GitHub")
-                    .padding(.horizontal, Spacing.lg)
-                    .frame(minHeight: AppSize.minTapTarget)
-                    .contentShape(.rect)
-                }
-                .padding(.top, Spacing.sm)
+            Link(destination: WhatsNew.releasesURL) {
+                Text(
+                    "See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))",
+                    comment:
+                        "Link to the release notes. The placeholder is an arrow icon. Keep it at the end."
+                )
+                .font(.subheadline)
+                .multilineTextAlignment(.center)
+                .accessibilityLabel("See all changes on GitHub")
+                .padding(.horizontal, Spacing.lg)
+                .frame(minHeight: AppSize.minTapTarget)
+                .contentShape(.rect)
             }
+            .padding(.top, Spacing.sm)
         }
         .onAppear { entered = true }
     }

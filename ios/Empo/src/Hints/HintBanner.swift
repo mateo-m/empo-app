@@ -74,7 +74,7 @@ private struct HintDetailSheet: View {
                 .font(.body)
                 .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-
+        } footer: {
             SheetPrimaryButton("Done") { dismiss() }
         }
     }
