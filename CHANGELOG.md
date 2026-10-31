@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0 - 2026-10-31
+
+### Bug Fixes
+
+- Adopt the UIScene life cycle in the test host for the iOS 27 SDK (#210) ([`22ca557`](https://github.com/mateo-m/empo-app/commit/22ca55742d760223d5630b6f2c88df6412b41dde))
+- Keep the sheet title and footer in place while the content scrolls (#211) ([`03d8364`](https://github.com/mateo-m/empo-app/commit/03d8364b5adf0ba9166f551f3d0de8f34523fef4))
+- Put the iPhone Duo strip buttons under the Wi-Fi icon (#212) ([`4d63247`](https://github.com/mateo-m/empo-app/commit/4d632473839d4ec35d71ceee84b3ba19a105a72b))
+- The language menu crash at the start of Pokémon GS Vitro (mateo-m/mkxp-z-apple-mobile#63) ([`4a324d5`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4a324d584d84b75526b28b24188e77602f6bb734))
+
+### Features
+
+- Put the toolbar buttons in the iPhone Duo side strip (#209) ([`4f56ca3`](https://github.com/mateo-m/empo-app/commit/4f56ca36b19062786288e8e88dd2d97a0249f5b9))
+- Run each Ruby game in its own process behind an experimental setting (#173) ([`1af1076`](https://github.com/mateo-m/empo-app/commit/1af107693e23eac6b747455a5f65a181ed4f244e))
+- Announce quit and switch games in What's new, with a button to the setting (#214) ([`8827c80`](https://github.com/mateo-m/empo-app/commit/8827c802e7953a5ae0faa0d6d8134c20aa7a3728))
+
 ## 0.8.1 - 2026-10-24
 
 ### Bug Fixes
