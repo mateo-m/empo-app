@@ -51,8 +51,17 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         controllers.actionHandler = { [weak self] action, pressed in
             if pressed, action == EmpoActionCatalog.pauseMenu { self?.togglePause(nil) }
         }
+        controllers.updateResolvedMap(Self.gameBindings(gameRoot: URL(fileURLWithPath: launch.gamePath)))
         controllers.start()
         NSApp.activate()
+    }
+
+    /// The Mac app has no screen to change the controls, so the game's
+    /// own controls file is the only layer over the built-in bindings.
+    private static func gameBindings(gameRoot: URL) -> [String: ResolvedTarget] {
+        let result = ControlsManifestLoader.load(gameRoot: gameRoot)?.result
+        let bindings = result?.ignoredNewerVersion == false ? result?.manifest?.bindings : nil
+        return BindingResolver.resolveRuntime(layers: bindings.map { [$0] } ?? []).elements
     }
 
     private static func makeWindow(title: String) -> NSWindow {
