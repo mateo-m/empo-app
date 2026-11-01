@@ -5,6 +5,7 @@ import XCTest
 
 @testable import GameProbe
 
+@available(iOS 16, macOS 13, *)
 @MainActor
 final class HeldKeysTests: XCTestCase {
     private struct Event: Equatable {
