@@ -122,7 +122,7 @@ final class EmpoMacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Each game reads the newest file when it starts.
         CABundleStore.refreshIfStale {}
-        Task { await MacUpdates.shared.checkIfStale() }
+        MacUpdates.shared.checkIfStale()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

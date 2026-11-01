@@ -9,16 +9,23 @@ final class MacUpdates {
     static let shared = MacUpdates()
 
     private(set) var status: UpdateChecker.Status = .unknown
+    private var launchCheck: Task<Void, Never>?
+    private var isCheckingNow = false
 
-    func checkIfStale() async {
+    func checkIfStale() {
         guard UpdateChecker.isSideloadBuild else { return }
-        status = .checking
-        status = await UpdateChecker.checkIfStale()
+        launchCheck = Task {
+            status = .checking
+            status = await UpdateChecker.checkIfStale()
+        }
     }
 
     /// Shows the result in an alert, also when there is no update.
     func checkNow() async {
-        guard status != .checking else { return }
+        guard !isCheckingNow else { return }
+        isCheckingNow = true
+        defer { isCheckingNow = false }
+        await launchCheck?.value
         status = .checking
         status = await UpdateChecker.checkNow()
 
