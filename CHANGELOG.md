@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1 - 2026-11-01
+
+### Chores
+
+- Update mimalloc to v3.6.1 (#222) ([`099d3ce`](https://github.com/mateo-m/empo-app/commit/099d3ce5e65b64c78ad035ab7a5b664a948a5e0d))
+
 ## 0.10.0 - 2026-11-01
 
 ### Bug Fixes
