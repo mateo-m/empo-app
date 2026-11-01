@@ -74,7 +74,7 @@ repo_slug() {
 # bypass).
 run_ci_sync() {
     local version="$1"
-    local ipa_name="Empo-${version}-unsigned.ipa"
+    local ipa_name="Empo-ios.ipa"
     local i
 
     echo "==> waiting for the Release workflow to publish $ipa_name"
@@ -323,7 +323,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     mkdir -p "$IPA_DIR/Payload"
     cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
-    IPA_NAME="Empo-${VERSION}-unsigned.ipa"
+    IPA_NAME="Empo-ios.ipa"
     (cd "$IPA_DIR" && zip -qr "$IPA_NAME" Payload)
     rm -rf "$IPA_DIR/Payload"
     IPA_PATH="$IPA_DIR/$IPA_NAME"

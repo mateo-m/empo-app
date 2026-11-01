@@ -6,7 +6,7 @@
 #
 # Usage:
 #   scripts/audit-ipa.sh path/to/Empo.app
-#   scripts/audit-ipa.sh [--version X.Y.Z] path/to/Empo-unsigned.ipa
+#   scripts/audit-ipa.sh [--version X.Y.Z] path/to/Empo-ios.ipa
 #
 # --cores names the game cores the bundle must carry, and nothing else.
 # Without it the script audits the cores it finds.
@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h | --help)
-            echo "usage: $0 [--version X.Y.Z] [--cores \"MkxpCore Psdk30Core\"] <Empo.app | Empo-unsigned.ipa>"
+            echo "usage: $0 [--version X.Y.Z] [--cores \"MkxpCore Psdk30Core\"] <Empo.app | Empo-ios.ipa>"
             exit 0
             ;;
         *)

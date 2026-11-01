@@ -311,7 +311,9 @@ jobs:
           scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
           mkdir -p build/ipa/Payload
           cp -R build/Release-iphoneos/Empo.app build/ipa/Payload/Empo.app
-          IPA_NAME="Empo-${{ steps.meta.outputs.version }}-unsigned.ipa"
+          # A fixed name, so releases/latest/download/Empo-ios.ipa always
+          # points to the newest one.
+          IPA_NAME="Empo-ios.ipa"
           (cd build/ipa && zip -qr "$IPA_NAME" Payload)
           IPA_SIZE="$(stat -f%z "build/ipa/$IPA_NAME")"
           echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
@@ -353,7 +355,7 @@ jobs:
             cat changelog-section.md
             echo ""
             echo "---"
-            echo "> iPhone and iPad: unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing."
+            echo "> iPhone and iPad: install the app with a sideloading tool. [Install Empo on an iPhone or iPad](https://empo.mateo.sh/install#iphone-and-ipad) shows how."
             echo ">"
             echo "> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it."
           } > release-notes.md
