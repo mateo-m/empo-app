@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.2 - 2026-11-01
+
+### Bug Fixes
+
+- Let Empo Player open game cores so games start again (#223) ([`a6c1bab`](https://github.com/mateo-m/empo-app/commit/a6c1bab0d3a971e34df984863e47319e731e8c48))
+
 ## 0.10.1 - 2026-11-01
 
 ### Chores
