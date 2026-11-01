@@ -13,6 +13,7 @@ Issues, ideas, and PRs are welcome.
 - Homebrew (`xcodegen`, `gh`).
 - Apple developer account (required only for on-device builds).
 - iPhone or iPad running iOS 26+ for on-device testing. iPhone 11 is the floor model.
+- macOS 26 or newer to run the Mac app.
 
 ## Build
 
@@ -33,6 +34,18 @@ Build the scheme, not the target. A `-target` build resolves SwiftPM
 packages through the legacy build system, which cannot find the
 generated module map for the `json5cpp` C package and fails with
 `module map file ... json5cpp.modulemap not found`.
+
+### Mac app
+
+The `EmpoMac` scheme builds the Mac app. It has the same cores as the iOS app, and it puts the helper app `Empo Player` in `Empo.app/Contents/Helpers`. Each game runs in an `Empo Player` process of its own.
+
+```sh
+xcodebuild -project ios/Empo/Empo.xcodeproj -scheme EmpoMac \
+  -configuration Debug -derivedDataPath build/mac build
+open build/mac/Build/Products/Debug/Empo.app
+```
+
+A Debug build has the bundle ID `sh.mateo.empo.dev`. The app runs in the macOS sandbox, so its games and settings are in `~/Library/Containers/sh.mateo.empo.dev/Data`. The Mac app has ad hoc signing only. A Mac release needs a Developer ID certificate and notarization, which the release workflow does not do yet.
 
 ### Change an engine
 
