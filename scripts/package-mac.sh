@@ -33,13 +33,13 @@ mkdir -p "$OUT"
 
 echo "==> building the Mac app" >&2
 # Send the build log to stderr: the caller reads the disk image path
-# from stdout.
+# from stdout. With pipefail, a failed build stops the script here.
 xcodebuild \
     -project "$PROJECT_DIR/Empo.xcodeproj" \
     -scheme EmpoMac \
     -configuration Release \
     -derivedDataPath "$DERIVED_DATA" \
-    build 2>&1 | grep -E "^(\*\* BUILD|error:)" >&2 || true
+    build 2>&1 | grep -E "^(\*\* BUILD|error:)" >&2
 [[ -d "$APP" ]] || fail "build failed: $APP not found"
 
 PLAYER="$APP/Contents/Helpers/Empo Player.app"
