@@ -1,7 +1,7 @@
 # mimalloc
 
-Vendored from mimalloc **v3.5.4** (https://github.com/microsoft/mimalloc,
-tag `v3.5.4`), MIT, see `LICENSE`.
+Vendored from mimalloc **v3.6.1** (https://github.com/microsoft/mimalloc,
+tag `v3.6.1`), MIT, see `LICENSE`.
 
 The game process uses it as its malloc zone, on the block of memory that
 the app lends it (`GameProcess/AppMemoryHeap.c`). Only `src/static.c`
