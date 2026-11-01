@@ -17,6 +17,7 @@ struct PlayerLaunch: Codable {
     let userDataDirectory: String?
     let fontsDirectory: String
     let verticalAlignment: GameCoreVerticalAlignment
+    let fixedAspectRatio: Bool
     let settings: [Setting]
     let debugLogPath: String?
     let caBundlePath: String?

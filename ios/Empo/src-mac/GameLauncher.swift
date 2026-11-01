@@ -65,6 +65,9 @@ final class GameLauncher {
             fontsDirectory: DataDirectory.fontsRootURL.path,
             verticalAlignment: (start.settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment)
                 .bridgeValue,
+            fixedAspectRatio: start.settings.fixedAspectRatio
+                ?? start.core.displayDefaults(for: start.container).fixedAspectRatio
+                ?? GameConfigDefaults.engineFixedAspectRatio,
             settings: CoreSettingsRecorder.settings,
             debugLogPath: logger.logURL?.path,
             caBundlePath: CABundleStore.effectivePath,

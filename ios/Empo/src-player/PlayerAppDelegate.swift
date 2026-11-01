@@ -225,17 +225,19 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         guard width > 0, height > 0 else { return }
         let ratio = CGFloat(width / height)
         if let aspectRatio, abs(aspectRatio - ratio) < 0.01 { return }
+        let isFirstRect = aspectRatio == nil
         aspectRatio = ratio
-        guard !window.styleMask.contains(.fullScreen) else {
+        if launch.fixedAspectRatio {
             window.contentAspectRatio = NSSize(width: CGFloat(width), height: CGFloat(height))
-            return
         }
+        // With the ratio free, the core reports a picture the size of the
+        // window, so a resize here would undo the user's own resize.
+        guard launch.fixedAspectRatio || isFirstRect, !window.styleMask.contains(.fullScreen) else { return }
         let visible = (window.screen ?? NSScreen.main)?.visibleFrame.size ?? NSSize(width: 1280, height: 800)
         var size = NSSize(width: visible.height * 0.75 * ratio, height: visible.height * 0.75)
         if size.width > visible.width * 0.9 {
             size = NSSize(width: visible.width * 0.9, height: visible.width * 0.9 / ratio)
         }
-        window.contentAspectRatio = NSSize(width: CGFloat(width), height: CGFloat(height))
         window.setContentSize(size)
         window.center()
     }
