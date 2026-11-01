@@ -12,7 +12,6 @@ struct GameSettingsView: View {
     @Environment(\.pauseManager) private var pauseManager
 
     @State private var model: GameSettingsModel
-    @State private var showResetConfirm = false
 
     init(game: GameEntry) {
         self.game = game
@@ -44,15 +43,7 @@ struct GameSettingsView: View {
             Form {
                 model.core?.settingsPage(model)
 
-                if model.hasAnyCustomizations {
-                    Section {
-                        Button("Reset to defaults", role: .destructive) {
-                            showResetConfirm = true
-                        }
-                    } footer: {
-                        Text("Clears every change you made and uses the game's original values.")
-                    }
-                }
+                ResetSettingsSection(model: model, gameTitle: game.title)
             }
             // Pin the restart-required pill above the form via a
             // top safe-area inset. The inset gives the pill a
@@ -93,12 +84,6 @@ struct GameSettingsView: View {
             }
             .animation(.smooth(duration: 0.25), value: restartHint != nil)
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Reset all settings?", isPresented: $showResetConfirm) {
-                Button("Reset", role: .destructive) { withAnimation { model.resetToDefaults() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This clears every change you made to \"\(game.title)\". You can't undo this.")
-            }
             .sheetToolbar {
                 VStack(spacing: 1) {
                     Text(game.title)

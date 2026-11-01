@@ -9,16 +9,55 @@ struct GameInspector: View {
     let model: LibraryWindowModel
 
     var body: some View {
-        if let game = model.selectedReadyGame, let container = game.container {
-            GameInfoForm(game: game, container: container, model: model)
-                .id(game.viewIdentity)
+        if let game = model.selectedGame {
+            if game.status == .ready, let container = game.container {
+                GameInfoForm(game: game, container: container, model: model)
+                    .id(game.viewIdentity)
+            } else {
+                GameStatusView(game: game)
+            }
         } else {
             ContentUnavailableView(
-                "No game selected",
+                "No Game Selected",
                 systemImage: "info.circle",
                 description: Text("Select a game to see its details.")
             )
         }
+    }
+}
+
+private struct GameStatusView: View {
+    let game: GameEntry
+
+    var body: some View {
+        VStack(spacing: Spacing.lg) {
+            GameArtworkView(
+                artworkPath: game.artworkPath,
+                placeholderIconSize: IconSize.placeholder,
+                size: 128,
+                cornerRadius: Radius.lg,
+                importing: game.isImporting,
+                reloadToken: game.artworkRevision
+            )
+            .elevatedShadow()
+            Text(game.title)
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            switch game.status {
+            case .invalid:
+                Label(GameLibrary.whyInvalid(game), systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            case .importing:
+                ProgressView(value: game.importProgress) { Text("Importing…") }
+            case .deleting:
+                Text("Deleting…").foregroundStyle(.secondary)
+            case .ready:
+                EmptyView()
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -29,7 +68,8 @@ private struct GameInfoForm: View {
 
     @Environment(\.openWindow) private var openWindow
     @Environment(\.appSettings) private var settings
-    @State private var metadata: GameMetadata
+    @State private var hasCustomArtwork: Bool
+    @State private var savedTitle: String?
     @State private var customTitle: String
     @State private var diskSize: Int64?
     @State private var runtimeRows: [InfoRow] = []
@@ -43,7 +83,8 @@ private struct GameInfoForm: View {
         self.container = container
         self.model = model
         let metadata = GameMetadata.load(from: container)
-        _metadata = State(initialValue: metadata)
+        _hasCustomArtwork = State(initialValue: metadata.customArtworkFilename != nil)
+        _savedTitle = State(initialValue: metadata.customTitle)
         _customTitle = State(initialValue: metadata.customTitle ?? "")
         let core = GameCores.core(forGameAt: container.gameURL)
         originalTitle =
@@ -57,18 +98,18 @@ private struct GameInfoForm: View {
             Section {
                 VStack(spacing: Spacing.lg) {
                     GameArtworkView(
-                        artworkPath: metadata.customArtworkPath(in: container) ?? game.artworkPath,
-                        placeholderIconSize: 48,
+                        artworkPath: game.artworkPath,
+                        placeholderIconSize: IconSize.placeholder,
                         size: 128,
                         cornerRadius: Radius.lg,
                         reloadToken: game.artworkRevision
                     )
-                    .shadow(color: .black.opacity(0.15), radius: 6, y: 2)
+                    .elevatedShadow()
 
-                    Menu("Change game artwork") {
-                        Button("Choose image…") { isChoosingArtwork = true }
-                        if metadata.customArtworkFilename != nil {
-                            Button("Use original artwork", action: removeArtwork)
+                    Menu("Change Game Artwork") {
+                        Button("Choose Image…") { isChoosingArtwork = true }
+                        if hasCustomArtwork {
+                            Button("Use Original Artwork", action: removeArtwork)
                         }
                     }
                     .menuStyle(.button)
@@ -93,30 +134,32 @@ private struct GameInfoForm: View {
 
             Section("Details") {
                 if let madeWith, let coreName {
-                    LabeledContent("Made with", value: madeWith)
-                    LabeledContent("Game core", value: coreName)
+                    LabeledContent("Made With", value: madeWith)
+                    LabeledContent("Game Core", value: coreName)
                 }
-                LabeledContent("Date added") {
+                LabeledContent("Date Added") {
                     Text(
-                        metadata.dateAdded?.formatted(date: .abbreviated, time: .omitted)
+                        game.dateAdded?.formatted(date: .abbreviated, time: .omitted)
                             ?? String(localized: "Unknown"))
                 }
-                LabeledContent("Last played") {
+                LabeledContent("Last Played") {
                     TimelineView(.everyMinute) { _ in
                         Text(
-                            metadata.lastPlayed?.formatted(.relative(presentation: .named))
+                            game.lastPlayed?.formatted(.relative(presentation: .named))
                                 ?? String(localized: "Never"))
                     }
                 }
-                LabeledContent("Play time", value: GameMetadata.formatPlayTime(metadata.totalPlayTime))
-                LabeledContent("Size on disk") {
+                if let playTime = game.totalPlayTime, playTime > 0 {
+                    LabeledContent("Play Time", value: GameMetadata.formatPlayTime(playTime))
+                }
+                LabeledContent("Size on Disk") {
                     if let diskSize {
                         Text(GameMetadata.formatDiskSize(diskSize))
                     } else {
                         ProgressView().controlSize(.small)
                     }
                 }
-                LabeledContent("Folder name") {
+                LabeledContent("Folder Name") {
                     Text(game.id)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -160,32 +203,21 @@ private struct GameInfoForm: View {
     }
 
     private func saveTitle() {
-        let title = customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newValue = title.isEmpty ? nil : title
-        guard newValue != metadata.customTitle else { return }
-        metadata.customTitle = newValue
-        metadata.save(to: container)
+        let trimmed = customTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (trimmed.isEmpty ? nil : trimmed) != savedTitle else { return }
+        savedTitle = GameMetadata.saveCustomTitle(customTitle, in: container).customTitle
         model.library.refreshGameEntry(id: game.id)
     }
 
     private func saveArtwork(_ image: NSImage) {
-        if let path = metadata.customArtworkPath(in: container) { ImageCache.shared.evict(path: path) }
-        guard let filename = GameMetadata.saveImage(image, as: "artwork", in: container) else { return }
-        metadata.customArtworkFilename = filename
-        metadata.save(to: container)
-        // A new image keeps the old file name. Evict again after the write
-        // to drop a load that read the old bytes in the meantime.
-        if let path = metadata.customArtworkPath(in: container) { ImageCache.shared.evict(path: path) }
+        guard GameMetadata.saveCustomImage(image, as: .artwork, in: container) != nil else { return }
+        hasCustomArtwork = true
         didChangeImage()
     }
 
     private func removeArtwork() {
-        if let path = metadata.customArtworkPath(in: container) { ImageCache.shared.evict(path: path) }
-        if let filename = metadata.customArtworkFilename {
-            GameMetadata.removeImage(named: filename, in: container)
-        }
-        metadata.customArtworkFilename = nil
-        metadata.save(to: container)
+        GameMetadata.removeCustomImage(.artwork, in: container)
+        hasCustomArtwork = false
         didChangeImage()
     }
 

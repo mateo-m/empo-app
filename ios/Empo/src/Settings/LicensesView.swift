@@ -30,9 +30,11 @@ struct LicensesView: View {
                 }
             }
         }
-        .navigationTitle("Open-source licenses")
         #if os(iOS)
+        .navigationTitle("Open-source licenses")
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .navigationTitle("Open-Source Licenses")
         #endif
     }
 

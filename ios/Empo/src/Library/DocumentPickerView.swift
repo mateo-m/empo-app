@@ -19,6 +19,10 @@ extension UTType {
         ?? UTType(
             importedAs: "cyou.joiplay.jgp",
             conformingTo: .zip)
+
+    static let importableGames: [UTType] = [
+        .folder, .zip, .sevenZArchive, .rarArchive, .jgpArchive, .exeArchive,
+    ]
 }
 
 #if os(iOS)
@@ -40,9 +44,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         // (folder: spinner forever) or silently no-ops (file: Open
         // does nothing). asCopy bypasses that whole grant flow.
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [
-                .folder, .zip, .sevenZArchive, .rarArchive, .jgpArchive, .exeArchive,
-            ],
+            forOpeningContentTypes: UTType.importableGames,
             asCopy: true
         )
         picker.allowsMultipleSelection = true

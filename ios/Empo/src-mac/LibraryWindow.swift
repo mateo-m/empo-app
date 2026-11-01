@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct LibraryWindow: View {
     @State private var model = LibraryWindowModel()
     @State private var isDropTargeted = false
+    @FocusState private var isSearchFocused: Bool
     @Environment(\.appSettings) private var settings
 
     var body: some View {
@@ -23,6 +26,7 @@ struct LibraryWindow: View {
             .navigationTitle("Library")
             .navigationSubtitle(subtitle)
             .searchable(text: $model.search, placement: .toolbar, prompt: "Search games")
+            .searchFocused($isSearchFocused)
             .toolbar { toolbar }
             .inspector(isPresented: $model.showsInspector) {
                 GameInspector(model: model)
@@ -30,7 +34,7 @@ struct LibraryWindow: View {
             }
             .fileImporter(
                 isPresented: $model.showsImporter,
-                allowedContentTypes: LibraryWindowModel.importableTypes,
+                allowedContentTypes: UTType.importableGames,
                 allowsMultipleSelection: true
             ) { result in
                 if case .success(let urls) = result { model.importGames(urls) }
@@ -43,6 +47,8 @@ struct LibraryWindow: View {
                     onConfirm: model.importPipeline.confirmChoice(_:approvedUpdateIDs:))
             }
             .focusedSceneValue(\.libraryWindow, model)
+            .focusedSceneValue(\.isSearchingLibrary, isSearchFocused)
+            .tint(.brand)
             .onChange(of: settings.librarySortOption, initial: true) { model.refreshSizesIfNeeded() }
             .onChange(of: model.library.games.count) { model.refreshSizesIfNeeded() }
     }
@@ -86,8 +92,8 @@ struct LibraryWindow: View {
             .pickerStyle(.segmented)
             .help("Show games as a grid or a list")
 
-            Menu("Sort by", systemImage: "arrow.up.arrow.down") {
-                Picker("Sort by", selection: $settings.librarySortOption) {
+            Menu("Sort By", systemImage: "arrow.up.arrow.down") {
+                Picker("Sort By", selection: $settings.librarySortOption) {
                     ForEach(LibrarySortOption.groups) { group in
                         Section {
                             ForEach(group.options, id: \.self) { option in
@@ -118,13 +124,13 @@ private struct EmptyLibraryView: View {
     var body: some View {
         ContentUnavailableView {
             Label {
-                Text("No games yet")
+                Text("No Games Yet")
             } icon: {
                 Image(.empoMark)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 56, height: 56)
-                    .foregroundStyle(.brand)
+                    .frame(width: IconSize.emptyState, height: IconSize.emptyState)
+                    .foregroundStyle(.secondary)
             }
         } description: {
             Text("Import a game folder or archive, or drag one into this window.")
@@ -138,8 +144,8 @@ private struct EmptyLibraryView: View {
 private struct DropHighlight: View {
     var body: some View {
         RoundedRectangle(cornerRadius: Radius.md)
-            .strokeBorder(Color.accentColor, lineWidth: 3)
-            .background(Color.accentColor.opacity(0.08), in: .rect(cornerRadius: Radius.md))
+            .strokeBorder(.tint, lineWidth: 3)
+            .background(.tint.opacity(0.08), in: .rect(cornerRadius: Radius.md))
             .overlay {
                 Label("Drop to import", systemImage: "square.and.arrow.down")
                     .font(.title3.weight(.semibold))
@@ -154,44 +160,25 @@ private struct DropHighlight: View {
 
 private struct LibraryAlerts: ViewModifier {
     @Bindable var model: LibraryWindowModel
+    @Bindable private var launcher = GameLauncher.shared
 
     func body(content: Content) -> some View {
         content
-            .alert(
-                "Delete this game?",
-                isPresented: isPresented($model.gameToDelete),
-                presenting: model.gameToDelete
-            ) { game in
-                Button("Delete", role: .destructive) { model.delete(game) }
-                Button("Cancel", role: .cancel) {}
-            } message: { game in
-                if game.isImporting {
-                    Text(
-                        "This stops importing \"\(game.title)\". If you were updating a game you already have, that copy stays as it is."
-                    )
-                } else {
-                    Text(
-                        "This deletes \"\(game.title)\" from your device. Empo moves the saves it recognizes to Rescued Saves. Saves it doesn't recognize are deleted with the game. You can't undo this."
-                    )
-                }
-            }
-            .alert(
-                "Couldn't move the saves",
-                isPresented: Binding(
-                    get: { !model.saveRescueFailures.isEmpty },
-                    set: {
-                        if !$0, !model.saveRescueFailures.isEmpty { model.saveRescueFailures.removeFirst() }
-                    }
-                ),
-                presenting: model.saveRescueFailures.first
-            ) { game in
-                Button("Delete anyway", role: .destructive) { model.delete(game, discardingSaves: true) }
-                Button("Keep game", role: .cancel) {}
-            } message: { game in
-                Text(
-                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
+            .modifier(
+                DeleteGameAlerts(
+                    isPresented: isPresented($model.gameToDelete),
+                    game: model.gameToDelete,
+                    saveRescueFailures: $model.saveRescueFailures,
+                    onDelete: { model.delete($0) },
+                    onDeleteDiscardingSaves: { model.delete($0, discardingSaves: true) }
                 )
-            }
+            )
+            .modifier(
+                StopValidationAlert(
+                    isPresented: $model.showsStopValidation,
+                    onStop: model.importPipeline.cancelValidation)
+            )
+            .modifier(InvalidGameAlert(reason: $model.invalidReason))
             .alert(
                 model.warnedLaunch?.warning.title ?? "",
                 isPresented: isPresented($model.warnedLaunch),
@@ -203,15 +190,29 @@ private struct LibraryAlerts: ViewModifier {
                 Text(warned.warning.message)
             }
             .alert(
-                "Empo can't run this game",
+                "Empo can't run this game.",
                 isPresented: isPresented($model.launchFailure),
                 presenting: model.launchFailure
             ) { _ in
-                Button("Got it") {}
+                Button("OK") {}
             } message: { failure in
                 Text(failure.message)
             }
             .modifier(ImportAlerts(model: model))
+            .alert(
+                launcher.lastFailure?.title ?? "",
+                isPresented: isPresented($launcher.lastFailure),
+                presenting: launcher.lastFailure
+            ) { failure in
+                if let logURL = failure.logURL {
+                    Button("Show Log") { NSWorkspace.shared.activateFileViewerSelecting([logURL]) }
+                }
+                Button("OK") {}
+            } message: { failure in
+                if failure.logURL == nil {
+                    Text("To find out why, turn on “Debug logs” in Settings, then play the game again.")
+                }
+            }
     }
 }
 
@@ -225,7 +226,7 @@ private struct ImportAlerts: ViewModifier {
                 isPresented: isPresented($model.deleteFailure),
                 presenting: model.deleteFailure
             ) { _ in
-                Button("Got it") {}
+                Button("OK") {}
             } message: { failure in
                 Text(failure.message)
             }
@@ -237,45 +238,20 @@ private struct ImportAlerts: ViewModifier {
                 ),
                 presenting: model.importPipeline.alert
             ) { _ in
-                Button("Got it") {}
+                Button("OK") {}
             } message: { alert in
                 Text(alert.message)
             }
-            .alert(
-                replaceTitle,
-                isPresented: Binding(
-                    get: { model.importPipeline.activeReplacePrompt != nil },
-                    set: { if !$0 { model.importPipeline.dismissReplacePrompt() } }
-                ),
-                presenting: model.importPipeline.activeReplacePrompt
-            ) { _ in
-                Button("Update", role: .destructive) { model.importPipeline.confirmReplace() }
-                Button("Cancel", role: .cancel) { model.importPipeline.cancelReplace() }
-            } message: { prompt in
-                Text(replaceMessage(for: prompt))
-            }
-    }
-
-    private var replaceTitle: String {
-        (model.importPipeline.activeReplacePrompt?.titles.count ?? 1) > 1
-            ? String(localized: "These games are already in your library")
-            : String(localized: "This game is already in your library")
-    }
-
-    private func replaceMessage(for prompt: ImportReplacePrompt) -> String {
-        if prompt.titles.count == 1, let name = prompt.titles.first {
-            return String(
-                localized:
-                    "\"\(name)\" is already in your library. Importing replaces its files with the new ones. Your saves and settings stay. You can't undo this.",
-                comment: "The placeholder is the game's name."
+            .modifier(
+                ImportReplaceAlert(
+                    prompt: Binding(
+                        get: { model.importPipeline.activeReplacePrompt },
+                        set: { if $0 == nil { model.importPipeline.dismissReplacePrompt() } }
+                    ),
+                    onReplace: model.importPipeline.confirmReplace,
+                    onCancel: model.importPipeline.cancelReplace
+                )
             )
-        }
-        let names = prompt.titles.map { "\"\($0)\"" }.formatted(.list(type: .and))
-        return String(
-            localized:
-                "\(names) are already in your library. Importing replaces their files with the new ones. Your saves and settings stay. You can't undo this.",
-            comment: "The placeholder is a list of game names."
-        )
     }
 }
 

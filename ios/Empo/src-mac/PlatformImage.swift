@@ -37,15 +37,4 @@ extension NSImage {
         return NSBitmapImageRep(cgImage: cgImage)
             .representation(using: .jpeg, properties: [.compressionFactor: compressionQuality])
     }
-
-    func resizedToFit(maxDimension: CGFloat) -> NSImage {
-        let maxSide = max(size.width, size.height)
-        guard maxSide > maxDimension else { return self }
-        let scale = maxDimension / maxSide
-        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        return NSImage(size: newSize, flipped: false) { rect in
-            self.draw(in: rect)
-            return true
-        }
-    }
 }

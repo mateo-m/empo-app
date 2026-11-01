@@ -153,6 +153,82 @@ struct GameMetadata: Codable {
         try? FileManager.default.removeItem(at: url)
     }
 
+    enum CustomImage {
+        case artwork
+        case banner
+
+        fileprivate var name: String {
+            switch self {
+            case .artwork: "artwork"
+            case .banner: "banner"
+            }
+        }
+
+        fileprivate var filename: WritableKeyPath<GameMetadata, String?> {
+            switch self {
+            case .artwork: \.customArtworkFilename
+            case .banner: \.customBannerFilename
+            }
+        }
+    }
+
+    func customImagePath(_ image: CustomImage, in container: GameContainer) -> String? {
+        customMediaPath(filename: self[keyPath: image.filename], in: container)
+    }
+
+    /// Reads the file again before each edit. The play-time logger
+    /// writes to it while a game runs, and a copy loaded earlier would
+    /// undo those writes.
+    @discardableResult
+    static func update(in container: GameContainer, _ change: (inout GameMetadata) -> Void) -> GameMetadata {
+        var metadata = load(from: container)
+        change(&metadata)
+        metadata.save(to: container)
+        return metadata
+    }
+
+    @discardableResult
+    static func saveCustomTitle(_ title: String, in container: GameContainer) -> GameMetadata {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return update(in: container) { $0.customTitle = trimmed.isEmpty ? nil : trimmed }
+    }
+
+    static func saveCustomImage(
+        _ image: UIImage, as kind: CustomImage, in container: GameContainer
+    )
+        -> GameMetadata?
+    {
+        if let path = load(from: container).customImagePath(kind, in: container) {
+            ImageCache.shared.evict(path: path)
+        }
+        guard let filename = saveImage(image, as: kind.name, in: container) else { return nil }
+        let metadata = update(in: container) { $0[keyPath: kind.filename] = filename }
+        if let path = metadata.customImagePath(kind, in: container) {
+            // The new image keeps the old file name. Evict again to drop
+            // a load that read the old bytes between the first evict and
+            // the write, then prime the cache for cache-first readers.
+            ImageCache.shared.evict(path: path)
+            Task.detached(priority: .userInitiated) {
+                ImageCache.shared.prewarmThumbnail(for: path, maxPixelSize: ImageCache.PixelBudget.cell)
+                ImageCache.shared.prewarmThumbnail(for: path, maxPixelSize: ImageCache.PixelBudget.hero)
+            }
+        }
+        return metadata
+    }
+
+    @discardableResult
+    static func removeCustomImage(_ kind: CustomImage, in container: GameContainer) -> GameMetadata {
+        update(in: container) { metadata in
+            if let path = metadata.customImagePath(kind, in: container) {
+                ImageCache.shared.evict(path: path)
+            }
+            if let filename = metadata[keyPath: kind.filename] {
+                removeImage(named: filename, in: container)
+            }
+            metadata[keyPath: kind.filename] = nil
+        }
+    }
+
     /// Returns containers whose metadata has the given JGP manifest
     /// id. Used to detect when a user imports the same JGP archive
     /// twice so the import flow can offer to replace the existing
@@ -206,7 +282,6 @@ struct GameMetadata: Codable {
     }
 }
 
-#if os(iOS)
 extension UIImage {
     fileprivate func resizedToFit(maxDimension: CGFloat) -> UIImage {
         let maxSide = max(size.width, size.height)
@@ -215,10 +290,15 @@ extension UIImage {
         let scale = maxDimension / maxSide
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
 
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        return renderer.image { _ in
+        #if os(iOS)
+        return UIGraphicsImageRenderer(size: newSize).image { _ in
             draw(in: CGRect(origin: .zero, size: newSize))
         }
+        #else
+        return NSImage(size: newSize, flipped: false) { rect in
+            self.draw(in: rect)
+            return true
+        }
+        #endif
     }
 }
-#endif

@@ -28,7 +28,6 @@ struct GameCoreLibrary {
     let signalInfoDismissed: @convention(c) () -> Void
     let setEngineTerminatedCallback: @convention(c) (Callback?, UnsafeMutableRawPointer?) -> Void
     let setGameRectChangedCallback: @convention(c) (RectCallback?, UnsafeMutableRawPointer?) -> Void
-    let setFrameRenderedCallback: @convention(c) (Callback?, UnsafeMutableRawPointer?) -> Void
     let setErrorMessageCallback: @convention(c) (MessageCallback?, UnsafeMutableRawPointer?) -> Void
     let setInfoMessageCallback: @convention(c) (MessageCallback?, UnsafeMutableRawPointer?) -> Void
 
@@ -66,7 +65,6 @@ struct GameCoreLibrary {
         signalInfoDismissed = try function("signalInfoDismissed")
         setEngineTerminatedCallback = try function("setEngineTerminatedCallback")
         setGameRectChangedCallback = try function("setGameRectChangedCallback")
-        setFrameRenderedCallback = try function("setFrameRenderedCallback")
         setErrorMessageCallback = try function("setErrorMessageCallback")
         setInfoMessageCallback = try function("setInfoMessageCallback")
     }

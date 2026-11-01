@@ -16,7 +16,7 @@ struct PlayerLaunch: Codable {
     let gamePath: String
     let userDataDirectory: String?
     let fontsDirectory: String
-    let verticalAlignment: Int32
+    let verticalAlignment: GameCoreVerticalAlignment
     let settings: [Setting]
     let debugLogPath: String?
     let caBundlePath: String?
@@ -26,12 +26,23 @@ struct PlayerLaunch: Codable {
     static let argument = "--launch"
 
     func arguments() throws -> [String] {
-        [Self.argument, String(bytes: try JSONEncoder().encode(self), encoding: .utf8) ?? ""]
+        // JSONEncoder always writes UTF-8, so the decode cannot fail.
+        // swiftlint:disable:next optional_data_string_conversion
+        [Self.argument, String(decoding: try JSONEncoder().encode(self), as: UTF8.self)]
     }
 
-    static func fromProcessArguments() -> PlayerLaunch? {
+    /// Nil when the process has no `--launch` argument.
+    static func fromProcessArguments() throws -> PlayerLaunch? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: argument), index + 1 < arguments.count else { return nil }
-        return try? JSONDecoder().decode(PlayerLaunch.self, from: Data(arguments[index + 1].utf8))
+        return try JSONDecoder().decode(PlayerLaunch.self, from: Data(arguments[index + 1].utf8))
     }
+}
+
+extension GameCoreVerticalAlignment: @retroactive Codable {}
+
+/// A line that Empo Player writes to its standard output for Empo.
+enum PlayerMessage: String {
+    case paused
+    case resumed
 }

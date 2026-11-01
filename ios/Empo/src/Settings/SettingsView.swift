@@ -225,10 +225,7 @@ struct SettingsView: View {
                             Label("Open-source licenses", systemImage: "doc.text")
                         }
 
-                        Link(
-                            destination: URL(string: "https://empo.mateo.sh/privacy/")
-                                ?? URL.empoHomepage
-                        ) {
+                        Link(destination: EmpoLink.privacy) {
                             Label {
                                 HStack {
                                     Text("Privacy policy")
@@ -243,10 +240,7 @@ struct SettingsView: View {
                         }
                         .tint(.primary)
 
-                        Link(
-                            destination: URL(string: "https://empo.mateo.sh/terms/")
-                                ?? URL.empoHomepage
-                        ) {
+                        Link(destination: EmpoLink.terms) {
                             Label {
                                 HStack {
                                     Text("Terms of use")
@@ -261,10 +255,7 @@ struct SettingsView: View {
                         }
                         .tint(.primary)
 
-                        Link(
-                            destination: URL(string: "https://github.com/mateo-m/empo-app")
-                                ?? URL.empoHomepage
-                        ) {
+                        Link(destination: EmpoLink.sourceCode) {
                             Label {
                                 HStack {
                                     Text("Source code on GitHub")
@@ -281,10 +272,7 @@ struct SettingsView: View {
                         }
                         .tint(.primary)
 
-                        Link(
-                            destination: URL(string: "https://x.com/gridplay_")
-                                ?? URL.empoHomepage
-                        ) {
+                        Link(destination: EmpoLink.twitter) {
                             Label {
                                 HStack {
                                     Text("Find me on Twitter")
@@ -1140,12 +1128,4 @@ private struct DevicePreview: View {
             return GameRect(width: gameW, height: gameH, offsetX: 0, offsetY: offsetY)
         }
     }
-}
-
-extension URL {
-    /// Fallback for any URL literal that fails to parse. There is no
-    /// way to guarantee a non-nil URL at compile time without a
-    /// force-unwrap, so the project homepage is the safe landing page.
-    fileprivate static let empoHomepage =
-        URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
 }

@@ -36,6 +36,20 @@ enum LibrarySortOption: String, CaseIterable {
     case smallestSize
 
     var label: LocalizedStringResource {
+        #if os(macOS)
+        switch self {
+        case .titleAZ: "Title A to Z"
+        case .titleZA: "Title Z to A"
+        case .recentlyAdded: "Recently Added"
+        case .leastRecentlyAdded: "Added Longest Ago"
+        case .recentlyPlayed: "Recently Played"
+        case .leastRecentlyPlayed: "Played Longest Ago"
+        case .mostPlayed: "Most Played"
+        case .leastPlayed: "Least Played"
+        case .largestSize: "Largest First"
+        case .smallestSize: "Smallest First"
+        }
+        #else
         switch self {
         case .titleAZ: "Title A to Z"
         case .titleZA: "Title Z to A"
@@ -48,6 +62,7 @@ enum LibrarySortOption: String, CaseIterable {
         case .largestSize: "Largest first"
         case .smallestSize: "Smallest first"
         }
+        #endif
     }
 
     var icon: String {
@@ -215,6 +230,15 @@ class AppSettings {
         }
     }
 
+    #if os(macOS)
+    var quitClosesGamesWithoutAsking: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                quitClosesGamesWithoutAsking, forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        }
+    }
+    #endif
+
     /// Where the games of `GameCores.gameProcessCores` run from the next
     /// launch. Experimental, and off
     /// (`.app`) by default.
@@ -308,7 +332,9 @@ class AppSettings {
             GameRunner(rawValue: ud.string(forKey: DefaultsKey.rubyGameRunner) ?? "") ?? .app
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
         self.whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
-
+        #if os(macOS)
+        self.quitClosesGamesWithoutAsking = ud.bool(forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        #endif
     }
 
     private static let defaultViewportBoundsColor = Color(

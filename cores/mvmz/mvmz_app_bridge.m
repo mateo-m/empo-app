@@ -345,15 +345,13 @@ void gamecore_injectKeyEvent(int scancode, int pressed) {
 
 // MARK: - The window
 
+void *gamecore_getGameWindow(void) {
 #if TARGET_OS_OSX
-void *gamecore_getGameWindow(void) {
     return (__bridge void *)gHostView;
-}
 #else
-void *gamecore_getGameWindow(void) {
     return (__bridge void *)gWindow;
-}
 #endif
+}
 
 // MARK: - Callbacks
 

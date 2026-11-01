@@ -16,17 +16,18 @@
 #include "GameCore.h"
 #include "psdk_core.h"
 
+#include <CoreFoundation/CoreFoundation.h>
 #include <TargetConditionals.h>
 
 #include <algorithm>
 #include <atomic>
+#include <climits>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <libgen.h>
 #include <mutex>
 #include <pthread.h>
 #include <stdlib.h>
@@ -147,27 +148,45 @@ std::atomic<char **> gArgv{nullptr};
 constexpr size_t kGameStackBytes = 16 * 1024 * 1024;
 
 // The core reads its own files from its own bundle, so a launcher embeds
-// the framework and ships no PSDK file of its own. dladdr on a
-// function in this image names the framework binary, and its folder is
-// the bundle. mkxp-z finds its assets the same way
-// (filesystemImplIOS.mm mkxpOwnBundle).
-std::string ownBundlePath() {
+// the framework and ships no PSDK file of its own. dladdr on a function in
+// this image names the framework binary. mkxp-z finds its assets the same
+// way (filesystemImplIOS.mm mkxpOwnBundle). CFBundle knows where the
+// resources are: at the top on iOS, in Versions/A/Resources on macOS.
+std::string supportPath() {
     Dl_info info;
-    if (dladdr(reinterpret_cast<const void *>(&ownBundlePath), &info) == 0 || !info.dli_fname) {
+    if (dladdr(reinterpret_cast<const void *>(&supportPath), &info) == 0 || !info.dli_fname) {
         return {};
     }
-    std::string path(info.dli_fname);
-    std::string copy(path);
-    return dirname(&copy[0]);
+    const std::string binary(info.dli_fname);
+    const size_t end = binary.rfind(".framework/");
+    if (end == std::string::npos) {
+        return {};
+    }
+    const std::string framework = binary.substr(0, end + strlen(".framework"));
+    CFURLRef frameworkURL = CFURLCreateFromFileSystemRepresentation(
+        nullptr, reinterpret_cast<const UInt8 *>(framework.data()), framework.size(), true);
+    CFBundleRef bundle = CFBundleCreate(nullptr, frameworkURL);
+    CFRelease(frameworkURL);
+    if (!bundle) {
+        return {};
+    }
+    CFURLRef supportURL = CFBundleCopyResourceURL(bundle, CFSTR("PsdkSupport"), nullptr, nullptr);
+    CFRelease(bundle);
+    if (!supportURL) {
+        return {};
+    }
+    char path[PATH_MAX];
+    const bool found =
+        CFURLGetFileSystemRepresentation(supportURL, true, reinterpret_cast<UInt8 *>(path), sizeof(path));
+    CFRelease(supportURL);
+    return found ? path : std::string();
 }
 
 void *runGame(void *) {
-    const std::string bundle = ownBundlePath();
-#if TARGET_OS_OSX
-    const std::string support = bundle + "/Resources/PsdkSupport";
-#else
-    const std::string support = bundle + "/PsdkSupport";
-#endif
+    const std::string support = supportPath();
+    if (support.empty()) {
+        fprintf(stderr, "[psdk-bridge] PsdkSupport is not in the core's bundle\n");
+    }
     const char *path = waitForGamePath();
 
     int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), nullptr);

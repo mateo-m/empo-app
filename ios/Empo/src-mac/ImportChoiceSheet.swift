@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-import AppKit
 import SwiftUI
 
 struct ImportChoiceSheet: View {
@@ -21,15 +20,15 @@ struct ImportChoiceSheet: View {
     ) {
         self.onCancel = onCancel
         self.onConfirm = onConfirm
-        freshChoices = prompt.choices.filter { !prompt.updatingChoiceIDs.contains($0.id) }
-        updateChoices = prompt.choices.filter { prompt.updatingChoiceIDs.contains($0.id) }
-        _selectedUpdateIDs = State(initialValue: Set(updateChoices.map(\.id)))
+        freshChoices = prompt.freshChoices
+        updateChoices = prompt.updateChoices
+        _selectedUpdateIDs = State(initialValue: Set(prompt.updateChoices.map(\.id)))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("This import includes more than one game")
+                Text(ImportRootPrompt.title(showingUpdates: freshChoices.isEmpty))
                     .font(.headline)
                 Text(
                     updateChoices.isEmpty
@@ -44,11 +43,11 @@ struct ImportChoiceSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.xl) {
                     if !freshChoices.isEmpty {
-                        ChoiceGroup(title: "Add games", choices: freshChoices, selection: $selectedFreshIDs)
+                        ChoiceGroup(title: "Add Games", choices: freshChoices, selection: $selectedFreshIDs)
                     }
                     if !updateChoices.isEmpty {
                         ChoiceGroup(
-                            title: "Already in your library", choices: updateChoices,
+                            title: "Already in Your Library", choices: updateChoices,
                             selection: $selectedUpdateIDs)
                     }
                 }
@@ -131,9 +130,7 @@ private struct ChoiceRow: View {
     var body: some View {
         Toggle(isOn: $isOn) {
             HStack(spacing: Spacing.lg) {
-                artwork
-                    .frame(width: 40, height: 40)
-                    .clipShape(.rect(cornerRadius: Radius.sm))
+                ImportRootChoiceArtworkView(artwork: choice.artwork)
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(choice.title)
                         .lineLimit(1)
@@ -150,23 +147,5 @@ private struct ChoiceRow: View {
         .toggleStyle(.checkbox)
         .padding(Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var artwork: some View {
-        if let data = choice.artwork?.imageData ?? choice.artwork?.iconData, let image = NSImage(data: data) {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: choice.artwork?.imageData != nil ? .fill : .fit)
-        } else {
-            ZStack {
-                Color(nsColor: .controlBackgroundColor)
-                Image(.empoMark)
-                    .resizable()
-                    .scaledToFit()
-                    .padding(Spacing.md)
-                    .foregroundStyle(.tertiary)
-            }
-        }
     }
 }

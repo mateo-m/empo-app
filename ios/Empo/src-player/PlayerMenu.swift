@@ -16,6 +16,8 @@ enum PlayerMenu {
             submenu(
                 gameTitle,
                 [
+                    item(String(localized: "About Empo"), #selector(PlayerAppDelegate.showAboutEmpo(_:))),
+                    .separator(),
                     item(
                         String(
                             localized: "Hide \(gameTitle)",
@@ -35,7 +37,7 @@ enum PlayerMenu {
                 ]))
 
         var gameItems = [item(String(localized: "Pause"), #selector(PlayerAppDelegate.togglePause(_:)), "p")]
-        if let fastForward, fastForward >= 2 {
+        if let fastForward {
             gameItems.append(
                 item(
                     String(
@@ -45,6 +47,11 @@ enum PlayerMenu {
                     ),
                     #selector(PlayerAppDelegate.toggleFastForward(_:)), "f"))
         }
+        bar.addItem(
+            submenu(
+                String(localized: "File"),
+                [item(String(localized: "Close"), #selector(PlayerAppDelegate.closeGame(_:)), "w")]))
+
         bar.addItem(submenu(String(localized: "Game"), gameItems))
 
         bar.addItem(
@@ -60,7 +67,6 @@ enum PlayerMenu {
         let window = submenu(
             String(localized: "Window"),
             [
-                item(String(localized: "Close"), #selector(PlayerAppDelegate.closeGame(_:)), "w"),
                 item(String(localized: "Minimize"), #selector(NSWindow.performMiniaturize(_:)), "m"),
                 item(String(localized: "Zoom"), #selector(NSWindow.performZoom(_:))),
             ])

@@ -5,6 +5,7 @@ import SwiftUI
 
 struct LibraryCommands: Commands {
     @FocusedValue(\.libraryWindow) private var window
+    @FocusedValue(\.isSearchingLibrary) private var isSearchingLibrary
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -38,11 +39,12 @@ struct LibraryCommands: Commands {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
                 .disabled(game == nil)
             Divider()
+            let deletable = window?.selectedGame.flatMap { window?.canDelete($0) == true ? $0 : nil }
             Button("Delete Game…") {
-                if let selected = window?.selectedGame { window?.requestDelete(selected) }
+                if let deletable { window?.requestDelete(deletable) }
             }
             .keyboardShortcut(.delete, modifiers: .command)
-            .disabled(window?.selectedGame == nil)
+            .disabled(deletable == nil || isSearchingLibrary == true)
         }
     }
 }
@@ -69,7 +71,7 @@ private struct SortCommands: View {
     @Bindable private var settings = AppSettings.shared
 
     var body: some View {
-        Picker("Sort by", selection: $settings.librarySortOption) {
+        Picker("Sort By", selection: $settings.librarySortOption) {
             ForEach(LibrarySortOption.groups) { group in
                 Section {
                     ForEach(group.options, id: \.self) { option in

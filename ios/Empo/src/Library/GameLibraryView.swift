@@ -281,7 +281,7 @@ struct GameLibraryView: View {
                     pausedGame: pauseManager.pausedGame,
                     pendingGame: pendingGame,
                     canClosePausedGame: appState.canKillPausedGame,
-                    onDeleteGame: deleteSelectedGame,
+                    onDeleteGame: deleteGame,
                     onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
                     onCancelValidation: importPipeline.cancelValidation,
@@ -937,21 +937,9 @@ struct GameLibraryView: View {
         }
         switch game.status {
         case .ready: handleGameTap(game, from: .item)
-        case .invalid: invalidReason = Self.whyInvalid(game)
+        case .invalid: invalidReason = GameLibrary.whyInvalid(game)
         case .importing, .deleting: break
         }
-    }
-
-    /// A core that refuses a game gives its own reason. A new import
-    /// meets the same refusal, so the usual advice to import again
-    /// would be wrong there.
-    private static func whyInvalid(_ game: GameEntry) -> String {
-        do {
-            if let container = game.container { try GameImportValidator.validate(container.gameURL) }
-        } catch GameImportValidator.ImportError.unsupportedRuntime(let reason) {
-            return reason
-        } catch {}
-        return String(localized: "Empo can't read this game's files. Delete it, then import it again.")
     }
 
     /// Enter selection mode. When `gameId` is non-nil the game is
@@ -989,17 +977,10 @@ struct GameLibraryView: View {
         let ids = selectedIDs
         let games = library.games.filter { ids.contains($0.id) }
         for game in games {
-            // Capture the title, not the model: the error closure is
-            // @Sendable and may run after the model left the library.
-            let title = game.title
-            library.deleteGame(game) { error in
-                errorTitle = String(
-                    localized: "Couldn't delete \"\(title)\"",
-                    comment: "Alert title. The placeholder is the game's name.")
-                errorMessage = error
-                showErrorAlert = true
-            } onSaveRescueFailure: { failedGame in
-                enqueueSaveRescueFailure(failedGame)
+            library.delete(game) {
+                showDeleteFailure(title: $0, message: $1)
+            } onSaveRescueFailure: {
+                enqueueSaveRescueFailure($0)
             }
         }
         exitSelectionMode()
@@ -1145,10 +1126,7 @@ struct GameLibraryView: View {
     }
 
     private func startUnlessWarned(_ game: GameEntry) {
-        if let container = game.container,
-            let warning = GameCores.core(forGameAt: container.gameURL)?
-                .launchWarning(for: container, gameTitle: game.title)
-        {
+        if let warning = library.launchWarning(for: game) {
             warnedLaunch = WarnedLaunch(game: game, warning: warning)
         } else {
             appState.selectGame(game)
@@ -1221,29 +1199,24 @@ struct GameLibraryView: View {
         }
     }
 
-    private func deleteSelectedGame() {
-        guard let game = gameToDelete else { return }
-        library.deleteGame(game) { error in
-            errorTitle = String(
-                localized: "Couldn't delete \"\(game.title)\"",
-                comment: "Alert title. The placeholder is the game's name.")
-            errorMessage = error
-            showErrorAlert = true
-        } onSaveRescueFailure: { failedGame in
-            enqueueSaveRescueFailure(failedGame)
+    private func deleteGame(_ game: GameEntry) {
+        library.delete(game) {
+            showDeleteFailure(title: $0, message: $1)
+        } onSaveRescueFailure: {
+            enqueueSaveRescueFailure($0)
         }
     }
 
     /// The user's explicit "Delete Anyway" after a failed save
     /// rescue: delete without rescuing again.
     private func deleteGameDiscardingSaves(_ game: GameEntry) {
-        library.deleteGame(game, skipSaveRescue: true) { error in
-            errorTitle = String(
-                localized: "Couldn't delete \"\(game.title)\"",
-                comment: "Alert title. The placeholder is the game's name.")
-            errorMessage = error
-            showErrorAlert = true
-        }
+        library.delete(game, discardingSaves: true) { showDeleteFailure(title: $0, message: $1) }
+    }
+
+    private func showDeleteFailure(title: String, message: String) {
+        errorTitle = title
+        errorMessage = message
+        showErrorAlert = true
     }
 
     private func enqueueSaveRescueFailure(_ game: GameEntry) {
@@ -1362,66 +1335,6 @@ private struct DuplicateGamesNotice: ViewModifier {
     }
 }
 
-/// Alert wrapper for the import update confirmation. Only the
-/// single-choice import path reaches it (multi-game sources confirm
-/// updates inside the root picker's "Already in Library" step).
-/// Extracted for the same type-checker-budget reason as
-/// `BulkDeleteAlert`.
-///
-/// Button actions run before SwiftUI resets the binding, and the
-/// pipeline consumes the prompt state in the action, so the
-/// trailing set-to-nil (also fired by swipe/outside dismissal)
-/// falls through to a guarded no-op after an explicit choice.
-private struct ImportReplaceAlert: ViewModifier {
-    @Binding var prompt: ImportReplacePrompt?
-    let onReplace: () -> Void
-    let onCancel: () -> Void
-
-    private var isPresented: Binding<Bool> {
-        Binding(
-            get: { prompt != nil },
-            set: { presented in
-                if !presented { prompt = nil }
-            }
-        )
-    }
-
-    private var title: String {
-        (prompt?.titles.count ?? 1) > 1
-            ? String(localized: "These games are already in your library")
-            : String(localized: "This game is already in your library")
-    }
-
-    private func message(for prompt: ImportReplacePrompt) -> String {
-        if prompt.titles.count == 1, let name = prompt.titles.first {
-            return String(
-                localized:
-                    "\"\(name)\" is already in your library. Importing replaces its files with the new ones. Your saves and settings stay. You can't undo this.",
-                comment: "The placeholder is the game's name."
-            )
-        }
-        let names = prompt.titles.map { "\"\($0)\"" }.formatted(.list(type: .and))
-        return String(
-            localized:
-                "\(names) are already in your library. Importing replaces their files with the new ones. Your saves and settings stay. You can't undo this.",
-            comment: "The placeholder is a list of game names."
-        )
-    }
-
-    func body(content: Content) -> some View {
-        content.alert(
-            title,
-            isPresented: isPresented,
-            presenting: prompt
-        ) { _ in
-            Button("Update", role: .destructive, action: onReplace)
-            Button("Cancel", role: .cancel, action: onCancel)
-        } message: { prompt in
-            Text(message(for: prompt))
-        }
-    }
-}
-
 private struct LibrarySheetPresentation: ViewModifier {
     @Binding var showSettings: Bool
     @Binding var settingsScrollTarget: SettingsSection?
@@ -1487,7 +1400,7 @@ private struct LibraryAlertPresentation: ViewModifier {
     let pausedGame: GameEntry?
     let pendingGame: GameEntry?
     let canClosePausedGame: Bool
-    let onDeleteGame: () -> Void
+    let onDeleteGame: (GameEntry) -> Void
     let onDeleteGameDiscardingSaves: (GameEntry) -> Void
     let onDismissImportPipelineAlert: () -> Void
     let onCancelValidation: () -> Void
@@ -1509,52 +1422,15 @@ private struct LibraryAlertPresentation: ViewModifier {
             } message: {
                 errorMessage.map { Text($0) } ?? Text("Empo couldn't finish this. Reopen Empo and try again.")
             }
-            .alert("Delete this game?", isPresented: $showDeleteConfirm) {
-                Button("Delete", role: .destructive, action: onDeleteGame)
-                    .keyboardShortcut(.defaultAction)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                if let game = gameToDelete {
-                    if game.isImporting {
-                        // Deleting an importing card cancels the
-                        // import. For an update, the installed game
-                        // stays - promising file removal here would
-                        // be false.
-                        Text(
-                            "This stops importing \"\(game.title)\". If you were updating a game you already have, that copy stays as it is."
-                        )
-                    } else {
-                        Text(
-                            "This deletes \"\(game.title)\" from your device. Empo moves the saves it recognizes to Rescued Saves. Saves it doesn't recognize are deleted with the game. You can't undo this."
-                        )
-                    }
-                }
-            }
-            .alert(
-                "Couldn't move the saves",
-                isPresented: Binding(
-                    get: { !saveRescueFailures.isEmpty },
-                    set: { presented in
-                        // Dismissal pops the queue. The binding
-                        // then reads true again while more
-                        // failures wait, so the next game's
-                        // choice presents in turn.
-                        if !presented, !saveRescueFailures.isEmpty {
-                            saveRescueFailures.removeFirst()
-                        }
-                    }
-                ),
-                presenting: saveRescueFailures.first
-            ) { game in
-                Button("Delete anyway", role: .destructive) {
-                    onDeleteGameDiscardingSaves(game)
-                }
-                Button("Keep game", role: .cancel) {}
-            } message: { game in
-                Text(
-                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
+            .modifier(
+                DeleteGameAlerts(
+                    isPresented: $showDeleteConfirm,
+                    game: gameToDelete,
+                    saveRescueFailures: $saveRescueFailures,
+                    onDelete: onDeleteGame,
+                    onDeleteDiscardingSaves: onDeleteGameDiscardingSaves
                 )
-            }
+            )
             .alert(
                 "Empo can't run this game",
                 isPresented: Binding(
@@ -1565,28 +1441,11 @@ private struct LibraryAlertPresentation: ViewModifier {
             ) { _ in
                 Button("Got it") { gameWithNoCore = nil }
             } message: { game in
-                if let container = game.container,
-                    let core = AppState.missingCore(for: container)
-                {
-                    Text(
-                        "This build of Empo has no \(core.displayName), so it can't run \"\(game.title)\".",
-                        comment:
-                            "First placeholder: a game engine name, such as \"RPG Maker MV core\". Second: the game's name."
-                    )
+                if let container = game.container, let core = AppState.missingCore(for: container) {
+                    Text(core.notInThisBuildMessage)
                 }
             }
-            .alert(
-                "This game won't open",
-                isPresented: Binding(
-                    get: { invalidReason != nil },
-                    set: { presented in if !presented { invalidReason = nil } }
-                ),
-                presenting: invalidReason
-            ) { _ in
-                Button("Got it") { invalidReason = nil }
-            } message: { reason in
-                Text(reason)
-            }
+            .modifier(InvalidGameAlert(reason: $invalidReason))
             .alert(
                 warnedLaunch?.warning.title ?? "",
                 isPresented: Binding(
@@ -1602,12 +1461,9 @@ private struct LibraryAlertPresentation: ViewModifier {
             } message: { launch in
                 Text(launch.warning.message)
             }
-            .alert("Stop import?", isPresented: $showCancelValidationAlert) {
-                Button("Keep importing", role: .cancel) {}
-                Button("Stop import", role: .destructive, action: onCancelValidation)
-            } message: {
-                Text("Empo is still checking this game. If you stop now, Empo won't import it.")
-            }
+            .modifier(
+                StopValidationAlert(isPresented: $showCancelValidationAlert, onStop: onCancelValidation)
+            )
             .alert(
                 canClosePausedGame ? "Play \"\(pendingGame?.title ?? "")\"?" : "A game is paused",
                 isPresented: $showPausedGameAlert

@@ -27,13 +27,10 @@ struct LibraryGrid: View {
                         ForEach(games, id: \.viewIdentity) { game in
                             GameCard(game: game, isSelected: model.selection == game.id, isFocused: isFocused)
                                 .gesture(TapGesture(count: 2).onEnded { model.play(game) })
-                                .simultaneousGesture(
-                                    TapGesture().onEnded {
-                                        model.selection = game.id
-                                        isFocused = true
-                                    }
-                                )
+                                .simultaneousGesture(TapGesture().onEnded { select(game) })
                                 .contextMenu { GameContextMenu(game: game, model: model) }
+                                .accessibilityAction { model.play(game) }
+                                .accessibilityAction(named: "Select") { select(game) }
                         }
                     }
                     .padding(padding)
@@ -56,7 +53,7 @@ struct LibraryGrid: View {
                     return .handled
                 }
                 .onKeyPress(.return) {
-                    guard let game = model.selectedReadyGame else { return .ignored }
+                    guard let game = model.selectedGame else { return .ignored }
                     model.play(game)
                     return .handled
                 }
@@ -65,6 +62,11 @@ struct LibraryGrid: View {
                 }
             }
         }
+    }
+
+    private func select(_ game: GameEntry) {
+        model.selection = game.id
+        isFocused = true
     }
 
     private func moveSelection(by step: Int, in games: [GameEntry], scroller: ScrollViewProxy) {
@@ -86,6 +88,7 @@ private struct GameCard: View {
     let isSelected: Bool
     let isFocused: Bool
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
@@ -94,11 +97,18 @@ private struct GameCard: View {
                 .overlay {
                     GameArtworkView(
                         artworkPath: game.artworkPath,
-                        placeholderIconSize: 44,
+                        placeholderIconSize: IconSize.placeholder,
                         cornerRadius: Radius.md,
                         importing: game.isImporting,
                         reloadToken: game.artworkRevision
                     )
+                }
+                .overlay {
+                    if game.status == .invalid {
+                        Color.black.opacity(Scrim.light)
+                        InvalidGameBadge()
+                            .font(.title)
+                    }
                 }
                 .clipShape(.rect(cornerRadius: Radius.md))
                 .overlay(alignment: .bottom) {
@@ -110,20 +120,17 @@ private struct GameCard: View {
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: Radius.md + 4)
-                        .strokeBorder(selectionColor, lineWidth: 3)
+                        .strokeBorder(selectionStyle, lineWidth: 3)
                         .padding(-4)
                 }
-                .shadow(
-                    color: .black.opacity(isHovered ? 0.18 : 0.08), radius: isHovered ? 8 : 3,
-                    y: isHovered ? 4 : 1
-                )
-                .scaleEffect(isHovered && !game.isDeleting ? 1.02 : 1)
+                .cardShadow()
+                .scaleEffect(isHovered && !game.isDeleting && !reduceMotion ? 1.02 : 1)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(game.title)
                     .font(.headline)
                     .lineLimit(2)
-                TimelineView(.everyMinute) { _ in
+                if let subtitle {
                     Text(subtitle)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -131,7 +138,7 @@ private struct GameCard: View {
                 }
             }
         }
-        .opacity(game.isDeleting ? 0.4 : 1)
+        .opacity(game.isDeleting ? Alpha.disabled : 1)
         .contentShape(.rect)
         .onHover { hovering in
             withAnimation(Motion.snappy) { isHovered = hovering }
@@ -140,18 +147,22 @@ private struct GameCard: View {
         .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : .isButton)
     }
 
-    private var selectionColor: Color {
-        guard isSelected else { return .clear }
-        return isFocused ? .accentColor : .secondary.opacity(0.6)
+    private var selectionStyle: AnyShapeStyle {
+        guard isSelected else { return AnyShapeStyle(.clear) }
+        return isFocused ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary.opacity(0.6))
     }
 
-    private var subtitle: String {
+    private var subtitle: String? {
         if game.isImporting { return String(localized: "Importing…") }
         if game.isDeleting { return String(localized: "Deleting…") }
-        if let engineTitle = game.engineTitle { return engineTitle }
-        if let lastPlayed = game.lastPlayed {
-            return lastPlayed.formatted(.relative(presentation: .named))
-        }
-        return String(localized: "Not played yet")
+        return game.engineTitle
+    }
+}
+
+struct InvalidGameBadge: View {
+    var body: some View {
+        Image(systemName: "exclamationmark.triangle.fill")
+            .foregroundStyle(.warning)
+            .accessibilityLabel("This game won't open")
     }
 }

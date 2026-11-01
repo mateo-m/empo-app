@@ -2,31 +2,36 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import AppKit
+import GameProbe
 
-/// Runs one game: opens its core, starts it, and owns its window and
-/// menus. Empo starts one Empo Player process for each game.
+/// Runs one game: starts its core, and owns its window and menus. Empo
+/// starts one Empo Player process for each game.
 @MainActor
 final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let launch: PlayerLaunch
-    private var core: GameCoreLibrary!
-    private var window: NSWindow!
+    private let core: GameCoreLibrary
+    private let messages: FileHandle
+    private var window: NSWindow
     private let pausedOverlay = PausedOverlay()
-    private lazy var controllers = ControllerInput(
-        pressKey: { [weak self] scancode, pressed in self?.core.injectKeyEvent(scancode, pressed ? 1 : 0) },
-        runAction: { [weak self] action in
-            if action == "$pauseMenu" { self?.togglePause(nil) }
-        })
+    private let controllers: ControllerInputManager
     private var aspectRatio: CGFloat?
     private var isPaused = false
     private var pausedBySystem = false
     private var isFastForwarding = false
     private var gameEnded = false
+    private var reportedError = false
+    private var errorAlertsOnScreen = 0
     private var isAskingToQuit = false
     private var adoptedGame = false
-    private var terminationSignal: DispatchSourceSignal?
+    private var endSources: [any DispatchSourceProtocol] = []
 
-    init(launch: PlayerLaunch) {
+    init(launch: PlayerLaunch, core: GameCoreLibrary, messages: FileHandle) {
         self.launch = launch
+        self.core = core
+        self.messages = messages
+        window = Self.makeWindow(title: launch.title)
+        controllers = ControllerInputManager(
+            keys: HeldKeys(send: { scancode, pressed in core.injectKeyEvent(scancode, pressed ? 1 : 0) }))
     }
 
     private var context: UnsafeMutableRawPointer { Unmanaged.passUnretained(self).toOpaque() }
@@ -41,57 +46,60 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         if let iconPath = launch.iconPath, let icon = NSImage(contentsOfFile: iconPath) {
             NSApp.applicationIconImage = icon
         }
-        do {
-            core = try GameCoreLibrary(path: launch.corePath)
-        } catch {
-            NSLog("[player] cannot open %@: %@", launch.corePath, "\(error)")
-            exit(70)
-        }
-        makeWindow()
+        endWithEmpo()
         startGame()
+        controllers.actionHandler = { [weak self] action, pressed in
+            if pressed, action == EmpoActionCatalog.pauseMenu { self?.togglePause(nil) }
+        }
         controllers.start()
         NSApp.activate()
     }
 
-    private func makeWindow() {
-        window = NSWindow(
+    private static func makeWindow(title: String) -> NSWindow {
+        let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 960, height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
-        window.title = launch.title
+        window.title = title
         window.backgroundColor = .black
         window.collectionBehavior = [.fullScreenPrimary]
         window.tabbingMode = .disallowed
         window.isReleasedWhenClosed = false
         window.contentView = NSView()
         window.center()
+        return window
     }
 
-    private func startGame() {
+    /// Ends the game when Empo quits it with SIGTERM, and when Empo
+    /// itself ends, also by a crash or a force quit.
+    private func endWithEmpo() {
         // SDL blocks SIGTERM in every thread it starts, and the other
         // threads block it too, so `kill` never ends the mkxp core. A
         // kqueue signal source still sees a blocked signal.
         let terminationSignal = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .global())
-        terminationSignal.setEventHandler(handler: Self.endOnTerminationSignal)
-        terminationSignal.resume()
-        self.terminationSignal = terminationSignal
+        terminationSignal.setEventHandler(handler: Self.endNow)
+        let parentExit = DispatchSource.makeProcessSource(
+            identifier: getppid(), eventMask: .exit, queue: .global())
+        parentExit.setEventHandler(handler: Self.endNow)
+        endSources = [terminationSignal, parentExit]
+        endSources.forEach { $0.resume() }
+        // When Empo ended before the source above existed, launchd
+        // (pid 1) is already the parent, and its exit never comes.
+        if getppid() == 1 { Self.endNow() }
+    }
+
+    private func startGame() {
         core.setLauncherIdentity("empo")
         core.setCABundlePath(launch.caBundlePath)
         core.setDebugLogPath(launch.debugLogPath)
         for setting in launch.settings {
             core.setSetting(setting.key, setting.value)
         }
-        let fonts = strdup(launch.fontsDirectory)
-        let userData = launch.userDataDirectory.flatMap { strdup($0) }
-        defer {
-            free(fonts)
-            free(userData)
-        }
-        var config = GameCoreSessionConfig()
-        config.userDataDirectory = UnsafePointer(userData)
-        config.sharedFontsDirectory = UnsafePointer(fonts)
-        config.verticalAlignment = GameCoreVerticalAlignment(rawValue: UInt32(launch.verticalAlignment))
-        core.applySessionConfig(&config)
+        GameCoreSessionConfig.with(
+            userDataDirectory: launch.userDataDirectory,
+            sharedFontsDirectory: launch.fontsDirectory,
+            verticalAlignment: launch.verticalAlignment
+        ) { core.applySessionConfig($0) }
         core.resetSessionState()
         // Empo Player reads the controllers and sends their keys.
         core.setGameControllerCaptureEnabled(false)
@@ -128,8 +136,13 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         // gamecore_run_app may hold the main thread for the whole game,
         // so it runs from a run loop callout and not from a main queue
         // block (GameCore.h).
-        RunLoop.main.perform { [self] in
-            MainActor.assumeIsolated { _ = core.runApp(CommandLine.argc, CommandLine.unsafeArgv) }
+        RunLoop.main.perform { [core] in
+            // PSDK's Ruby reads argv[0] for its own paths (psdk_core.h). The
+            // other arguments hold the launch JSON, which is not for a game.
+            let argv = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: 2)
+            argv[0] = CommandLine.unsafeArgv[0]
+            argv[1] = nil
+            _ = core.runApp(1, argv)
         }
         RunLoop.main.perform { [self] in
             MainActor.assumeIsolated { adoptGame() }
@@ -218,7 +231,10 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         window.center()
     }
 
-    nonisolated private static func endOnTerminationSignal() {
+    /// No core has a call that stops its game cleanly, so a save that
+    /// the game writes at this moment is cut short.
+    nonisolated private static func endNow() {
+        fflush(nil)
         _exit(128 + SIGTERM)
     }
 
@@ -226,22 +242,25 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func engineTerminated() {
         gameEnded = true
-        if core.didEngineExitCleanly() != 0 {
-            NSApp.terminate(nil)
-        } else {
+        if core.didEngineExitCleanly() == 0, !reportedError {
             showError(nil)
+        } else if errorAlertsOnScreen == 0 {
+            NSApp.terminate(nil)
         }
     }
 
     private func showError(_ message: String?) {
+        reportedError = true
+        errorAlertsOnScreen += 1
         let alert = NSAlert()
         alert.alertStyle = .critical
         alert.messageText = String(localized: "The game stopped")
         alert.informativeText = message ?? String(localized: "Something went wrong while it was running.")
         alert.addButton(withTitle: String(localized: "Got it"))
         alert.beginSheetModal(for: windowForSheet()) { [self] _ in
+            errorAlertsOnScreen -= 1
             core.signalErrorDismissed()
-            if gameEnded { NSApp.terminate(nil) }
+            if gameEnded, errorAlertsOnScreen == 0 { NSApp.terminate(nil) }
         }
     }
 
@@ -272,12 +291,14 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         guard paused != isPaused, !gameEnded else { return }
         isPaused = paused
         if paused {
-            controllers.releaseAll()
+            controllers.releaseAllHeldInputs()
             core.requestPause()
         } else {
             core.requestResume()
         }
         pausedOverlay.isHidden = !paused
+        let message = paused ? PlayerMessage.paused : .resumed
+        try? messages.write(contentsOf: Data((message.rawValue + "\n").utf8))
     }
 
     @objc func toggleFastForward(_ sender: Any?) {
@@ -329,12 +350,21 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
     func applicationDidHide(_ notification: Notification) { pauseForSystem() }
     func applicationDidUnhide(_ notification: Notification) { resumeAfterSystem() }
-    func applicationDidResignActive(_ notification: Notification) { controllers.releaseAll() }
+    func applicationDidResignActive(_ notification: Notification) { controllers.releaseAllHeldInputs() }
 
     // MARK: - Quit
 
     @objc func closeGame(_ sender: Any?) {
         NSApp.terminate(nil)
+    }
+
+    @objc func showAboutEmpo(_ sender: Any?) {
+        let empo = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Empo",
+            .applicationIcon: NSWorkspace.shared.icon(forFile: empo.path),
+        ])
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

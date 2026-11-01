@@ -9,35 +9,25 @@ struct MacSettingsView: View {
         TabView {
             Tab("General", systemImage: "gearshape") { GeneralSettings() }
             Tab("Advanced", systemImage: "wrench.and.screwdriver") { AdvancedSettings() }
-            Tab("About", systemImage: "info.circle") { AboutSettings() }
         }
         .frame(width: 540)
+        .tint(.brand)
     }
 }
 
 private struct GeneralSettings: View {
     @Environment(\.appSettings) private var settings
-    @AppStorage(DefaultsKey.quitClosesGamesWithoutAsking) private var quitWithoutAsking = false
 
     var body: some View {
         @Bindable var settings = settings
         Form {
-            Section("Appearance") {
-                Picker("Theme", selection: $settings.theme) {
-                    ForEach(AppTheme.allCases, id: \.self) { theme in
-                        Text(theme.label).tag(theme)
-                    }
-                }
-                Picker("Layout", selection: $settings.libraryDisplayMode) {
-                    ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
-                        Text(mode.label).tag(mode)
-                    }
-                }
-            }
             Section {
                 SettingsToggle(
                     title: "Ask before closing games",
-                    isOn: Binding(get: { !quitWithoutAsking }, set: { quitWithoutAsking = !$0 }),
+                    isOn: Binding(
+                        get: { !settings.quitClosesGamesWithoutAsking },
+                        set: { settings.quitClosesGamesWithoutAsking = !$0 }
+                    ),
                     description: "When you quit \(AppInfo.name) with games open, ask first."
                 )
             }
@@ -67,9 +57,10 @@ private struct AdvancedSettings: View {
                     description: "Saves a log for each play session."
                 )
                 if settings.debugLogs {
-                    Stepper(
-                        "Keep last \(settings.maxLogFiles) logs per game",
-                        value: $settings.maxLogFiles, in: 5...100, step: 5)
+                    Stepper(value: $settings.maxLogFiles, in: 5...100, step: 5) {
+                        Text("Keep last \(settings.maxLogFiles) logs per game")
+                        Text("\(AppInfo.name) deletes older logs each time you start a game.")
+                    }
                 }
             } footer: {
                 Text("Use these if a game misbehaves or you want to report a bug.")
@@ -89,82 +80,5 @@ private struct AdvancedSettings: View {
         .formStyle(.grouped)
         .scrollDisabled(true)
         .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-private struct AboutSettings: View {
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    VStack(spacing: Spacing.md) {
-                        Image(nsImage: NSApp.applicationIconImage)
-                            .resizable()
-                            .frame(width: 96, height: 96)
-                        Text(AppInfo.name)
-                            .font(.title.weight(.bold))
-                        Text("Version \(AppInfo.version)")
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Spacing.md)
-                }
-
-                Section {
-                    NavigationLink("Game cores") { GameCoresView() }
-                    NavigationLink("Open-source licenses") { LicensesView() }
-                }
-
-                Section {
-                    ExternalLink(
-                        "Privacy policy", systemImage: "hand.raised", url: "https://empo.mateo.sh/privacy/")
-                    ExternalLink("Terms of use", systemImage: "scale.3d", url: "https://empo.mateo.sh/terms/")
-                    ExternalLink(
-                        "Source code on GitHub", image: Image(.gitHubMark),
-                        url: "https://github.com/mateo-m/empo-app")
-                    ExternalLink(
-                        "Find me on Twitter", image: Image(.twitterMark), url: "https://x.com/gridplay_")
-                }
-            }
-            .formStyle(.grouped)
-        }
-        .frame(height: 520)
-    }
-}
-
-private struct ExternalLink: View {
-    let title: LocalizedStringKey
-    let icon: Image
-    let url: URL
-
-    init(_ title: LocalizedStringKey, systemImage: String, url: String) {
-        self.init(title, image: Image(systemName: systemImage), url: url)
-    }
-
-    init(_ title: LocalizedStringKey, image: Image, url: String) {
-        self.title = title
-        self.icon = image
-        self.url = URL(string: url)!
-    }
-
-    var body: some View {
-        Link(destination: url) {
-            HStack {
-                Label {
-                    Text(title)
-                } icon: {
-                    icon
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 16, height: 16)
-                }
-                Spacer()
-                Image(systemName: "arrow.up.forward")
-                    .foregroundStyle(.secondary)
-            }
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
     }
 }

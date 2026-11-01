@@ -26,7 +26,6 @@ struct GameSettingsWindow: View {
 private struct GameSettingsForm: View {
     let game: GameEntry
     @State private var model: GameSettingsModel
-    @State private var showsResetConfirmation = false
 
     init(game: GameEntry) {
         self.game = game
@@ -36,29 +35,24 @@ private struct GameSettingsForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                model.core?.settingsPage(model)
-
-                Section {
-                    LabeledContent {
-                        Button("Reset to defaults…") { showsResetConfirmation = true }
-                            .disabled(!model.hasAnyCustomizations)
-                    } label: {
-                        Text("Clears every change you made and uses the game's original values.")
-                            .foregroundStyle(.secondary)
+                if GameLauncher.shared.isPlaying(game) {
+                    Section {
+                        Label(
+                            "Restart this game to apply your changes.",
+                            systemImage: "arrow.clockwise.circle.fill"
+                        )
+                        .foregroundStyle(.secondary)
                     }
                 }
+                model.core?.settingsPage(model)
+                ResetSettingsSection(model: model, gameTitle: game.title)
             }
             .formStyle(.grouped)
         }
         .frame(minWidth: 460, minHeight: 360)
         .navigationTitle(game.title)
         .navigationSubtitle("Settings")
-        .alert("Reset all settings?", isPresented: $showsResetConfirmation) {
-            Button("Reset", role: .destructive) { model.resetToDefaults() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This clears every change you made to \"\(game.title)\". You can't undo this.")
-        }
+        .tint(.brand)
         .onChange(of: model.settings) { model.save() }
         .onDisappear { model.save() }
     }

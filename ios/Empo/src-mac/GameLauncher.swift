@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import AppKit
+import Observation
 
 /// Starts each game in an Empo Player process of its own, and records
 /// its play time.
@@ -9,11 +10,24 @@ import AppKit
 /// Empo Player has only the sandbox and inherit entitlements, so a
 /// child that Process starts runs in Empo's sandbox and container. The
 /// games' saves stay in Empo's container, as on iOS.
-@MainActor
+@MainActor @Observable
 final class GameLauncher {
     static let shared = GameLauncher()
 
+    /// A game that could not start, or that stopped by a crash.
+    struct Failure: Identifiable {
+        let id = UUID()
+        let title: String
+        /// The session's debug log, when debug logs are on.
+        let logURL: URL?
+    }
+
+    /// The library window shows it as an alert, then sets it to nil.
+    var lastFailure: Failure?
+
     private struct Session {
+        let gameID: String
+        let gameTitle: String
         let process: Process
         let logger: SessionLogger
     }
@@ -25,10 +39,6 @@ final class GameLauncher {
     private static let playerURL = Bundle.main.bundleURL
         .appendingPathComponent("Contents/Helpers/Empo Player.app/Contents/MacOS/Empo Player")
 
-    struct LaunchError: LocalizedError {
-        let errorDescription: String?
-    }
-
     func isPlaying(_ game: GameEntry) -> Bool { sessions[game.id] != nil }
 
     var playingGameIDs: [String] { Array(sessions.keys) }
@@ -38,62 +48,92 @@ final class GameLauncher {
             NSRunningApplication(processIdentifier: session.process.processIdentifier)?.activate()
             return
         }
-        guard let container = game.container, let core = GameCores.core(forGameAt: container.gameURL) else {
-            return
-        }
-        guard let binary = core.binaryURL else {
-            throw LaunchError(errorDescription: core.notInThisBuildMessage)
-        }
-        try? container.ensureSubdirs()
-        let userData = DataDirectory.resolveAndPrepare(for: container, core: core)
-            .map(DataDirectory.engineSpelling(of:))
+        let start = try GameStart(game: game)
         DataDirectory.ensureFontsRoot()
-        let settings = GameSettings.load(from: container.empoStateURL)
 
         let logger = SessionLogger()
         logger.onPlayTimeFlushed = { GameLibrary.shared.refreshGameEntry(id: $0) }
+        logger.openDebugLog(for: game, container: start.container, enabled: AppSettings.shared.debugLogs)
         CoreSettingsRecorder.settings = []
-        core.launch(container)
-        logger.beginSession(for: game, container: container, debugLogsEnabled: AppSettings.shared.debugLogs)
+        start.core.launch(start.container)
 
         let launch = PlayerLaunch(
             title: game.title,
-            corePath: binary.path,
+            corePath: start.coreBinaryURL.path,
             gamePath: game.path,
-            userDataDirectory: userData?.path,
+            userDataDirectory: start.userDataDirectory?.path,
             fontsDirectory: DataDirectory.fontsRootURL.path,
-            verticalAlignment: Int32(
-                (settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment).bridgeValue
-                    .rawValue),
+            verticalAlignment: (start.settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment)
+                .bridgeValue,
             settings: CoreSettingsRecorder.settings,
             debugLogPath: logger.logURL?.path,
             caBundlePath: CABundleStore.effectivePath,
-            fastForwardMultiplier: settings.speedMultiplier.flatMap { $0 >= 2 ? $0 : nil },
+            fastForwardMultiplier: start.settings.speedMultiplier.flatMap { $0 >= 2 ? $0 : nil },
             iconPath: game.artworkPath)
 
         let process = Process()
         process.executableURL = Self.playerURL
         process.arguments = try launch.arguments()
-        let gameID = game.id
+        let messages = Pipe()
+        process.standardOutput = messages
         process.terminationHandler = { process in
-            let status = process.terminationStatus
-            Task { @MainActor in GameLauncher.shared.ended(gameID: gameID, status: status) }
+            Task { @MainActor in GameLauncher.shared.ended(process) }
         }
         try process.run()
-        logger.note("\(game.title) starts on \(core.framework) \(core.version) in Empo Player")
-        sessions[game.id] = Session(process: process, logger: logger)
+        logger.beginSession(for: game, container: start.container)
+        logger.note("\(game.title) starts on \(start.core.framework) \(start.core.version) in Empo Player")
+        sessions[game.id] = Session(gameID: game.id, gameTitle: game.title, process: process, logger: logger)
+        Task { [weak self] in
+            do {
+                for try await line in messages.fileHandleForReading.bytes.lines {
+                    self?.received(line, from: process)
+                }
+            } catch {
+                logger.note("Empo cannot read the messages of Empo Player: \(error)")
+            }
+        }
     }
 
-    private func ended(gameID: String, status: Int32) {
-        guard let session = sessions.removeValue(forKey: gameID) else { return }
-        session.logger.note("Empo Player ended with status \(status)")
-        session.logger.recordSessionPlayTime(for: GameLibrary.shared.games.first { $0.id == gameID })
+    private func session(of process: Process) -> Session? {
+        sessions.values.first { $0.process === process }
+    }
+
+    private func entry(_ session: Session) -> GameEntry? {
+        GameLibrary.shared.games.first { $0.id == session.gameID }
+    }
+
+    /// The SessionLogger timer runs only while the game is not paused,
+    /// as on iOS.
+    private func received(_ line: String, from process: Process) {
+        guard let session = session(of: process), let message = PlayerMessage(rawValue: line) else { return }
+        switch message {
+        case .paused:
+            session.logger.recordSessionPlayTime(for: entry(session))
+        case .resumed:
+            if let game = entry(session) { session.logger.resumeSessionTiming(for: game) }
+        }
+    }
+
+    private func ended(_ process: Process) {
+        guard let session = session(of: process) else { return }
+        sessions.removeValue(forKey: session.gameID)
+        let status = process.terminationStatus
+        let crashed = process.terminationReason == .uncaughtSignal
+        session.logger.note("Empo Player ended with \(crashed ? "signal" : "status") \(status)")
+        session.logger.recordSessionPlayTime(for: entry(session))
+        guard crashed || ![0, 128 + SIGTERM].contains(status) else { return }
+        // 64: the launch data was wrong. 70: the core did not open.
+        let title =
+            !crashed && [64, 70].contains(status)
+            ? String(localized: "\"\(session.gameTitle)\" couldn't start.")
+            : String(localized: "\"\(session.gameTitle)\" quit unexpectedly.")
+        lastFailure = Failure(title: title, logURL: session.logger.logURL)
     }
 
     /// Asks once before quit closes the open games. The alert's
     /// checkbox turns the question off.
     func confirmQuit() -> NSApplication.TerminateReply {
-        if !sessions.isEmpty, !UserDefaults.standard.bool(forKey: DefaultsKey.quitClosesGamesWithoutAsking) {
+        if !sessions.isEmpty, !AppSettings.shared.quitClosesGamesWithoutAsking {
             let alert = NSAlert()
             alert.messageText = String(
                 localized: "Quit \(AppInfo.name)?", comment: "Alert title. The placeholder is the app's name."
@@ -107,19 +147,15 @@ final class GameLauncher {
             alert.showsSuppressionButton = true
             guard alert.runModal() == .alertFirstButtonReturn else { return .terminateCancel }
             if alert.suppressionButton?.state == .on {
-                UserDefaults.standard.set(true, forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+                AppSettings.shared.quitClosesGamesWithoutAsking = true
             }
         }
-        recordAllPlayTime()
-        for session in sessions.values { session.process.terminate() }
+        for session in sessions.values {
+            session.logger.recordSessionPlayTime(for: entry(session))
+            session.process.terminate()
+        }
         sessions.removeAll()
         return .terminateNow
-    }
-
-    private func recordAllPlayTime() {
-        for (gameID, session) in sessions {
-            session.logger.recordSessionPlayTime(for: GameLibrary.shared.games.first { $0.id == gameID })
-        }
     }
 }
 
@@ -135,8 +171,3 @@ func recordCoreSetting(_ key: UnsafePointer<CChar>?, _ value: UnsafePointer<CCha
     CoreSettingsRecorder.settings.append(
         PlayerLaunch.Setting(key: String(cString: key), value: value.map { String(cString: $0) } ?? ""))
 }
-
-// SessionLogger sends the session log to the core. Empo Player sends
-// it in its own process, from PlayerLaunch.debugLogPath.
-@_cdecl("gamecore_setDebugLogPath")
-func ignoreCoreDebugLogPath(_ path: UnsafePointer<CChar>?) {}

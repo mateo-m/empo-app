@@ -72,6 +72,32 @@ struct ImportReplacePrompt: Identifiable {
     let titles: [String]
 
     var id: UUID { requestID }
+
+    var title: String {
+        #if os(macOS)
+        if titles.count > 1 { return String(localized: "These games are already in your library.") }
+        return String(localized: "This game is already in your library.")
+        #else
+        if titles.count > 1 { return String(localized: "These games are already in your library") }
+        return String(localized: "This game is already in your library")
+        #endif
+    }
+
+    var message: String {
+        if titles.count == 1, let name = titles.first {
+            return String(
+                localized:
+                    "\"\(name)\" is already in your library. Importing replaces its files with the new ones. Your saves and settings stay. You can't undo this.",
+                comment: "The placeholder is the game's name."
+            )
+        }
+        let names = titles.map { "\"\($0)\"" }.formatted(.list(type: .and))
+        return String(
+            localized:
+                "\(names) are already in your library. Importing replaces their files with the new ones. Your saves and settings stay. You can't undo this.",
+            comment: "The placeholder is a list of game names."
+        )
+    }
 }
 
 struct ImportPipelineAlert: Identifiable {
@@ -191,22 +217,21 @@ final class ImportPipeline {
     private var openGameNames: [String] {
         [PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id].compactMap { $0 }
     }
+    #else
+    private var openGameNames: [String] { GameLauncher.shared.playingGameIDs }
+    #endif
 
     private var refusedOpenGameMessage: String {
-        EngineSessionCoordinator.shared.canEndGame
-            ? String(localized: "This game is open. Quit it, then import again.")
-            : String(
+        #if os(iOS)
+        guard EngineSessionCoordinator.shared.canEndGame else {
+            return String(
                 localized:
                     "This game is still running. Close Empo from the app switcher, reopen it, then import again."
             )
+        }
+        #endif
+        return String(localized: "This game is open. Quit it, then import again.")
     }
-    #else
-    private var openGameNames: [String] { GameLauncher.shared.playingGameIDs }
-
-    private var refusedOpenGameMessage: String {
-        String(localized: "This game is open. Quit it, then import again.")
-    }
-    #endif
 
     func configure(library: GameLibrary) {
         self.library = library
@@ -794,8 +819,13 @@ extension GameLibrary {
         var errorDescription: String? {
             switch self {
             case .outOfSpace:
+                #if os(macOS)
+                return String(
+                    localized: "Not enough space to import. Free up space on this Mac and try again.")
+                #else
                 return String(
                     localized: "Not enough space to import. Free up space on your device and try again.")
+                #endif
             }
         }
     }
@@ -1190,11 +1220,16 @@ extension GameLibrary {
                     let tmpDest = tmpDir.appendingPathComponent(folderName)
 
                     try ImportSignpost.interval("stage-source", id: batchID) {
+                        #if os(macOS)
+                        // The Mac imports the user's own folder, not a copy.
+                        try fm.copyItem(at: sourceURL, to: tmpDest)
+                        #else
                         do {
                             try fm.moveItem(at: sourceURL, to: tmpDest)
                         } catch {
                             try fm.copyItem(at: sourceURL, to: tmpDest)
                         }
+                        #endif
                     }
                     try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
                         try EnigmaVirtualBoxImport.unpackAll(under: tmpDest) {

@@ -3,15 +3,10 @@
 
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 @MainActor
 @Observable
 final class LibraryWindowModel {
-    static let importableTypes: [UTType] = [
-        .folder, .zip, .sevenZArchive, .rarArchive, .jgpArchive, .exeArchive,
-    ]
-
     let library = GameLibrary.shared
     let importPipeline = ImportPipeline()
 
@@ -20,6 +15,8 @@ final class LibraryWindowModel {
     var showsImporter = false
     var showsInspector = false
     var gameToDelete: GameEntry?
+    var showsStopValidation = false
+    var invalidReason: String?
     var launchFailure: LaunchFailure?
     var warnedLaunch: WarnedLaunch?
     var deleteFailure: DeleteFailure?
@@ -55,7 +52,7 @@ final class LibraryWindowModel {
 
     var selectedGame: GameEntry? {
         guard let selection else { return nil }
-        return library.games.first { $0.id == selection }
+        return games.first { $0.id == selection }
     }
 
     var selectedReadyGame: GameEntry? {
@@ -84,14 +81,15 @@ final class LibraryWindowModel {
     }
 
     func play(_ game: GameEntry) {
-        guard game.status == .ready else { return }
-        if !GameLauncher.shared.isPlaying(game), let container = game.container,
-            let warning = GameCores.core(forGameAt: container.gameURL)?
-                .launchWarning(for: container, gameTitle: game.title)
-        {
-            warnedLaunch = WarnedLaunch(game: game, warning: warning)
-        } else {
-            launch(game)
+        switch game.status {
+        case .ready:
+            if !GameLauncher.shared.isPlaying(game), let warning = library.launchWarning(for: game) {
+                warnedLaunch = WarnedLaunch(game: game, warning: warning)
+            } else {
+                launch(game)
+            }
+        case .invalid: invalidReason = GameLibrary.whyInvalid(game)
+        case .importing, .deleting: break
         }
     }
 
@@ -108,20 +106,23 @@ final class LibraryWindowModel {
         NSWorkspace.shared.activateFileViewerSelecting([container.url])
     }
 
+    func canDelete(_ game: GameEntry) -> Bool {
+        !game.isDeleting && !GameLauncher.shared.isPlaying(game)
+    }
+
     func requestDelete(_ game: GameEntry) {
-        guard !game.isDeleting else { return }
-        gameToDelete = game
+        guard canDelete(game) else { return }
+        if library.pendingImports[game.id] != nil {
+            showsStopValidation = true
+        } else {
+            gameToDelete = game
+        }
     }
 
     func delete(_ game: GameEntry, discardingSaves: Bool = false) {
         if selection == game.id { selection = nil }
-        let title = game.title
-        library.deleteGame(game, skipSaveRescue: discardingSaves) { [weak self] error in
-            self?.deleteFailure = DeleteFailure(
-                title: String(
-                    localized: "Couldn't delete \"\(title)\"",
-                    comment: "Alert title. The placeholder is the game's name."),
-                message: error)
+        library.delete(game, discardingSaves: discardingSaves) { [weak self] title, message in
+            self?.deleteFailure = DeleteFailure(title: title, message: message)
         } onSaveRescueFailure: { [weak self] failedGame in
             self?.saveRescueFailures.append(failedGame)
         }
@@ -130,4 +131,5 @@ final class LibraryWindowModel {
 
 extension FocusedValues {
     @Entry var libraryWindow: LibraryWindowModel?
+    @Entry var isSearchingLibrary: Bool?
 }
