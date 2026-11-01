@@ -74,15 +74,22 @@ repo_slug() {
 # bypass).
 run_ci_sync() {
     local version="$1"
+    # Releases before 0.10.1 named the file Empo-<version>-unsigned.ipa.
     local ipa_name="Empo-ios.ipa"
+    local legacy_ipa_name="Empo-${version}-unsigned.ipa"
     local i
 
     echo "==> waiting for the Release workflow to publish $ipa_name"
-    local ipa_size=""
+    local ipa_size="" asset=""
     for i in $(seq 1 120); do
-        ipa_size=$(gh release view "v$version" --json assets \
-            --jq ".assets[] | select(.name == \"$ipa_name\") | .size" 2>/dev/null || true)
-        [[ -n "$ipa_size" ]] && break
+        asset=$(gh release view "v$version" --json assets \
+            --jq "[.assets[] | select(.name == \"$ipa_name\" or .name == \"$legacy_ipa_name\")][0] | select(.) | .name + \" \" + (.size | tostring)" \
+            2>/dev/null || true)
+        if [[ -n "$asset" ]]; then
+            ipa_name="${asset% *}"
+            ipa_size="${asset##* }"
+            break
+        fi
         local run_status
         run_status=$(gh run list --workflow=release.yml --branch "v$version" --limit 1 \
             --json status,conclusion --jq '.[0] | .status + ":" + (.conclusion // "")' 2>/dev/null || true)
@@ -324,6 +331,8 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     mkdir -p "$IPA_DIR/Payload"
     cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
     IPA_NAME="Empo-ios.ipa"
+    # zip adds to an existing archive, so start from an empty one.
+    rm -f "$IPA_DIR/$IPA_NAME"
     (cd "$IPA_DIR" && zip -qr "$IPA_NAME" Payload)
     rm -rf "$IPA_DIR/Payload"
     IPA_PATH="$IPA_DIR/$IPA_NAME"
