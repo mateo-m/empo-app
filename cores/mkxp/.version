@@ -2,3 +2,4 @@
 # cores/mkxp/fetch.sh downloads. The release notes give the sha256.
 MKXP_CORE_VERSION=v12
 MKXP_CORE_SHA256=a4a669c27004af8327401b8713307561edeb112949536c249757708da9ad94a2
+MKXP_CORE_ASSET=mkxp-z-ios.tar.gz

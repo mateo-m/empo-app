@@ -13,6 +13,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=cores/framework-common.sh
+. "$REPO_ROOT/cores/framework-common.sh"
 SDK="${PLATFORM_NAME:-iphoneos}"
 FW=""
 
@@ -64,16 +66,11 @@ otool -D "$BIN" | grep -q '@rpath/MkxpCore.framework/MkxpCore' ||
 otool -hv "$BIN" | grep -q TWOLEVEL ||
     fail "MkxpCore must stay two-level namespace"
 
-case "$SDK" in
-    iphonesimulator) WANT_PLATFORM=7 ;;
-    macosx) WANT_PLATFORM=1 ;;
-    *) WANT_PLATFORM=2 ;;
-esac
+WANT_PLATFORM="$(platform_number "$SDK")"
 otool -l "$BIN" | grep -Eq "platform ${WANT_PLATFORM}([[:space:]]|$)" ||
     fail "MkxpCore is not built for $SDK (platform $WANT_PLATFORM)"
 
-RES="$FW"
-[ "$SDK" = macosx ] && RES="$FW/Resources"
+RES="$(resources_dir "$FW" "$SDK")"
 for f in Assets.bundle/Shaders/common.h Assets.bundle/Fonts/liberation.ttf \
     Assets.bundle/gamecontrollerdb.txt Assets.bundle/Preload Assets.bundle/Postload \
     Ruby/3.1.0 Info.plist PrivacyInfo.xcprivacy; do

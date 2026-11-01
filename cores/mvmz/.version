@@ -2,3 +2,4 @@
 # cores/mvmz/fetch.sh downloads. The release notes give the sha256.
 MVMZ_CORE_VERSION=v3
 MVMZ_CORE_SHA256=6f16ea868e877c25776dd95f088d16db75e33bb62a53450be61f195c370f801c
+MVMZ_CORE_ASSET=mvmz-ios.tar.gz

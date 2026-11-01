@@ -15,6 +15,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=cores/framework-common.sh
+. "$REPO_ROOT/cores/framework-common.sh"
 SDK="${PLATFORM_NAME:-iphoneos}"
 FRAMEWORKS=()
 
@@ -50,11 +52,7 @@ fail() {
 # A missing one aborts in the forwarder, so fail here first.
 WANT_NAMES=$("$REPO_ROOT/cores/gamecore-exports.sh" /dev/stdout)
 
-case "$SDK" in
-    iphonesimulator) WANT_PLATFORM=7 ;;
-    macosx) WANT_PLATFORM=1 ;;
-    *) WANT_PLATFORM=2 ;;
-esac
+WANT_PLATFORM="$(platform_number "$SDK")"
 
 for FW in "${FRAMEWORKS[@]}"; do
     NAME="$(basename "$FW" .framework)"
@@ -87,8 +85,7 @@ for FW in "${FRAMEWORKS[@]}"; do
     FILES="Info.plist PrivacyInfo.xcprivacy PsdkSupport/compat.rb
         PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAudio.rb PsdkSupport/uri.rb"
     [ "$NAME" = Psdk25Core ] && FILES="$FILES PsdkSupport/litergss1.rb PsdkSupport/RubyFmod.rb"
-    RES="$FW"
-    [ "$SDK" = macosx ] && RES="$FW/Resources"
+    RES="$(resources_dir "$FW" "$SDK")"
     for f in $FILES; do
         [ -e "$RES/$f" ] || fail "$NAME.framework/$f missing"
     done

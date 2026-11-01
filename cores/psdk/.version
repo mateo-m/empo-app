@@ -2,3 +2,4 @@
 # cores/psdk/fetch.sh downloads. The release notes give the sha256.
 PSDK_CORE_VERSION=v4
 PSDK_CORE_SHA256=5eacdf89d3f996abd2f7acce0fb9587f1203c496c3c75835dbb5e8d3da84ac8b
+PSDK_CORE_ASSET=psdk-ios.tar.gz
