@@ -3,7 +3,7 @@ Empo plays PC games made with RPG Maker (XP, VX, VX Ace, MV, MZ) and PSDK, from 
 To test:
 1. On the review device, open https://aureliendossantos.itch.io/symphony-of-the-night in Safari and download the free game. This short puzzle game uses sound, so turn the sound on.
 2. Open Empo and tap Import game.
-3. In the file picker, open Downloads and pick "Symphony of the night.zip". On iPad, Downloads is in the sidebar. On iPhone, tap Browse, then On My iPhone, then Downloads. Then tap Open.
+3. In the file picker, tap Browse, then open the Downloads folder that Safari uses: iCloud Drive > Downloads when iCloud Drive is on, else On My iPhone (or On My iPad) > Downloads. Pick "Symphony of the night.zip", then tap Open.
 4. Tap the game in the library to play it. Use the on-screen buttons, or a game controller.
 
 Permissions:
