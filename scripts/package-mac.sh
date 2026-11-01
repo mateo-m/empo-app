@@ -58,7 +58,9 @@ CORES=$(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*Core.framework" -exe
 
 codesign --verify --deep --strict "$APP" || fail "the app signature is not valid"
 
-grep -q "api.github.com/repos" < <(strings "$APP/Contents/MacOS/Empo") ||
+# grep -c reads to the end. grep -q stops at the first match, and
+# strings then fails with "failed to flush output".
+[[ $(strings "$APP/Contents/MacOS/Empo" | grep -c "api.github.com/repos") -gt 0 ]] ||
     fail "the app has no update check. Build it with -xcconfig ios/Empo/Sideload.xcconfig"
 
 # A user plays a game only when Empo Player opens its core. The signing,
@@ -72,7 +74,8 @@ STAGE="$OUT/dmg"
 mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/Empo.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -quiet -volname Empo -srcfolder "$STAGE" -format UDZO -ov "$DMG"
+hdiutil create -volname Empo -srcfolder "$STAGE" -format UDZO -ov "$DMG" >&2 ||
+    fail "hdiutil could not create $(basename "$DMG")"
 rm -rf "$STAGE"
 
 echo "$DMG"
