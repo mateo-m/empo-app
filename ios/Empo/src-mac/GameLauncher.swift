@@ -123,6 +123,9 @@ final class GameLauncher {
         let status = process.terminationStatus
         let crashed = process.terminationReason == .uncaughtSignal
         session.logger.note("Empo Player ended with \(crashed ? "signal" : "status") \(status)")
+        if !crashed, status == 64 {
+            session.logger.note("Empo Player could not read the launch data from Empo")
+        }
         session.logger.recordSessionPlayTime(for: entry(session))
         guard crashed || ![0, 128 + SIGTERM].contains(status) else { return }
         // 64: the launch data was wrong. 70: the core did not open.

@@ -26,6 +26,11 @@ do {
     core = try GameCoreLibrary(path: launch.corePath)
 } catch {
     NSLog("[player] cannot open %@: %@", launch.corePath, "\(error)")
+    // The core opens the debug log, so it cannot write this error there.
+    if let path = launch.debugLogPath, let file = fopen(path, "a") {
+        fputs("[player] cannot open \(launch.corePath): \(error)\n", file)
+        fclose(file)
+    }
     exit(70)
 }
 
