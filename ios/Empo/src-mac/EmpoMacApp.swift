@@ -108,6 +108,11 @@ private struct HelpCommands: Commands {
 }
 
 final class EmpoMacAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Each game reads the newest file when it starts.
+        CABundleStore.refreshIfStale {}
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         GameLauncher.shared.confirmQuit()
     }
