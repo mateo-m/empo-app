@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.10.0",
+          "buildVersion": "787",
+          "date": "2026-11-01",
+          "localizedDescription": "New\n• MacOS support\n• Build the engine for the Mac\n• Build and release the core for macOS\n• Build the core for the Mac and ship it in the release\n\nFixed\n• Prepare for App Store review\n• Build ruby 3.1 without getattrlist and fgetattrlist\n• Build ruby without getattrlist and fgetattrlist",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.10.0/Empo-0.10.0-unsigned.ipa",
+          "size": 65492972,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.9.1",
           "buildVersion": "783",
           "date": "2026-10-31",
