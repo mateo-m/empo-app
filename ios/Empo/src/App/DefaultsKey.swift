@@ -26,6 +26,8 @@ enum DefaultsKey {
     static let dataAppGroup = "dataAppGroup"
     /// The `GameReport` of the last session that started. JSON `Data`.
     static let lastGameReport = "lastGameReport"
+    /// On the Mac, quit closes the open games with no question. Bool.
+    static let quitClosesGamesWithoutAsking = "quitClosesGamesWithoutAsking"
 
     /// Controls edit mode: drags land on a fixed grid. Bool.
     static let controlsEditSnapToGrid = "controlsEditSnapToGrid"

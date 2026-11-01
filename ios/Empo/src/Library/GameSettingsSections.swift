@@ -30,8 +30,7 @@ struct GameplaySettingsSection: View {
                             }
                         }
                     ),
-                    description:
-                        "Show a Fast forward switch in the More menu while you play. When the switch is on, the game runs at the speed below."
+                    description: fastForwardDescription
                 )
 
                 if model.fastForwardEnabled {
@@ -58,6 +57,14 @@ struct GameplaySettingsSection: View {
         } footer: {
             Text("How you play the game.")
         }
+    }
+
+    private var fastForwardDescription: LocalizedStringResource {
+        #if os(macOS)
+        "Add Fast Forward to the Game menu while you play. When it's on, the game runs at the speed below."
+        #else
+        "Show a Fast forward switch in the More menu while you play. When the switch is on, the game runs at the speed below."
+        #endif
     }
 }
 
@@ -135,6 +142,7 @@ extension DisplaySettingsSection where Extra == EmptyView {
     }
 }
 
+#if os(iOS)
 /// One section for the layout profile, which sets the controls and
 /// where the game sits on screen.
 struct LayoutSettingsSection: View {
@@ -192,6 +200,8 @@ struct LayoutSettingsSection: View {
         }
     }
 }
+
+#endif
 
 struct TouchMouseToggle: View {
     let model: GameSettingsModel

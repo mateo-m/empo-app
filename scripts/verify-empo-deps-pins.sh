@@ -112,7 +112,7 @@ verify_pin_file() {
     printf 'verify-empo-deps-pins: %s OK (%s)\n' "$label" "$version"
 }
 
-verify_pin_file "ANGLE" "$ANGLE_VERSION_FILE" ANGLE_VERSION ANGLE_SHA256 "angle-ios-prebuilt.tar.gz" "$DEPS_REPO"
+verify_pin_file "ANGLE" "$ANGLE_VERSION_FILE" ANGLE_VERSION ANGLE_SHA256 "angle-apple-prebuilt.tar.gz" "$DEPS_REPO"
 verify_pin_file "mkxp-z core" "$MKXP_VERSION_FILE" MKXP_CORE_VERSION MKXP_CORE_SHA256 "mkxp-z-ios.tar.gz" mateo-m/mkxp-z-apple-mobile
 verify_pin_file "PSDK core" "$PSDK_VERSION_FILE" PSDK_CORE_VERSION PSDK_CORE_SHA256 "psdk-ios.tar.gz" mateo-m/psdk-apple-mobile
 verify_pin_file "MV/MZ core" "$MVMZ_VERSION_FILE" MVMZ_CORE_VERSION MVMZ_CORE_SHA256 "mvmz-ios.tar.gz" mateo-m/mvmz-apple-mobile

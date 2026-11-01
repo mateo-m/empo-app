@@ -4,7 +4,12 @@
 import Foundation
 import Observation
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 enum LibraryDisplayMode: String, CaseIterable {
     case grid
@@ -112,6 +117,7 @@ enum AppTheme: String, CaseIterable {
         }
     }
 
+    #if os(iOS)
     var userInterfaceStyle: UIUserInterfaceStyle {
         switch self {
         case .dark: .dark
@@ -119,6 +125,7 @@ enum AppTheme: String, CaseIterable {
         case .auto: .unspecified
         }
     }
+    #endif
 }
 
 /// Where a game runs: in the app, or in a game process of its own
@@ -252,7 +259,9 @@ class AppSettings {
 
     func acknowledgeDisclaimer() {
         disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
+        #if os(iOS)
         acknowledgeWhatsNew()
+        #endif
     }
 
     // MARK: - What's new
@@ -263,6 +272,7 @@ class AppSettings {
         }
     }
 
+    #if os(iOS)
     var needsWhatsNew: Bool {
         whatsNewSeenVersion < WhatsNew.version
     }
@@ -270,6 +280,7 @@ class AppSettings {
     func acknowledgeWhatsNew() {
         whatsNewSeenVersion = WhatsNew.version
     }
+    #endif
 
     private init() {
         let ud = UserDefaults.standard
@@ -316,7 +327,11 @@ class AppSettings {
     }
 
     private func resolvedRGBA() -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+        #if os(iOS)
         let resolved = UIColor(viewportBoundsColor)
+        #else
+        let resolved = NSColor(viewportBoundsColor).usingColorSpace(.sRGB) ?? .orange
+        #endif
         var r: CGFloat = 0
         var g: CGFloat = 0
         var b: CGFloat = 0
@@ -341,9 +356,11 @@ class AppSettings {
     /// `EngineSessionCoordinator.openCore` calls this once the core is
     /// in.
     func pushToCore() {
+        #if os(iOS)
         guard EmpoCoreIsOpen() != 0 else { return }
         gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
         gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        #endif
     }
 }

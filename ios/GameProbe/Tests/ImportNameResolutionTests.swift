@@ -16,7 +16,7 @@ final class ImportNameResolutionTests: XCTestCase {
         ImportNameResolution.Context(
             installedFolderNames: installed,
             inFlightNames: inFlight,
-            openGameName: open
+            openGameNames: open.map { [$0] } ?? []
         )
     }
 

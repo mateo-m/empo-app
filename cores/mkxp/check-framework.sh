@@ -8,7 +8,7 @@
 # to check. The mkxp_ bridge out, no Ruby and no SDL name in or out.
 #
 # Usage:
-#   cores/mkxp/check-framework.sh [--sdk iphoneos|iphonesimulator]
+#   cores/mkxp/check-framework.sh [--sdk iphoneos|iphonesimulator|macosx]
 #   cores/mkxp/check-framework.sh --framework <path> --sdk <sdk>
 set -euo pipefail
 
@@ -64,14 +64,20 @@ otool -D "$BIN" | grep -q '@rpath/MkxpCore.framework/MkxpCore' ||
 otool -hv "$BIN" | grep -q TWOLEVEL ||
     fail "MkxpCore must stay two-level namespace"
 
-if [ "$SDK" = iphonesimulator ]; then WANT_PLATFORM=7; else WANT_PLATFORM=2; fi
+case "$SDK" in
+    iphonesimulator) WANT_PLATFORM=7 ;;
+    macosx) WANT_PLATFORM=1 ;;
+    *) WANT_PLATFORM=2 ;;
+esac
 otool -l "$BIN" | grep -Eq "platform ${WANT_PLATFORM}([[:space:]]|$)" ||
     fail "MkxpCore is not built for $SDK (platform $WANT_PLATFORM)"
 
+RES="$FW"
+[ "$SDK" = macosx ] && RES="$FW/Resources"
 for f in Assets.bundle/Shaders/common.h Assets.bundle/Fonts/liberation.ttf \
     Assets.bundle/gamecontrollerdb.txt Assets.bundle/Preload Assets.bundle/Postload \
     Ruby/3.1.0 Info.plist PrivacyInfo.xcprivacy; do
-    [ -e "$FW/$f" ] || fail "MkxpCore.framework/$f missing"
+    [ -e "$RES/$f" ] || fail "MkxpCore.framework/$f missing"
 done
 
 # GameImportValidator reads this at import, before any core is open. A
@@ -86,7 +92,7 @@ done
 #
 # grep -c and not grep -q: grep -q leaves on the first match, nm dies on
 # SIGPIPE, and pipefail reads that as no match.
-MASK="$(/usr/libexec/PlistBuddy -c 'Print :EmpoCoreRGSSVersionMask' "$FW/Info.plist" 2>/dev/null || true)"
+MASK="$(/usr/libexec/PlistBuddy -c 'Print :EmpoCoreRGSSVersionMask' "$RES/Info.plist" 2>/dev/null || true)"
 PATCHED_RUBY_COUNT="$(nm -a "$BIN" | grep -c '_mkxp_syntax_transform_target_ruby_version_major$' || true)"
 if [ "$PATCHED_RUBY_COUNT" -gt 0 ]; then
     WANT_MASK=7

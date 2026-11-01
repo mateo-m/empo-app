@@ -16,6 +16,8 @@
 #include "GameCore.h"
 #include "psdk_core.h"
 
+#include <TargetConditionals.h>
+
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -33,7 +35,13 @@
 #include <unistd.h>
 #include <vector>
 
+#if TARGET_OS_OSX
+#define GL_SILENCE_DEPRECATION
+#import <AppKit/AppKit.h>
+#include <OpenGL/gl.h>
+#else
 #include <GLES2/gl2.h>
+#endif
 
 static const char *waitForGamePath(void);
 
@@ -155,7 +163,11 @@ std::string ownBundlePath() {
 
 void *runGame(void *) {
     const std::string bundle = ownBundlePath();
+#if TARGET_OS_OSX
+    const std::string support = bundle + "/Resources/PsdkSupport";
+#else
     const std::string support = bundle + "/PsdkSupport";
+#endif
     const char *path = waitForGamePath();
 
     int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), nullptr);
@@ -413,7 +425,22 @@ void onFrame(void *) {
     // PSDK's FPSBalancer counts frames from the microsecond part of the
     // clock. So after a pause of any length, the game catches up less
     // than one second of updates.
+#if TARGET_OS_OSX
+    // The game runs on the main thread here, so the pause keeps the
+    // app's events moving: the menu, the quit sheet and the resume.
+    lock.unlock();
+    while (gPausedFlag.load()) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                            untilDate:[NSDate distantFuture]
+                                               inMode:NSDefaultRunLoopMode
+                                              dequeue:YES];
+        if (event && event.type != NSEventTypeApplicationDefined) {
+            [NSApp sendEvent:event];
+        }
+    }
+#else
     gResumeSignal.wait(lock, [] { return !gPausedFlag.load(); });
+#endif
     psdk_resume_audio();
 }
 
@@ -421,18 +448,26 @@ void onFrame(void *) {
 
 // MARK: - Starting the game
 
-// Starts the game on its own thread and returns at once.
+// On iOS, starts the game on its own thread and returns at once. SFML
+// marshals every UIKit call to the main thread with dispatch_sync, so
+// the main thread has to stay in its run loop and answer them.
 //
-// MkxpCore holds the calling thread here until the game ends. This core
-// cannot: SFML marshals every UIKit call to the main thread with
-// dispatch_sync, so the main thread has to stay in its run loop and
-// answer them. A launcher reads gamecore_isEngineTerminated or takes the
-// terminated callback either way.
+// On macOS, holds the main thread until the game ends, as MkxpCore does.
+// SFML makes its window and reads its events only on the main thread
+// there (SFWindowController.mm).
+//
+// A launcher reads gamecore_isEngineTerminated or takes the terminated
+// callback either way.
 int gamecore_run_app(int argc, char **argv) {
     gArgc.store(argc);
     gArgv.store(argv);
     psdk_set_frame_callback(onFrame, nullptr);
     psdk_set_resolution_callback(onGameResolution, nullptr);
+
+#if TARGET_OS_OSX
+    runGame(nullptr);
+    return 0;
+#else
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -446,6 +481,7 @@ int gamecore_run_app(int argc, char **argv) {
     }
     pthread_detach(thread);
     return 0;
+#endif
 }
 
 void gamecore_setGamePath(const char *path) {
@@ -577,6 +613,19 @@ void gamecore_requestResume(void) {
         gPausedFlag.store(false);
     }
     gResumeSignal.notify_one();
+#if TARGET_OS_OSX
+    // Wakes the paused loop in onFrame, which waits for an event.
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                                        location:NSZeroPoint
+                                   modifierFlags:0
+                                       timestamp:0
+                                    windowNumber:0
+                                         context:nil
+                                         subtype:0
+                                           data1:0
+                                           data2:0]
+             atStart:NO];
+#endif
     {
         std::lock_guard<std::mutex> lock(gSnapshotLock);
         gSnapshotRGBA.clear();

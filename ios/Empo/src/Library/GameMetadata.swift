@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import Foundation
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Per-game metadata stored at `<container>/Metadata/metadata.json`,
 /// with custom artwork/banner images alongside it as
@@ -201,6 +206,7 @@ struct GameMetadata: Codable {
     }
 }
 
+#if os(iOS)
 extension UIImage {
     fileprivate func resizedToFit(maxDimension: CGFloat) -> UIImage {
         let maxSide = max(size.width, size.height)
@@ -215,3 +221,4 @@ extension UIImage {
         }
     }
 }
+#endif

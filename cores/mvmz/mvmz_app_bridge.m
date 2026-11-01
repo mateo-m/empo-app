@@ -4,12 +4,25 @@
 // The launcher interface for the RPG Maker MV and MZ core. The core,
 // mvmz_core.h from mvmz-apple-mobile, runs the game in a web view. This
 // file puts the web view in its own window and in the launcher's
-// region, and answers the launcher calls with the core's calls.
+// region, and answers the launcher calls with the core's calls. On
+// macOS it puts the web view in a view that the launcher puts in its
+// own window.
 //
 // Every function here runs on the main thread. The launcher calls them
 // from the main actor, and the core calls back on the main thread.
 
+#import <TargetConditionals.h>
+#if TARGET_OS_OSX
+#import <AppKit/AppKit.h>
+typedef NSView PlatformView;
+typedef NSImage PlatformImage;
+typedef NSEdgeInsets PlatformInsets;
+#else
 #import <UIKit/UIKit.h>
+typedef UIView PlatformView;
+typedef UIImage PlatformImage;
+typedef UIEdgeInsets PlatformInsets;
+#endif
 #import <WebKit/WebKit.h>
 
 #include "GameCore.h"
@@ -31,7 +44,11 @@ static Callback gTextInputMode;
 
 static NSString *gGamePath;
 static NSFileHandle *gLog;
+#if TARGET_OS_OSX
+static NSView *gHostView;
+#else
 static UIWindow *gWindow;
+#endif
 static WKWebView *gWebView;
 
 static BOOL gGameReady;
@@ -41,7 +58,7 @@ static BOOL gPausedFlag;
 static BOOL gCheatsEnabled;
 static int gFastForward = 1;
 static GameCoreVerticalAlignment gVerticalAlignment = GAMECORE_VALIGN_TOP_CENTER;
-static UIEdgeInsets gSafeArea;
+static PlatformInsets gSafeArea;
 static BOOL gHasHostRegion;
 static BOOL gHostRegionPortrait;
 static CGRect gHostRegion;
@@ -67,7 +84,7 @@ static void logLine(NSString *line) {
 // The game scales its canvas to the page and centres it, so the web
 // view gets the picture rect itself and the page has no margin.
 static void placeWebView(void) {
-    UIView *host = gWebView.superview;
+    PlatformView *host = gWebView.superview;
     const CGRect bounds = host.bounds;
     if (!host || CGRectIsEmpty(bounds)) {
         return;
@@ -82,12 +99,14 @@ static void placeWebView(void) {
                          gHostRegion.size.height * bounds.size.height);
     } else {
         // Landscape keeps the full height, as in the other two cores.
-        UIEdgeInsets insets = gSafeArea;
+        PlatformInsets insets = gSafeArea;
         if (!portrait) {
             insets.top = 0;
             insets.bottom = 0;
         }
-        box = UIEdgeInsetsInsetRect(bounds, insets);
+        box = CGRectMake(bounds.origin.x + insets.left, bounds.origin.y + insets.top,
+                         bounds.size.width - insets.left - insets.right,
+                         bounds.size.height - insets.top - insets.bottom);
     }
     box = CGRectIntersection(box, bounds);
     if (CGRectIsEmpty(box)) {
@@ -129,6 +148,22 @@ static void placeWebView(void) {
     }
 }
 
+#if TARGET_OS_OSX
+__attribute__((visibility("hidden")))
+@interface MvmzHostView : NSView
+@end
+
+// Flipped, so that the picture rect has the top-left origin of the
+// other platforms.
+@implementation MvmzHostView
+- (BOOL)isFlipped {
+    return YES;
+}
+- (void)resizeSubviewsWithOldSize:(NSSize)oldSize {
+    placeWebView();
+}
+@end
+#else
 __attribute__((visibility("hidden")))
 @interface MvmzHostView : UIView
 @end
@@ -150,6 +185,7 @@ __attribute__((visibility("hidden")))
     self.view.backgroundColor = UIColor.blackColor;
 }
 @end
+#endif
 
 static void fire(Callback cb) {
     if (cb.fn) {
@@ -168,8 +204,12 @@ static void terminate(BOOL clean) {
 
 // Converts the snapshot WebKit makes to the RGBA rows the launcher
 // reads, then tells the launcher the game is paused.
-static void storeSnapshotAndReportPause(UIImage *image, NSError *error) {
+static void storeSnapshotAndReportPause(PlatformImage *image, NSError *error) {
+#if TARGET_OS_OSX
+    CGImageRef cg = [image CGImageForProposedRect:NULL context:nil hints:nil];
+#else
     CGImageRef cg = image.CGImage;
+#endif
     if (!cg) {
         logLine([NSString stringWithFormat:@"paused with no picture: %@", error.localizedDescription]);
     } else {
@@ -220,7 +260,7 @@ static void coreLog(const char *line, void *userdata) {
 
 static void takeSnapshot(void *userdata) {
     [gWebView takeSnapshotWithConfiguration:nil
-                          completionHandler:^(UIImage *image, NSError *error) {
+                          completionHandler:^(PlatformImage *image, NSError *error) {
                               storeSnapshotAndReportPause(image, error);
                           }];
 }
@@ -229,7 +269,8 @@ static void takeSnapshot(void *userdata) {
 
 // Makes the window, starts the game in the core's web view, then
 // returns. The launcher keeps the main thread in its run loop, and
-// WebKit needs it there.
+// WebKit needs it there. On macOS the launcher puts the view of
+// gamecore_getGameWindow in its window.
 int gamecore_run_app(int argc, char **argv) {
     NSString *root = gGamePath;
     if (root.length == 0) {
@@ -239,6 +280,11 @@ int gamecore_run_app(int argc, char **argv) {
 
     gamecore_killSession();
 
+#if TARGET_OS_OSX
+    gHostView = [[MvmzHostView alloc] init];
+    gHostView.wantsLayer = YES;
+    gHostView.layer.backgroundColor = NSColor.blackColor.CGColor;
+#else
     UIWindowScene *scene = nil;
     for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
         if ([candidate isKindOfClass:UIWindowScene.class]) {
@@ -248,6 +294,7 @@ int gamecore_run_app(int argc, char **argv) {
     }
     gWindow = [[UIWindow alloc] initWithWindowScene:scene];
     gWindow.rootViewController = [[MvmzViewController alloc] init];
+#endif
 
     mvmz_set_frame_callback(frameRendered, NULL);
     mvmz_set_size_callback(gameSizeChanged, NULL);
@@ -260,19 +307,29 @@ int gamecore_run_app(int argc, char **argv) {
 #if DEBUG
     gWebView.inspectable = YES;
 #endif
+#if TARGET_OS_OSX
+    gWebView.frame = gHostView.bounds;
+    [gHostView addSubview:gWebView];
+#else
     gWebView.frame = gWindow.rootViewController.view.bounds;
     [gWindow.rootViewController.view addSubview:gWebView];
     // WebKit suspends the page of a web view that is in no visible
     // window. The app window stays above this one until the first frame.
     gWindow.hidden = NO;
+#endif
     return 0;
 }
 
 void gamecore_killSession(void) {
     mvmz_stop();
     gWebView = nil;
+#if TARGET_OS_OSX
+    [gHostView removeFromSuperview];
+    gHostView = nil;
+#else
     gWindow.hidden = YES;
     gWindow = nil;
+#endif
     gamecore_resetSessionState();
 }
 
@@ -288,9 +345,15 @@ void gamecore_injectKeyEvent(int scancode, int pressed) {
 
 // MARK: - The window
 
+#if TARGET_OS_OSX
+void *gamecore_getGameWindow(void) {
+    return (__bridge void *)gHostView;
+}
+#else
 void *gamecore_getGameWindow(void) {
     return (__bridge void *)gWindow;
 }
+#endif
 
 // MARK: - Callbacks
 
@@ -462,7 +525,7 @@ void gamecore_clearHostViewportRegion(void) {
 }
 
 void gamecore_setSafeAreaInsets(float top, float bottom, float left, float right) {
-    gSafeArea = UIEdgeInsetsMake(top, left, bottom, right);
+    gSafeArea = (PlatformInsets){top, left, bottom, right};
     placeWebView();
 }
 

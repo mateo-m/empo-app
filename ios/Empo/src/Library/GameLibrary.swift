@@ -6,7 +6,12 @@ import GameProbe
 import Observation
 import SwiftUI
 import Synchronization
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// In-flight import that's still in its pre-flight validation phase.
 /// Once the pre-flight passes, the matching `GameEntry` is appended

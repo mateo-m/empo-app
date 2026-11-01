@@ -4,7 +4,12 @@
 import CryptoKit
 import ImageIO
 import Synchronization
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Two-layer (memory + disk) cache of downsampled artwork thumbnails.
 ///

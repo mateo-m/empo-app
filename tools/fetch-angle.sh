@@ -27,7 +27,7 @@ ANGLE_DIR="$REPO_ROOT/ios/Dependencies/ANGLE"
 VERSION_FILE="$ANGLE_DIR/.version"
 STAMP="$ANGLE_DIR/.fetched-version"
 DEPS_REPO="${EMPO_DEPS_REPO:-mateo-m/empo-deps}"
-ASSET_NAME="angle-ios-prebuilt.tar.gz"
+ASSET_NAME="angle-apple-prebuilt.tar.gz"
 
 if [ ! -f "$VERSION_FILE" ]; then
     echo "fetch-angle: $VERSION_FILE missing; cannot resolve ANGLE version" >&2

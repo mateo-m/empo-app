@@ -182,7 +182,11 @@ struct GameArtworkView: View {
     @ViewBuilder
     private var placeholderBackground: some View {
         ZStack {
+            #if os(iOS)
             Color(.secondarySystemBackground)
+            #else
+            Color(nsColor: .tertiarySystemFill)
+            #endif
             LinearGradient(
                 stops: [
                     .init(color: .white.opacity(0.10), location: 0),

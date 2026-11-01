@@ -29,6 +29,8 @@ ios/Dependencies/ANGLE/iphoneos/include/
 ios/Dependencies/ANGLE/iphoneos/lib/
 ios/Dependencies/ANGLE/iphonesimulator/include/
 ios/Dependencies/ANGLE/iphonesimulator/lib/
+ios/Dependencies/ANGLE/macosx/include/
+ios/Dependencies/ANGLE/macosx/lib/
 ios/Dependencies/ANGLE/.fetched-version
 
 # The mkxp-z core release, fetched by cores/mkxp/fetch.sh.

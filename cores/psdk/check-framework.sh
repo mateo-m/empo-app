@@ -8,7 +8,7 @@
 # check. Only psdk_ names out, no Ruby and no LiteRGSS name in.
 #
 # Usage:
-#   cores/psdk/check-framework.sh [--sdk iphoneos|iphonesimulator]
+#   cores/psdk/check-framework.sh [--sdk iphoneos|iphonesimulator|macosx]
 #   cores/psdk/check-framework.sh --framework <path> --sdk <sdk>
 #
 # Without --framework, it checks the four PSDK cores in the build tree.
@@ -50,7 +50,11 @@ fail() {
 # A missing one aborts in the forwarder, so fail here first.
 WANT_NAMES=$("$REPO_ROOT/cores/gamecore-exports.sh" /dev/stdout)
 
-if [ "$SDK" = iphonesimulator ]; then WANT_PLATFORM=7; else WANT_PLATFORM=2; fi
+case "$SDK" in
+    iphonesimulator) WANT_PLATFORM=7 ;;
+    macosx) WANT_PLATFORM=1 ;;
+    *) WANT_PLATFORM=2 ;;
+esac
 
 for FW in "${FRAMEWORKS[@]}"; do
     NAME="$(basename "$FW" .framework)"
@@ -83,8 +87,10 @@ for FW in "${FRAMEWORKS[@]}"; do
     FILES="Info.plist PrivacyInfo.xcprivacy PsdkSupport/compat.rb
         PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAudio.rb PsdkSupport/uri.rb"
     [ "$NAME" = Psdk25Core ] && FILES="$FILES PsdkSupport/litergss1.rb PsdkSupport/RubyFmod.rb"
+    RES="$FW"
+    [ "$SDK" = macosx ] && RES="$FW/Resources"
     for f in $FILES; do
-        [ -e "$FW/$f" ] || fail "$NAME.framework/$f missing"
+        [ -e "$RES/$f" ] || fail "$NAME.framework/$f missing"
     done
 
     echo "OK: $NAME.framework is closed for $SDK"

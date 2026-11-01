@@ -14,7 +14,7 @@
 # ANGLE pin, the bridge and this script. Xcode runs it before each build.
 #
 # Usage:
-#   cores/mkxp/build-framework-ios.sh [--sdk iphoneos|iphonesimulator]
+#   cores/mkxp/build-framework-ios.sh [--sdk iphoneos|iphonesimulator|macosx]
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -30,6 +30,7 @@ fi
 SDK=iphoneos
 ARCH=arm64
 MIN_OS=26.0
+MIN_OS_KEY=MinimumOSVersion
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -52,6 +53,11 @@ case "$SDK" in
     iphonesimulator)
         TARGET="${ARCH}-apple-ios${MIN_OS}-simulator"
         PLATFORM=iPhoneSimulator
+        ;;
+    macosx)
+        TARGET="${ARCH}-apple-macos${MIN_OS}"
+        PLATFORM=MacOSX
+        MIN_OS_KEY=LSMinimumSystemVersion
         ;;
     *)
         echo "build-framework-ios: unknown sdk $SDK" >&2
@@ -87,8 +93,18 @@ if [ -f "$FW/MkxpCore" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; t
     exit 0
 fi
 
+# A macOS framework keeps its binary and resources in Versions/A, with
+# links at the top. codesign refuses the flat iOS layout on macOS.
+if [ "$SDK" = macosx ]; then
+    BIN_DIR="$FW/Versions/A"
+    RES="$BIN_DIR/Resources"
+else
+    BIN_DIR="$FW"
+    RES="$FW"
+fi
+
 rm -rf "$FW"
-mkdir -p "$FW" "$TREE/lib"
+mkdir -p "$RES" "$TREE/lib"
 
 BRIDGE="$TREE/lib/mkxp-bridge.o"
 "$CC" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" -std=c11 -O2 -Wall -Werror \
@@ -97,27 +113,30 @@ BRIDGE="$TREE/lib/mkxp-bridge.o"
 "$ROOT/cores/gamecore-exports.sh" "$TREE/gamecore.exports"
 
 echo "[mkxp-framework] Linking $CORE_VERSION..."
-# LINK names its files relative to <sdk>/.
+# LINK names its files relative to <sdk>/. The frameworks differ between
+# iOS and macOS, so a macOS release has its own <sdk>/LINK.
+LINK="$CORE/$SDK/LINK"
+[ -f "$LINK" ] || LINK="$CORE/LINK"
 # shellcheck disable=SC2046
 (cd "$CORE/$SDK" && "$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
     -install_name "@rpath/MkxpCore.framework/MkxpCore" \
     -Wl,-exported_symbols_list,"$TREE/gamecore.exports" \
     -L"$ANGLE/lib" \
-    -o "$FW/MkxpCore" \
-    "$BRIDGE" $(cat "$CORE/LINK"))
+    -o "$BIN_DIR/MkxpCore" \
+    "$BRIDGE" $(cat "$LINK"))
 
 # The engine reads its assets and the Ruby stdlib through its own
 # bundle, which dladdr resolves to this framework (filesystemImplIOS.mm).
-cp -R "$CORE/assets" "$FW/Assets.bundle"
-cp -R "$CORE/$SDK/ruby-stdlib" "$FW/Ruby"
+cp -R "$CORE/assets" "$RES/Assets.bundle"
+cp -R "$CORE/$SDK/ruby-stdlib" "$RES/Ruby"
 
 # The licenses screen reads it (LicenseEntry.inThisBuild).
-cp "$CORE/licenses.json" "$FW/"
-cp "$ROOT/cores/PrivacyInfo.xcprivacy" "$FW/"
+cp "$CORE/licenses.json" "$RES/"
+cp "$ROOT/cores/PrivacyInfo.xcprivacy" "$RES/"
 
 # GameImportValidator reads EmpoCoreRGSSVersionMask at import, before
 # any core is open.
-cat >"$FW/Info.plist" <<PLIST
+cat >"$RES/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -131,12 +150,18 @@ cat >"$FW/Info.plist" <<PLIST
 	<key>CFBundleShortVersionString</key><string>1.0</string>
 	<key>CFBundleVersion</key><string>1</string>
 	<key>CFBundleSupportedPlatforms</key><array><string>$PLATFORM</string></array>
-	<key>MinimumOSVersion</key><string>$MIN_OS</string>
+	<key>$MIN_OS_KEY</key><string>$MIN_OS</string>
 	<key>EmpoCoreRGSSVersionMask</key><integer>$RGSS_MASK</integer>
 	<key>EmpoCoreVersion</key><string>$CORE_VERSION</string>
 </dict>
 </plist>
 PLIST
+
+if [ "$SDK" = macosx ]; then
+    ln -s A "$FW/Versions/Current"
+    ln -s Versions/Current/MkxpCore "$FW/MkxpCore"
+    ln -s Versions/Current/Resources "$FW/Resources"
+fi
 
 "$ROOT/cores/mkxp/check-framework.sh" --framework "$FW" --sdk "$SDK"
 printf '%s\n' "$WANT_STAMP" >"$STAMP"

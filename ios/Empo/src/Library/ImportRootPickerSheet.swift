@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Root picker for sources that contain more than one game,
 /// presented as up to two steps:

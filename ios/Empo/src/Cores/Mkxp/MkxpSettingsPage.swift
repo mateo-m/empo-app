@@ -26,7 +26,9 @@ struct MkxpSettingsPage: View {
                     )
                 }
             }
+            #if os(iOS)
             LayoutSettingsSection(model: model)
+            #endif
             Section {
                 MkxpEngineRow(state: state, field: .frameSkip) {
                     SettingsToggle(
@@ -64,7 +66,9 @@ struct MkxpSettingsPage: View {
                         Text(scale.label).tag(scale)
                     }
                 }
+                #if os(iOS)
                 .pickerStyle(.navigationLink)
+                #endif
 
                 Text(state.effectiveRenderScale.description)
                     .font(.footnote)

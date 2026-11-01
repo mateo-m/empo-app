@@ -27,10 +27,12 @@ final class GameSettingsModel {
 
     var settings: GameSettings
     let displayDefaults: GameDisplayDefaults
+    #if os(iOS)
     /// The screen placement of the layout profile for each orientation.
     /// A form body renders again on every control change, and the
     /// resolve reads two files.
     var resolvedScreen: ScreenResolution.Result?
+    #endif
 
     @ObservationIgnored private let initialSettings: GameSettings
 
@@ -68,6 +70,7 @@ final class GameSettingsModel {
         coreSettings?.reset()
     }
 
+    #if os(iOS)
     func reloadResolvedScreen() {
         let store = LayoutProfilesManager.store
         resolvedScreen = ScreenResolution.resolve(
@@ -76,6 +79,7 @@ final class GameSettingsModel {
             readScreen: { store.readScreen($0) }
         )
     }
+    #endif
 
     // MARK: - Effective values
 

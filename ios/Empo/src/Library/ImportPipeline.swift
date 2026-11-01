@@ -177,6 +177,7 @@ final class ImportPipeline {
         )
     }
 
+    #if os(iOS)
     var importButtonPhase: ImportButton.Phase {
         if activePrompt != nil {
             return .multipleGames
@@ -186,6 +187,26 @@ final class ImportPipeline {
         }
         return .idle
     }
+
+    private var openGameNames: [String] {
+        [PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id].compactMap { $0 }
+    }
+
+    private var refusedOpenGameMessage: String {
+        EngineSessionCoordinator.shared.canEndGame
+            ? String(localized: "This game is open. Quit it, then import again.")
+            : String(
+                localized:
+                    "This game is still running. Close Empo from the app switcher, reopen it, then import again."
+            )
+    }
+    #else
+    private var openGameNames: [String] { GameLauncher.shared.playingGameIDs }
+
+    private var refusedOpenGameMessage: String {
+        String(localized: "This game is open. Quit it, then import again.")
+    }
+    #endif
 
     func configure(library: GameLibrary) {
         self.library = library
@@ -443,7 +464,7 @@ final class ImportPipeline {
         let context = ImportNameResolution.Context(
             installedFolderNames: installed.map(\.folderName),
             inFlightNames: inFlightNames,
-            openGameName: PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id
+            openGameNames: openGameNames
         )
 
         var reservedBatchKeys = Set<String>()
@@ -505,12 +526,7 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: EngineSessionCoordinator.shared.canEndGame
-                        ? String(localized: "This game is open. Quit it, then import again.")
-                        : String(
-                            localized:
-                                "This game is still running. Close Empo from the app switcher, reopen it, then import again."
-                        )
+                    message: refusedOpenGameMessage
                 )
             }
         }
@@ -597,9 +613,11 @@ final class ImportPipeline {
             preparedSource.cleanup()
 
             let succeeded = batchSelections.count - failures.count
+            #if os(iOS)
             if succeeded > 0 {
                 Haptics.impact()
             }
+            #endif
             for (selection, error) in failures where !(error is GameLibrary.ImportCancelled) {
                 self.presentError(
                     name: selection.displayName,
@@ -696,11 +714,16 @@ private enum ImportPipelineService {
                 }
             }
 
+            #if os(iOS)
             do {
                 try fm.moveItem(at: url, to: archiveCopyURL)
             } catch {
                 try fm.copyItem(at: url, to: archiveCopyURL)
             }
+            #else
+            // The Mac open panel and a drop give the user's own file, not a copy.
+            try fm.copyItem(at: url, to: archiveCopyURL)
+            #endif
             copied = true
 
             return ImportPreparedSource(
