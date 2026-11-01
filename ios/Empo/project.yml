@@ -548,8 +548,8 @@ targets:
         embed: false
   EmpoPlayer:
     # Runs one game in a window of its own. Empo starts it from
-    # Contents/Helpers with Process. With only the sandbox and inherit
-    # entitlements, it runs in Empo's sandbox and container.
+    # Contents/Helpers with Process. With the inherit entitlement, it
+    # runs in Empo's sandbox and container.
     type: application
     platform: macOS
     deploymentTarget: "26.0"
@@ -574,6 +574,9 @@ targets:
         # Ad hoc in every configuration: the Mac app has no release
         # signing yet.
         CODE_SIGN_IDENTITY: "-"
+        # Also disable-library-validation: an ad hoc signature has no
+        # Team ID, and the hardened runtime refuses to dlopen a core
+        # unless its Team ID matches the player's.
         CODE_SIGN_ENTITLEMENTS: src-player/EmpoPlayer.entitlements
         ENABLE_HARDENED_RUNTIME: YES # yamllint disable-line rule:truthy
         SKIP_INSTALL: YES # yamllint disable-line rule:truthy
