@@ -292,6 +292,7 @@ jobs:
             -derivedDataPath "$PWD/build/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) SIDELOAD' \
             build 2>&1 | tail -n 40
           test -d build/Release-iphoneos/Empo.app
 

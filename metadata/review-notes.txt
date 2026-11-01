@@ -1,0 +1,14 @@
+Empo plays PC games made with RPG Maker (XP, VX, VX Ace, MV, MZ) and PSDK, from files that the user already has. It works like a PC game emulator (Guideline 4.7). Empo does not include, list, sell, host, or download any game. The user imports a game folder or archive from the Files app.
+
+To test:
+1. On the review device, open https://aureliendossantos.itch.io/symphony-of-the-night in Safari and download the free game. This short puzzle game uses sound, so turn the sound on.
+2. Open Empo and tap Import game.
+3. In the file picker, open Downloads and pick "Symphony of the night.zip". On iPad, Downloads is in the sidebar. On iPhone, tap Browse, then On My iPhone, then Downloads. Then tap Open.
+4. Tap the game in the library to play it. Use the on-screen buttons, or a game controller.
+
+Permissions:
+- Camera: only when you take a photo to use as artwork for a game.
+- Bluetooth: the game controller library links it. Empo reads no Bluetooth data.
+- Local network: only when a game has local multiplayer.
+
+Empo has no account, no sign-in, no purchases, no ads, and no analytics.

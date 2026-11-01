@@ -80,7 +80,7 @@ for FW in "${FRAMEWORKS[@]}"; do
     otool -l "$BIN" | grep -Eq "platform ${WANT_PLATFORM}([[:space:]]|$)" ||
         fail "$NAME is not built for $SDK (platform $WANT_PLATFORM)"
 
-    FILES="Info.plist PsdkSupport/compat.rb
+    FILES="Info.plist PrivacyInfo.xcprivacy PsdkSupport/compat.rb
         PsdkSupport/ruby-dist/lib/LiteRGSS.rb PsdkSupport/ruby-dist/lib/SFMLAudio.rb PsdkSupport/uri.rb"
     [ "$NAME" = Psdk25Core ] && FILES="$FILES PsdkSupport/litergss1.rb PsdkSupport/RubyFmod.rb"
     for f in $FILES; do

@@ -326,10 +326,14 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
             return nil
         }
         defer { free(rootPath) }
-        var volume = statfs()
-        guard statfs(rootPath, &volume) == 0 else { return nil }
+        var info = stat()
+        guard stat(rootPath, &info) == 0 else { return nil }
+        // fsgetpath reads only val[0] of the fsid, and st_dev is that
+        // value (xnu mount_lookupby_volfsid). statfs gives the same id,
+        // but Apple counts it as a disk space API.
+        var volume = fsid_t(val: (info.st_dev, 0))
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-        guard fsgetpath(&buffer, buffer.count, &volume.f_fsid, fileID) > 0 else { return nil }
+        guard fsgetpath(&buffer, buffer.count, &volume, fileID) > 0 else { return nil }
         // fsgetpath gives the real path, with /private, which
         // resolvingSymlinksInPath removes from `root`.
         guard

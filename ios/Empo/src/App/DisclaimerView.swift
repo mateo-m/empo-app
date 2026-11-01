@@ -18,15 +18,15 @@ struct DisclaimerView: View {
     /// splash logo's entrance.
     @State private var entered = false
 
-    /// The "Save often..." line as an AttributedString, so the GitHub
+    /// The GitHub line as an AttributedString, so the GitHub
     /// link can be both bold AND underlined. Markdown's `**bold**`
     /// alone is not visually distinct against the white-on-orange
     /// copy.
     private var githubReportLine: AttributedString {
         var attr = AttributedString(
-            localized: "Save often. If you hit issues, report them on [**GitHub**](\(GitInfo.issuesURL)).",
+            localized: "If one doesn't, tell me on [**GitHub**](\(GitInfo.issuesURL)).",
             comment:
-                "Launch disclaimer. Keep the Markdown link. The placeholder is the URL of the issues page."
+                "First-launch welcome. \"One\" is a game that does not run. Keep the Markdown link. The placeholder is the URL of the issues page."
         )
         for run in attr.runs where run.link != nil {
             attr[run.range].underlineStyle = .single
@@ -36,21 +36,15 @@ struct DisclaimerView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing._2xl) {
-            VStack(spacing: 0) {
-                Text("Here be dragons")
-                    .font(.largeTitle.weight(.bold))
-                    .fontDesign(.rounded)
-                Text("or bugs!")
-                    .font(.title3.weight(.semibold))
-                    .fontDesign(.rounded)
-                    .foregroundStyle(.white.opacity(0.85))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
+            Text("Welcome to Empo")
+                .font(.largeTitle.weight(.bold))
+                .fontDesign(.rounded)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("I build Empo alone in my spare time.")
-                Text("Things can crash, freeze, or refuse to load.")
+                Text("Some games may not run yet.")
                 // The build generates the URL from the git origin
                 // (see project.yml's "Generate Git Info" phase).
                 // The disclaimer thus always points at the fork
@@ -73,7 +67,7 @@ struct DisclaimerView: View {
                 Haptics.tap()
                 onAcknowledge()
             } label: {
-                Text("I understand")
+                Text("Continue")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(DisclaimerButtonStyle())

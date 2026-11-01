@@ -70,7 +70,7 @@ otool -l "$BIN" | grep -Eq "platform ${WANT_PLATFORM}([[:space:]]|$)" ||
 
 for f in Assets.bundle/Shaders/common.h Assets.bundle/Fonts/liberation.ttf \
     Assets.bundle/gamecontrollerdb.txt Assets.bundle/Preload Assets.bundle/Postload \
-    Ruby/3.1.0 Info.plist; do
+    Ruby/3.1.0 Info.plist PrivacyInfo.xcprivacy; do
     [ -e "$FW/$f" ] || fail "MkxpCore.framework/$f missing"
 done
 

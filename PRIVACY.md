@@ -1,6 +1,6 @@
 Empo runs on your iPhone or iPad. There is no Empo account and no Empo server.
 
-Last update: 7 September 2026.
+Last update: 1 November 2026.
 
 ## What Empo collects
 
@@ -14,14 +14,23 @@ backup on. That is an Apple feature, and Empo does not control it.
 
 Empo makes two kinds of network request.
 
-A version check reads the latest release of the Empo repository from
-`api.github.com`. GitHub sees the request and the IP address it came from.
+The version of Empo from GitHub checks for updates. It reads the latest release
+of the Empo repository from `api.github.com`. GitHub sees the request and the IP
+address it came from. The App Store version does not make this request.
 
 A certificate refresh reads `cacert.pem` from `curl.se`. Games need it for HTTPS.
 The curl project sees the request and the IP address it came from.
 
 Empo sends none of these to a server that Empo owns, because there is no such
 server.
+
+## Games that go online
+
+A game that you import can connect to the internet, for example to check for
+its own updates or for online features. That traffic goes from the game to the
+servers that its makers chose. Empo does not read it or keep it. To stop an RPG
+Maker XP, VX, or VX Ace game from going online, turn off **Network access** in
+the settings of that game.
 
 ## Device permissions
 
@@ -45,5 +54,6 @@ A change to this policy shows here with a new date at the top.
 
 ## Contact
 
-Open an issue at [github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues),
-or ask on the [Discord server](https://discord.gg/m3YnpXMxrB).
+Send an email to [empo@mateo.sh](mailto:empo@mateo.sh), open an issue at
+[github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues), or ask on the
+[Discord server](https://discord.gg/m3YnpXMxrB).

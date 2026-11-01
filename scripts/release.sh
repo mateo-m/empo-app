@@ -301,6 +301,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         -derivedDataPath "$DERIVED_DATA" \
         CODE_SIGNING_ALLOWED=NO \
         CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS="\$(inherited) SIDELOAD" \
         ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
         build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
 

@@ -71,7 +71,7 @@ CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
 
 STAMP="$TREE/.psdk-frameworks"
 WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
-    "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/GameCore.h" | shasum -a 256 | awk '{print $1}')"
+    "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/GameCore.h" "$ROOT/cores/PrivacyInfo.xcprivacy" | shasum -a 256 | awk '{print $1}')"
 BUILT=yes
 for ruby in $RUBIES; do
     [ -f "$TREE/Psdk${ruby}Core.framework/Psdk${ruby}Core" ] || BUILT=no
@@ -117,6 +117,7 @@ for ruby in $RUBIES; do
 
     # The licenses screen reads it (LicenseEntry.inThisBuild).
     cp "$CORE/licenses.json" "$FW/"
+    cp "$ROOT/cores/PrivacyInfo.xcprivacy" "$FW/"
 
     cat >"$FW/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

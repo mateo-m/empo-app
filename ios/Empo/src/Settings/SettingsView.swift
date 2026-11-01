@@ -381,7 +381,7 @@ struct SettingsView: View {
                         await appState.checkForUpdatesNow()
                     },
                     size: .compact,
-                    showsManualRefresh: UpdateChecker.isSideloadOrDevBuild,
+                    showsManualRefresh: UpdateChecker.isSideloadBuild,
                     onManualRefresh: {
                         await appState.checkForUpdatesNow()
                     }
