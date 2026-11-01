@@ -361,7 +361,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
     func applicationDidHide(_ notification: Notification) { pauseForSystem() }
     func applicationDidUnhide(_ notification: Notification) { resumeAfterSystem() }
-    func applicationDidResignActive(_ notification: Notification) { controllers.releaseAllHeldInputs() }
+    func applicationDidResignActive(_ notification: Notification) { controllers.releaseAndForgetHeldInputs() }
 
     // MARK: - Quit
 

@@ -195,6 +195,22 @@ final class ControllerInputManagerTests: XCTestCase {
         XCTAssertEqual(actions.count, 2)
     }
 
+    func testBecomingActiveAfterForgetPressesAStillHeldButtonAgain() async throws {
+        let pad = GCController.withExtendedGamepad()
+        let profile = try XCTUnwrap(pad.extendedGamepad)
+        manager.updateResolvedMap(["a": .action("confirm")])
+        try await connect(pad)
+
+        profile.buttonA.setValue(1)
+        try await waitUntil { self.actions.count == 1 }
+        manager.releaseAndForgetHeldInputs()
+        XCTAssertEqual(actions.map(\.1), [true, false])
+
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        try await waitUntil { self.actions.count == 3 }
+        XCTAssertEqual(actions.last?.1, true)
+    }
+
     func testSecondConnectNotificationDoesNotDuplicateEdges() async throws {
         let pad = GCController.withExtendedGamepad()
         let profile = try XCTUnwrap(pad.extendedGamepad)

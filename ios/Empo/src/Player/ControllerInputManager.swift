@@ -506,4 +506,12 @@ final class ControllerInputManager {
         }
         elementPressAction.removeAll()
     }
+
+    /// Also forgets which elements are down, so the poll when the app
+    /// becomes active presses an element that is still held.
+    func releaseAndForgetHeldInputs() {
+        releaseAllHeldInputs()
+        reducer = ControllerStateReducer()
+        heldStickDirections.removeAll()
+    }
 }
