@@ -9,7 +9,7 @@ Read this file before you add or change a translation.
 One person builds Empo in their spare time. It is a small open-source app, not a company product. The English text speaks like a friend who knows the app well:
 
 - Short, plain sentences. One idea in each sentence.
-- Warm, never cold or corporate. "Enjoy!", "Here be dragons", and "I build Empo alone in my spare time." are the voice.
+- Warm, never cold or corporate. "Enjoy!" and "I build Empo alone in my spare time." are the voice.
 - Direct about risk. "You can't undo this." stays as plain in each language.
 - No marketing words, no exclamation marks that the English does not have.
 

@@ -292,6 +292,7 @@ jobs:
             -derivedDataPath "$PWD/build/DerivedData" \
             CODE_SIGNING_ALLOWED=NO \
             CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
+            -xcconfig ios/Empo/Sideload.xcconfig \
             build 2>&1 | tail -n 40
           test -d build/Release-iphoneos/Empo.app
 

@@ -13159,64 +13159,6 @@
         }
       }
     },
-    "Here be dragons" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hier lauern Drachen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aquí hay dragones"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ici vivent des dragons"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hic sunt dracones"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ドラゴン出没注意"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "여긴 용이 살아요"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aqui há dragões"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Здесь водятся драконы"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "前方有龙出没"
-          }
-        }
-      }
-    },
     "Hide controls" : {
       "localizations" : {
         "de" : {
@@ -13739,64 +13681,6 @@
         }
       }
     },
-    "I understand" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verstanden"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entendido"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "J'ai compris"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ho capito"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "わかりました"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "확인했어요"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Entendi"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Понятно"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "我知道了"
-          }
-        }
-      }
-    },
     "If loading is stuck, close Empo from the app switcher, then reopen it." : {
       "localizations" : {
         "de" : {
@@ -13851,6 +13735,65 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "如果一直卡在加载，请在 App 切换器中关闭 Empo，然后重新打开。"
+          }
+        }
+      }
+    },
+    "If one doesn't, tell me on [**GitHub**](%@)." : {
+      "comment" : "First-launch welcome. \"One\" is a game that does not run. Keep the Markdown link. The placeholder is the URL of the issues page.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn eins nicht läuft, sag mir auf [**GitHub**](%@) Bescheid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si alguno no funciona, avísame en [**GitHub**](%@)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si un jeu ne marche pas, dis-le-moi sur [**GitHub**](%@)."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se uno non funziona, dimmelo su [**GitHub**](%@)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "動かないゲームがあったら、[**GitHub**](%@)で教えてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실행되지 않는 게임이 있으면 [**GitHub**](%@)에 알려 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se algum não rodar, me avise no [**GitHub**](%@)."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Если какая-то не запускается, напишите мне на [**GitHub**](%@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果有游戏运行不了，欢迎到 [**GitHub**](%@) 告诉我。"
           }
         }
       }
@@ -24180,65 +24123,6 @@
         }
       }
     },
-    "Save often. If you hit issues, report them on [**GitHub**](%@)." : {
-      "comment" : "Launch disclaimer. Keep the Markdown link. The placeholder is the URL of the issues page.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speichere oft. Wenn etwas schiefgeht, melde es auf [**GitHub**](%@)."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guarda a menudo. Si encuentras problemas, repórtalos en [**GitHub**](%@)."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sauvegarde souvent. Si tu rencontres des problèmes, signale-les sur [**GitHub**](%@)."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Salva spesso. Se trovi problemi, segnalali su [**GitHub**](%@)."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "こまめにセーブしてくださいね。問題があったら[**GitHub**](%@)で教えてください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "자주 저장하세요. 문제가 생기면 [**GitHub**](%@)에 알려 주세요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Salve com frequência. Se der problema, avise no [**GitHub**](%@)."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сохраняйтесь почаще. Если что-то сломается, напишите об этом на [**GitHub**](%@)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记得常存档。遇到问题的话，欢迎到 [**GitHub**](%@) 反馈。"
-          }
-        }
-      }
-    },
     "Saves a log for each play session. Find them in Files, under %@ › Games › the game's name › Logs." : {
       "localizations" : {
         "de" : {
@@ -26918,6 +26802,65 @@
         }
       }
     },
+    "Some games may not run yet." : {
+      "comment" : "First-launch welcome.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manche Spiele laufen noch nicht."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puede que algunos juegos todavía no funcionen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains jeux ne tournent pas encore."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni giochi potrebbero non funzionare ancora."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "まだ動かないゲームもあります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아직 실행되지 않는 게임도 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguns jogos ainda podem não rodar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некоторые игры пока могут не запускаться."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有些游戏可能还运行不了。"
+          }
+        }
+      }
+    },
     "Something went wrong while it was running." : {
       "localizations" : {
         "de" : {
@@ -29066,64 +29009,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这些游戏已经在你的游戏库里了"
-          }
-        }
-      }
-    },
-    "Things can crash, freeze, or refuse to load." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Manches stürzt ab, hängt oder lädt nicht."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Puede que algo se cierre, se congele o no cargue."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ça peut planter, se figer ou refuser de charger."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Può capitare che qualcosa si chiuda, si blocchi o non si carichi."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "クラッシュしたり、固まったり、読み込めなかったりすることがあります。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "앱이 튕기거나, 멈추거나, 로딩이 안 될 수도 있어요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "As coisas podem fechar do nada, travar ou não querer carregar."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Что-то может вылетать, зависать или не загружаться."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可能会崩溃、卡死，或者加载不出来。"
           }
         }
       }
@@ -33035,6 +32920,65 @@
         }
       }
     },
+    "Welcome to Empo" : {
+      "comment" : "First-launch welcome. Title.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Willkommen bei Empo"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Te damos la bienvenida a Empo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bienvenue dans Empo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benvenuto in Empo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empoへようこそ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo에 오신 걸 환영해요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Boas-vindas ao Empo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добро пожаловать в Empo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "欢迎来到 Empo"
+          }
+        }
+      }
+    },
     "What's new" : {
       "localizations" : {
         "de" : {
@@ -33814,64 +33758,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "例如 Z"
-          }
-        }
-      }
-    },
-    "or bugs!" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "oder Bugs!"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "¡o bugs!"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ou des bugs !"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "o bug!"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "…いや、バグかも！"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "아니면 버그가요!"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ou bugs!"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "или баги!"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "……也可能是 bug！"
           }
         }
       }

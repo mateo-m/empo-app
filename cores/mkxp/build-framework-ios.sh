@@ -82,7 +82,7 @@ fi
 
 STAMP="$TREE/.mkxp-framework"
 WANT_STAMP="$(cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
-    "$ROOT/cores/mkxp/mkxp_app_bridge.c" "$ROOT/cores/GameCore.h" | shasum -a 256 | awk '{print $1}')"
+    "$ROOT/cores/mkxp/mkxp_app_bridge.c" "$ROOT/cores/GameCore.h" "$ROOT/cores/PrivacyInfo.xcprivacy" | shasum -a 256 | awk '{print $1}')"
 if [ -f "$FW/MkxpCore" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; then
     exit 0
 fi
@@ -113,6 +113,7 @@ cp -R "$CORE/$SDK/ruby-stdlib" "$FW/Ruby"
 
 # The licenses screen reads it (LicenseEntry.inThisBuild).
 cp "$CORE/licenses.json" "$FW/"
+cp "$ROOT/cores/PrivacyInfo.xcprivacy" "$FW/"
 
 # GameImportValidator reads EmpoCoreRGSSVersionMask at import, before
 # any core is open.

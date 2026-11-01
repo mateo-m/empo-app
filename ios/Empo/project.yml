@@ -408,6 +408,8 @@ targets:
           - Info.plist
           - fetch.sh
           - .version
+      - path: ../../cores/PrivacyInfo.xcprivacy
+        buildPhase: resources
     preBuildScripts:
       - name: Fetch the MV/MZ core
         # The mvmz-apple-mobile release that cores/mvmz/.version

@@ -35,5 +35,6 @@ after a change means you accept the new terms.
 
 ## Contact
 
-Open an issue at [github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues),
-or ask on the [Discord server](https://discord.gg/m3YnpXMxrB).
+Send an email to [empo@mateo.sh](mailto:empo@mateo.sh), open an issue at
+[github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues), or ask on the
+[Discord server](https://discord.gg/m3YnpXMxrB).

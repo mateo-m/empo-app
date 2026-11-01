@@ -340,7 +340,7 @@ struct RootView: View {
         }
     }
 
-    /// The disclaimer's "I understand" button calls this. It persists
+    /// The disclaimer's "Continue" button calls this. It persists
     /// the acknowledgment and runs the usual splash exit animation.
     private func acknowledgeAndDismissSplash() {
         settings.acknowledgeDisclaimer()

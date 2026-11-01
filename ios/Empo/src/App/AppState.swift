@@ -48,7 +48,7 @@ class AppState {
     var pendingCrashRecovery: Bool { session.pendingCrashRecovery }
 
     func checkForUpdatesIfStale() async {
-        guard UpdateChecker.isSideloadOrDevBuild else { return }
+        guard UpdateChecker.isSideloadBuild else { return }
         updateStatus = .checking
         let result = await UpdateChecker.checkIfStale()
         withAnimation(Motion.standard) {
@@ -57,7 +57,7 @@ class AppState {
     }
 
     func checkForUpdatesNow() async {
-        guard UpdateChecker.isSideloadOrDevBuild else { return }
+        guard UpdateChecker.isSideloadBuild else { return }
         updateStatus = .checking
         let result = await UpdateChecker.checkNow()
         withAnimation(Motion.standard) {

@@ -28,7 +28,7 @@ final class GameProcessUITests: XCTestCase {
         if let ruby = env["EMPO_TEMP_RUBY"] { app.launchEnvironment["EMPO_TEMP_RUBY"] = ruby }
         XCUIDevice.shared.orientation = .portrait
         app.launch()
-        let understand = app.buttons["I understand"]
+        let understand = app.buttons["Continue"]
         if understand.waitForExistence(timeout: 8) { understand.tap() }
         sleep(3)
 
@@ -342,7 +342,7 @@ final class GameProcessUITests: XCTestCase {
             "-whatsNewSeenVersion", "999", "-rubyGameRunner", env["EMPO_GP_RUNNER"] ?? "gameProcess",
         ]
         app.launch()
-        let understand = app.buttons["I understand"]
+        let understand = app.buttons["Continue"]
         if understand.waitForExistence(timeout: 8) { understand.tap() }
         sleep(3)
         start(app, game: env["EMPO_FP_TITLE"] ?? fpGame)
