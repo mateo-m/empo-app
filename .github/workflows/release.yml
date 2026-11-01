@@ -321,7 +321,7 @@ jobs:
       - name: Build + package the Mac app
         id: mac
         run: |
-          set -e
+          set -eo pipefail
           DMG="$(scripts/package-mac.sh "${{ steps.meta.outputs.version }}" | tail -n 1)"
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
 

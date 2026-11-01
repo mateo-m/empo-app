@@ -6,6 +6,7 @@
 # The Release workflow and scripts/release.sh both run this script.
 #
 # Usage: scripts/package-mac.sh <version>
+# EMPO_CORES in the environment ships only the cores it names.
 # Prints the path of the disk image on its last line.
 #
 # The app has an ad hoc signature only (no Developer ID, no
@@ -39,6 +40,7 @@ xcodebuild \
     -scheme EmpoMac \
     -configuration Release \
     -derivedDataPath "$DERIVED_DATA" \
+    ${EMPO_CORES:+"EMPO_CORES=$EMPO_CORES"} \
     build 2>&1 | grep -E "^(\*\* BUILD|error:)" >&2
 [[ -d "$APP" ]] || fail "build failed: $APP not found"
 
