@@ -142,6 +142,8 @@ targets:
           # Mozilla CA root bundle. CABundleStore reads this copy from
           # the main bundle and pushes the path into the engine, so
           # the app needs its own.
+          # The mkxp download holds it, also when the build has no MkxpCore.
+          "${PROJECT_DIR}/../../cores/mkxp/fetch.sh"
           mkdir -p "$BUNDLE"
           cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$BUNDLE/"
 
@@ -530,6 +532,7 @@ targets:
           # newer one. The iOS app gets it from its Assets.bundle folder,
           # which also holds iOS-only pictures.
           ASSETS="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Assets.bundle"
+          "${PROJECT_DIR}/../../cores/mkxp/fetch.sh"
           mkdir -p "$ASSETS"
           cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$ASSETS/"
     dependencies:
