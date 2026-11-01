@@ -16,6 +16,7 @@ final class LibraryWindowModel {
     var showsInspector = false
     var gameToDelete: GameEntry?
     var showsStopValidation = false
+    @ObservationIgnored private var importToStop: String?
     var invalidReason: String?
     var launchFailure: LaunchFailure?
     var warnedLaunch: WarnedLaunch?
@@ -106,10 +107,15 @@ final class LibraryWindowModel {
     func requestDelete(_ game: GameEntry) {
         guard canDelete(game) else { return }
         if library.pendingImports[game.id] != nil {
+            importToStop = game.id
             showsStopValidation = true
         } else {
             gameToDelete = game
         }
+    }
+
+    func stopImport() {
+        if let importToStop { library.cancelPendingImport(importToStop) }
     }
 
     func delete(_ game: GameEntry, discardingSaves: Bool = false) {

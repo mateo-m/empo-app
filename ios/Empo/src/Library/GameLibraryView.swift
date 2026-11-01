@@ -29,6 +29,8 @@ struct GameLibraryView: View {
     @State private var errorTitle = String(localized: "Couldn't delete this game")
     @State private var showErrorAlert = false
     @State private var showCancelValidationAlert = false
+    /// Nil when the alert stops every import.
+    @State private var importToStop: String?
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
     /// Games whose delete aborted because their saves could not
@@ -279,7 +281,7 @@ struct GameLibraryView: View {
                     onDeleteGame: deleteGame,
                     onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
-                    onCancelValidation: importPipeline.cancelValidation,
+                    onCancelValidation: stopImport,
                     onDismissPausedGameAlert: { pendingGame = nil },
                     onReplacePausedGame: replacePausedGame,
                     onContinueDespiteWarning: continueDespiteLaunchWarning
@@ -416,7 +418,10 @@ struct GameLibraryView: View {
                 // inspection before any progress card exists.
                 phase: importPipeline.importButtonPhase,
                 collapsedCenter: hasSensorStrip ? { railSlotCenter(1, in: $0) } : nil,
-                onRequestCancelValidation: { showCancelValidationAlert = true }
+                onRequestCancelValidation: {
+                    importToStop = nil
+                    showCancelValidationAlert = true
+                }
             )
         }
     }
@@ -688,13 +693,13 @@ struct GameLibraryView: View {
             ForEach(pending, id: \.id) { pendingEntry in
                 GameListRow(
                     game: pendingEntry,
-                    onStopImport: { showCancelValidationAlert = true }
+                    onStopImport: { requestStopImport(pendingEntry.id) }
                 )
                 .gameContextMenu(
                     game: pendingEntry,
                     appState: appState,
                     onPlay: {},
-                    onCancelImport: { showCancelValidationAlert = true },
+                    onCancelImport: { requestStopImport(pendingEntry.id) },
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,
@@ -724,14 +729,14 @@ struct GameLibraryView: View {
         ForEach(pending, id: \.id) { pendingEntry in
             GameCard(
                 game: pendingEntry,
-                onStopImport: { showCancelValidationAlert = true }
+                onStopImport: { requestStopImport(pendingEntry.id) }
             )
             .cardShadow()
             .gameContextMenu(
                 game: pendingEntry,
                 appState: appState,
                 onPlay: {},
-                onCancelImport: { showCancelValidationAlert = true },
+                onCancelImport: { requestStopImport(pendingEntry.id) },
                 gameToDelete: $gameToDelete,
                 showDeleteConfirm: $showDeleteConfirm,
                 gameForSettings: $gameForSettings,
@@ -1146,6 +1151,19 @@ struct GameLibraryView: View {
     private func continueDespiteLaunchWarning(_ game: GameEntry) {
         appState.selectGame(game)
         push(game)
+    }
+
+    private func requestStopImport(_ id: String) {
+        importToStop = id
+        showCancelValidationAlert = true
+    }
+
+    private func stopImport() {
+        if let importToStop {
+            library.cancelPendingImport(importToStop)
+        } else {
+            importPipeline.cancelValidation()
+        }
     }
 
     private func refreshGameSizes() {

@@ -176,7 +176,7 @@ private struct LibraryAlerts: ViewModifier {
             .modifier(
                 StopValidationAlert(
                     isPresented: $model.showsStopValidation,
-                    onStop: model.importPipeline.cancelValidation)
+                    onStop: model.stopImport)
             )
             .modifier(InvalidGameAlert(reason: $model.invalidReason))
             .alert(
