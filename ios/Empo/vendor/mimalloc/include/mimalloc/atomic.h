@@ -9,7 +9,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #define MI_ATOMIC_H
 
 // include windows.h or pthreads.h
-#if defined(_WIN32) || defined(__CYGWIN__)  // we use windows locks on cygwin, but otherwise treat it at unix
+#if defined(_WIN32) || defined(__CYGWIN__)  // we use windows locks on cygwin, but otherwise treat it as unix
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -42,7 +42,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #else
  #define MI_ATOMIC_VAR_INIT(x)    ATOMIC_VAR_INIT(x)
 #endif
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) && !defined(__clang__)
 // Use MSVC C wrapper for C11 atomics
 #define  _Atomic(tp)              tp
 #define  MI_ATOMIC_VAR_INIT(x)    x
@@ -106,7 +106,7 @@ static inline void       mi_atomic_storess_relaxed(_Atomic(mi_ssize_t)* p, mi_ss
 static inline mi_ssize_t mi_atomic_loads_relaxed(_Atomic(mi_ssize_t)* p);
 
 
-#if defined(__cplusplus) || !defined(_MSC_VER)
+#if defined(__cplusplus) || !defined(_MSC_VER) || defined(__clang__)
 
 // In C++/C11 atomics we have polymorphic atomics so can use the typed `ptr` variants (where `tp` is the type of atomic value)
 // We use these macros so we can provide a typed wrapper in MSVC in C compilation mode as well
@@ -162,7 +162,7 @@ static inline void mi_atomic_volatile_maxi64_relaxed(volatile int64_t* p, int64_
 #define mi_atomic_addi64_relaxed(p,i)           mi_atomic_add_relaxed(p,i)
 
 
-#elif defined(_MSC_VER)
+#elif defined(_MSC_VER) && !defined(__clang__)
 
 // Deprecated: MSVC plain C compilation wrapper that uses Interlocked operations to model C11 atomics.
 // It is recommended to always compile as C++ when using MSVC.
@@ -411,14 +411,14 @@ static inline mi_ssize_t mi_atomic_loads_relaxed(_Atomic(mi_ssize_t)* p) {
 // Guard
 // ----------------------------------------------------------------------
 
-typedef _Atomic(uintptr_t) mi_atomic_guard_t;
+typedef _Atomic(size_t) mi_atomic_guard_t;
 
 // Allows only one thread to execute at a time (without blocking anyone)
 #define mi_atomic_guard(guard) \
-  uintptr_t _mi_guard_expected = 0; \
+  size_t _mi_guard_expected = 0; \
   for(bool _mi_guard_once = true; \
-      _mi_guard_once && mi_atomic_cas_strong_acq_rel(guard,&_mi_guard_expected,(uintptr_t)1); \
-      (mi_atomic_store_release(guard,(uintptr_t)0), _mi_guard_once = false) )
+      _mi_guard_once && mi_atomic_cas_strong_acq_rel(guard,&_mi_guard_expected,(size_t)1); \
+      (mi_atomic_store_release(guard,(size_t)0), _mi_guard_once = false) )
 
 
 // ----------------------------------------------------------------------
@@ -430,8 +430,12 @@ typedef _Atomic(uintptr_t) mi_atomic_guard_t;
 #pragma warning(disable:26110)  // unlock with holding lock
 #endif
 
-#define mi_lock(lock)                  for(bool _mi_go = (mi_lock_acquire(lock),true); _mi_go; (mi_lock_release(lock), _mi_go=false) )
-#define mi_lock_maybe(lock,acquire)    for(bool _mi_go = (acquire ? (mi_lock_acquire(lock),true) : true); _mi_go; _mi_go = (acquire ? (mi_lock_release(lock),false) : false) )
+// use a unique loop variable per line to avoid shadowing warnings for nested locks
+#define mi_concat_(a,b)                a##b
+#define mi_concat(a,b)                 mi_concat_(a,b)
+#define mi_unique(name)                mi_concat(name,__LINE__)
+#define mi_lock(lock)                  for(bool mi_unique(_mi_go) = (mi_lock_acquire(lock),true); mi_unique(_mi_go); (mi_lock_release(lock), mi_unique(_mi_go)=false) )
+#define mi_lock_maybe(lock,acquire)    for(bool mi_unique(_mi_go) = ((acquire) ? (mi_lock_acquire(lock),true) : true); mi_unique(_mi_go); mi_unique(_mi_go) = ((acquire) ? (mi_lock_release(lock),false) : false) )
 
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -531,17 +535,16 @@ void _mi_error_message(int err, const char* fmt, ...);
 void _mi_prim_thread_yield(void);
 
 typedef struct mi_lock_s {
-  _Atomic(uintptr_t) mutex;
+  _Atomic(size_t) mutex;
 } mi_lock_t;
 
 #define MI_LOCK_INITIALIZER  { MI_ATOMIC_VAR_INIT(0) }
 
 static inline bool mi_lock_try_acquire(mi_lock_t* lock) {
-  uintptr_t expected = 0;
-  return mi_atomic_cas_strong_acq_rel(&lock->mutex, &expected, (uintptr_t)1);
+  size_t expected = 0;
+  return mi_atomic_cas_strong_acq_rel(&lock->mutex, &expected, (size_t)1);
 }
 static inline void mi_lock_acquire(mi_lock_t* lock) {
-  size_t ticks = 0;
   for (int i = 0; i < 10000; i++) {  // for at most 10000 tries?
     if (mi_lock_try_acquire(lock)) return;
     _mi_prim_thread_yield();
@@ -549,7 +552,7 @@ static inline void mi_lock_acquire(mi_lock_t* lock) {
   _mi_error_message(EFAULT, "internal error: lock cannot be acquired (due to lack of native lock primitives)\n");
 }
 static inline void mi_lock_release(mi_lock_t* lock) {
-  mi_atomic_store_release(&lock->mutex, (uintptr_t)0);
+  mi_atomic_store_release(&lock->mutex, (size_t)0);
 }
 static inline void mi_lock_init(mi_lock_t* lock) {
   mi_lock_release(lock);
@@ -562,19 +565,63 @@ static inline void mi_lock_done(mi_lock_t* lock) {
 
 
 typedef struct mi_atomic_once_s {
-  _Atomic(uintptr_t) tid;
+  _Atomic(size_t)    tid;
   mi_lock_t          lock;
 } mi_atomic_once_t;
 
 // Returns `true` only on the first invocation, signifying we can execute an action once.
 // If it returns `true`, the caller should call `_mi_atomic_once_release` after performing the action.
 // Other threads (than the initial thread that entered) will block until `_mi_atomic_once_release` has been called.
-bool _mi_atomic_once_enter(mi_atomic_once_t* once);        // defined in `libc.c`
-void _mi_atomic_once_release(mi_atomic_once_t* once);      // defined in `libc.c`
+bool _mi_atomic_once_enter(mi_atomic_once_t* once);        // defined in `util/libc.c`
+void _mi_atomic_once_release(mi_atomic_once_t* once);      // defined in `util/libc.c`
 
 #define mi_atomic_do_once  \
   static mi_atomic_once_t _mi_once = { MI_ATOMIC_VAR_INIT(0), MI_LOCK_INITIALIZER }; \
   for(bool _mi_exec = _mi_atomic_once_enter(&_mi_once); _mi_exec; (_mi_atomic_once_release(&_mi_once),_mi_exec=false))
+
+
+
+/* -----------------------------------------------------------
+  pthread thread locals
+----------------------------------------------------------- */
+
+#if MI_USE_PTHREADS
+
+#if defined(__APPLE__) && defined(__aarch64__)
+#define MI_PTHREAD_KEY_INVALID ((pthread_key_t)(0))   // nicer codegen
+#else
+#define MI_PTHREAD_KEY_INVALID ((pthread_key_t)(-1))
+#endif
+
+#if defined(__linux__) && defined(__GLIBC__)
+// pthread_getspecific returns NULL for invalid keys. <https://man7.org/linux/man-pages/man3/pthread_getspecific.3p.html>
+// see also: <https://github.com/lattera/glibc/blob/master/nptl/pthread_getspecific.c>
+#define MI_PTHREADS_GET_INVALID_KEY_IS_NULL  1
+#endif
+
+mi_decl_noinline bool _mi_pthread_key_create(pthread_key_t* pkey, void (*destruct)(void*), void* init);
+
+static inline void* mi_pthread_key_get(pthread_key_t key) {
+  #if !MI_PTHREADS_GET_INVALID_KEY_IS_NULL
+  if mi_unlikely(key==MI_PTHREAD_KEY_INVALID) return NULL;
+  #endif
+  return pthread_getspecific(key);
+}
+
+static inline bool mi_pthread_key_set(pthread_key_t* pkey, void* val) {
+  if mi_likely(*pkey!=MI_PTHREAD_KEY_INVALID) { pthread_setspecific(*pkey,val); return true; }
+  else if (val!=NULL) { return _mi_pthread_key_create(pkey,NULL,val); }
+  else return true;
+}
+
+static inline void mi_pthread_key_delete(pthread_key_t* pkey) {
+  const pthread_key_t key = *pkey;
+  if (key!=MI_PTHREAD_KEY_INVALID) {
+    *pkey = MI_PTHREAD_KEY_INVALID;
+    pthread_key_delete(key);
+  }
+}
+#endif
 
 
 #endif // __MIMALLOC_ATOMIC_H
