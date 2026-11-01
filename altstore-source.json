@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.10.2",
+          "buildVersion": "794",
+          "date": "2026-11-01",
+          "localizedDescription": "Fixed\n• Let Empo Player open game cores so games start again",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.10.2/Empo-ios.ipa",
+          "size": 65493517,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.10.1",
           "buildVersion": "791",
           "date": "2026-11-01",
