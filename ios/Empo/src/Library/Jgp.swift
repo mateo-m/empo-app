@@ -3,7 +3,12 @@
 
 import Foundation
 import GameProbe
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// `manifest.json`: identifies the game and its runtime.
 struct JgpManifest: Codable {

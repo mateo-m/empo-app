@@ -4,7 +4,12 @@
 import Foundation
 import Observation
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 enum LibraryDisplayMode: String, CaseIterable {
     case grid
@@ -31,6 +36,20 @@ enum LibrarySortOption: String, CaseIterable {
     case smallestSize
 
     var label: LocalizedStringResource {
+        #if os(macOS)
+        switch self {
+        case .titleAZ: "Title A to Z"
+        case .titleZA: "Title Z to A"
+        case .recentlyAdded: "Recently Added"
+        case .leastRecentlyAdded: "Added Longest Ago"
+        case .recentlyPlayed: "Recently Played"
+        case .leastRecentlyPlayed: "Played Longest Ago"
+        case .mostPlayed: "Most Played"
+        case .leastPlayed: "Least Played"
+        case .largestSize: "Largest First"
+        case .smallestSize: "Smallest First"
+        }
+        #else
         switch self {
         case .titleAZ: "Title A to Z"
         case .titleZA: "Title Z to A"
@@ -43,6 +62,7 @@ enum LibrarySortOption: String, CaseIterable {
         case .largestSize: "Largest first"
         case .smallestSize: "Smallest first"
         }
+        #endif
     }
 
     var icon: String {
@@ -112,6 +132,7 @@ enum AppTheme: String, CaseIterable {
         }
     }
 
+    #if os(iOS)
     var userInterfaceStyle: UIUserInterfaceStyle {
         switch self {
         case .dark: .dark
@@ -119,6 +140,7 @@ enum AppTheme: String, CaseIterable {
         case .auto: .unspecified
         }
     }
+    #endif
 }
 
 /// Where a game runs: in the app, or in a game process of its own
@@ -208,6 +230,15 @@ class AppSettings {
         }
     }
 
+    #if os(macOS)
+    var quitClosesGamesWithoutAsking: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                quitClosesGamesWithoutAsking, forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        }
+    }
+    #endif
+
     /// Where the games of `GameCores.gameProcessCores` run from the next
     /// launch. Experimental, and off
     /// (`.app`) by default.
@@ -252,7 +283,9 @@ class AppSettings {
 
     func acknowledgeDisclaimer() {
         disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
+        #if os(iOS)
         acknowledgeWhatsNew()
+        #endif
     }
 
     // MARK: - What's new
@@ -263,6 +296,7 @@ class AppSettings {
         }
     }
 
+    #if os(iOS)
     var needsWhatsNew: Bool {
         whatsNewSeenVersion < WhatsNew.version
     }
@@ -270,6 +304,7 @@ class AppSettings {
     func acknowledgeWhatsNew() {
         whatsNewSeenVersion = WhatsNew.version
     }
+    #endif
 
     private init() {
         let ud = UserDefaults.standard
@@ -297,7 +332,9 @@ class AppSettings {
             GameRunner(rawValue: ud.string(forKey: DefaultsKey.rubyGameRunner) ?? "") ?? .app
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
         self.whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
-
+        #if os(macOS)
+        self.quitClosesGamesWithoutAsking = ud.bool(forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        #endif
     }
 
     private static let defaultViewportBoundsColor = Color(
@@ -316,7 +353,11 @@ class AppSettings {
     }
 
     private func resolvedRGBA() -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+        #if os(iOS)
         let resolved = UIColor(viewportBoundsColor)
+        #else
+        let resolved = NSColor(viewportBoundsColor).usingColorSpace(.sRGB) ?? .orange
+        #endif
         var r: CGFloat = 0
         var g: CGFloat = 0
         var b: CGFloat = 0
@@ -341,9 +382,11 @@ class AppSettings {
     /// `EngineSessionCoordinator.openCore` calls this once the core is
     /// in.
     func pushToCore() {
+        #if os(iOS)
         guard EmpoCoreIsOpen() != 0 else { return }
         gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
         gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        #endif
     }
 }

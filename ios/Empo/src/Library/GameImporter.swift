@@ -3,7 +3,12 @@
 
 import Foundation
 import GameProbe
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Write pipeline for imported games: metadata seeding and JGP
 /// finalization after files land in the container.

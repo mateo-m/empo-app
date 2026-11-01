@@ -1,4 +1,4 @@
-Empo runs on your iPhone or iPad. There is no Empo account and no Empo server.
+Empo runs on your iPhone, iPad, or Mac. There is no Empo account and no Empo server.
 
 Last update: 1 November 2026.
 
@@ -7,8 +7,8 @@ Last update: 1 November 2026.
 Nothing. Empo has no analytics, no crash reporting service, and no advertising.
 
 Your games, your save files, and your settings stay in the app container on the
-device. iOS backs that container up to your own iCloud backup if you turn iCloud
-backup on. That is an Apple feature, and Empo does not control it.
+device. On an iPhone or iPad, iOS backs that container up to your own iCloud
+backup if you turn iCloud backup on. That is an Apple feature, and Empo does not control it.
 
 ## What leaves the device
 

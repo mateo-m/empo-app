@@ -60,7 +60,9 @@ struct MvmzCore: GameCore {
             Group {
                 GameplaySettingsSection(model: model)
                 DisplaySettingsSection(model: model, fields: [.smoothScaling])
+                #if os(iOS)
                 LayoutSettingsSection(model: model)
+                #endif
             })
     }
 }

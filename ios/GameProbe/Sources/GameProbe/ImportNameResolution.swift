@@ -21,25 +21,25 @@ public enum ImportNameResolution {
         public let installedNamesByKey: [String: String]
         /// Lowercased names of imports currently in flight.
         public let inFlightKeys: Set<String>
-        /// Lowercased folder name of the currently open
-        /// (playing/paused) game. Compared case-insensitively like
+        /// Lowercased folder names of the currently open
+        /// (playing/paused) games. Compared case-insensitively like
         /// every other name in this policy - the strings all come
         /// from the same folder listing today, but the guard that
         /// keeps a running game's files from being swapped must not
         /// depend on that staying true.
-        public let openGameKey: String?
+        public let openGameKeys: Set<String>
 
         public init(
             installedFolderNames: [String],
             inFlightNames: [String],
-            openGameName: String?
+            openGameNames: [String]
         ) {
             self.installedNamesByKey = Dictionary(
                 installedFolderNames.map { ($0.lowercased(), $0) },
                 uniquingKeysWith: { first, _ in first }
             )
             self.inFlightKeys = Set(inFlightNames.map { $0.lowercased() })
-            self.openGameKey = openGameName?.lowercased()
+            self.openGameKeys = Set(openGameNames.map { $0.lowercased() })
         }
     }
 
@@ -71,7 +71,7 @@ public enum ImportNameResolution {
         // running game whose container dropped out of the installed
         // list (mid-scan, broken remnant) must not have its folder
         // claimed while the engine holds files inside it.
-        if key == context.openGameKey {
+        if context.openGameKeys.contains(key) {
             return .refusedOpenGame
         }
 

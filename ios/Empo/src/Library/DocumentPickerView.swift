@@ -11,19 +11,21 @@ extension UTType {
     /// behind a Windows extractor stub). Resolves to
     /// com.microsoft.windows-executable via the extension lookup.
     static let exeArchive = UTType(filenameExtension: "exe") ?? .data
-    /// JoiPlay archive. Declared via `exportedAs` in Info.plist so
-    /// Files.app can open .jgp with us, but we look up the
-    /// filename-extension-based UTType first so the document picker
-    /// accepts .jgp even when the Launch Services index hasn't
-    /// caught up (first run after install, or simulator state).
-    /// Falling back to our exported type matches how 7z/rar behave.
+    /// JoiPlay archive. The extension lookup comes first, because the
+    /// document picker rejects .jgp until Launch Services indexes the
+    /// Info.plist type (first run after install, or simulator state).
     static let jgpArchive =
         UTType(filenameExtension: "jgp")
         ?? UTType(
-            exportedAs: "cyou.joiplay.jgp",
+            importedAs: "cyou.joiplay.jgp",
             conformingTo: .zip)
+
+    static let importableGames: [UTType] = [
+        .folder, .zip, .sevenZArchive, .rarArchive, .jgpArchive, .exeArchive,
+    ]
 }
 
+#if os(iOS)
 struct DocumentPickerView: UIViewControllerRepresentable {
     var onPick: ([URL]) -> Void
 
@@ -42,9 +44,7 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         // (folder: spinner forever) or silently no-ops (file: Open
         // does nothing). asCopy bypasses that whole grant flow.
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [
-                .folder, .zip, .sevenZArchive, .rarArchive, .jgpArchive, .exeArchive,
-            ],
+            forOpeningContentTypes: UTType.importableGames,
             asCopy: true
         )
         picker.allowsMultipleSelection = true
@@ -67,3 +67,4 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         }
     }
 }
+#endif

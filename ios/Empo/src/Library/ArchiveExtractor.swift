@@ -46,9 +46,14 @@ enum ArchiveExtractor {
                         "Empo couldn't read this archive. It may be damaged. Download the game again, then import it."
                 )
             case .writeFailed:
+                #if os(macOS)
+                return String(
+                    localized: "Empo couldn't write the game to this Mac. Free up space, then import again.")
+                #else
                 return String(
                     localized:
                         "Empo couldn't write the game to your device. Free up space, then import again.")
+                #endif
             case .pathEscape:
                 return String(
                     localized:

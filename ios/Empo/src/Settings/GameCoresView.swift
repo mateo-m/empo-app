@@ -44,7 +44,11 @@ struct GameCoresView: View {
                 )
             }
         }
+        #if os(iOS)
         .navigationTitle("Game cores")
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .navigationTitle("Game Cores")
+        #endif
     }
 }

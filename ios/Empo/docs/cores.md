@@ -29,8 +29,10 @@ framework and not a static library.
 ## What a build ships
 
 A build carries one or more cores. `EMPO_CORES` in `ios/Empo/project.yml`
-names the cores, and the "Embed the cores" phase copies those frameworks into
-the app. Ship one core from the command line:
+names the cores. The iOS app and the Mac app use the same list. The "Embed the
+cores" phase of each app runs `scripts/embed-cores.sh`, which copies those
+frameworks into the app. The script stops the build when the list is empty or
+names an unknown core. Ship one core from the command line:
 
 ```sh
 xcodebuild ... EMPO_CORES=Psdk30Core

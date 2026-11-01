@@ -225,6 +225,7 @@ struct MkxpEngineSection: View {
                 )
             }
 
+            #if os(iOS)
             SettingsToggle(
                 title: "In-game keyboard",
                 isOn: Binding(
@@ -236,6 +237,7 @@ struct MkxpEngineSection: View {
             )
 
             TouchMouseToggle(model: model)
+            #endif
 
             SettingsToggle(
                 title: "JoiPlay compatibility",
@@ -270,7 +272,9 @@ struct MkxpEngineSection: View {
                     Text(RubyVersionPick.v19.displayLabel).tag(RubyVersionPick.v19)
                     Text(RubyVersionPick.v31.displayLabel).tag(RubyVersionPick.v31)
                 }
+                #if os(iOS)
                 .pickerStyle(.navigationLink)
+                #endif
 
                 Text(
                     "Auto-detect reads the game's scripts and picks the correct Ruby version. Change it only if the game shows a script error or runs wrongly."
@@ -295,7 +299,9 @@ struct MkxpEngineSection: View {
                         Text(CompatibilityPick.modern.displayLabel).tag(CompatibilityPick.modern)
                         Text(CompatibilityPick.legacy.displayLabel).tag(CompatibilityPick.legacy)
                     }
+                    #if os(iOS)
                     .pickerStyle(.navigationLink)
+                    #endif
 
                     Text(
                         "Legacy rewrites old Ruby code so newer Ruby can run it. Switch to Legacy if a Pokemon Essentials game crashes with a \"private method\" error."

@@ -35,9 +35,9 @@ settings:
       -Wno-unused-const-variable
       -Wno-deprecated-literal-operator
       -Wno-unused-function
-    # Which game cores the app ships. The "Embed the cores" phase reads
-    # it, and the Game cores screen lists what it finds in the bundle.
-    # Build one core only by passing it on the command line:
+    # Which game cores the iOS and Mac apps ship. The "Embed the cores"
+    # phase reads it, and the Game cores screen lists what it finds in
+    # the bundle. Build one core only by passing it on the command line:
     #   xcodebuild ... EMPO_CORES=Psdk30Core
     EMPO_CORES: MkxpCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core MvmzCore
     HEADER_SEARCH_PATHS:
@@ -99,16 +99,20 @@ targets:
         script: |
           "${PROJECT_DIR}/../../tools/fetch-angle.sh"
 
-      - name: Wrap the mkxp-z core
+      - &wrapMkxp
+        name: Wrap the mkxp-z core
         # Fetches the mkxp-z-apple-mobile release that
         # cores/mkxp/.version pins, and links it into
         # MkxpCore.framework. A stamp skips the link when nothing
         # changed. See cores/mkxp/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../cores/mkxp/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
+          case " ${EMPO_CORES} " in
+            *" MkxpCore "*) "${PROJECT_DIR}/../../cores/mkxp/build-framework-ios.sh" --sdk "${PLATFORM_NAME}" ;;
+          esac
 
-      - name: Wrap the PSDK cores
+      - &wrapPsdk
+        name: Wrap the PSDK cores
         # Fetches the psdk-apple-mobile release that
         # cores/psdk/.version pins, and links each Ruby's
         # library with psdk_app_bridge.cpp into Psdk<NN>Core.framework.
@@ -116,7 +120,9 @@ targets:
         # changed. See cores/psdk/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
-          "${PROJECT_DIR}/../../cores/psdk/build-framework-ios.sh" --sdk "${PLATFORM_NAME}"
+          case " ${EMPO_CORES} " in
+            *" Psdk"*) "${PROJECT_DIR}/../../cores/psdk/build-framework-ios.sh" --sdk "${PLATFORM_NAME}" ;;
+          esac
 
       - name: Assemble Assets.bundle
         # Force every build. The script copies whatever is in the
@@ -136,6 +142,8 @@ targets:
           # Mozilla CA root bundle. CABundleStore reads this copy from
           # the main bundle and pushes the path into the engine, so
           # the app needs its own.
+          # The mkxp download holds it, also when the build has no MkxpCore.
+          "${PROJECT_DIR}/../../cores/mkxp/fetch.sh"
           mkdir -p "$BUNDLE"
           cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$BUNDLE/"
 
@@ -161,68 +169,16 @@ targets:
         # library of the Ruby of their name. MvmzCore wraps the
         # mvmz-apple-mobile library, which shows RPG Maker MV and MZ
         # games in a web view. The MvmzCore target below builds it with
-        # the app. The app links none of them and opens
-        # one of them with dlopen when the user picks a game
-        # (EngineSessionCoordinator.openCore).
-        #
-        # A copy phase, not a linked dependency. The app must not bind
-        # a single engine name at launch, or a second core could bind
-        # to the first core's definitions.
-        #
-        # EMPO_CORES says which cores to embed, so a release can ship
-        # some of them. The app reads the bundle to find out what it got
-        # (GameCores.inThisBuild), and refuses a game it cannot run.
+        # the app. The app opens one of them with dlopen when the user
+        # picks a game (EngineSessionCoordinator.openCore).
         #
         # Force every build: content follows the fetched deps version,
         # not any file Xcode tracks.
         basedOnDependencyAnalysis: false
         script: |
-          set -e
-          TREE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64"
-          DEST="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-          mkdir -p "$DEST"
-          if [ -z "${EMPO_CORES:-}" ]; then
-            echo "error: EMPO_CORES is empty - the app would ship no game core" >&2
-            exit 1
-          fi
-          for CORE in ${EMPO_CORES}; do
-            case "$CORE" in
-              MkxpCore) HOW="cores/mkxp/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
-              Psdk25Core|Psdk30Core|Psdk32Core|Psdk33Core) HOW="cores/psdk/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
-              MvmzCore) HOW="build the MvmzCore target" ;;
-              *)
-                echo "error: EMPO_CORES names an unknown core: $CORE" >&2
-                exit 1
-                ;;
-            esac
-            CORE_SRC="$TREE/$CORE.framework"
-            [ "$CORE" = MvmzCore ] && CORE_SRC="${BUILT_PRODUCTS_DIR}/$CORE.framework"
-            if [ ! -d "$CORE_SRC" ]; then
-              echo "error: $CORE_SRC missing - run: $HOW" >&2
-              exit 1
-            fi
-            # An archive builds MvmzCore as a link into UninstalledProducts.
-            # The "/" at the end makes rsync copy what the link points to.
-            rsync -a --delete "$CORE_SRC/" "$DEST/$CORE.framework/"
-            # A nested framework carries its own signature. The app's
-            # own signing step does not reach inside it, so sign it
-            # here, the way Xcode's Embed Frameworks phase does.
-            if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ] && [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ]; then
-              codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" \
-                --preserve-metadata=identifier,entitlements,flags \
-                --timestamp=none "$DEST/$CORE.framework"
-            fi
-          done
-          # An incremental build keeps the framework folder from the last
-          # build, so remove a core this build does not ship. PsdkCore is
-          # in the list because older builds shipped it.
-          for CORE in MkxpCore MvmzCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core PsdkCore; do
-            case " ${EMPO_CORES} " in
-              *" $CORE "*) continue ;;
-            esac
-            rm -rf "$DEST/$CORE.framework"
-          done
-      - name: Generate Git Info
+          "${PROJECT_DIR}/../../scripts/embed-cores.sh"
+      - &generateGitInfo
+        name: Generate Git Info
         # Force this script to run every build. Without this, Xcode sees
         # the declared output file already on disk and skips the script,
         # so changing a branch / commit / dirty state wouldn't be
@@ -402,7 +358,7 @@ targets:
   MvmzCore:
     type: framework
     platform: iOS
-    sources:
+    sources: &mvmzSources
       - path: ../../cores/mvmz
         excludes:
           - Info.plist
@@ -410,7 +366,7 @@ targets:
           - .version
       - path: ../../cores/PrivacyInfo.xcprivacy
         buildPhase: resources
-    preBuildScripts:
+    preBuildScripts: &mvmzPreBuild
       - name: Fetch the MV/MZ core
         # The mvmz-apple-mobile release that cores/mvmz/.version
         # pins. See cores/mvmz/fetch.sh.
@@ -424,7 +380,7 @@ targets:
         script: |
           mkdir -p "${TARGET_TEMP_DIR}"
           "${PROJECT_DIR}/../../cores/gamecore-exports.sh" "${TARGET_TEMP_DIR}/gamecore.exports"
-    postBuildScripts:
+    postBuildScripts: &mvmzPostBuild
       - name: Name the MV/MZ core release
         # The Game cores screen shows EmpoCoreVersion, the release tag
         # that cores/mvmz/.version pins. The input orders it after Xcode
@@ -464,6 +420,203 @@ targets:
         VERSIONING_SYSTEM: ""
         # "Embed the cores" signs the copy inside the app.
         CODE_SIGNING_ALLOWED: NO
+  EmpoMac:
+    # The Mac app. It shares the library, the importer and the game
+    # cores' detection code with the iOS app. Its window, menus and
+    # screens are in src-mac. It starts each game in an Empo Player
+    # process (src-player), which opens the game's core.
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    preBuildScripts:
+      - *generateGitInfo
+      - *wrapMkxp
+      - *wrapPsdk
+    sources:
+      - path: vendor/libmspack
+        type: group
+      - path: src
+        type: group
+        excludes:
+          - Player
+          - App/main.m
+          - App/AppLoader.m
+          - App/AppCoreForwarders.c
+          - App/GameProcessClient.m
+          - App/GameProcessHost.swift
+          - App/GameViewEmbedder.swift
+          - App/EmpoSceneDelegate.swift
+          - App/AppWindow.swift
+          - App/RootView.swift
+          - App/EngineSessionCoordinator.swift
+          - App/EngineState.swift
+          - App/GameSession.swift
+          - App/PauseManager.swift
+          - App/UITestVirtualController.swift
+          - App/AppState.swift
+          - App/CrashTracker.swift
+          - App/GameReport.swift
+          - App/DisclaimerView.swift
+          - Library/GameLibraryView.swift
+          - Library/GameLoadingView.swift
+          - Library/ImageSourcePicker.swift
+          - Library/ImageSourceSheet.swift
+          - Library/ImportButton.swift
+          - Library/LibrarySearchBar.swift
+          - Library/LibrarySortSheet.swift
+          - Library/GameHeroCard.swift
+          - Library/GameCard.swift
+          - Library/WhatsNewSheet.swift
+          - Library/GameInfoView.swift
+          - Library/GameSettingsView.swift
+          - Library/GameContextMenu.swift
+          - Library/ImportRootPickerSheet.swift
+          - Library/SaveRecoverySheet.swift
+          - Design/Haptics.swift
+          - Design/Button.swift
+          - Design/IconButton.swift
+          - Design/Sheet.swift
+          - Design/IntrinsicSheet.swift
+          - Design/SheetToolbar.swift
+          - Design/PauseSnapshotOverlay.swift
+          - Design/SplashIcons.swift
+          - Settings/SettingsView.swift
+          - Hints
+      - path: src-mac
+        type: group
+      - path: src-player/PlayerLaunch.swift
+        group: src-player
+      - path: src/App/GitInfo.generated.swift
+        optional: true
+      - path: PrivacyInfo.xcprivacy
+      - path: Resources
+      - path: Assets.xcassets
+    settings:
+      base:
+        PRODUCT_NAME: Empo
+        PRODUCT_MODULE_NAME: Empo
+        GENERATE_INFOPLIST_FILE: YES # yamllint disable-line rule:truthy
+        INFOPLIST_KEY_CFBundleDisplayName: Empo
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.role-playing-games
+        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Mateo M.
+        ASSETCATALOG_COMPILER_APPICON_NAME: MacAppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        # Ad hoc in every configuration: the Mac app has no release
+        # signing yet.
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_ENTITLEMENTS: src-mac/EmpoMac.entitlements
+        ENABLE_HARDENED_RUNTIME: YES # yamllint disable-line rule:truthy
+        SWIFT_VERSION: "5.0"
+        SWIFT_EMIT_LOC_STRINGS: YES # yamllint disable-line rule:truthy
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES # yamllint disable-line rule:truthy
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-mac/EmpoMac-Bridging-Header.h
+        OTHER_LDFLAGS:
+          - -larchive
+          - -lz
+          - -lbz2
+          - -liconv
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo
+    postBuildScripts:
+      - name: Embed the cores
+        # Empo Player opens one of them with dlopen.
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          "${PROJECT_DIR}/../../scripts/embed-cores.sh"
+          # CABundleStore falls back to this copy until it downloads a
+          # newer one. The iOS app gets it from its Assets.bundle folder,
+          # which also holds iOS-only pictures.
+          ASSETS="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Assets.bundle"
+          "${PROJECT_DIR}/../../cores/mkxp/fetch.sh"
+          mkdir -p "$ASSETS"
+          cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$ASSETS/"
+    dependencies:
+      - package: GameProbe
+      - target: EmpoPlayer
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
+      - target: MvmzCoreMac
+        link: false
+        embed: false
+  EmpoPlayer:
+    # Runs one game in a window of its own. Empo starts it from
+    # Contents/Helpers with Process. With only the sandbox and inherit
+    # entitlements, it runs in Empo's sandbox and container.
+    type: application
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: src-player
+        excludes:
+          - EmpoPlayer.entitlements
+      - path: src/Player/ControllerInputManager.swift
+      - path: src/Player/OverlayVisibilityController.swift
+      - path: src/App/KeyHolder.swift
+      - path: src/App/GameCoreSessionConfig.swift
+      - path: Resources/Localizable.xcstrings
+    settings:
+      base:
+        PRODUCT_NAME: Empo Player
+        PRODUCT_MODULE_NAME: EmpoPlayer
+        GENERATE_INFOPLIST_FILE: YES # yamllint disable-line rule:truthy
+        INFOPLIST_KEY_CFBundleDisplayName: Empo Player
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.role-playing-games
+        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Mateo M.
+        CODE_SIGN_STYLE: Automatic
+        # Ad hoc in every configuration: the Mac app has no release
+        # signing yet.
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_ENTITLEMENTS: src-player/EmpoPlayer.entitlements
+        ENABLE_HARDENED_RUNTIME: YES # yamllint disable-line rule:truthy
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
+        SWIFT_VERSION: "5.0"
+        SWIFT_EMIT_LOC_STRINGS: YES # yamllint disable-line rule:truthy
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES # yamllint disable-line rule:truthy
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-player/EmpoPlayer-Bridging-Header.h
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev.player
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.player
+    dependencies:
+      - package: GameProbe
+  MvmzCoreMac:
+    # The MvmzCore framework for the Mac.
+    type: framework
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources: *mvmzSources
+    preBuildScripts: *mvmzPreBuild
+    postBuildScripts: *mvmzPostBuild
+    settings:
+      base:
+        PRODUCT_NAME: MvmzCore
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mvmzcore
+        INFOPLIST_FILE: $(PROJECT_DIR)/../../cores/mvmz/Info.plist
+        HEADER_SEARCH_PATHS:
+          - $(PROJECT_DIR)/../../cores
+          - $(PROJECT_DIR)/../Dependencies/mvmz-core/include
+        OTHER_LDFLAGS:
+          - -Wl,-exported_symbols_list,$(TARGET_TEMP_DIR)/gamecore.exports
+          - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a
+          - -framework WebKit
+          - -framework AppKit
+          - -framework Metal
+          - -framework UniformTypeIdentifiers
+        CLANG_ENABLE_MODULES: YES # yamllint disable-line rule:truthy
+        SKIP_INSTALL: YES # yamllint disable-line rule:truthy
+        DEFINES_MODULE: NO # yamllint disable-line rule:truthy
+        VERSIONING_SYSTEM: ""
+        # "Embed the cores" signs the copy inside the app.
+        CODE_SIGNING_ALLOWED: NO
   EmpoTests:
     type: bundle.unit-test
     platform: iOS
@@ -491,6 +644,14 @@ schemes:
     profile:
       config: Release
     analyze:
+      config: Debug
+    archive:
+      config: Release
+  EmpoMac:
+    build:
+      targets:
+        EmpoMac: all
+    run:
       config: Debug
     archive:
       config: Release

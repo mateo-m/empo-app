@@ -6,7 +6,12 @@ import GameProbe
 import Observation
 import SwiftUI
 import Synchronization
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// In-flight import that's still in its pre-flight validation phase.
 /// Once the pre-flight passes, the matching `GameEntry` is appended
@@ -84,6 +89,12 @@ class GameLibrary {
     static let shared = GameLibrary()
 
     var games: [GameEntry] = []
+
+    /// Changes when an import or a delete ends. `games.count` changes
+    /// when an import starts, before the game has its size.
+    var readyGameIDs: [String] {
+        games.filter { $0.status == .ready }.map(\.id)
+    }
 
     /// False until the first catalog pass of this launch has been
     /// merged into `games`. Distinguishes "not scanned yet" from
@@ -332,13 +343,53 @@ class GameLibrary {
         return sort.sort(base, sizes: sizes)
     }
 
-    /// Pre-flight import placeholders shown above the catalog when
-    /// the library already has games.
+    /// Pre-flight import placeholders shown above the catalog.
     func pendingValidationCatalog() -> [GameEntry] {
-        guard !games.isEmpty else { return [] }
-        return pendingImports.values
+        pendingImports.values
             .sorted { $0.order < $1.order }
             .map(\.entry)
+    }
+
+    func launchWarning(for game: GameEntry) -> LaunchWarning? {
+        guard let container = game.container else { return nil }
+        return GameCores.core(forGameAt: container.gameURL)?.launchWarning(
+            for: container, gameTitle: game.title)
+    }
+
+    /// A core that refuses a game gives its own reason. A new import
+    /// meets the same refusal, so the usual advice to import again
+    /// would be wrong there.
+    static func whyInvalid(_ game: GameEntry) -> String {
+        do {
+            if let container = game.container { try GameImportValidator.validate(container.gameURL) }
+        } catch GameImportValidator.ImportError.unsupportedRuntime(let reason) {
+            return reason
+        } catch {}
+        return String(localized: "Empo can't read this game's files. Delete it, then import it again.")
+    }
+
+    /// Deletes a game, or stops its import. `onFailure` gets an alert
+    /// title and message.
+    func delete(
+        _ game: GameEntry,
+        discardingSaves: Bool = false,
+        onFailure: @escaping @MainActor @Sendable (_ title: String, _ message: String) -> Void,
+        onSaveRescueFailure: (@MainActor @Sendable (GameEntry) -> Void)? = nil
+    ) {
+        #if os(macOS)
+        guard !GameLauncher.shared.isPlaying(game) else { return }
+        #endif
+        let title = game.title
+        deleteGame(
+            game, skipSaveRescue: discardingSaves,
+            onError: { error in
+                onFailure(
+                    String(
+                        localized: "Couldn't delete \"\(title)\"",
+                        comment: "Alert title. The placeholder is the game's name."),
+                    error)
+            },
+            onSaveRescueFailure: onSaveRescueFailure)
     }
 
     /// Hero card candidate for "Continue playing", or nil.

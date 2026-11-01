@@ -38,24 +38,16 @@ enum GameSession {
         input.core.launch(container)
 
         DataDirectory.ensureFontsRoot()
-        func applySessionConfig(userDataDirectory: UnsafePointer<CChar>?) {
-            DataDirectory.fontsRootURL.path.withCString { fontsPtr in
-                var config = GameCoreSessionConfig()
-                config.userDataDirectory = userDataDirectory
-                config.sharedFontsDirectory = fontsPtr
-                config.verticalAlignment = alignment.bridgeValue
-                gamecore_applySessionConfig(&config)
-            }
-        }
-        if let userDataDir = input.userDataDir {
-            userDataDir.path.withCString(applySessionConfig(userDataDirectory:))
-        } else {
-            applySessionConfig(userDataDirectory: nil)
-        }
+        GameCoreSessionConfig.with(
+            userDataDirectory: input.userDataDir?.path,
+            sharedFontsDirectory: DataDirectory.fontsRootURL.path,
+            verticalAlignment: alignment.bridgeValue
+        ) { gamecore_applySessionConfig($0) }
 
         crashTracker.writeMarker(for: container)
         let runner = EngineSessionCoordinator.shared.runner
         sessionLogger.beginSession(for: game, container: container, debugLogsEnabled: input.debugLogsEnabled)
+        gamecore_setDebugLogPath(sessionLogger.logURL?.path)
         GameReport.last = sessionLogger.logURL.map {
             GameReport(gameTitle: game.title, logURL: $0)
         }

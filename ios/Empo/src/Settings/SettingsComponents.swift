@@ -9,6 +9,13 @@ struct SettingsToggle: View {
     let description: LocalizedStringResource
 
     var body: some View {
+        #if os(macOS)
+        Toggle(isOn: $isOn) {
+            Text(title)
+            Text(description)
+        }
+        .toggleStyle(.checkbox)
+        #else
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Toggle(title, isOn: $isOn)
             Text(description)
@@ -16,6 +23,7 @@ struct SettingsToggle: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, Spacing.xxs)
+        #endif
     }
 }
 

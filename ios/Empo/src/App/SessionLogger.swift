@@ -40,7 +40,13 @@ final class SessionLogger {
         container: GameContainer,
         debugLogsEnabled: Bool
     ) {
-        configureDebugLog(for: game, container: container, enabled: debugLogsEnabled)
+        openDebugLog(for: game, container: container, enabled: debugLogsEnabled)
+        beginSession(for: game, container: container)
+    }
+
+    /// Starts the play time and adds the session to session-history.log.
+    /// The debug log, if any, is the one `openDebugLog` opened.
+    func beginSession(for game: GameEntry, container: GameContainer) {
         appendSessionHistory(game: game, container: container)
         activeGame = game
         sessionStartTime = Date()
@@ -102,14 +108,15 @@ final class SessionLogger {
         onPlayTimeFlushed?(game.id)
     }
 
-    private func configureDebugLog(
+    /// Makes the session's debug log and sets `logURL`, or sets it to
+    /// nil when debug logs are off. The caller gives the path to the core.
+    func openDebugLog(
         for game: GameEntry,
         container: GameContainer,
         enabled: Bool
     ) {
         guard enabled else {
             logURL = nil
-            gamecore_setDebugLogPath(nil)
             return
         }
 
@@ -132,8 +139,6 @@ final class SessionLogger {
                 ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
         logURL = URL(fileURLWithPath: logPath)
-
-        gamecore_setDebugLogPath(logPath)
 
         let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
         Self.pruneSessionLogs(in: logsDir, keeping: maxLogFiles)

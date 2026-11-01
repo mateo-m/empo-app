@@ -120,6 +120,7 @@ struct PsdkCore: GameCore {
             Group {
                 GameplaySettingsSection(model: model)
                 DisplaySettingsSection(model: model, fields: [.smoothScaling, .fixedAspectRatio])
+                #if os(iOS)
                 LayoutSettingsSection(model: model)
                 Section {
                     TouchMouseToggle(model: model)
@@ -128,6 +129,7 @@ struct PsdkCore: GameCore {
                 } footer: {
                     Text("This works only in games that use a mouse.")
                 }
+                #endif
             })
     }
 }

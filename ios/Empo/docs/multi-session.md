@@ -27,6 +27,17 @@ A Ruby game that runs in the app cannot end. The screens tell the person to clos
 
 `GameProcessHost.swift` starts and ends the extension. It shows the game in an `EXHostViewController` behind the app's views. The app waits until the old process ended, with a limit of 2 seconds, before it starts a new one. When the extension stops without a `quit`, the app shows the game as stopped. A paused game that loses its process closes.
 
+## On the Mac
+
+The Mac app does not use `GameRunner`. Every game runs in its own process, also an RPG Maker or PSDK game. `GameLauncher` starts the helper app `Empo Player` (`src-player`) with `Process`, one process for each game. The helper is in `Empo.app/Contents/Helpers`. Two or more games can run at the same time, each in its own window.
+
+- `GameLauncher` gives the helper the game, the core, and the settings as JSON after the `--launch` argument (`PlayerLaunch`). The helper opens the core with `dlopen` and runs the game.
+- The helper has only the sandbox and inherit entitlements. It runs in the sandbox and the container of the Mac app, so the saves are in the same folder as the saves of the library.
+- The helper writes `paused` and `resumed` to its stdout. `GameLauncher` stops and starts the play time with these lines. The engine writes its own output to stderr.
+- The helper ends with the Mac app. It watches the parent process, and ends the game when the parent ends, also after a crash or a force quit.
+- An exit status of 64 (bad launch data) or 70 (the core did not open), or a crash, makes the library show an alert. A normal quit ends with 0, or with 143 when the Mac app sent `SIGTERM`.
+- When the person quits the Mac app with games open, the app asks first. The "Don't ask again" box turns the question off, and "Ask before closing games" in Settings turns it on again.
+
 ## Where the data lives
 
 A game process can open only its own folder and the app group folder. It cannot open the app's Documents. The app group ID is `group.` plus the bundle ID of the app. `project.yml` sets it in `EMPO_APP_GROUP`. The app reads it from `NSExtensionFileProviderDocumentGroup` in the `Info.plist` of the `FilesProvider` extension.

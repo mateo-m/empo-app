@@ -82,42 +82,27 @@ class AppState {
         }
 
         guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil else { return }
-        guard let container = game.container,
-            let core = GameCores.core(forGameAt: container.gameURL), core.isInThisBuild
-        else { return }
-        SaveMigration.migrateLegacySavesIfNeeded(for: container)
+        let start: GameStart
+        do {
+            start = try GameStart(game: game)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
         selectedGame = game
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
-        ControlsLayout.shared.switchGame(id: game.id, container: container, title: game.title)
+        ControlsLayout.shared.switchGame(id: game.id, container: start.container, title: game.title)
         PauseManager.shared.reset()
         phase = .loading
-
-        // Everything related to this game lives inside
-        // `<container>/`. `Game/` holds the imported files (engine
-        // cwd target). `EmpoState/` holds Empo-managed config
-        // (mkxp.json, patches.json, game_settings.json,
-        // .session-active, etc.). `Logs/` and `Metadata/` complete
-        // the per-game tree.
-        try? container.ensureSubdirs()
-        // The engine compares this path against getcwd output, so
-        // it must receive the symlink-resolved spelling (see
-        // `engineSpelling` for the /var vs /private/var trap).
-        let userDataDir = DataDirectory.resolveAndPrepare(for: container, core: core)
-            .map(DataDirectory.engineSpelling(of:))
-        let stateDir = container.empoStateURL
-
-        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir)
-
-        let settings = GameSettings.load(from: stateDir)
 
         session.configureEngine(
             GameSession.LaunchInput(
                 game: game,
-                container: container,
-                userDataDir: userDataDir,
-                core: core,
-                settings: settings,
+                container: start.container,
+                userDataDir: start.userDataDirectory,
+                core: start.core,
+                settings: start.settings,
                 debugLogsEnabled: AppSettings.shared.debugLogs
             )
         )

@@ -4,7 +4,12 @@
 import Foundation
 import GameController
 import GameProbe
+
+#if canImport(UIKit)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Host-side physical controller input (SPEC section 10.2). Maps GCController
 /// elements to keyboard scancodes via the merged four-layer map (section 9).
@@ -76,9 +81,21 @@ final class ControllerInputManager {
     private var connectedControllers: [String: GCController] = [:]
     private var heldStickDirections: [String: Set<ControllerStickMapper.Direction>] = [:]
 
+    private let keys: HeldKeys<KeyHolder>
+
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
     private var activeObserver: NSObjectProtocol?
+
+    init(keys: HeldKeys<KeyHolder>) {
+        self.keys = keys
+    }
+
+    #if os(iOS)
+    convenience init() {
+        self.init(keys: EngineSessionCoordinator.shared.heldKeys)
+    }
+    #endif
 
     /// Atomically swap the merged map. Keys held mid-press keep their
     /// press-time scancode until release (SPEC section 10.2 / ticket 004).
@@ -117,8 +134,13 @@ final class ControllerInputManager {
         // `GCController.shouldMonitorBackgroundEvents` is on. A release
         // in that window never arrives, so the key stays pressed until
         // this re-read.
+        #if canImport(UIKit)
+        let didBecomeActive = UIApplication.didBecomeActiveNotification
+        #else
+        let didBecomeActive = NSApplication.didBecomeActiveNotification
+        #endif
         activeObserver = NotificationCenter.default.addObserver(
-            forName: UIApplication.didBecomeActiveNotification,
+            forName: didBecomeActive,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -203,7 +225,7 @@ final class ControllerInputManager {
 
     private func attach(_ controller: GCController) {
         guard sessionActive else { return }
-        #if DEBUG
+        #if DEBUG && os(iOS)
         guard UITestVirtualController.admits(controller) else { return }
         #endif
         logDevice(controller)
@@ -452,8 +474,7 @@ final class ControllerInputManager {
                 switch target {
                 case .key(let scancode):
                     elementPressScancode[edge.element] = scancode
-                    EngineSessionCoordinator.shared.holdKey(
-                        scancode: scancode, by: .controller(edge.element))
+                    keys.hold(scancode, by: .controller(edge.element))
                 case .action(let name):
                     elementPressAction[edge.element] = name
                     actionHandler?(name, true)
@@ -468,8 +489,7 @@ final class ControllerInputManager {
                 guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
                     continue
                 }
-                EngineSessionCoordinator.shared.releaseKey(
-                    scancode: scancode, by: .controller(edge.element))
+                keys.release(scancode, by: .controller(edge.element))
             }
         }
     }
@@ -477,13 +497,21 @@ final class ControllerInputManager {
     /// Drops everything this path holds. Suppression and stop()
     /// swallow the physical release edges, and a held fast-forward
     /// with no release would leave the engine sped up.
-    private func releaseAllHeldInputs() {
-        EngineSessionCoordinator.shared.releaseKeys(from: .controller)
+    func releaseAllHeldInputs() {
+        keys.release { $0.source == .controller }
         elementPressScancode.removeAll()
 
         for action in elementPressAction.values {
             actionHandler?(action, false)
         }
         elementPressAction.removeAll()
+    }
+
+    /// Also forgets which elements are down, so the poll when the app
+    /// becomes active presses an element that is still held.
+    func releaseAndForgetHeldInputs() {
+        releaseAllHeldInputs()
+        reducer = ControllerStateReducer()
+        heldStickDirections.removeAll()
     }
 }

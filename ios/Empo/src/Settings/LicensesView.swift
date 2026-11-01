@@ -18,7 +18,9 @@ struct LicensesView: View {
                         .textSelection(.enabled)
                 }
                 .navigationTitle(license.name)
+                #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
+                #endif
             } label: {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Text(license.name)
@@ -28,8 +30,12 @@ struct LicensesView: View {
                 }
             }
         }
+        #if os(iOS)
         .navigationTitle("Open-source licenses")
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        .navigationTitle("Open-Source Licenses")
+        #endif
     }
 
     private func linkingURLs(in text: String) -> AttributedString {
