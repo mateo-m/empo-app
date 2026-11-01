@@ -32,7 +32,9 @@ A Ruby game that runs in the app cannot end. The screens tell the person to clos
 The Mac app does not use `GameRunner`. Every game runs in its own process, also an RPG Maker or PSDK game. `GameLauncher` starts the helper app `Empo Player` (`src-player`) with `Process`, one process for each game. The helper is in `Empo.app/Contents/Helpers`. Two or more games can run at the same time, each in its own window.
 
 - `GameLauncher` gives the helper the game, the core, and the settings as JSON after the `--launch` argument (`PlayerLaunch`). The helper opens the core with `dlopen` and runs the game.
-- The helper has only the sandbox and inherit entitlements. It runs in the sandbox and the container of the Mac app, so the saves are in the same folder as the saves of the library.
+- The helper has the sandbox and inherit entitlements. It runs in the sandbox and the container of the Mac app, so the saves are in the same folder as the saves of the library.
+- The helper also has the `disable-library-validation` entitlement. The app has an ad hoc signature, which has no Team ID, and without this entitlement the hardened runtime refuses to open a core.
+- `Empo --check-cores` starts the helper once for each core in the app, and the helper only opens the core. `scripts/package-mac.sh` runs it on the built app, so a release or a pull request in which a core does not open fails.
 - The helper writes `paused` and `resumed` to its stdout. `GameLauncher` stops and starts the play time with these lines. The engine writes its own output to stderr.
 - The helper ends with the Mac app. It watches the parent process, and ends the game when the parent ends, also after a crash or a force quit.
 - An exit status of 64 (bad launch data) or 70 (the core did not open), or a crash, makes the library show an alert. A normal quit ends with 0, or with 143 when the Mac app sent `SIGTERM`.

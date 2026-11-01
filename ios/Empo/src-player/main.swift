@@ -3,6 +3,19 @@
 
 import AppKit
 
+if let index = CommandLine.arguments.firstIndex(of: PlayerLaunch.checkCoreArgument),
+    index + 1 < CommandLine.arguments.count
+{
+    let path = CommandLine.arguments[index + 1]
+    do {
+        _ = try GameCoreLibrary(path: path)
+        exit(0)
+    } catch {
+        NSLog("[player] cannot open %@: %@", path, "\(error)")
+        exit(70)
+    }
+}
+
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
 

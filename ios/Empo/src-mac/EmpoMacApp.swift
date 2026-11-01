@@ -9,6 +9,12 @@ struct EmpoMacApp: App {
     @NSApplicationDelegateAdaptor private var delegate: EmpoMacAppDelegate
     @State private var settings = AppSettings.shared
 
+    init() {
+        if CommandLine.arguments.contains(GameLauncher.checkCoresArgument) {
+            exit(GameLauncher.checkCores() ? 0 : 1)
+        }
+    }
+
     var body: some Scene {
         Window(AppInfo.name, id: "library") {
             LibraryWindow()
@@ -63,6 +69,11 @@ private struct AboutCommand: Commands {
             Button("About \(AppInfo.name)") {
                 NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
             }
+            if UpdateChecker.isSideloadBuild {
+                Button("Check for Updates…") {
+                    Task { await MacUpdates.shared.checkNow() }
+                }
+            }
         }
     }
 
@@ -111,6 +122,7 @@ final class EmpoMacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Each game reads the newest file when it starts.
         CABundleStore.refreshIfStale {}
+        MacUpdates.shared.checkIfStale()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

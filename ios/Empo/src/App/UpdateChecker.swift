@@ -3,7 +3,7 @@
 
 import Foundation
 
-/// Update checker for sideloaded / IPA installs.
+/// Update checker for the sideloaded iOS app and the Mac disk image.
 ///
 /// Hits GitHub's Releases API to compare the running build's
 /// `CFBundleShortVersionString` against the latest tagged release on
@@ -107,7 +107,7 @@ enum UpdateChecker {
             forHTTPHeaderField: "Accept"
         )
         request.setValue(
-            "Empo/\(AppInfo.version) (iOS update-check)",
+            "Empo/\(AppInfo.version) (update-check)",
             forHTTPHeaderField: "User-Agent"
         )
         request.timeoutInterval = 10

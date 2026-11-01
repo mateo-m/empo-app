@@ -361,11 +361,12 @@ jobs:
           path: |
             ios/Dependencies/ANGLE/iphoneos
             ios/Dependencies/ANGLE/iphonesimulator
+            ios/Dependencies/ANGLE/macosx
             ios/Dependencies/ANGLE/.fetched-version
             ios/Dependencies/mkxp-core
             ios/Dependencies/psdk-core
             ios/Dependencies/mvmz-core
-          key: cores-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
+          key: cores-angle3-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
 
       - name: Fetch ANGLE
         env:
@@ -416,6 +417,58 @@ jobs:
             { echo "app process exited within 10s"; exit 1; }
           echo "boot smoke OK"
 
+  # The release builds the Mac app with the same script. The script
+  # starts the signed app and opens each core in Empo Player, so a pull
+  # request that stops Mac games from starting fails here.
+  mac:
+    name: Mac build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.MACOS_RUNNER || '"macos-latest"') }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: false
+
+      - name: Select newest Xcode
+        run: |
+          XCODE="$(find /Applications -maxdepth 1 -name 'Xcode*.app' | sort -V | tail -n 1)"
+          echo "Using $XCODE"
+          echo "DEVELOPER_DIR=$XCODE/Contents/Developer" >> "$GITHUB_ENV"
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Cache the cores
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Dependencies/ANGLE/iphoneos
+            ios/Dependencies/ANGLE/iphonesimulator
+            ios/Dependencies/ANGLE/macosx
+            ios/Dependencies/ANGLE/.fetched-version
+            ios/Dependencies/mkxp-core
+            ios/Dependencies/psdk-core
+            ios/Dependencies/mvmz-core
+          key: mac-cores-angle3-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
+
+      - name: Fetch ANGLE
+        env:
+          GH_TOKEN: ${{ secrets.EMPO_DEPS_READ_TOKEN }}
+        run: tools/fetch-angle.sh
+
+      - name: Create empty signing overrides
+        run: touch ios/Empo/Signing.xcconfig
+
+      - name: Generate Xcode project
+        working-directory: ios/Empo
+        run: xcodegen generate --spec project.yml --project . --quiet
+
+      - name: Build the Mac app and open each core
+        run: |
+          scripts/package-mac.sh "$(sed -n 's/^ *MARKETING_VERSION: //p' ios/Empo/project.yml)"
+
   # The aggregate gate. Its check-run name matches the ruleset's one
   # required context, "CI", exactly. The jobs above have descriptive
   # names the ruleset does not track one by one, so this job is what a
@@ -443,6 +496,7 @@ jobs:
       - lint
       - test
       - simulator
+      - mac
     if: always()
     runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.LINUX_RUNNER || '"ubuntu-latest"') }}
     steps:
