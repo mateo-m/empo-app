@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.10.1",
+          "buildVersion": "791",
+          "date": "2026-11-01",
+          "localizedDescription": "Other changes\n• Update mimalloc to v3.6.1",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.10.1/Empo-ios.ipa",
+          "size": 65492992,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.10.0",
           "buildVersion": "787",
           "date": "2026-11-01",
