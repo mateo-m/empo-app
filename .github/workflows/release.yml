@@ -9,7 +9,7 @@
 #     creates the same tags and flows into the same tag-push run.
 #
 # Either way the tag-push run builds, audits, ad-hoc signs, and
-# publishes the unsigned .ipa, then the post-release job syncs the
+# publishes the unsigned .ipa and the Mac disk image, then the post-release job syncs the
 # AltStore manifest STRAIGHT TO MAIN (no PR): commits
 # created with EMPO_RELEASE_TOKEN are GitHub-signed and authored by
 # the token's owner, whose repo-admin role bypasses the ruleset.
@@ -18,7 +18,8 @@
 # events, so an `on: release` workflow would never fire).
 #
 # workflow_dispatch with mode=dry-run builds + audits any ref and
-# uploads the .ipa as a workflow artifact without publishing anything.
+# uploads the .ipa and the Mac disk image as workflow artifacts without
+# publishing anything.
 #
 # Secrets:
 #   EMPO_DEPS_READ_TOKEN         read empo-deps (the ANGLE tarball)
@@ -317,12 +318,26 @@ jobs:
           echo "ipa_size=$IPA_SIZE" >> "$GITHUB_OUTPUT"
           echo "Packaged $IPA_NAME ($IPA_SIZE bytes)"
 
+      - name: Build + package the Mac app
+        id: mac
+        run: |
+          set -e
+          DMG="$(scripts/package-mac.sh "${{ steps.meta.outputs.version }}" | tail -n 1)"
+          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+
       - name: Upload .ipa artifact (dry run)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.package.outputs.ipa_name }}
           path: build/ipa/${{ steps.package.outputs.ipa_name }}
+
+      - name: Upload Mac disk image artifact (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Empo-mac.dmg
+          path: ${{ steps.mac.outputs.dmg }}
 
       - name: Create GitHub release
         if: github.event_name == 'push'
@@ -338,12 +353,15 @@ jobs:
             cat changelog-section.md
             echo ""
             echo "---"
-            echo "> Unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing."
+            echo "> iPhone and iPad: unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing."
+            echo ">"
+            echo "> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it."
           } > release-notes.md
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --notes-file release-notes.md \
-            "build/ipa/${{ steps.package.outputs.ipa_name }}"
+            "build/ipa/${{ steps.package.outputs.ipa_name }}" \
+            "${{ steps.mac.outputs.dmg }}"
 
   # ── Finish: sync AltStore manifest to main ───────────────────────
   post-release:

@@ -21,8 +21,8 @@ usage() {
     echo "  1. verifies empo-deps pins"
     echo "  2. bumps version, generates the changelog, commits, tags"
     echo "  3. pushes and exits. The Release workflow builds, audits,"
-    echo "     and publishes the IPA. It syncs the AltStore manifest"
-    echo "     straight to main and announces on Discord."
+    echo "     and publishes the IPA and the Mac disk image. It syncs the"
+    echo "     AltStore manifest straight to main and announces on Discord."
     echo ""
     echo "You can cut the same release without this script at all:"
     echo "GitHub > Actions > Release > Run workflow (mode=cut)."
@@ -250,7 +250,7 @@ fi
 
 CHANGELOG=$("$REPO_ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH")
 
-RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> Unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing." "$CHANGELOG")
+RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> iPhone and iPad: unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing.\n>\n> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it." "$CHANGELOG")
 
 # 8. Commit + tag (signed). Tag the release metadata first so the IPA
 # build below runs from a clean tree and bakes the release commit hash
@@ -330,6 +330,9 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     IPA_SIZE=$(stat -f%z "$IPA_PATH")
     echo "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
 
+    DMG_PATH=$("$REPO_ROOT/scripts/package-mac.sh" "$VERSION" | tail -n 1)
+    echo "    mac: $DMG_PATH"
+
     # 10. Update AltStore source from the locally-built artifact so the
     # manifest lands through the same signed release flow as every other
     # release metadata change.
@@ -380,7 +383,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     gh release create "v$VERSION" \
         --title "v$VERSION" \
         --notes "$RELEASE_NOTES" \
-        "$IPA_PATH"
+        "$IPA_PATH" "$DMG_PATH"
     echo "==> done - v$VERSION released (local build)"
 else
     echo "==> done - v$VERSION handed off to CI, which finishes the release"
