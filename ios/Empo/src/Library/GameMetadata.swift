@@ -240,6 +240,19 @@ struct GameMetadata: Codable {
         }
     }
 
+    /// The size of each game's whole folder, by game ID. Nil when the
+    /// task is cancelled first.
+    @MainActor
+    static func diskSizes(of games: [GameEntry]) async -> [String: Int64]? {
+        var sizes: [String: Int64] = [:]
+        for game in games {
+            guard !Task.isCancelled else { return nil }
+            guard let container = game.container else { continue }
+            sizes[game.id] = await diskSize(for: container.url)
+        }
+        return Task.isCancelled ? nil : sizes
+    }
+
     static func diskSize(for directory: URL) async -> Int64 {
         let directory = directory
         return await Task.detached(priority: .utility) {

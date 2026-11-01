@@ -90,6 +90,12 @@ class GameLibrary {
 
     var games: [GameEntry] = []
 
+    /// Changes when an import or a delete ends. `games.count` changes
+    /// when an import starts, before the game has its size.
+    var readyGameIDs: [String] {
+        games.filter { $0.status == .ready }.map(\.id)
+    }
+
     /// False until the first catalog pass of this launch has been
     /// merged into `games`. Distinguishes "not scanned yet" from
     /// "scanned and truly empty": before this flips, `games.isEmpty`

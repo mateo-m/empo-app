@@ -50,7 +50,7 @@ struct LibraryWindow: View {
             .focusedSceneValue(\.isSearchingLibrary, isSearchFocused)
             .tint(.brand)
             .onChange(of: settings.librarySortOption, initial: true) { model.refreshSizesIfNeeded() }
-            .onChange(of: model.library.games.count) { model.refreshSizesIfNeeded() }
+            .onChange(of: model.library.readyGameIDs) { model.refreshSizesIfNeeded() }
     }
 
     @ViewBuilder

@@ -69,14 +69,7 @@ final class LibraryWindowModel {
         guard AppSettings.shared.librarySortOption.usesDiskSizes else { return }
         sizesTask?.cancel()
         sizesTask = Task {
-            var sizes: [String: Int64] = [:]
-            for game in library.games {
-                guard !Task.isCancelled else { return }
-                guard let container = game.container else { continue }
-                sizes[game.id] = await GameMetadata.diskSize(for: container.url)
-            }
-            guard !Task.isCancelled else { return }
-            gameSizes = sizes
+            if let sizes = await GameMetadata.diskSizes(of: library.games) { gameSizes = sizes }
         }
     }
 
