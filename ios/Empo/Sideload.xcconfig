@@ -1,0 +1,3 @@
+// The sideload IPA build. release.yml and scripts/release.sh pass this
+// file with -xcconfig. SIDELOAD turns on the GitHub update check.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) SIDELOAD

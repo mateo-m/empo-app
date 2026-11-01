@@ -233,6 +233,10 @@ GIT_LINE=$(grep -m1 -E '^commit: ' < <(strings "$BIN") || true)
 [[ "$GIT_LINE" != *"(dirty)"* ]] ||
     fail "binary embeds a dirty GitInfo marker ($GIT_LINE)"
 
+# Only a build with Sideload.xcconfig has the GitHub update check.
+strings "$BIN" | grep -q "api.github.com/repos" ||
+    fail "binary has no update check. Build it with -xcconfig ios/Empo/Sideload.xcconfig"
+
 EMBEDDED_COMMIT=$(awk '{print $2}' <<<"$GIT_LINE")
 [[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||
     fail "embedded commit $EMBEDDED_COMMIT != HEAD $HEAD_COMMIT"
