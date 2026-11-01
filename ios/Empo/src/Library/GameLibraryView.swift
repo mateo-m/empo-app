@@ -113,7 +113,7 @@ struct GameLibraryView: View {
     /// feedback on the Import button so the empty state doesn't
     /// bounce in and out on invalid imports.
     private var pendingValidationEntries: [GameEntry] {
-        library.pendingValidationCatalog()
+        library.games.isEmpty ? [] : library.pendingValidationCatalog()
     }
 
     /// True only once the initial scan has confirmed the library is

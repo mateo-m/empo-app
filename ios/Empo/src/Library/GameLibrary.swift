@@ -343,11 +343,9 @@ class GameLibrary {
         return sort.sort(base, sizes: sizes)
     }
 
-    /// Pre-flight import placeholders shown above the catalog when
-    /// the library already has games.
+    /// Pre-flight import placeholders shown above the catalog.
     func pendingValidationCatalog() -> [GameEntry] {
-        guard !games.isEmpty else { return [] }
-        return pendingImports.values
+        pendingImports.values
             .sorted { $0.order < $1.order }
             .map(\.entry)
     }
