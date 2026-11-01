@@ -361,11 +361,12 @@ jobs:
           path: |
             ios/Dependencies/ANGLE/iphoneos
             ios/Dependencies/ANGLE/iphonesimulator
+            ios/Dependencies/ANGLE/macosx
             ios/Dependencies/ANGLE/.fetched-version
             ios/Dependencies/mkxp-core
             ios/Dependencies/psdk-core
             ios/Dependencies/mvmz-core
-          key: cores-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
+          key: cores-angle3-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
 
       - name: Fetch ANGLE
         env:
@@ -443,12 +444,14 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            ios/Dependencies/ANGLE/iphoneos
+            ios/Dependencies/ANGLE/iphonesimulator
             ios/Dependencies/ANGLE/macosx
             ios/Dependencies/ANGLE/.fetched-version
             ios/Dependencies/mkxp-core
             ios/Dependencies/psdk-core
             ios/Dependencies/mvmz-core
-          key: mac-cores-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
+          key: mac-cores-angle3-${{ runner.os }}-${{ hashFiles('ios/Dependencies/ANGLE/.version', 'cores/mkxp/.version', 'cores/psdk/.version', 'cores/mvmz/.version') }}
 
       - name: Fetch ANGLE
         env:
