@@ -25,6 +25,9 @@ struct PlayerLaunch: Codable {
     let iconPath: String?
 
     static let argument = "--launch"
+    /// Empo Player opens the core at the path after it, then ends with
+    /// status 0, or 70 when the core does not open.
+    static let checkCoreArgument = "--check-core"
 
     func arguments() throws -> [String] {
         // JSONEncoder always writes UTF-8, so the decode cannot fail.

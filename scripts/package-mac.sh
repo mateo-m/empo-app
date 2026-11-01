@@ -57,6 +57,12 @@ CORES=$(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*Core.framework" -exe
 
 codesign --verify --deep --strict "$APP" || fail "the app signature is not valid"
 
+# A user plays a game only when Empo Player opens its core. The signing,
+# the entitlements and the sandbox all decide that, and only a run of
+# the signed app shows the result.
+echo "==> opening each core in Empo Player" >&2
+"$APP/Contents/MacOS/Empo" --check-cores >&2 || fail "Empo Player cannot open every core, so games cannot start"
+
 echo "==> packing $(basename "$DMG") (cores: $CORES)" >&2
 STAGE="$OUT/dmg"
 mkdir -p "$STAGE"

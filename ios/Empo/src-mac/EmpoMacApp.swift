@@ -9,6 +9,12 @@ struct EmpoMacApp: App {
     @NSApplicationDelegateAdaptor private var delegate: EmpoMacAppDelegate
     @State private var settings = AppSettings.shared
 
+    init() {
+        if CommandLine.arguments.contains(GameLauncher.checkCoresArgument) {
+            exit(GameLauncher.checkCores() ? 0 : 1)
+        }
+    }
+
     var body: some Scene {
         Window(AppInfo.name, id: "library") {
             LibraryWindow()

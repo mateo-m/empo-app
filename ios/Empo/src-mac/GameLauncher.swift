@@ -7,9 +7,9 @@ import Observation
 /// Starts each game in an Empo Player process of its own, and records
 /// its play time.
 ///
-/// Empo Player has only the sandbox and inherit entitlements, so a
-/// child that Process starts runs in Empo's sandbox and container. The
-/// games' saves stay in Empo's container, as on iOS.
+/// Empo Player has the inherit entitlement, so a child that Process
+/// starts runs in Empo's sandbox and container. The games' saves stay
+/// in Empo's container, as on iOS.
 @MainActor @Observable
 final class GameLauncher {
     static let shared = GameLauncher()
@@ -38,6 +38,36 @@ final class GameLauncher {
 
     private static let playerURL = Bundle.main.bundleURL
         .appendingPathComponent("Contents/Helpers/Empo Player.app/Contents/MacOS/Empo Player")
+
+    /// scripts/package-mac.sh starts the built app with it.
+    static let checkCoresArgument = "--check-cores"
+
+    /// Starts Empo Player once for each core in the app, the way `play`
+    /// does, and asks it to open the core. False when one does not open.
+    static func checkCores() -> Bool {
+        let cores = GameCores.inThisBuild
+        var passed = !cores.isEmpty
+        for core in cores {
+            guard let url = core.binaryURL else { continue }
+            let process = Process()
+            process.executableURL = playerURL
+            process.arguments = [PlayerLaunch.checkCoreArgument, url.path]
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                print("\(core.framework): Empo Player did not start: \(error)")
+                passed = false
+                continue
+            }
+            let opened = process.terminationReason == .exit && process.terminationStatus == 0
+            print(
+                "\(core.framework): \(opened ? "opens" : "does not open (status \(process.terminationStatus))")"
+            )
+            passed = passed && opened
+        }
+        return passed
+    }
 
     func isPlaying(_ game: GameEntry) -> Bool { sessions[game.id] != nil }
 
