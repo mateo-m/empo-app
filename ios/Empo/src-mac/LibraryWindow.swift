@@ -10,6 +10,7 @@ struct LibraryWindow: View {
     @State private var isDropTargeted = false
     @FocusState private var isSearchFocused: Bool
     @Environment(\.appSettings) private var settings
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         @Bindable var model = model
@@ -107,6 +108,14 @@ struct LibraryWindow: View {
                 .pickerStyle(.inline)
             }
             .help("Sort games")
+        }
+        if case .available(let latestVersion, let releaseURL) = MacUpdates.shared.status {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Update available: v\(latestVersion)", systemImage: "arrow.down.circle") {
+                    openURL(releaseURL)
+                }
+                .labelStyle(.titleAndIcon)
+            }
         }
     }
 

@@ -69,6 +69,11 @@ private struct AboutCommand: Commands {
             Button("About \(AppInfo.name)") {
                 NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
             }
+            if UpdateChecker.isSideloadBuild {
+                Button("Check for Updates…") {
+                    Task { await MacUpdates.shared.checkNow() }
+                }
+            }
         }
     }
 
@@ -117,6 +122,7 @@ final class EmpoMacAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Each game reads the newest file when it starts.
         CABundleStore.refreshIfStale {}
+        Task { await MacUpdates.shared.checkIfStale() }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

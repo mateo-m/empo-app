@@ -40,6 +40,7 @@ xcodebuild \
     -scheme EmpoMac \
     -configuration Release \
     -derivedDataPath "$DERIVED_DATA" \
+    -xcconfig "$PROJECT_DIR/Sideload.xcconfig" \
     ${EMPO_CORES:+"EMPO_CORES=$EMPO_CORES"} \
     build 2>&1 | grep -E "^(\*\* BUILD|error:)" >&2
 [[ -d "$APP" ]] || fail "build failed: $APP not found"
@@ -56,6 +57,9 @@ CORES=$(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*Core.framework" -exe
 [[ -n "$CORES" ]] || fail "no game core in Contents/Frameworks"
 
 codesign --verify --deep --strict "$APP" || fail "the app signature is not valid"
+
+grep -q "api.github.com/repos" < <(strings "$APP/Contents/MacOS/Empo") ||
+    fail "the app has no update check. Build it with -xcconfig ios/Empo/Sideload.xcconfig"
 
 # A user plays a game only when Empo Player opens its core. The signing,
 # the entitlements and the sandbox all decide that, and only a run of
