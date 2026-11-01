@@ -47,17 +47,26 @@ download from their authors. Empo does not link to game downloads.
 
 ## Why iOS 26?
 
-Empo builds on the iOS 26 SDK and uses its controls throughout the interface. Older versions of
-iOS cannot run it.
+Empo builds on the iOS 26 and macOS 26 SDKs and uses their controls throughout the interface.
+Older versions of iOS and macOS cannot run it.
 
 ## Does it work on iPad?
 
 Yes. Empo runs on iPhone and iPad with iOS 26 or newer. Each orientation keeps its own touch
 layout, and each game can keep its own.
 
+## Does it work on a Mac?
+
+Yes, on a Mac with Apple silicon and macOS 26 or newer. See [Install Empo](/install#mac).
+
+The Mac app has the same library. Each game opens in its own window, and you can play more than
+one game at a time. Play with a keyboard or a controller. To find your games and saves, open
+**Empo → Settings → Advanced**, and click **Show in Finder**.
+
 ## Why can I play only one game per session?
 
-This applies to RPG Maker XP, VX, VX Ace and PSDK games. The engine keeps one Ruby interpreter
+This applies to RPG Maker XP, VX, VX Ace and PSDK games on an iPhone or an iPad. A Mac does not
+have this limit. The engine keeps one Ruby interpreter
 for the lifetime of the process, and the interpreter cannot restart cleanly. After you quit one
 of these games, close Empo from the app switcher and open it again.
 

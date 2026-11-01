@@ -2,17 +2,17 @@
 
 # <p align="center"><a href="https://discord.gg/m3YnpXMxrB">Empo</a></p>
 
-> <p align="center">Run RPG Maker and PSDK games on iPhone and iPad.</p>
+> <p align="center">Run RPG Maker and PSDK games on iPhone, iPad, and Mac.</p>
 
 <p align="center">
   <a href="#license"><img alt="License" src="https://img.shields.io/badge/license-GPLv3-blue.svg" /></a>
   <a href="#status"><img alt="Status" src="https://img.shields.io/badge/status-pre--release-yellow.svg" /></a>
-  <a href="#requirements"><img alt="Platform" src="https://img.shields.io/badge/platform-iOS%2026%2B-lightgrey.svg" /></a>
+  <a href="#requirements"><img alt="Platform" src="https://img.shields.io/badge/platform-iOS%2026%2B%20%7C%20macOS%2026%2B-lightgrey.svg" /></a>
 </p>
 
 <p align="center"><a href="https://discord.gg/m3YnpXMxrB">Discord</a></p>
 
-Empo is a game launcher for iPhone and iPad. It runs RPG Maker XP, VX, VX Ace, MV, and MZ games, Pokemon Essentials games, and PSDK games. RPG Maker games run on [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), an iOS fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine. PSDK games run on [psdk-apple-mobile](https://github.com/mateo-m/psdk-apple-mobile), an iOS build of LiteRGSS2 and SFML with one Ruby for each PSDK release type. RPG Maker MV and MZ games bring their own JavaScript engine, and run in a web view.
+Empo is a game launcher for iPhone, iPad, and Mac. It runs RPG Maker XP, VX, VX Ace, MV, and MZ games, Pokemon Essentials games, and PSDK games. RPG Maker games run on [mkxp-z-apple-mobile](https://github.com/mateo-m/mkxp-z-apple-mobile), a fork of the [mkxp-z](https://github.com/mkxp-z/mkxp-z) engine for Apple devices. PSDK games run on [psdk-apple-mobile](https://github.com/mateo-m/psdk-apple-mobile), a build of LiteRGSS2 and SFML for Apple devices, with one Ruby for each PSDK release type. RPG Maker MV and MZ games bring their own JavaScript engine, and run in a web view.
 
 The name's from _emporos_, ancient Greek for a traveler riding on someone else's ship.
 
@@ -59,6 +59,8 @@ The app works end to end with RGSS1/2/3 games, modern mkxp-z forks, and PSDK gam
 
 Each tagged release on the [Releases page](https://github.com/mateo-m/empo-app/releases) includes pre-built unsigned `.ipa` files. Install them with [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or [Sideloadly](https://sideloadly.io).
 
+The release also has a disk image for a Mac with Apple silicon and macOS 26 or newer. Apple has not notarized it, so macOS blocks it the first time you open it. [Install Empo](https://empo.mateo.sh/install#mac) shows how to allow it.
+
 AltStore/SideStore users can add Empo as a source for native update notifications:
 
 ```text
@@ -67,7 +69,7 @@ https://raw.githubusercontent.com/mateo-m/empo-app/main/altstore-source.json
 
 ### Limitations
 
-- **One game per session.** After you exit a Ruby game (RPG Maker XP, VX, VX Ace or PSDK), close Empo from the app switcher and reopen it to start a different one. MV and MZ games do not have this limit. This limit stays until Ruby can clear its state reliably. See [`ios/Empo/docs/multi-session.md`](ios/Empo/docs/multi-session.md).
+- **One game per session on iPhone and iPad.** After you exit a Ruby game (RPG Maker XP, VX, VX Ace or PSDK), close Empo from the app switcher and reopen it to start a different one. MV and MZ games do not have this limit. This limit stays until Ruby can clear its state reliably. See [`ios/Empo/docs/multi-session.md`](ios/Empo/docs/multi-session.md).
 - **Ogg and Theora movies only.** The engine skips MP4 and other formats without a message.
 - **Windows-only code.** Some games call Windows functions that the engine's `win32_wrap.rb` does not copy. Those games can fail to load some files.
 
