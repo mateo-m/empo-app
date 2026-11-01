@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.0 - 2026-11-01
+
+### Bug Fixes
+
+- Prepare for App Store review (#217) ([`18c3b0b`](https://github.com/mateo-m/empo-app/commit/18c3b0bbab59cd65453b328b142141ac16dca8d9))
+- Build ruby 3.1 without getattrlist and fgetattrlist (mateo-m/mkxp-z-apple-mobile#64) ([`6aabcc0`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6aabcc09b574f60fe6c4332bbadcc3a0de4c892c))
+- Build ruby without getattrlist and fgetattrlist (mateo-m/psdk-apple-mobile#4) ([`c0e14e6`](https://github.com/mateo-m/psdk-apple-mobile/commit/c0e14e64691123d3993f284f3f9872924fc79189))
+
+### Features
+
+- MacOS support (#218) ([`18dc25e`](https://github.com/mateo-m/empo-app/commit/18dc25e63ce27a4e94d6c921042bc4a9c757b2ce))
+- Build the engine for the Mac (mateo-m/mkxp-z-apple-mobile#65) ([`5728f4e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/5728f4ec10c9617de5a5aeef1b80ae60f367f196))
+- Build and release the core for macOS (mateo-m/mvmz-apple-mobile#2) ([`529a804`](https://github.com/mateo-m/mvmz-apple-mobile/commit/529a804f400bd4518cd45a94dbe5a8d9788dfb70))
+- Build the core for the Mac and ship it in the release (mateo-m/psdk-apple-mobile#5) ([`9ffb79a`](https://github.com/mateo-m/psdk-apple-mobile/commit/9ffb79ac2d373cef24fce1675b48949a81737451))
+
 ## 0.9.1 - 2026-10-31
 
 ### Release
