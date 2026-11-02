@@ -340,8 +340,11 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     private func setPaused(_ paused: Bool) {
         guard paused != isPaused, !gameEnded else { return }
         isPaused = paused
+        // `handleAction` refuses a press while paused, but the controller
+        // still holds it. Without this, its release after the resume
+        // would end the fast forward hold of another button.
+        controllers.releaseAllHeldInputs()
         if paused {
-            controllers.releaseAllHeldInputs()
             core.requestPause()
         } else {
             core.requestResume()
