@@ -6,11 +6,25 @@ import GameProbe
 import Observation
 import SwiftUI
 
-/// Session runtime state the player actions act on. It covers fast
-/// forward, cheats, and the per-game `RuntimeFlag` settings the
-/// engine re-reads while it runs. It used to live as `@State` in
-/// `PlayerView`, but SwiftUI recycles that view on pause/resume
-/// while the engine's multiplier is process-static.
+/// The engine calls that the player actions make. The iOS app links
+/// the engine. Empo Player on the Mac opens it from a core file.
+struct PlayerEngine {
+    let fastForwardMultiplier: () -> Int
+    let setFastForwardMultiplier: (Int) -> Void
+    let setCheatsEnabled: (Bool) -> Void
+    let tapKey: (_ scancode: Int32, _ holdMilliseconds: Int) -> Void
+
+    /// For a screen that shows the actions while no game runs.
+    static var none: PlayerEngine {
+        PlayerEngine(
+            fastForwardMultiplier: { 1 }, setFastForwardMultiplier: { _ in }, setCheatsEnabled: { _ in },
+            tapKey: { _, _ in })
+    }
+}
+
+/// Session runtime state the player actions act on. SwiftUI recycles
+/// `PlayerView` on pause/resume while the engine's multiplier is
+/// process-static, so this does not live in the view.
 /// The bridge is the source of truth. This model re-derives from it
 /// at every safe point and on every activation, never from a cached
 /// flag.
@@ -23,33 +37,31 @@ final class PlayerRuntimeState {
     /// Per-game multiplier from Game Settings. nil = fast forward is
     /// off for this game and the fast-forward actions are unavailable.
     private(set) var fastForwardMultiplier: Int?
+    private(set) var cheatsAvailable = false
 
     private var arbiter = FastForwardArbiter()
-    private var container: GameContainer?
+    private let engine: PlayerEngine
+
+    init(engine: PlayerEngine) {
+        self.engine = engine
+    }
 
     var fastForwardAvailable: Bool {
-        (fastForwardMultiplier ?? 0) >= 2
+        FastForwardArbiter.usableMultiplier(fastForwardMultiplier) != nil
     }
 
-    /// Binds the model to the running game and adopts bridge state.
-    func bind(container: GameContainer?) {
-        self.container = container
+    /// Binds the model to a new session and adopts bridge state. A
+    /// nil multiplier turns fast forward off for the game.
+    func bind(fastForwardMultiplier: Int?, cheatsAvailable: Bool) {
         arbiter = FastForwardArbiter()
-        reconcile()
+        self.cheatsAvailable = cheatsAvailable
+        reconcile(fastForwardMultiplier: fastForwardMultiplier)
     }
 
-    /// Re-reads the per-game runtime settings and adopts the bridge
-    /// state. Safe points only: session start, resume, More-sheet
-    /// open. The arbiter refuses to adopt mid-hold, so an in-progress
-    /// hold cannot convert into a latch.
-    ///
-    /// This is the one place a `RuntimeFlag` setting re-reaches the
-    /// engine mid-session. The settings sheet only opens from the
-    /// library, so every runtime edit happens while the game is
-    /// paused and this call picks it up on resume.
-    func reconcile() {
-        GameSettings.assertRuntimeFieldsHaveAppliers()
-        reloadPerGameSettings()
+    /// The arbiter refuses to adopt the bridge state mid-hold, so an
+    /// in-progress hold cannot convert into a latch.
+    func reconcile(fastForwardMultiplier: Int?) {
+        self.fastForwardMultiplier = fastForwardMultiplier
         let outcome = arbiter.reconcile(
             configuredMultiplier: fastForwardMultiplier,
             bridgeMultiplier: bridgeMultiplier()
@@ -107,43 +119,19 @@ final class PlayerRuntimeState {
         refreshFastForwardActive()
     }
 
-    // MARK: - Cheats
-
-    /// The engine's cheat scripts open their menu on HOME while the
-    /// bridge flag is on.
-    func showCheats() {
-        gamecore_setCheatsEnabled(true)
-        // The KEYUP must land at least one RGSS tick after the
-        // KEYDOWN or Input.trigger?(HOME) never sees the edge.
-        EngineSessionCoordinator.shared.injectKeyTap(
-            scancode: Int32(GAMECORE_SCANCODE_HOME), holdMilliseconds: 100)
-    }
-
     // MARK: - Bridge
-
-    private func reloadPerGameSettings() {
-        guard let container else {
-            fastForwardMultiplier = nil
-            return
-        }
-        let settings = GameSettings.load(from: container.empoStateURL)
-        fastForwardMultiplier = settings.speedMultiplier
-        // `eventthread.cpp` reads this atomic on every synthesized
-        // mouse event, so the next frame sees the new value.
-        gamecore_setTouchMouseEnabled(settings.touchMouseEnabled)
-    }
 
     private func refreshFastForwardActive() {
         fastForwardActive = bridgeMultiplier() > 1
     }
 
     private func bridgeMultiplier() -> Int {
-        Int(gamecore_getFastForwardMultiplier())
+        engine.fastForwardMultiplier()
     }
 
     private func apply(_ write: Int?) {
         guard let write else { return }
-        gamecore_setFastForwardMultiplier(Int32(write))
+        engine.setFastForwardMultiplier(write)
     }
 }
 
@@ -152,7 +140,29 @@ final class PlayerRuntimeState {
 /// `ControllerInputManager`.
 @MainActor
 final class PlayerActionRegistry {
-    let runtime = PlayerRuntimeState()
+    let runtime: PlayerRuntimeState
+
+    private let engine: PlayerEngine
+
+    init(engine: PlayerEngine) {
+        self.engine = engine
+        runtime = PlayerRuntimeState(engine: engine)
+    }
+
+    /// The actions this app runs. Empo Player on the Mac has no touch
+    /// controls.
+    static let actionIDs: Set<String> = {
+        #if os(macOS)
+        [
+            EmpoActionCatalog.fastForwardHold, EmpoActionCatalog.fastForwardToggle,
+            EmpoActionCatalog.pauseMenu,
+            EmpoActionCatalog.toggleCheats,
+        ]
+        #else
+        EmpoActionCatalog.allIDs
+        #endif
+    }()
+    static let actions = EmpoActionCatalog.all.filter { actionIDs.contains($0.id) }
 
     /// Wired by the player scene on appear.
     var pauseMenu: () -> Void = {}
@@ -178,7 +188,7 @@ final class PlayerActionRegistry {
         }
     }
 
-    /// Lazy: `pauseMenu`/`toggleTouchControls` capture self, so the
+    /// Lazy: `pauseMenu` and `toggleTouchControls` capture self, so the
     /// closures read the wiring the player scene sets after init.
     private lazy var behaviors: [String: ActionBehavior] = [
         EmpoActionCatalog.fastForwardHold: ActionBehavior(
@@ -193,7 +203,15 @@ final class PlayerActionRegistry {
         EmpoActionCatalog.pauseMenu: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.pauseMenu() }),
         EmpoActionCatalog.toggleCheats: ActionBehavior(
-            handle: Self.pressOnly { [runtime] in runtime.showCheats() }),
+            isAvailable: { [runtime] in runtime.cheatsAvailable },
+            handle: Self.pressOnly { [engine] in
+                // The engine's cheat scripts open their menu on HOME while
+                // the bridge flag is on. The KEYUP must land at least one
+                // RGSS tick after the KEYDOWN or Input.trigger?(HOME) never
+                // sees the edge.
+                engine.setCheatsEnabled(true)
+                engine.tapKey(Int32(GAMECORE_SCANCODE_HOME), 100)
+            }),
         EmpoActionCatalog.toggleTouchControls: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.toggleTouchControls() }),
     ]
@@ -202,7 +220,7 @@ final class PlayerActionRegistry {
     /// unavailable action's touch button hides during play. A
     /// controller binding to one stays inert.
     func isAvailable(_ actionID: String) -> Bool {
-        behaviors[actionID]?.isAvailable() ?? EmpoActionCatalog.allIDs.contains(actionID)
+        Self.actionIDs.contains(actionID) && behaviors[actionID]?.isAvailable() ?? false
     }
 
     /// A latched toggle shows its engaged state on the button face.

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import GameProbe
 import SwiftUI
 
 /// Bottom sheet of secondary in-game actions reachable from the
@@ -25,17 +26,14 @@ struct PlayerMoreSheet: View {
     /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
     let showControllerRemap: Bool
-    /// The core running the game. Rows the core cannot answer stay
-    /// hidden. Nil before a core opens, which the sheet never sees,
-    /// because the toolbar that opens it only exists during a session.
-    let core: (any GameCore)?
     let onControllerRemap: () -> Void
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
     /// Nil hides the Quit row, for a game that can't end without
     /// closing Empo.
     let onQuit: (() -> Void)?
-    let onCheats: () -> Void
+    /// Nil hides the Show cheats row, for a game that has no cheats.
+    let onCheats: (() -> Void)?
 
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
@@ -44,7 +42,7 @@ struct PlayerMoreSheet: View {
     @State private var confirmQuit = false
 
     private var fastForwardEnabled: Bool {
-        (fastForwardMultiplier ?? 0) >= 2
+        FastForwardArbiter.usableMultiplier(fastForwardMultiplier) != nil
     }
 
     private var pauseLabel: LocalizedStringResource {
@@ -69,7 +67,7 @@ struct PlayerMoreSheet: View {
                     InterleavedRows(
                         separator: { rowSeparator },
                         content: {
-                            if core?.supportsCheats == true {
+                            if let onCheats {
                                 MenuRow(icon: "wand.and.stars", label: "Show cheats") {
                                     onCheats()
                                     dismiss()
