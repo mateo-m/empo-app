@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.3 - 2026-11-02
+
+### Features
+
+- Give PSDK games $userAgent and $empo (#225) ([`793820f`](https://github.com/mateo-m/empo-app/commit/793820fc08a0b3a3754450a65d52f7db76608222))
+- Map controller buttons in the Mac app (#227) ([`9a24783`](https://github.com/mateo-m/empo-app/commit/9a247830671f8c27730675643b41096fa8492785))
+
 ## 0.10.2 - 2026-11-01
 
 ### Bug Fixes
