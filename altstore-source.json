@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.10.3",
+          "buildVersion": "799",
+          "date": "2026-11-02",
+          "localizedDescription": "New\n• Give PSDK games $userAgent and $empo\n• Map controller buttons in the Mac app",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.10.3/Empo-ios.ipa",
+          "size": 65507118,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.10.2",
           "buildVersion": "794",
           "date": "2026-11-01",
