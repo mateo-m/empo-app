@@ -113,20 +113,22 @@ public struct FastForwardArbiter: Equatable, Sendable {
     }
 
     /// Adopts the bridge state at a safe point (session start, resume,
-    /// sheet open). While a hold is active the arbiter keeps its own
-    /// state: adopting mid-hold would convert the hold into a latch.
+    /// sheet open, a settings change). While a hold is active the
+    /// arbiter keeps its own state: adopting mid-hold would convert the
+    /// hold into a latch. A new speed applies at once all the same.
     public mutating func reconcile(
         configuredMultiplier: Int?,
         bridgeMultiplier: Int
     ) -> ReconcileOutcome {
-        if holdCount > 0 {
-            return ReconcileOutcome(write: nil, active: bridgeMultiplier > 1)
-        }
         let bridgeActive = bridgeMultiplier > 1
         guard let configured = Self.usableMultiplier(configuredMultiplier) else {
             latched = false
             // Settings turned fast forward off. Stop a running engine.
             return ReconcileOutcome(write: bridgeActive ? 1 : nil, active: false)
+        }
+        if holdCount > 0 {
+            let speedChanged = bridgeActive && bridgeMultiplier != configured
+            return ReconcileOutcome(write: speedChanged ? configured : nil, active: bridgeActive)
         }
         latched = bridgeActive
         // Push the configured value back so an in-pause settings edit
