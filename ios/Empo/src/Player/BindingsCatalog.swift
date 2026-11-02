@@ -249,27 +249,70 @@ enum BindingsCatalog {
         }
     }
 
-    /// Rows for the keyboard section: the keys bound in this scope,
-    /// in key-table order. A controller in keyboard mode has no
-    /// elements to list, only the keys it sends.
-    static func keyRows(scope: Scope, container: GameContainer?, manifest: BindingMap?) -> [Row] {
-        let bound = Set(mergedMap(scope: scope, container: container, manifest: manifest).keys.map(\.name))
-        return KeyCodeTable.allCodes
-            .filter { bound.contains($0) }
-            .map { Row(source: .key($0), label: label(for: .key($0))) }
-    }
+    /// The bindings of one scope, read from disk once for a screen update.
+    @MainActor
+    struct SavedBindings {
+        private let scope: Scope
+        private let manifest: BindingMap?
+        private let global: BindingMap?
+        private let perGame: BindingMap?
+        private let merged: [BindingSource: ControlsTarget]
 
-    private static func mergedMap(
-        scope: Scope,
-        container: GameContainer?,
-        manifest: BindingMap?
-    ) -> [BindingSource: ControlsTarget] {
-        switch scope {
-        case .thisGame:
-            return BindingResolver.resolve(
-                layers: BindingLayers.overrideLayers(for: container, manifest: manifest))
-        case .allGames:
-            return BindingResolver.resolve(layers: [BindingStore.loadGlobal()].compactMap { $0 })
+        init(scope: Scope, container: GameContainer?, manifest: BindingMap?) {
+            self.scope = scope
+            self.manifest = manifest
+            let global = BindingStore.loadGlobal()
+            self.global = global
+            switch scope {
+            case .thisGame:
+                let perGame = container.flatMap(BindingStore.loadPerGame)
+                self.perGame = perGame
+                merged = BindingResolver.resolve(
+                    layers: BindingLayers.overrideLayers(global: global, manifest: manifest, perGame: perGame)
+                )
+            case .allGames:
+                perGame = nil
+                merged = BindingResolver.resolve(layers: [global].compactMap { $0 })
+            }
+        }
+
+        var hasOverrides: Bool {
+            (scope == .thisGame ? perGame : global) != nil
+        }
+
+        /// Rows for the keyboard section: the keys bound in this scope,
+        /// in key-table order. A controller in keyboard mode has no
+        /// elements to list, only the keys it sends.
+        var keyRows: [Row] {
+            let bound = Set(merged.keys.map(\.name))
+            return KeyCodeTable.allCodes
+                .filter { bound.contains($0) }
+                .map { Row(source: .key($0), label: BindingsCatalog.label(for: .key($0))) }
+        }
+
+        func target(for source: BindingSource) -> BindingMap.Target? {
+            switch merged[source] {
+            case nil where source.isElement:
+                // The merge drops an unbound element.
+                return .unbound
+            case .action(let id)?
+            where EmpoActionCatalog.action(id: id) != nil && !PlayerActionRegistry.actionIDs.contains(id):
+                return .unbound
+            case let target:
+                return target
+            }
+        }
+
+        func provenance(for source: BindingSource) -> Provenance? {
+            switch scope {
+            case .thisGame:
+                if perGame?.entries[source] != nil { return .userOverride }
+                if manifest?.entries[source] != nil { return .gameDefault }
+                if global?.entries[source] != nil { return nil }
+                return .empoDefault
+            case .allGames:
+                return global?.entries[source] != nil ? .userOverride : .empoDefault
+            }
         }
     }
 
@@ -290,46 +333,6 @@ enum BindingsCatalog {
         case .unbound:
             return String(localized: "None", comment: "A controller button that does nothing.")
         }
-    }
-
-    static func provenance(
-        source: BindingSource,
-        scope: Scope,
-        container: GameContainer?,
-        manifest: BindingMap?
-    ) -> Provenance? {
-        switch scope {
-        case .thisGame:
-            if let container,
-                let perGame = BindingStore.loadPerGame(container: container),
-                perGame.entries[source] != nil
-            {
-                return .userOverride
-            }
-            if let manifest, manifest.entries[source] != nil {
-                return .gameDefault
-            }
-            if let global = BindingStore.loadGlobal(), global.entries[source] != nil {
-                return nil
-            }
-            return .empoDefault
-        case .allGames:
-            if let global = BindingStore.loadGlobal(), global.entries[source] != nil {
-                return .userOverride
-            }
-            return .empoDefault
-        }
-    }
-
-    static func resolvedTarget(
-        source: BindingSource,
-        scope: Scope,
-        container: GameContainer?,
-        manifest: BindingMap?
-    ) -> BindingMap.Target? {
-        let target = mergedMap(scope: scope, container: container, manifest: manifest)[source]
-        if case .action(let id) = target, !PlayerActionRegistry.actionIDs.contains(id) { return .unbound }
-        return target
     }
 
     static func save(
@@ -384,16 +387,6 @@ enum BindingsCatalog {
             BindingStore.deletePerGame(container: container)
         case .allGames:
             BindingStore.deleteGlobal()
-        }
-    }
-
-    static func hasOverrides(scope: Scope, container: GameContainer?) -> Bool {
-        switch scope {
-        case .thisGame:
-            guard let container else { return false }
-            return BindingStore.loadPerGame(container: container) != nil
-        case .allGames:
-            return BindingStore.loadGlobal() != nil
         }
     }
 

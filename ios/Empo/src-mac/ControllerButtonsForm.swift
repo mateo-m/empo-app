@@ -18,17 +18,13 @@ struct ControllerButtonsForm: View {
     private var container: GameContainer? { game?.container }
     private var listener: ControllerPressListener { .shared }
 
-    private var sections: [BindingsCatalog.Section] {
+    private var saved: BindingsCatalog.SavedBindings {
         _ = refreshToken
-        return BindingsCatalog.sections(includingOptional: listener.optionalElements)
-    }
-
-    private var hasOverrides: Bool {
-        _ = refreshToken
-        return BindingsCatalog.hasOverrides(scope: scope, container: container)
+        return BindingsCatalog.SavedBindings(scope: scope, container: container, manifest: manifest)
     }
 
     var body: some View {
+        let saved = self.saved
         ScrollViewReader { proxy in
             Form {
                 Section {
@@ -36,15 +32,15 @@ struct ControllerButtonsForm: View {
                         .foregroundStyle(.secondary)
                 }
 
-                ForEach(sections) { section in
+                ForEach(BindingsCatalog.sections(includingOptional: listener.optionalElements)) { section in
                     Section(section.title) {
                         ForEach(section.elements) { row in
-                            buttonRow(row).id(row.id)
+                            buttonRow(row, saved: saved).id(row.id)
                         }
                     }
                 }
 
-                if hasOverrides {
+                if saved.hasOverrides {
                     Section {
                         LabeledContent {
                             Button("Reset", role: .destructive) { showResetConfirm = true }
@@ -76,11 +72,9 @@ struct ControllerButtonsForm: View {
         }
     }
 
-    private func buttonRow(_ row: BindingsCatalog.Row) -> some View {
-        let target = BindingsCatalog.resolvedTarget(
-            source: row.source, scope: scope, container: container, manifest: manifest)
-        let provenance = BindingsCatalog.provenance(
-            source: row.source, scope: scope, container: container, manifest: manifest)
+    private func buttonRow(_ row: BindingsCatalog.Row, saved: BindingsCatalog.SavedBindings) -> some View {
+        let target = saved.target(for: row.source)
+        let provenance = saved.provenance(for: row.source)
         // The Mac settings for all games open with no game, so no game
         // can lack an action there.
         let choices = BindingsCatalog.targetChoices(

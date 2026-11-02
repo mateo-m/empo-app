@@ -41,12 +41,13 @@ struct BindingsView: View {
             includingOptional: input.controller.exposedOptionalElements)
     }
 
-    private var keyRows: [BindingsCatalog.Row] {
+    private var saved: BindingsCatalog.SavedBindings {
         _ = refreshToken
-        return BindingsCatalog.keyRows(scope: scope, container: container, manifest: manifest)
+        return BindingsCatalog.SavedBindings(scope: scope, container: container, manifest: manifest)
     }
 
     var body: some View {
+        let saved = self.saved
         NavigationStack {
             VStack(spacing: 0) {
                 Picker("Applies to", selection: $scope) {
@@ -63,16 +64,16 @@ struct BindingsView: View {
                         ForEach(sections) { section in
                             Section(section.title) {
                                 ForEach(section.elements) { row in
-                                    bindingRow(row).id(row.id)
+                                    bindingRow(row, saved: saved).id(row.id)
                                 }
                             }
                         }
 
                         if input.keyboard.hasHadKeyboardThisSession {
-                            keyboardSection
+                            keyboardSection(saved)
                         }
 
-                        if BindingsCatalog.hasOverrides(scope: scope, container: container) {
+                        if saved.hasOverrides {
                             Section {
                                 Button("Reset to defaults", role: .destructive) {
                                     showResetConfirm = true
@@ -103,12 +104,7 @@ struct BindingsView: View {
                 case .choosingTarget(let row):
                     BindingTargetPicker(
                         source: row.source,
-                        current: BindingsCatalog.resolvedTarget(
-                            source: row.source,
-                            scope: scope,
-                            container: container,
-                            manifest: manifest
-                        ),
+                        current: saved.target(for: row.source),
                         scope: scope,
                         actions: actions
                     ) { target in
@@ -155,11 +151,10 @@ struct BindingsView: View {
         .tint(.brand)
     }
 
-    @ViewBuilder
-    private var keyboardSection: some View {
+    private func keyboardSection(_ saved: BindingsCatalog.SavedBindings) -> some View {
         Section {
-            ForEach(keyRows) { row in
-                bindingRow(row).id(row.id)
+            ForEach(saved.keyRows) { row in
+                bindingRow(row, saved: saved).id(row.id)
             }
             Button {
                 step = .capturingKey
@@ -179,19 +174,9 @@ struct BindingsView: View {
     }
 
     @ViewBuilder
-    private func bindingRow(_ row: BindingsCatalog.Row) -> some View {
-        let target = BindingsCatalog.resolvedTarget(
-            source: row.source,
-            scope: scope,
-            container: container,
-            manifest: manifest
-        )
-        let provenance = BindingsCatalog.provenance(
-            source: row.source,
-            scope: scope,
-            container: container,
-            manifest: manifest
-        )
+    private func bindingRow(_ row: BindingsCatalog.Row, saved: BindingsCatalog.SavedBindings) -> some View {
+        let target = saved.target(for: row.source)
+        let provenance = saved.provenance(for: row.source)
         let bindingLabel = BindingsCatalog.displayName(for: target)
 
         Button {

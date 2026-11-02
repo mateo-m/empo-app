@@ -8,6 +8,14 @@ import GameProbe
 @MainActor
 enum BindingLayers {
     static func overrideLayers(for container: GameContainer?, manifest: BindingMap?) -> [BindingMap] {
-        [BindingStore.loadGlobal(), manifest, container.flatMap(BindingStore.loadPerGame)].compactMap { $0 }
+        overrideLayers(
+            global: BindingStore.loadGlobal(), manifest: manifest,
+            perGame: container.flatMap(BindingStore.loadPerGame))
+    }
+
+    static func overrideLayers(
+        global: BindingMap?, manifest: BindingMap?, perGame: BindingMap?
+    ) -> [BindingMap] {
+        [global, manifest, perGame].compactMap { $0 }
     }
 }
