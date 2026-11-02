@@ -35,16 +35,27 @@ private struct GameSettingsForm: View {
     var body: some View {
         NavigationStack {
             Form {
-                if GameLauncher.shared.isPlaying(game) {
+                if let launched = GameLauncher.shared.launchedSettings(of: game),
+                    let hint = model.restartHint(since: launched)
+                {
                     Section {
-                        Label(
-                            "Restart this game to apply your changes.",
-                            systemImage: "arrow.clockwise.circle.fill"
-                        )
+                        Label {
+                            Text(hint)
+                        } icon: {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                        }
                         .foregroundStyle(.secondary)
                     }
                 }
                 model.core?.settingsPage(model)
+                Section {
+                    NavigationLink("Controller buttons") {
+                        ControllerButtonsForm(
+                            game: game, fastForwardMultiplier: model.settings.speedMultiplier
+                        )
+                        .navigationTitle("Controller buttons")
+                    }
+                }
                 ResetSettingsSection(model: model, gameTitle: game.title)
             }
             .formStyle(.grouped)
@@ -53,7 +64,10 @@ private struct GameSettingsForm: View {
         .navigationTitle(game.title)
         .navigationSubtitle("Settings")
         .tint(.brand)
-        .onChange(of: model.settings) { model.save() }
+        .onChange(of: model.settings) {
+            model.save()
+            GameLauncher.shared.sendLiveSettings()
+        }
         .onDisappear { model.save() }
     }
 }

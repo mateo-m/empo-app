@@ -63,6 +63,7 @@ protocol GameCore {
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning?
 
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)?
+    @MainActor func launchedSettings(for container: GameContainer) -> (any CoreLaunchedSettings)?
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults
     /// The folder under `Documents/Data/` that the app gives the game for
     /// its saves, as path components. Two games with the same folder
@@ -100,6 +101,7 @@ extension GameCore {
     func launch(_ container: GameContainer) {}
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? { nil }
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)? { nil }
+    @MainActor func launchedSettings(for container: GameContainer) -> (any CoreLaunchedSettings)? { nil }
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults { GameDisplayDefaults() }
     func sharedDataFolder(for container: GameContainer) -> [String]? { nil }
     func infoRows(for container: GameContainer) async -> [InfoRow] { [] }
@@ -162,6 +164,10 @@ enum GameCores {
 
     static func core(forGameAt url: URL, fileManager: FileManager = .default) -> (any GameCore)? {
         all.first { $0.isGameRoot(url, fileManager: fileManager) }
+    }
+
+    static func supportsCheats(in container: GameContainer?) -> Bool {
+        container.flatMap { core(forGameAt: $0.gameURL) }?.supportsCheats ?? false
     }
 
     /// The first picture in `Graphics/Titles`, where RGSS and PSDK games

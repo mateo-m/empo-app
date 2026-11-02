@@ -123,6 +123,9 @@ final class EmpoMacAppDelegate: NSObject, NSApplicationDelegate {
         // Each game reads the newest file when it starts.
         CABundleStore.refreshIfStale {}
         MacUpdates.shared.checkIfStale()
+        #if DEBUG
+        UITestVirtualController.connectIfRequested()
+        #endif
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

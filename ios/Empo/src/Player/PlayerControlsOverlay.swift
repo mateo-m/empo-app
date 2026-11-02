@@ -215,7 +215,7 @@ struct PlayerControlsOverlay: View {
             )
             .overlay(alignment: .bottom) {
                 if editMode && !isPreview && !actions.isAvailable(button.action) {
-                    Text("Turn this on in this game's settings")
+                    Text(BindingsCatalog.unavailableActionNote(button.action, in: .editModeBadge))
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)

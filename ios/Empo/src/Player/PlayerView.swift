@@ -357,7 +357,7 @@ struct PlayerView: View {
             actions.pauseMenu = { appState.togglePauseMenu() }
             actions.toggleTouchControls = { toggleHideControls() }
             actions.log = { line in
-                layout.currentContainer?.appendLogLine(line, fileName: "controls.json.log")
+                layout.currentContainer?.appendLogLine(line, fileName: UserControlsFile.logFileName)
             }
             input.actionHandler = { id, pressed in
                 actions.handle(id, pressed: pressed)
@@ -373,7 +373,7 @@ struct PlayerView: View {
             // Fires on first launch AND on resume from pause ->
             // library -> resume (engine state is process-static).
             actions.runtime.bind(container: layout.currentContainer)
-            input.applyBindings(container: layout.currentContainer)
+            applyBindings()
             input.start(overlayHidden: $controlsHidden, editMode: $editMode)
 
             // Pick up the pause snapshot and hold it until the engine
@@ -400,11 +400,11 @@ struct PlayerView: View {
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
         .onChange(of: layout.currentContainer) { _, container in
-            input.applyBindings(container: container)
+            applyBindings()
             actions.runtime.bind(container: container)
         }
         .onReceive(NotificationCenter.default.publisher(for: .bindingsDidChange)) { _ in
-            input.applyBindings(container: layout.currentContainer)
+            applyBindings()
         }
         .onReceive(NotificationCenter.default.publisher(for: .gameAreaTouchBegan)) { _ in
             resetToolbarIdleTimer()
@@ -424,12 +424,12 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
-                core: EngineSessionCoordinator.shared.openedCore,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { sheetAction = .pause },
                 onQuit: appState.canQuitGame ? { sheetAction = .quit } : nil,
-                onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
+                onCheats: actions.isAvailable(EmpoActionCatalog.toggleCheats)
+                    ? { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) } : nil
             )
         }
         .sheet(isPresented: $showLayoutProfilePicker) {
@@ -454,7 +454,7 @@ struct PlayerView: View {
             // pick that up. If they turned it off entirely, the row
             // should disappear.
             guard opened else { return }
-            actions.runtime.reconcile()
+            actions.runtime.reconcile(container: layout.currentContainer)
         }
         .tint(nil)
         .controlsEditDialogs(
@@ -740,6 +740,10 @@ struct PlayerView: View {
     /// The pause and the quit remove this view. When they run while
     /// the More sheet is still on screen, SwiftUI can keep the view
     /// after the game ended, so they wait until the sheet is gone.
+    private func applyBindings() {
+        input.applyBindings(container: layout.currentContainer, manifest: layout.activeManifest?.bindings)
+    }
+
     private func runSheetAction() {
         let action = sheetAction
         sheetAction = nil

@@ -10,6 +10,7 @@ struct GameSettingsView: View {
     /// settings do not reach a paused game, so the sheet then shows a
     /// "restart required" hint after an edit.
     @Environment(\.pauseManager) private var pauseManager
+    @Environment(\.appState) private var appState
 
     @State private var model: GameSettingsModel
 
@@ -18,20 +19,13 @@ struct GameSettingsView: View {
         _model = State(initialValue: GameSettingsModel(game: game))
     }
 
-    /// The hint names the settings that wait for a relaunch, such as
-    /// "Restart this game to apply: Smooth scaling and Render scale."
     private var restartHint: Hint? {
-        guard pauseManager.pausedGame?.id == game.id else { return nil }
-        let changed = model.restartRequiredChanges
-        guard !changed.isEmpty else { return nil }
-        let list = changed.formatted(.list(type: .and, width: .standard))
+        guard pauseManager.pausedGame?.id == game.id, let launched = appState.launchedSettings,
+            let excerpt = model.restartHint(since: launched)
+        else { return nil }
         return Hint(
             id: "gameSettings.restartRequired",
-            excerpt: LocalizedStringResource(
-                "Restart this game to apply: \(list).",
-                comment:
-                    "The placeholder is a list of setting names, such as \"Smooth scaling and Render scale\"."
-            ),
+            excerpt: excerpt,
             description: nil,
             dismissal: .none,
             icon: "arrow.clockwise.circle.fill"

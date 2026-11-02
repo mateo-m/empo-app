@@ -8,8 +8,9 @@ import AppKit
 @MainActor
 enum PlayerMenu {
     static let windowMenuTag = 1
+    private static let fastForwardTag = 2
 
-    static func make(gameTitle: String, fastForward: Int?) -> NSMenu {
+    static func make(gameTitle: String, fastForward: Int?, cheats: Bool) -> NSMenu {
         let bar = NSMenu()
 
         bar.addItem(
@@ -36,16 +37,17 @@ enum PlayerMenu {
                         #selector(NSApplication.terminate(_:)), "q"),
                 ]))
 
-        var gameItems = [item(String(localized: "Pause"), #selector(PlayerAppDelegate.togglePause(_:)), "p")]
-        if let fastForward {
+        let fastForwardItem = item("", #selector(PlayerAppDelegate.toggleFastForward(_:)))
+        fastForwardItem.tag = fastForwardTag
+        var gameItems = [
+            item(String(localized: "Pause"), #selector(PlayerAppDelegate.togglePause(_:)), "p"),
+            fastForwardItem,
+        ]
+        if cheats {
             gameItems.append(
                 item(
-                    String(
-                        localized: "Fast Forward (\(fastForward)×)",
-                        comment:
-                            "Menu item that turns fast forward on and off. The placeholder is the speed, such as 4."
-                    ),
-                    #selector(PlayerAppDelegate.toggleFastForward(_:)), "f"))
+                    String(localized: "Show Cheats", comment: "Menu item that opens the game's cheat menu."),
+                    #selector(PlayerAppDelegate.showCheats(_:))))
         }
         bar.addItem(
             submenu(
@@ -72,7 +74,19 @@ enum PlayerMenu {
             ])
         window.tag = windowMenuTag
         bar.addItem(window)
+        update(bar, fastForward: fastForward)
         return bar
+    }
+
+    /// Nil hides the Fast Forward item.
+    static func update(_ bar: NSMenu, fastForward: Int?) {
+        guard let item = bar.items.lazy.compactMap({ $0.submenu?.item(withTag: fastForwardTag) }).first
+        else { return }
+        item.isHidden = fastForward == nil
+        item.keyEquivalent = fastForward == nil ? "" : "f"
+        item.title = String(
+            localized: "Fast Forward (\(fastForward ?? 0)×)",
+            comment: "Menu item that turns fast forward on and off. The placeholder is the speed, such as 4.")
     }
 
     private static func submenu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {

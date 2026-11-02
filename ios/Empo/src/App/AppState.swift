@@ -21,6 +21,7 @@ class AppState {
 
     var phase: GamePhase?
     var selectedGame: GameEntry?
+    private(set) var launchedSettings: LaunchedSettings?
     var errorMessage: String?
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
     /// The core blocks its game thread until the user dismisses
@@ -90,6 +91,7 @@ class AppState {
             return
         }
         selectedGame = game
+        launchedSettings = start.launchedSettings
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
         ControlsLayout.shared.switchGame(id: game.id, container: start.container, title: game.title)
@@ -362,6 +364,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         resumeTask?.cancel()
         resumeTask = nil
         selectedGame = nil
+        launchedSettings = nil
         // Unbind the controls layout. Library-screen UI that reads
         // it then sees a neutral default, and mutations (they should
         // not occur, but still) do not write to the last-played

@@ -331,9 +331,6 @@ class ControlsLayout {
         return (isPortrait ? postReset.portrait : postReset.landscape).placement == nil
     }
 
-    private static let controlsManifestLogFile = "controls.json.log"
-    private static let separationLogFile = "controls.json.log"
-
     /// Dedupes display-time separation log lines per layout + geometry signature.
     private var separationLogSignature: String?
 
@@ -1428,7 +1425,7 @@ class ControlsLayout {
                 separationLogSignature = signature
                 container.appendLogLine(
                     "controls: separated \(result.movedCount) overlapping buttons",
-                    fileName: Self.separationLogFile
+                    fileName: UserControlsFile.logFileName
                 )
             }
         }
@@ -1596,7 +1593,7 @@ class ControlsLayout {
         let store = LayoutProfilesManager.store
         let loaded = store.loadPin(forGameFolder: container.url)
         if let note = loaded.note {
-            container.appendLogLine(note, fileName: Self.controlsManifestLogFile)
+            container.appendLogLine(note, fileName: UserControlsFile.logFileName)
         }
 
         var pinnedRead: LayoutProfileStore.ProfileRead?
@@ -2146,73 +2143,17 @@ class ControlsLayout {
             return
         }
 
-        let result = outcome.result
-        activeManifestSource = result.location
+        activeManifestSource = outcome.result.location
         let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
-
-        if let note = outcome.note {
-            logsContainer.appendLogLine(
-                Self.logLine(for: note),
-                fileName: Self.controlsManifestLogFile
-            )
-            if note != .rootSkippedBecauseEmpoExists
-                && note != .kirinSkippedBecauseManifestExists
-                && note != .joiplaySkippedBecauseOtherSourceExists
-            {
-                return
-            }
+        for line in outcome.logLines {
+            logsContainer.appendLogLine(line, fileName: UserControlsFile.logFileName)
         }
-
-        if result.ignoredNewerVersion {
-            logsContainer.appendLogLine(
-                "controls.json: Ignored manifest with version > 1",
-                fileName: Self.controlsManifestLogFile
-            )
-            return
-        }
-
-        let logPrefix: String =
-            switch result.location {
-            case .kirin: "kirin-touch-controls.json:"
-            case .joiplay: "gamepad.json:"
-            default: "controls.json:"
-            }
-        for finding in result.findings {
-            let severity = finding.severity == .error ? "error" : "warning"
-            let line =
-                "\(logPrefix) [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
-            logsContainer.appendLogLine(line, fileName: Self.controlsManifestLogFile)
-        }
-
-        if let manifest = result.manifest {
+        if let manifest = outcome.result.manifest {
             activeManifest = manifest
             return
         }
 
-        manifestRejectionErrorCount = result.findings.filter { $0.severity == .error }.count
-    }
-
-    private static func logLine(for note: ControlsManifestLoader.LoadOutcome.Note) -> String {
-        switch note {
-        case .rootSkippedBecauseEmpoExists:
-            return
-                "controls.json: Skipped controls.json at game root, using empo/controls.json"
-        case .rootUnclaimedNoVersion:
-            return
-                "controls.json: Ignored controls.json at game root (no version key, so not an Empo manifest)"
-        case .rootUnclaimedNotObject:
-            return
-                "controls.json: Ignored controls.json at game root (not a JSON object, so not an Empo manifest)"
-        case .rootUnclaimedOversized:
-            return
-                "controls.json: Ignored controls.json at game root (larger than 128 KiB, so not an Empo manifest)"
-        case .kirinSkippedBecauseManifestExists:
-            return
-                "kirin-touch-controls.json: Skipped (an Empo controls manifest takes precedence)"
-        case .joiplaySkippedBecauseOtherSourceExists:
-            return
-                "gamepad.json: Skipped (a controls manifest or Kirin layout takes precedence)"
-        }
+        manifestRejectionErrorCount = outcome.result.findings.filter { $0.severity == .error }.count
     }
 
     private func applyResolvedLayout() {

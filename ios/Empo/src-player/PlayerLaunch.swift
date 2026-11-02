@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import Foundation
+import GameProbe
 
 /// What Empo tells Empo Player about the game to run. Empo passes it
 /// as JSON after `--launch`.
@@ -21,8 +22,9 @@ struct PlayerLaunch: Codable {
     let settings: [Setting]
     let debugLogPath: String?
     let caBundlePath: String?
-    let fastForwardMultiplier: Int?
     let iconPath: String?
+    let supportsCheats: Bool
+    let live: PlayerLiveSettings
 
     static let argument = "--launch"
     /// Empo Player opens the core at the path after it, then ends with
@@ -41,6 +43,15 @@ struct PlayerLaunch: Codable {
         guard let index = arguments.firstIndex(of: argument), index + 1 < arguments.count else { return nil }
         return try JSONDecoder().decode(PlayerLaunch.self, from: Data(arguments[index + 1].utf8))
     }
+}
+
+/// The settings that a running game takes without a restart. When one
+/// changes, Empo writes all of them to the standard input of Empo
+/// Player as one JSON line.
+struct PlayerLiveSettings: Codable {
+    /// Oldest first.
+    let bindingLayers: [BindingMap]
+    let fastForwardMultiplier: Int?
 }
 
 extension GameCoreVerticalAlignment: @retroactive Codable {}

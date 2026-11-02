@@ -18,6 +18,11 @@ public struct FastForwardArbiter: Equatable, Sendable {
 
     public init() {}
 
+    /// Fast forward is on for a game when its multiplier is 2 or more.
+    public static func usableMultiplier(_ configuredMultiplier: Int?) -> Int? {
+        configuredMultiplier.flatMap { $0 >= 2 ? $0 : nil }
+    }
+
     /// The multiplier to write to the bridge, or nil for no write.
     public typealias Write = Int?
 
@@ -25,7 +30,7 @@ public struct FastForwardArbiter: Equatable, Sendable {
         configuredMultiplier: Int?,
         bridgeMultiplier: Int
     ) -> Write {
-        guard let configured = configuredMultiplier, configured >= 2 else { return nil }
+        guard let configured = Self.usableMultiplier(configuredMultiplier) else { return nil }
         holdCount += 1
         return configured
     }
@@ -39,7 +44,7 @@ public struct FastForwardArbiter: Equatable, Sendable {
         if holdCount > 0 { return nil }
         if latched {
             // Latch wins: keep the configured speed after the hold ends.
-            guard let configured = configuredMultiplier, configured >= 2 else {
+            guard let configured = Self.usableMultiplier(configuredMultiplier) else {
                 latched = false
                 return 1
             }
@@ -52,7 +57,7 @@ public struct FastForwardArbiter: Equatable, Sendable {
         configuredMultiplier: Int?,
         bridgeMultiplier: Int
     ) -> Write {
-        guard let configured = configuredMultiplier, configured >= 2 else {
+        guard let configured = Self.usableMultiplier(configuredMultiplier) else {
             latched = false
             return bridgeMultiplier > 1 ? 1 : nil
         }
@@ -86,7 +91,7 @@ public struct FastForwardArbiter: Equatable, Sendable {
         guard holdCount > 0 else { return nil }
         holdCount = 0
         if latched {
-            guard let configured = configuredMultiplier, configured >= 2 else {
+            guard let configured = Self.usableMultiplier(configuredMultiplier) else {
                 latched = false
                 return 1
             }
@@ -108,20 +113,22 @@ public struct FastForwardArbiter: Equatable, Sendable {
     }
 
     /// Adopts the bridge state at a safe point (session start, resume,
-    /// sheet open). While a hold is active the arbiter keeps its own
-    /// state: adopting mid-hold would convert the hold into a latch.
+    /// sheet open, a settings change). While a hold is active the
+    /// arbiter keeps its own state: adopting mid-hold would convert the
+    /// hold into a latch. A new speed applies at once all the same.
     public mutating func reconcile(
         configuredMultiplier: Int?,
         bridgeMultiplier: Int
     ) -> ReconcileOutcome {
-        if holdCount > 0 {
-            return ReconcileOutcome(write: nil, active: bridgeMultiplier > 1)
-        }
         let bridgeActive = bridgeMultiplier > 1
-        guard let configured = configuredMultiplier, configured >= 2 else {
+        guard let configured = Self.usableMultiplier(configuredMultiplier) else {
             latched = false
             // Settings turned fast forward off. Stop a running engine.
             return ReconcileOutcome(write: bridgeActive ? 1 : nil, active: false)
+        }
+        if holdCount > 0 {
+            let speedChanged = bridgeActive && bridgeMultiplier != configured
+            return ReconcileOutcome(write: speedChanged ? configured : nil, active: bridgeActive)
         }
         latched = bridgeActive
         // Push the configured value back so an in-pause settings edit

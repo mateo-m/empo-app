@@ -23,7 +23,9 @@ struct GameCoreLibrary {
     let injectKeyEvent: @convention(c) (Int32, Int32) -> Void
     let requestPause: @convention(c) () -> Void
     let requestResume: @convention(c) () -> Void
+    let getFastForwardMultiplier: @convention(c) () -> Int32
     let setFastForwardMultiplier: @convention(c) (Int32) -> Void
+    let setCheatsEnabled: @convention(c) (Bool) -> Void
     let signalErrorDismissed: @convention(c) () -> Void
     let signalInfoDismissed: @convention(c) () -> Void
     let setEngineTerminatedCallback: @convention(c) (Callback?, UnsafeMutableRawPointer?) -> Void
@@ -60,7 +62,9 @@ struct GameCoreLibrary {
         injectKeyEvent = try function("injectKeyEvent")
         requestPause = try function("requestPause")
         requestResume = try function("requestResume")
+        getFastForwardMultiplier = try function("getFastForwardMultiplier")
         setFastForwardMultiplier = try function("setFastForwardMultiplier")
+        setCheatsEnabled = try function("setCheatsEnabled")
         signalErrorDismissed = try function("signalErrorDismissed")
         signalInfoDismissed = try function("signalInfoDismissed")
         setEngineTerminatedCallback = try function("setEngineTerminatedCallback")
