@@ -231,23 +231,27 @@ final class PlayerActionRegistry {
 
     /// `pressed` is true on press edges. Hold actions also receive
     /// the release edge. Toggle and instant actions ignore it.
-    func handle(_ actionID: String, pressed: Bool) {
+    /// Returns false when the action refuses a press. The caller must
+    /// then not send its release: the arbiter counts holds, so that
+    /// release would end the hold of another button.
+    @discardableResult
+    func handle(_ actionID: String, pressed: Bool) -> Bool {
         guard EmpoActionCatalog.action(id: actionID) != nil else {
             if pressed {
                 log("Controls: unknown action \(actionID) does nothing")
             }
-            return
+            return false
         }
         // Availability gates press edges only. A release must always
         // reach the arbiter, or a hold whose availability flipped
-        // mid-press would stick (the arbiter self-guards on
-        // holdCount, so spurious releases are safe).
+        // mid-press would stick.
         if pressed, !isAvailable(actionID) {
             log("Controls: action \(actionID) is unavailable for this game")
-            return
+            return false
         }
 
         behaviors[actionID]?.handle(pressed)
+        return true
     }
 
     /// Drops every held action at once. `ControllerInputManager`

@@ -19,7 +19,8 @@ final class ControllerInputManager {
     /// `PlayerActionRegistry.handle`. Hold actions rely on the
     /// release edge. See `releaseAllHeldKeys` for the paths where
     /// release edges cannot arrive.
-    var actionHandler: ((String, Bool) -> Void)?
+    /// Returns false when the action refuses the press.
+    var actionHandler: ((String, Bool) -> Bool)?
 
     /// Runs on physical element press edges (listen mode for the remap UI).
     var elementActivityHandler: ((String) -> Void)?
@@ -484,8 +485,9 @@ final class ControllerInputManager {
                     elementPressScancode[edge.element] = scancode
                     keys.hold(scancode, by: .controller(edge.element))
                 case .action(let name):
-                    elementPressAction[edge.element] = name
-                    actionHandler?(name, true)
+                    if actionHandler?(name, true) == true {
+                        elementPressAction[edge.element] = name
+                    }
                 case .unbound:
                     break
                 }

@@ -20,7 +20,8 @@ import GameProbe
 @MainActor
 final class KeyboardInputManager {
     /// Dispatches action targets: (action id, pressed).
-    var actionHandler: ((String, Bool) -> Void)?
+    /// Returns false when the action refuses the press.
+    var actionHandler: ((String, Bool) -> Bool)?
 
     /// Runs on physical key press edges (listen mode for the remap
     /// UI). The argument is the W3C key code.
@@ -183,8 +184,9 @@ final class KeyboardInputManager {
             case .key(let scancode):
                 press(source: source, scancode: scancode)
             case .action(let name):
-                pressedKeyAction[source] = name
-                actionHandler?(name, true)
+                if actionHandler?(name, true) == true {
+                    pressedKeyAction[source] = name
+                }
             case .unbound:
                 break
             case nil:

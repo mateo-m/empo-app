@@ -64,7 +64,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             cheats: actions.isAvailable(EmpoActionCatalog.toggleCheats))
         NSApp.windowsMenu = NSApp.mainMenu?.item(withTag: PlayerMenu.windowMenuTag)?.submenu
         controllers.actionHandler = { [weak self] action, pressed in
-            self?.handleAction(action, pressed: pressed)
+            self?.handleAction(action, pressed: pressed) ?? false
         }
         applyBindings(launch.live.bindingLayers)
         #if DEBUG
@@ -340,11 +340,8 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     private func setPaused(_ paused: Bool) {
         guard paused != isPaused, !gameEnded else { return }
         isPaused = paused
-        // `handleAction` refuses a press while paused, but the controller
-        // still holds it. Without this, its release after the resume
-        // would end the fast forward hold of another button.
-        controllers.releaseAllHeldInputs()
         if paused {
+            controllers.releaseAllHeldInputs()
             core.requestPause()
         } else {
             core.requestResume()
@@ -364,9 +361,11 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     /// Only Pause works while the game is paused, as in the menu. A
     /// release always goes through, so a held button cannot stick.
-    private func handleAction(_ action: String, pressed: Bool) {
-        guard !gameEnded, !(pressed && isPaused && action != EmpoActionCatalog.pauseMenu) else { return }
-        actions.handle(action, pressed: pressed)
+    private func handleAction(_ action: String, pressed: Bool) -> Bool {
+        guard !gameEnded, !(pressed && isPaused && action != EmpoActionCatalog.pauseMenu) else {
+            return false
+        }
+        return actions.handle(action, pressed: pressed)
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {

@@ -25,6 +25,17 @@ final class PlayerActionRegistryTests: XCTestCase {
         XCTAssertTrue(cheatsEnabled)
     }
 
+    func testPressOfAnUnavailableActionIsRefused() {
+        let registry = PlayerActionRegistry(engine: .none)
+
+        registry.runtime.bind(fastForwardMultiplier: nil, cheatsAvailable: false)
+        XCTAssertFalse(registry.handle(EmpoActionCatalog.fastForwardHold, pressed: true))
+        XCTAssertFalse(registry.handle("$fromANewerEmpo", pressed: true))
+
+        registry.runtime.bind(fastForwardMultiplier: 4, cheatsAvailable: false)
+        XCTAssertTrue(registry.handle(EmpoActionCatalog.fastForwardHold, pressed: true))
+    }
+
     func testUnavailableNoteNamesTheReason() {
         XCTAssertEqual(
             BindingsCatalog.unavailableActionNote(EmpoActionCatalog.toggleCheats, in: .editModeBadge),

@@ -22,7 +22,7 @@ final class SessionInput {
     }
 
     /// Dispatches action targets from either path: (action id, pressed).
-    var actionHandler: ((String, Bool) -> Void)? {
+    var actionHandler: ((String, Bool) -> Bool)? {
         didSet {
             controller.actionHandler = actionHandler
             keyboard.actionHandler = actionHandler
