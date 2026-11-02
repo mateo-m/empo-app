@@ -12,63 +12,24 @@ struct BindingTargetPicker: View {
     let actions: PlayerActionRegistry
     let onSelect: (BindingMap.Target) -> Void
 
-    /// A key can stand in for a controller button, which hands it
-    /// every binding that button already has. An element cannot: a
-    /// chain of elements could loop.
-    private var offersElements: Bool { !source.isElement }
-
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        let choices = BindingsCatalog.targetChoices(
+            for: source, scope: scope, isAvailable: actions.isAvailable)
         NavigationStack {
             List {
                 Section("Actions") {
-                    ForEach(EmpoActionCatalog.all, id: \.id) { action in
-                        let available = actions.isAvailable(action.id)
-                        actionRow(
-                            label: action.localizedName,
-                            blurb: action.localizedBlurb,
-                            note: available ? nil : unavailableNote,
-                            target: .action(action.id),
-                            enabled: available || scope == .allGames
-                        )
-                    }
-                    actionRow(
-                        label: String(
-                            localized: "Do nothing",
-                            comment: "Choice that makes a controller button do nothing."),
-                        target: .unbound
-                    )
+                    ForEach(choices.actions) { choiceRow($0) }
                 }
-
-                if offersElements {
+                if !choices.elements.isEmpty {
                     Section("Controller buttons") {
-                        ForEach(
-                            BindingsCatalog.sections(includingOptional: []), id: \.id
-                        ) { section in
-                            ForEach(section.elements) { row in
-                                actionRow(
-                                    label: row.label,
-                                    blurb: String(
-                                        localized: "Acts as this button",
-                                        comment:
-                                            "Under a controller button name, in the list of what a key can do."
-                                    ),
-                                    target: .element(row.source.name)
-                                )
-                            }
-                        }
+                        ForEach(choices.elements) { choiceRow($0) }
                     }
                 }
-
-                ForEach(KeyCodePickerGroup.allCases, id: \.self) { group in
-                    let codes = KeyCodeTable.codesByPickerGroup[group] ?? []
-                    if !codes.isEmpty {
-                        Section(group.localizedTitle) {
-                            ForEach(codes, id: \.self) { code in
-                                keyRow(code: code, group: group)
-                            }
-                        }
+                ForEach(choices.keyGroups) { group in
+                    Section(group.title) {
+                        ForEach(group.choices) { choiceRow($0) }
                     }
                 }
             }
@@ -84,45 +45,22 @@ struct BindingTargetPicker: View {
         .presentationDragIndicator(.visible)
     }
 
-    private var unavailableNote: String {
-        switch scope {
-        case .thisGame:
-            return String(localized: "Fast forward is off for this game. Turn it on in this game's settings.")
-        case .allGames:
-            return String(
-                localized:
-                    "Fast forward is off for this game. This button works in games that have Fast forward on."
-            )
-        }
-    }
-
-    private func actionRow(
-        label: String,
-        blurb: String? = nil,
-        note: String? = nil,
-        target: BindingMap.Target,
-        enabled: Bool = true
-    ) -> some View {
+    private func choiceRow(_ choice: BindingsCatalog.TargetChoice) -> some View {
         Button {
-            onSelect(target)
+            onSelect(choice.target)
             dismiss()
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(label)
-                    if let blurb {
-                        Text(blurb)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let note {
-                        Text(note)
+                    Text(choice.title)
+                    ForEach([choice.blurb, choice.note].compactMap { $0 }, id: \.self) { line in
+                        Text(line)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                if targetsMatch(current, target) {
+                if current == choice.target {
                     Image(systemName: "checkmark")
                         .foregroundStyle(.brand)
                 }
@@ -130,46 +68,7 @@ struct BindingTargetPicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .opacity(enabled ? 1 : 0.4)
-        .disabled(!enabled)
-    }
-
-    private func keyRow(code: String, group: KeyCodePickerGroup) -> some View {
-        let target: BindingMap.Target = .key(code)
-        let title = KeyCodeTable.displayName(for: code) ?? code
-        let annotation = group == .common ? BindingsCatalog.commonKeyAnnotations[code] : nil
-
-        return Button {
-            onSelect(target)
-            dismiss()
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                    if let annotation {
-                        Text(annotation)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                if targetsMatch(current, target) {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(.brand)
-                }
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func targetsMatch(_ lhs: BindingMap.Target?, _ rhs: BindingMap.Target) -> Bool {
-        switch (lhs, rhs) {
-        case (.key(let a), .key(let b)): return a == b
-        case (.element(let a), .element(let b)): return a == b
-        case (.action(let a), .action(let b)): return a == b
-        case (.unbound, .unbound): return true
-        default: return false
-        }
+        .opacity(choice.enabled ? 1 : 0.4)
+        .disabled(!choice.enabled)
     }
 }

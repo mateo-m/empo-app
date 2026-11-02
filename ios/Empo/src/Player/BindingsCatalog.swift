@@ -26,6 +26,14 @@ enum BindingsCatalog {
         case userOverride
         case gameDefault
         case empoDefault
+
+        var label: LocalizedStringResource? {
+            switch self {
+            case .gameDefault: "Game default"
+            case .empoDefault: "Empo default"
+            case .userOverride: nil
+            }
+        }
     }
 
     struct Section: Identifiable {
@@ -168,7 +176,13 @@ enum BindingsCatalog {
                     label: String(localized: "Options / Select")),
                 Row(
                     source: .element("guide"),
-                    label: String(localized: "Home / Guide (iOS often uses this)")),
+                    label: {
+                        #if os(macOS)
+                        String(localized: "Home / Guide")
+                        #else
+                        String(localized: "Home / Guide (iOS often uses this)")
+                        #endif
+                    }()),
             ]),
     ]
 
@@ -238,8 +252,8 @@ enum BindingsCatalog {
     /// Rows for the keyboard section: the keys bound in this scope,
     /// in key-table order. A controller in keyboard mode has no
     /// elements to list, only the keys it sends.
-    static func keyRows(scope: Scope, container: GameContainer?) -> [Row] {
-        let bound = Set(mergedMap(scope: scope, container: container).keys.map(\.name))
+    static func keyRows(scope: Scope, container: GameContainer?, manifest: BindingMap?) -> [Row] {
+        let bound = Set(mergedMap(scope: scope, container: container, manifest: manifest).keys.map(\.name))
         return KeyCodeTable.allCodes
             .filter { bound.contains($0) }
             .map { Row(source: .key($0), label: label(for: .key($0))) }
@@ -247,11 +261,13 @@ enum BindingsCatalog {
 
     private static func mergedMap(
         scope: Scope,
-        container: GameContainer?
+        container: GameContainer?,
+        manifest: BindingMap?
     ) -> [BindingSource: ControlsTarget] {
         switch scope {
         case .thisGame:
-            return BindingResolver.resolve(layers: BindingLayers.overrideLayers(for: container))
+            return BindingResolver.resolve(
+                layers: BindingLayers.overrideLayers(for: container, manifest: manifest))
         case .allGames:
             return BindingResolver.resolve(layers: [BindingStore.loadGlobal()].compactMap { $0 })
         }
@@ -311,7 +327,9 @@ enum BindingsCatalog {
         container: GameContainer?,
         manifest: BindingMap?
     ) -> BindingMap.Target? {
-        mergedMap(scope: scope, container: container)[source]
+        let target = mergedMap(scope: scope, container: container, manifest: manifest)[source]
+        if case .action(let id) = target, !PlayerActionRegistry.actionIDs.contains(id) { return .unbound }
+        return target
     }
 
     static func save(
@@ -376,6 +394,142 @@ enum BindingsCatalog {
             return BindingStore.loadPerGame(container: container) != nil
         case .allGames:
             return BindingStore.loadGlobal() != nil
+        }
+    }
+
+    static func resetTitle(scope: Scope) -> LocalizedStringResource {
+        scope == .thisGame ? "Reset buttons for this game?" : "Reset buttons for all games?"
+    }
+
+    static func resetFooter(scope: Scope) -> LocalizedStringResource {
+        switch scope {
+        case .thisGame:
+            return "Clears the buttons you changed for this game."
+        case .allGames:
+            return "Clears the buttons you changed for all games. Buttons you changed for one game stay."
+        }
+    }
+
+    /// A button can get an action that this game cannot run when the
+    /// binding is for all games, because other games can run it.
+    static func offersAction(available: Bool, scope: Scope) -> Bool {
+        available || scope == .allGames
+    }
+
+    enum UnavailableNotePlace {
+        case editModeBadge
+        case addButtonSheet
+        case bindingList(Scope)
+    }
+
+    static func unavailableActionNote(_ actionID: String, in place: UnavailableNotePlace) -> String {
+        let cheats = actionID == EmpoActionCatalog.toggleCheats
+        switch place {
+        case .editModeBadge:
+            return cheats
+                ? String(localized: "This game has no cheats.")
+                : String(localized: "Turn this on in this game's settings")
+        case .addButtonSheet:
+            return cheats
+                ? String(localized: "This game has no cheats. The button shows in games that have cheats.")
+                : String(
+                    localized:
+                        "Fast forward is off for this game. The button shows in games that have Fast forward on."
+                )
+        case .bindingList(.thisGame):
+            return cheats
+                ? String(localized: "This game has no cheats.")
+                : String(localized: "Fast forward is off for this game. Turn it on in this game's settings.")
+        case .bindingList(.allGames):
+            return cheats
+                ? String(localized: "This game has no cheats. This button works in games that have cheats.")
+                : String(
+                    localized:
+                        "Fast forward is off for this game. This button works in games that have Fast forward on."
+                )
+        }
+    }
+
+    struct TargetChoice: Identifiable {
+        let title: String
+        var blurb: String?
+        var note: String?
+        let target: BindingMap.Target
+        var enabled = true
+
+        var id: String { "\(target)" }
+    }
+
+    struct TargetChoiceGroup: Identifiable {
+        let title: String
+        let choices: [TargetChoice]
+
+        var id: String { title }
+    }
+
+    /// What a binding row can do, in the order that the picker shows it:
+    /// the actions with "Do nothing", the controller buttons when the
+    /// source is a key, then one group for each kind of key.
+    static func targetChoices(
+        for source: BindingSource,
+        scope: Scope,
+        isAvailable: (String) -> Bool
+    ) -> (actions: [TargetChoice], elements: [TargetChoice], keyGroups: [TargetChoiceGroup]) {
+        let actionChoices =
+            PlayerActionRegistry.actions.map { action in
+                let available = isAvailable(action.id)
+                return TargetChoice(
+                    title: action.localizedName,
+                    blurb: action.localizedBlurb,
+                    note: available ? nil : unavailableActionNote(action.id, in: .bindingList(scope)),
+                    target: .action(action.id),
+                    enabled: offersAction(available: available, scope: scope))
+            } + [
+                TargetChoice(
+                    title: String(
+                        localized: "Do nothing", comment: "Choice that makes a controller button do nothing."),
+                    target: .unbound)
+            ]
+        // A key can stand in for a controller button, which hands it
+        // every binding that button already has. An element cannot: a
+        // chain of elements could loop.
+        let elementChoices =
+            source.isElement
+            ? []
+            : sections(includingOptional: []).flatMap(\.elements).map { row in
+                TargetChoice(
+                    title: row.label,
+                    blurb: String(
+                        localized: "Acts as this button",
+                        comment: "Under a controller button name, in the list of what a key can do."),
+                    target: .element(row.source.name))
+            }
+        let keyGroups = KeyCodePickerGroup.allCases.compactMap { group -> TargetChoiceGroup? in
+            let codes = KeyCodeTable.codesByPickerGroup[group] ?? []
+            guard !codes.isEmpty else { return nil }
+            return TargetChoiceGroup(
+                title: group.localizedTitle,
+                choices: codes.map { code in
+                    TargetChoice(
+                        title: KeyCodeTable.displayName(for: code) ?? code,
+                        blurb: group == .common ? commonKeyAnnotations[code] : nil,
+                        target: .key(code))
+                })
+        }
+        return (actionChoices, elementChoices, keyGroups)
+    }
+
+    static func resetMessage(scope: Scope, gameTitle: String?) -> LocalizedStringResource {
+        switch scope {
+        case .thisGame:
+            if let gameTitle {
+                return
+                    "The buttons you changed for \(gameTitle) go back to their defaults. You can't undo this."
+            }
+            return "The buttons you changed for this game go back to their defaults. You can't undo this."
+        case .allGames:
+            return
+                "The buttons you changed for all games go back to their defaults. Buttons you changed for one game stay. You can't undo this."
         }
     }
 }

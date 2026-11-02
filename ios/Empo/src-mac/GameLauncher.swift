@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import AppKit
+import GameProbe
 import Observation
 
 /// Starts each game in an Empo Player process of its own, and records
@@ -28,13 +29,24 @@ final class GameLauncher {
     private struct Session {
         let gameID: String
         let gameTitle: String
+        let container: GameContainer
+        let launchedSettings: LaunchedSettings
+        let manifestBindings: BindingMap?
         let process: Process
         let logger: SessionLogger
+        let liveChanges: FileHandle
+        /// A write to a full pipe waits until Empo Player reads, so the
+        /// writes run here and not on the main thread.
+        let liveChangesQueue = DispatchQueue(label: "sh.mateo.empo.live-settings")
     }
 
     private var sessions: [String: Session] = [:]
 
-    private init() {}
+    private init() {
+        NotificationCenter.default.addObserver(forName: .bindingsDidChange, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { GameLauncher.shared.sendLiveSettings() }
+        }
+    }
 
     private static let playerURL = Bundle.main.bundleURL
         .appendingPathComponent("Contents/Helpers/Empo Player.app/Contents/MacOS/Empo Player")
@@ -71,6 +83,9 @@ final class GameLauncher {
 
     func isPlaying(_ game: GameEntry) -> Bool { sessions[game.id] != nil }
 
+    /// Nil when the game does not run.
+    func launchedSettings(of game: GameEntry) -> LaunchedSettings? { sessions[game.id]?.launchedSettings }
+
     var playingGameIDs: [String] { Array(sessions.keys) }
 
     func play(_ game: GameEntry) throws {
@@ -87,6 +102,7 @@ final class GameLauncher {
         CoreSettingsRecorder.settings = []
         start.core.launch(start.container)
 
+        let manifestBindings = Self.loadManifestBindings(of: start.container)
         let launch = PlayerLaunch(
             title: game.title,
             corePath: start.coreBinaryURL.path,
@@ -101,21 +117,30 @@ final class GameLauncher {
             settings: CoreSettingsRecorder.settings,
             debugLogPath: logger.logURL?.path,
             caBundlePath: CABundleStore.effectivePath,
-            fastForwardMultiplier: start.settings.speedMultiplier.flatMap { $0 >= 2 ? $0 : nil },
-            iconPath: game.artworkPath)
+            iconPath: game.artworkPath,
+            supportsCheats: start.core.supportsCheats,
+            live: Self.liveSettings(of: start.container, manifest: manifestBindings))
 
         let process = Process()
         process.executableURL = Self.playerURL
         process.arguments = try launch.arguments()
         let messages = Pipe()
         process.standardOutput = messages
+        let liveChanges = Pipe()
+        process.standardInput = liveChanges
+        // A write after the game ended fails with EPIPE, not with a
+        // SIGPIPE that ends Empo.
+        _ = fcntl(liveChanges.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         process.terminationHandler = { process in
             Task { @MainActor in GameLauncher.shared.ended(process) }
         }
         try process.run()
         logger.beginSession(for: game, container: start.container)
         logger.note("\(game.title) starts on \(start.core.framework) \(start.core.version) in Empo Player")
-        sessions[game.id] = Session(gameID: game.id, gameTitle: game.title, process: process, logger: logger)
+        sessions[game.id] = Session(
+            gameID: game.id, gameTitle: game.title, container: start.container,
+            launchedSettings: start.launchedSettings, manifestBindings: manifestBindings,
+            process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting)
         Task { [weak self] in
             do {
                 for try await line in messages.fileHandleForReading.bytes.lines {
@@ -125,6 +150,39 @@ final class GameLauncher {
                 logger.note("Empo cannot read the messages of Empo Player: \(error)")
             }
         }
+    }
+
+    private static func loadManifestBindings(of container: GameContainer) -> BindingMap? {
+        guard let outcome = ControlsManifestLoader.load(gameRoot: container.gameURL) else { return nil }
+        for line in outcome.logLines {
+            container.appendLogLine(line, fileName: UserControlsFile.logFileName)
+        }
+        return outcome.result.manifest?.bindings
+    }
+
+    func sendLiveSettings() {
+        for session in sessions.values {
+            let live = Self.liveSettings(of: session.container, manifest: session.manifestBindings)
+            guard let line = try? JSONEncoder().encode(live) else { continue }
+            let (handle, logger) = (session.liveChanges, session.logger)
+            session.liveChangesQueue.async {
+                do {
+                    try handle.write(contentsOf: line + Data("\n".utf8))
+                } catch {
+                    Task { @MainActor in
+                        logger.note("Empo cannot send the new settings to Empo Player: \(error)")
+                    }
+                }
+            }
+        }
+    }
+
+    private static func liveSettings(of container: GameContainer, manifest: BindingMap?) -> PlayerLiveSettings
+    {
+        PlayerLiveSettings(
+            bindingLayers: BindingLayers.overrideLayers(for: container, manifest: manifest),
+            fastForwardMultiplier: FastForwardArbiter.usableMultiplier(
+                GameSettings.load(from: container.empoStateURL).speedMultiplier))
     }
 
     private func session(of process: Process) -> Session? {

@@ -55,6 +55,15 @@ dup2(STDERR_FILENO, STDOUT_FILENO)
 // ends the game.
 _ = fcntl(messages.fileDescriptor, F_SETNOSIGPIPE, 1)
 
-let delegate = MainActor.assumeIsolated { PlayerAppDelegate(launch: launch, core: core, messages: messages) }
+// Empo writes settings changes to standard input. The cores read
+// /dev/null there.
+let liveChanges = FileHandle(fileDescriptor: dup(STDIN_FILENO), closeOnDealloc: true)
+let devNull = open("/dev/null", O_RDONLY)
+dup2(devNull, STDIN_FILENO)
+close(devNull)
+
+let delegate = MainActor.assumeIsolated {
+    PlayerAppDelegate(launch: launch, core: core, messages: messages, liveChanges: liveChanges)
+}
 app.delegate = delegate
 app.run()

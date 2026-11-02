@@ -69,9 +69,9 @@ final class SessionInput {
     }
 
     /// Rebuilds both runtime maps from one merge of the layers.
-    func applyBindings(container: GameContainer?) {
+    func applyBindings(container: GameContainer?, manifest: BindingMap?) {
         let runtime = BindingResolver.resolveRuntime(
-            layers: BindingLayers.overrideLayers(for: container))
+            layers: BindingLayers.overrideLayers(for: container, manifest: manifest))
         controller.updateResolvedMap(runtime.elements)
         keyboard.updateResolvedMap(runtime.keys)
     }

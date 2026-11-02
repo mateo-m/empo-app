@@ -24,6 +24,8 @@ final class ControllerInputManager {
     /// Runs on physical element press edges (listen mode for the remap UI).
     var elementActivityHandler: ((String) -> Void)?
 
+    var connectionHandler: (() -> Void)?
+
     /// When true, edges still update internal state but do not inject keys
     /// or dispatch host actions (remap screen is frontmost). When
     /// suppression begins, the manager releases the keys held at that
@@ -149,7 +151,11 @@ final class ControllerInputManager {
             }
         }
 
-        for controller in GCController.controllers() {
+        var controllers = GCController.controllers()
+        #if DEBUG
+        controllers += [UITestVirtualController.controller].compactMap { $0 }
+        #endif
+        for controller in controllers {
             attach(controller)
         }
     }
@@ -225,7 +231,7 @@ final class ControllerInputManager {
 
     private func attach(_ controller: GCController) {
         guard sessionActive else { return }
-        #if DEBUG && os(iOS)
+        #if DEBUG
         guard UITestVirtualController.admits(controller) else { return }
         #endif
         logDevice(controller)
@@ -244,6 +250,7 @@ final class ControllerInputManager {
         overlay?.update {
             $0.setExtendedController(hasExtendedController, isFirstController: priorCount == 0)
         }
+        connectionHandler?()
     }
 
     private func detach(_ controller: GCController) {
@@ -262,6 +269,7 @@ final class ControllerInputManager {
         } else if hadExtendedController != hasExtendedController {
             overlay?.update { $0.setExtendedController(hasExtendedController) }
         }
+        connectionHandler?()
     }
 
     private var hasExtendedController: Bool {

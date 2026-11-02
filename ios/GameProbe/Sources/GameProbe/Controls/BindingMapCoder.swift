@@ -109,3 +109,16 @@ public enum BindingMapCoder {
         ControllerElement.allElements.map { .element($0) }
         + KeyCodeTable.allCodes.map { .key($0) }
 }
+
+/// The JSON form of `BindingMapCoder.encode`, for `Codable` messages.
+extension BindingMap: Codable {
+    public init(from decoder: Decoder) throws {
+        let object = try decoder.singleValueContainer().decode([String: String?].self)
+        self = BindingMapCoder.decode(object.mapValues { $0.map { $0 as Any } ?? NSNull() })
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(BindingMapCoder.encode(self).mapValues { $0 as? String })
+    }
+}

@@ -452,7 +452,6 @@ targets:
           - App/EngineState.swift
           - App/GameSession.swift
           - App/PauseManager.swift
-          - App/UITestVirtualController.swift
           - App/AppState.swift
           - App/CrashTracker.swift
           - App/GameReport.swift
@@ -486,6 +485,16 @@ targets:
         type: group
       - path: src-player/PlayerLaunch.swift
         group: src-player
+      - path: src/Player/BindingLayers.swift
+      - path: src/Player/BindingResetViews.swift
+      - path: src/Player/BindingStore.swift
+      - path: src/Player/BindingsCatalog.swift
+      - path: src/Player/ControllerInputManager.swift
+      - path: src/Player/EmpoAction+Localized.swift
+      - path: src/Player/OverlayVisibilityController.swift
+      - path: src/Player/PlayerRuntimeState.swift
+      - path: src/Player/PressedRowHighlight.swift
+      - path: src/Player/UserControlsFile.swift
       - path: src/App/GitInfo.generated.swift
         optional: true
       - path: PrivacyInfo.xcprivacy
@@ -559,6 +568,8 @@ targets:
           - EmpoPlayer.entitlements
       - path: src/Player/ControllerInputManager.swift
       - path: src/Player/OverlayVisibilityController.swift
+      - path: src/App/UITestVirtualController.swift
+      - path: src/Player/PlayerRuntimeState.swift
       - path: src/App/KeyHolder.swift
       - path: src/App/GameCoreSessionConfig.swift
       - path: Resources/Localizable.xcstrings

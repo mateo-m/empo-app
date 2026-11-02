@@ -11,13 +11,14 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     private let launch: PlayerLaunch
     private let core: GameCoreLibrary
     private let messages: FileHandle
+    private let liveChanges: FileHandle
     private var window: NSWindow
     private let pausedOverlay = PausedOverlay()
     private let controllers: ControllerInputManager
     private var aspectRatio: CGFloat?
     private var isPaused = false
     private var pausedBySystem = false
-    private var isFastForwarding = false
+    private let actions: PlayerActionRegistry
     private var gameEnded = false
     private var reportedError = false
     private var errorAlertsOnScreen = 0
@@ -25,13 +26,22 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     private var adoptedGame = false
     private var endSources: [any DispatchSourceProtocol] = []
 
-    init(launch: PlayerLaunch, core: GameCoreLibrary, messages: FileHandle) {
+    init(launch: PlayerLaunch, core: GameCoreLibrary, messages: FileHandle, liveChanges: FileHandle) {
         self.launch = launch
         self.core = core
         self.messages = messages
+        self.liveChanges = liveChanges
         window = Self.makeWindow(title: launch.title)
-        controllers = ControllerInputManager(
-            keys: HeldKeys(send: { scancode, pressed in core.injectKeyEvent(scancode, pressed ? 1 : 0) }))
+        let keys = HeldKeys<KeyHolder>(send: { scancode, pressed in
+            core.injectKeyEvent(scancode, pressed ? 1 : 0)
+        })
+        actions = PlayerActionRegistry(
+            engine: PlayerEngine(
+                fastForwardMultiplier: { Int(core.getFastForwardMultiplier()) },
+                setFastForwardMultiplier: { core.setFastForwardMultiplier(Int32($0)) },
+                setCheatsEnabled: { core.setCheatsEnabled($0) },
+                tapKey: { keys.tap($0, holdMilliseconds: $1) }))
+        controllers = ControllerInputManager(keys: keys)
     }
 
     private var context: UnsafeMutableRawPointer { Unmanaged.passUnretained(self).toOpaque() }
@@ -41,27 +51,56 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.mainMenu = PlayerMenu.make(gameTitle: launch.title, fastForward: launch.fastForwardMultiplier)
-        NSApp.windowsMenu = NSApp.mainMenu?.item(withTag: PlayerMenu.windowMenuTag)?.submenu
         if let iconPath = launch.iconPath, let icon = NSImage(contentsOfFile: iconPath) {
             NSApp.applicationIconImage = icon
         }
         endWithEmpo()
         startGame()
+        actions.pauseMenu = { [weak self] in self?.togglePause(nil) }
+        actions.runtime.bind(
+            fastForwardMultiplier: launch.live.fastForwardMultiplier, cheatsAvailable: launch.supportsCheats)
+        NSApp.mainMenu = PlayerMenu.make(
+            gameTitle: launch.title, fastForward: actions.runtime.fastForwardMultiplier,
+            cheats: actions.isAvailable(EmpoActionCatalog.toggleCheats))
+        NSApp.windowsMenu = NSApp.mainMenu?.item(withTag: PlayerMenu.windowMenuTag)?.submenu
         controllers.actionHandler = { [weak self] action, pressed in
-            if pressed, action == EmpoActionCatalog.pauseMenu { self?.togglePause(nil) }
+            self?.handleAction(action, pressed: pressed)
         }
-        controllers.updateResolvedMap(Self.gameBindings(gameRoot: URL(fileURLWithPath: launch.gamePath)))
+        applyBindings(launch.live.bindingLayers)
+        #if DEBUG
+        UITestVirtualController.connectIfRequested()
+        #endif
         controllers.start()
+        readLiveChanges()
         NSApp.activate()
     }
 
-    /// The Mac app has no screen to change the controls, so the game's
-    /// own controls file is the only layer over the built-in bindings.
-    private static func gameBindings(gameRoot: URL) -> [String: ResolvedTarget] {
-        let result = ControlsManifestLoader.load(gameRoot: gameRoot)?.result
-        let bindings = result?.ignoredNewerVersion == false ? result?.manifest?.bindings : nil
-        return BindingResolver.resolveRuntime(layers: bindings.map { [$0] } ?? []).elements
+    private func applyBindings(_ layers: [BindingMap]) {
+        controllers.updateResolvedMap(BindingResolver.resolveRuntime(layers: layers).elements)
+    }
+
+    private func readLiveChanges() {
+        Task { [weak self, liveChanges] in
+            do {
+                for try await line in liveChanges.bytes.lines {
+                    do {
+                        self?.apply(try JSONDecoder().decode(PlayerLiveSettings.self, from: Data(line.utf8)))
+                    } catch {
+                        NSLog("[player] cannot read the settings change: %@", "\(error)")
+                    }
+                }
+            } catch {
+                NSLog("[player] cannot read settings changes from Empo: %@", "\(error)")
+            }
+        }
+    }
+
+    private func apply(_ live: PlayerLiveSettings) {
+        guard !gameEnded else { return }
+        applyBindings(live.bindingLayers)
+        guard live.fastForwardMultiplier != actions.runtime.fastForwardMultiplier else { return }
+        actions.runtime.reconcile(fastForwardMultiplier: live.fastForwardMultiplier)
+        if let bar = NSApp.mainMenu { PlayerMenu.update(bar, fastForward: live.fastForwardMultiplier) }
     }
 
     private static func makeWindow(title: String) -> NSWindow {
@@ -313,9 +352,18 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     @objc func toggleFastForward(_ sender: Any?) {
-        guard let multiplier = launch.fastForwardMultiplier else { return }
-        isFastForwarding.toggle()
-        core.setFastForwardMultiplier(Int32(isFastForwarding ? multiplier : 1))
+        actions.runtime.setFastForward(active: !actions.runtime.fastForwardActive)
+    }
+
+    @objc func showCheats(_ sender: Any?) {
+        actions.handle(EmpoActionCatalog.toggleCheats, pressed: true)
+    }
+
+    /// Only Pause works while the game is paused, as in the menu. A
+    /// release always goes through, so a held button cannot stick.
+    private func handleAction(_ action: String, pressed: Bool) {
+        guard !gameEnded, !(pressed && isPaused && action != EmpoActionCatalog.pauseMenu) else { return }
+        actions.handle(action, pressed: pressed)
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
@@ -324,7 +372,9 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             item.title = isPaused ? String(localized: "Resume") : String(localized: "Pause")
             return !gameEnded
         case #selector(toggleFastForward(_:)):
-            item.state = isFastForwarding ? .on : .off
+            item.state = actions.runtime.fastForwardActive ? .on : .off
+            return !gameEnded && !isPaused
+        case #selector(showCheats(_:)):
             return !gameEnded && !isPaused
         default:
             return true
