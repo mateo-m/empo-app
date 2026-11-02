@@ -53,6 +53,22 @@ struct MkxpSettings: GameSettingsGroup {
     var networkAccessEnabled: Bool { networkEnabled ?? true }
 }
 
+struct MkxpLaunchedSettings: CoreLaunchedSettings {
+    let settings: MkxpSettings
+    let engine: MkxpEngineSettings
+
+    init(container: GameContainer) {
+        settings = MkxpSettings.load(from: container.empoStateURL)
+        engine = MkxpEngineSettings.load(from: container.empoStateURL)
+    }
+
+    func restartRequiredChanges(to current: any CoreSettings) -> [String] {
+        guard let current = current as? MkxpSettingsState else { return [] }
+        return current.settings.restartRequiredFieldsChanged(from: settings)
+            + current.engine.restartRequiredFieldsChanged(from: engine)
+    }
+}
+
 @MainActor @Observable
 final class MkxpSettingsState: CoreSettings {
     var settings: MkxpSettings
@@ -63,17 +79,12 @@ final class MkxpSettingsState: CoreSettings {
     let isPokemonEssentials: Bool
 
     @ObservationIgnored private let container: GameContainer
-    @ObservationIgnored private let initial: MkxpSettings
-    @ObservationIgnored private let initialEngine: MkxpEngineSettings
 
     init(container: GameContainer) {
         self.container = container
         let settings = MkxpSettings.load(from: container.empoStateURL)
         self.settings = settings
-        self.initial = settings
-        let engine = MkxpEngineSettings.load(from: container.empoStateURL)
-        self.engine = engine
-        self.initialEngine = engine
+        self.engine = MkxpEngineSettings.load(from: container.empoStateURL)
         self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
         self.profile = MkxpProfile.load(for: container)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
@@ -81,11 +92,6 @@ final class MkxpSettingsState: CoreSettings {
     }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
-
-    var restartRequiredChanges: [String] {
-        settings.restartRequiredFieldsChanged(from: initial)
-            + engine.restartRequiredFieldsChanged(from: initialEngine)
-    }
 
     func save() {
         settings.save(to: container.empoStateURL)

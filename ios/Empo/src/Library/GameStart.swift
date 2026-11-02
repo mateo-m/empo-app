@@ -20,6 +20,7 @@ struct GameStart {
     /// them in its own folder.
     let userDataDirectory: URL?
     let settings: GameSettings
+    let launchedSettings: LaunchedSettings
 
     init(game: GameEntry) throws {
         guard let container = game.container, let core = GameCores.core(forGameAt: container.gameURL) else {
@@ -39,5 +40,6 @@ struct GameStart {
             .map(DataDirectory.engineSpelling(of:))
         ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: container.empoStateURL)
         settings = GameSettings.load(from: container.empoStateURL)
+        launchedSettings = LaunchedSettings(settings: settings, core: core.launchedSettings(for: container))
     }
 }
