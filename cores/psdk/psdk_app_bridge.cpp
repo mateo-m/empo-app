@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <climits>
 #include <condition_variable>
 #include <cstdio>
@@ -182,14 +183,68 @@ std::string supportPath() {
     return found ? path : std::string();
 }
 
+// Gives the game $userAgent = "<name>" and $<name> = true. psdk_run
+// takes Ruby code only as a file. Each byte of the name is a \x escape,
+// so no name can end the string early. The file deletes itself when
+// Ruby loads it, because a killed game never gets back here.
+std::string writeLauncherIdentityPrelude() {
+    std::string identity;
+    {
+        std::lock_guard<std::mutex> guard(gLock);
+        identity = gLauncherIdentity;
+    }
+    if (identity.empty()) {
+        return {};
+    }
+
+    std::string ruby = "File.delete(__FILE__) rescue nil\n$userAgent = \"";
+    char escaped[5];
+    for (unsigned char byte : identity) {
+        snprintf(escaped, sizeof(escaped), "\\x%02x", byte);
+        ruby += escaped;
+    }
+    ruby += "\".force_encoding(Encoding::UTF_8)\n";
+
+    bool validIdentifier = isalpha(static_cast<unsigned char>(identity[0])) || identity[0] == '_';
+    for (size_t i = 1; validIdentifier && i < identity.size(); ++i) {
+        validIdentifier = isalnum(static_cast<unsigned char>(identity[i])) || identity[i] == '_';
+    }
+    if (validIdentifier) {
+        ruby += "$" + identity + " = true\n";
+    }
+
+    char tempDir[PATH_MAX];
+    if (confstr(_CS_DARWIN_USER_TEMP_DIR, tempDir, sizeof(tempDir)) == 0) {
+        fprintf(stderr, "[psdk-bridge] no temp folder for the launcher identity\n");
+        return {};
+    }
+    const std::string path = std::string(tempDir) + "psdk-launcher-identity-" + std::to_string(getpid()) + ".rb";
+    FILE *file = fopen(path.c_str(), "w");
+    if (!file) {
+        fprintf(stderr, "[psdk-bridge] cannot write %s\n", path.c_str());
+        return {};
+    }
+    const bool written = fwrite(ruby.data(), 1, ruby.size(), file) == ruby.size();
+    if (fclose(file) != 0 || !written) {
+        fprintf(stderr, "[psdk-bridge] cannot write %s\n", path.c_str());
+        unlink(path.c_str());
+        return {};
+    }
+    return path;
+}
+
 void *runGame(void *) {
     const std::string support = supportPath();
     if (support.empty()) {
         fprintf(stderr, "[psdk-bridge] PsdkSupport is not in the core's bundle\n");
     }
     const char *path = waitForGamePath();
+    // The launcher sets the identity before the game path, so it is
+    // here by now.
+    const std::string prelude = writeLauncherIdentityPrelude();
 
-    int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), nullptr);
+    int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(),
+                          prelude.empty() ? nullptr : prelude.c_str());
     fprintf(stderr, "[psdk-bridge] psdk_run returned %d\n", result);
 
     gExitedCleanly.store(result == PSDK_OK);
