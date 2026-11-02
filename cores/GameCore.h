@@ -204,10 +204,11 @@ void gamecore_injectKeyEvent(int scancode, int pressed);
 // loads fonts from files loads these after the game's own fonts. NULL
 // means no shared folder.
 
-// The launcher's name (UI -> Engine). A core that lets a game ask which
-// launcher runs it gives the game this name. Set it once before the
-// game starts. NULL or "" clears it.
-void gamecore_setLauncherIdentity(const char *name);
+// The launcher's name and version (UI -> Engine). A core that lets a
+// game ask which launcher runs it gives the game these. Set them once
+// before the game starts. A NULL or "" name clears the identity. A NULL
+// or "" version gives the game "unknown".
+void gamecore_setLauncherIdentity(const char *name, const char *version);
 
 // CA certificate bundle (UI -> Engine).
 //

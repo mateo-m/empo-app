@@ -14,7 +14,7 @@ struct GameCoreLibrary {
     let setSetting: @convention(c) (UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Void
     let setDebugLogPath: @convention(c) (UnsafePointer<CChar>?) -> Void
     let setCABundlePath: @convention(c) (UnsafePointer<CChar>?) -> Void
-    let setLauncherIdentity: @convention(c) (UnsafePointer<CChar>?) -> Void
+    let setLauncherIdentity: @convention(c) (UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Void
     let applySessionConfig: @convention(c) (UnsafePointer<GameCoreSessionConfig>?) -> Void
     let resetSessionState: @convention(c) () -> Void
     let setGameControllerCaptureEnabled: @convention(c) (Bool) -> Void
