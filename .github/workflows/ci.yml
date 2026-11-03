@@ -410,6 +410,8 @@ jobs:
       # boot of a new Simulator takes about 30 seconds, so the runner
       # keeps it for the next run.
       - name: Start the app on the runner's Simulator
+        # A Simulator that does not boot holds the runner until this limit.
+        timeout-minutes: 10
         run: |
           APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Empo.app"
           [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
