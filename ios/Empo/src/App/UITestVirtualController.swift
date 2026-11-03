@@ -136,6 +136,7 @@ enum UITestVirtualController {
             SDL_SetJoystickVirtualAxis(
                 joystick, axis, triggers.contains(axis) ? Int16(SDL_JOYSTICK_AXIS_MIN) : 0)
         }
+        SDL_UpdateJoysticks()
     }
 
     private static func disconnect() {
