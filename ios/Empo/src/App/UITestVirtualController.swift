@@ -35,12 +35,15 @@ enum UITestVirtualController {
         case leftStick(x: Float, y: Float)
     }
 
-    private static let commands: [String: Command] = [
-        "a.down": .buttonA(pressed: true),
-        "a.up": .buttonA(pressed: false),
-        "stick.right": .leftStick(x: 1, y: 0),
-        "stick.upright": .leftStick(x: 0.7, y: 0.7),
-        "stick.center": .leftStick(x: 0, y: 0),
+    /// The commands of one entry run in one main thread turn, so a
+    /// press and its release reach the app together.
+    private static let commands: [String: [Command]] = [
+        "a.down": [.buttonA(pressed: true)],
+        "a.up": [.buttonA(pressed: false)],
+        "stick.right": [.leftStick(x: 1, y: 0)],
+        "stick.upright": [.leftStick(x: 0.7, y: 0.7)],
+        "stick.center": [.leftStick(x: 0, y: 0)],
+        "stick.tap": [.leftStick(x: 1, y: 0), .leftStick(x: 0, y: 0)],
     ]
 
     static func connectIfRequested() {
@@ -59,8 +62,8 @@ enum UITestVirtualController {
         let name = String(notification.dropFirst(prefix.count))
         if name == "disconnect" {
             disconnect()
-        } else if let command = commands[name] {
-            apply(command)
+        } else if let commands = commands[name] {
+            commands.forEach(apply)
         }
     }
 
@@ -152,6 +155,10 @@ enum UITestVirtualController {
             SDL_SetJoystickVirtualAxis(
                 joystick, Int32(SDL_GAMEPAD_AXIS_LEFTY.rawValue), Int16(-y * Float(SDL_JOYSTICK_AXIS_MAX)))
         }
+        // A virtual joystick keeps only its newest values until SDL
+        // reads it. The read puts this command in the event queue, as
+        // SDL does with each report of a real pad.
+        SDL_UpdateJoysticks()
     }
     #endif
 }
