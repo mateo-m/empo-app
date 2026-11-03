@@ -30,7 +30,11 @@ jobs:
       BRANCH: deps/update-pins
       TITLE: "build(deps): update the core and ANGLE pins"
     steps:
+      # A manual run from another branch must not put that branch's
+      # commits in the pull request.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
 
       - name: Update the pins and open a pull request
         run: |
