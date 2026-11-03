@@ -82,7 +82,7 @@ struct LicenseEntry: Identifiable, Decodable, Equatable {
             let entries = (try? JSONDecoder().decode([LicenseEntry].self, from: data)) ?? []
             return entries.map { LicenseEntry($0.name, license: $0.license, text: unwrapped($0.text)) }
         }
-        return merged(appLicenses + fromCores)
+        return merged(appLicenses + macLicenses + fromCores)
     }
 
     /// Two cores can ship the same library at two versions, so a name
@@ -265,15 +265,33 @@ private let appLicenses: [LicenseEntry] = [
         text: """
             (C) 1995-2022 Jean-loup Gailly and Mark Adler
 
-            This software is provided 'as-is', without any express or implied warranty.  In no event will the authors be held liable for any damages arising from the use of this software.
-
-            Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:
-
-            1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
-            2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
-            3. This notice may not be removed or altered from any source distribution.
+            \(zlibTerms)
 
             Jean-loup Gailly  Mark Adler
             jloup@gzip.org  madler@alumni.caltech.edu
             """),
 ]
+
+#if os(macOS)
+private let macLicenses: [LicenseEntry] = [
+    LicenseEntry(
+        "SDL", license: "zlib License",
+        text: """
+            Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
+
+            \(zlibTerms)
+            """)
+]
+#else
+private let macLicenses: [LicenseEntry] = []
+#endif
+
+private let zlibTerms = """
+    This software is provided 'as-is', without any express or implied warranty.  In no event will the authors be held liable for any damages arising from the use of this software.
+
+    Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+    2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+    3. This notice may not be removed or altered from any source distribution.
+    """

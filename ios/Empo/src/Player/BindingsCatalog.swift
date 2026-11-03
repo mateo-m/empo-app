@@ -215,6 +215,8 @@ enum BindingsCatalog {
                 label: String(localized: "Touchpad click")),
         ])
 
+    static let optionalElements = Set(extrasSection.elements.map(\.source.name))
+
     static func sections(includingOptional exposed: Set<String>) -> [Section] {
         var result = baseSections
         let extras = extrasSection.elements.filter { exposed.contains($0.source.name) }

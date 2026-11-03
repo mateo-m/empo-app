@@ -27,6 +27,10 @@ struct ControllerButtonsForm: View {
         let saved = self.saved
         ScrollViewReader { proxy in
             Form {
+                if game == nil {
+                    ControllerSetupSection()
+                }
+
                 Section {
                     Label("Press a button on your controller to find it here.", systemImage: "gamecontroller")
                         .foregroundStyle(.secondary)

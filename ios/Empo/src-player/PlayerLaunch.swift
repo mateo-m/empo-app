@@ -52,6 +52,8 @@ struct PlayerLiveSettings: Codable {
     /// Oldest first.
     let bindingLayers: [BindingMap]
     let fastForwardMultiplier: Int?
+    /// The SDL mapping lines from Settings > Controller.
+    let controllerMappings: [String]
 }
 
 extension GameCoreVerticalAlignment: @retroactive Codable {}

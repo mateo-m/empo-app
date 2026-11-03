@@ -401,7 +401,7 @@ final class ControllerInputManagerTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Same scheme as the manager's `controllerID`, so a log line
+    /// Same scheme as the reader's `controllerID`, so a log line
     /// matches its pad by identity.
     private func id(of pad: GCController) -> String {
         String(UInt(bitPattern: ObjectIdentifier(pad)))
@@ -415,24 +415,5 @@ final class ControllerInputManagerTests: XCTestCase {
         pads.append(pad)
         NotificationCenter.default.post(name: .GCControllerDidConnect, object: pad)
         try await waitUntil { self.connectLine(for: pad) != nil }
-    }
-
-    /// The framework queues element handlers on the handler queue and
-    /// the connect observers hop through a Task. Neither offers a
-    /// completion signal, so the tests poll the observable result.
-    private func waitUntil(
-        _ condition: @escaping @MainActor () -> Bool,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async throws {
-        for _ in 0..<200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(condition(), "condition did not hold within 2 s", file: file, line: line)
-    }
-
-    /// Enough main-queue turns for queued handlers to land.
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(100))
     }
 }
