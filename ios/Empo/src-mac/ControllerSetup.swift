@@ -33,7 +33,7 @@ struct ControllerSetupSection: View {
         .onAppear { controllers.start() }
         .onDisappear { controllers.stop() }
         .onChange(of: controllers.all) {
-            if let settingUp, !controllers.all.contains(settingUp) {
+            if let settingUp, !controllers.all.contains(where: { $0.id == settingUp.id }) {
                 self.settingUp = nil
             }
         }
