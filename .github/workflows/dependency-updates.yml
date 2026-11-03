@@ -44,6 +44,13 @@ jobs:
           mapfile -t files < <(git diff --name-only -- "${pins[@]}")
           pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
 
+          # A lookup that failed changes no pin, so the open pull request
+          # can still have the newest one. Leave it as it is.
+          if [ "$status" != 0 ] && [ -n "$pr" ]; then
+              echo "a pin lookup failed, so pull request #$pr stays as it is"
+              exit "$status"
+          fi
+
           if [ "${#files[@]}" = 0 ]; then
               echo "every pin is current"
               if [ -n "$pr" ]; then
