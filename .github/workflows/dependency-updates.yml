@@ -35,43 +35,53 @@ jobs:
       - name: Update the pins and open a pull request
         run: |
           set -euo pipefail
-          changes=$(scripts/update-pins.sh)
-          mapfile -t files < <(git diff --name-only)
+          # A pin that cannot change fails the run at the end, after the
+          # pull request has the pins that can.
+          status=0
+          changes=$(scripts/update-pins.sh) || status=$?
+          [ -z "$changes" ] || printf '%s\n' "$changes"
+          pins=(cores/*/.version ios/Dependencies/ANGLE/.version)
+          mapfile -t files < <(git diff --name-only -- "${pins[@]}")
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+
           if [ "${#files[@]}" = 0 ]; then
               echo "every pin is current"
-              exit 0
+              if [ -n "$pr" ]; then
+                  gh pr close "$pr" --comment "main has these pins now"
+              fi
+              exit "$status"
           fi
-          printf '%s\n' "$changes"
 
+          # A run that stopped after the commit left the branch with the
+          # pins. This run then only adds what is missing.
           if git fetch --depth=1 origin "$BRANCH" 2>/dev/null &&
-              git diff --quiet FETCH_HEAD -- "${files[@]}"; then
+              git diff --quiet FETCH_HEAD -- "${pins[@]}"; then
               echo "$BRANCH already has these pins"
-              exit 0
-          fi
-
-          base=$(git rev-parse HEAD)
-          if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null; then
-              gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" -f sha="$base" -F force=true >/dev/null
+              head=$(git rev-parse FETCH_HEAD)
           else
-              gh api "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base" >/dev/null
+              base=$(git rev-parse HEAD)
+              if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null; then
+                  gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" -f sha="$base" -F force=true >/dev/null
+              else
+                  gh api "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base" >/dev/null
+              fi
+              # The rules ask for a signed commit on every branch. GitHub
+              # signs a commit that this API makes, but not one that git
+              # pushes.
+              head=$(for f in "${files[@]}"; do
+                  jq -n --arg path "$f" --arg contents "$(base64 -w0 "$f")" '{$path, $contents}'
+              done | jq -s \
+                  --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' \
+                  --arg repo "$REPO" --arg branch "$BRANCH" --arg head "$base" --arg headline "$TITLE" \
+                  '{$query, variables: {input: {
+                      branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                      expectedHeadOid: $head,
+                      message: {$headline},
+                      fileChanges: {additions: .}}}}' |
+                  gh api graphql --input - --jq .data.createCommitOnBranch.commit.oid)
           fi
-
-          # The rules ask for a signed commit on every branch. GitHub signs
-          # a commit that this API makes, but not one that git pushes.
-          for f in "${files[@]}"; do
-              jq -n --arg path "$f" --arg contents "$(base64 -w0 "$f")" '{$path, $contents}'
-          done | jq -s \
-              --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' \
-              --arg repo "$REPO" --arg branch "$BRANCH" --arg head "$base" --arg headline "$TITLE" \
-              '{$query, variables: {input: {
-                  branch: {repositoryNameWithOwner: $repo, branchName: $branch},
-                  expectedHeadOid: $head,
-                  message: {$headline},
-                  fileChanges: {additions: .}}}}' |
-              gh api graphql --input - >/dev/null
 
           body="because new core or ANGLE releases are out"$'\n\n'"- ${changes//$'\n'/$'\n'- }"
-          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
           if [ -n "$pr" ]; then
               gh pr edit "$pr" --title "$TITLE" --body "$body"
           else
@@ -81,4 +91,8 @@ jobs:
           # GitHub starts no pull_request run for a push or a pull request
           # that GITHUB_TOKEN makes. A workflow_dispatch run is the
           # exception, and its checks count for the pull request.
-          gh workflow run ci.yml --ref "$BRANCH"
+          ran=$(gh run list --workflow ci.yml --branch "$BRANCH" --commit "$head" --json databaseId --jq '.[0].databaseId // empty')
+          if [ -z "$ran" ]; then
+              gh workflow run ci.yml --ref "$BRANCH"
+          fi
+          exit "$status"
