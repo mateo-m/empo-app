@@ -30,7 +30,7 @@ enum UITestVirtualController {
 
     private static let prefix = "sh.mateo.empo.uitest.pad."
 
-    private enum Command {
+    enum Command {
         case buttonA(pressed: Bool)
         case paddle(pressed: Bool)
         case leftStick(x: Float, y: Float)
@@ -106,33 +106,61 @@ enum UITestVirtualController {
     }
     #else
     private static let isMac = true
-    private static var joystickID: SDL_JoystickID = 0
-    private static var joystick: OpaquePointer?
+    private static var pad: SDLVirtualPad?
 
-    private static var isConnected: Bool { joystick != nil }
+    private static var isConnected: Bool { pad != nil }
 
     static func admits(_ candidate: SDL_JoystickID) -> Bool {
-        mode == nil || (joystickID != 0 && candidate == joystickID)
+        mode == nil || candidate == pad?.id
     }
 
-    /// A virtual pad of type gamepad with no button or axis mask gets
-    /// an SDL mapping where button and axis numbers are the gamepad
-    /// button and axis numbers. A pad of another type gets no mapping.
     private static func connect() {
+        pad = SDLVirtualPad(name: "Empo UI Test Pad", isRecognized: mode != "unmapped")
+    }
+
+    private static func disconnect() {
+        pad?.detach()
+        pad = nil
+    }
+
+    private static func apply(_ command: Command) {
+        pad?.apply(command)
+    }
+    #endif
+}
+
+private func padCommandCallback(
+    _: CFNotificationCenter?, _: UnsafeMutableRawPointer?, name: CFNotificationName?,
+    _: UnsafeRawPointer?, _: CFDictionary?
+) {
+    guard let name = name?.rawValue as String? else { return }
+    // The Darwin center calls back on the main thread.
+    MainActor.assumeIsolated { UITestVirtualController.run(name) }
+}
+
+#if os(macOS)
+/// An SDL virtual joystick with each gamepad button and axis. A
+/// recognized pad gets an SDL mapping where button and axis numbers are
+/// the gamepad button and axis numbers. Another pad gets no mapping.
+@MainActor
+final class SDLVirtualPad {
+    let id: SDL_JoystickID
+    private let joystick: OpaquePointer?
+
+    init(name: String, isRecognized: Bool) {
         _ = SDLControllers.shared
         var desc = SDL_VirtualJoystickDesc()
         // What the SDL_INIT_INTERFACE macro does. Swift cannot call it.
         desc.version = UInt32(MemoryLayout<SDL_VirtualJoystickDesc>.size)
-        desc.type = UInt16(
-            (mode == "unmapped" ? SDL_JOYSTICK_TYPE_UNKNOWN : SDL_JOYSTICK_TYPE_GAMEPAD).rawValue)
+        desc.type = UInt16((isRecognized ? SDL_JOYSTICK_TYPE_GAMEPAD : SDL_JOYSTICK_TYPE_UNKNOWN).rawValue)
         desc.naxes = UInt16(SDL_GAMEPAD_AXIS_COUNT.rawValue)
         desc.nbuttons = UInt16(SDL_GAMEPAD_BUTTON_COUNT.rawValue)
         // SDL copies the name.
-        joystickID = "Empo UI Test Pad".withCString { name in
+        id = name.withCString { name in
             desc.name = name
             return SDL_AttachVirtualJoystick(&desc)
         }
-        joystick = SDL_OpenJoystick(joystickID)
+        joystick = SDL_OpenJoystick(id)
         // SDL takes the first value of an axis as its rest value. A
         // virtual joystick sends a value only when it changes.
         let triggers = [SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER].map {
@@ -145,13 +173,7 @@ enum UITestVirtualController {
         SDL_UpdateJoysticks()
     }
 
-    private static func disconnect() {
-        SDL_CloseJoystick(joystick)
-        joystick = nil
-        SDL_DetachVirtualJoystick(joystickID)
-    }
-
-    private static func apply(_ command: Command) {
+    func apply(_ command: UITestVirtualController.Command) {
         switch command {
         case .buttonA(let pressed):
             SDL_SetJoystickVirtualButton(joystick, Int32(SDL_GAMEPAD_BUTTON_SOUTH.rawValue), pressed)
@@ -169,15 +191,11 @@ enum UITestVirtualController {
         // SDL does with each report of a real pad.
         SDL_UpdateJoysticks()
     }
-    #endif
-}
 
-private func padCommandCallback(
-    _: CFNotificationCenter?, _: UnsafeMutableRawPointer?, name: CFNotificationName?,
-    _: UnsafeRawPointer?, _: CFDictionary?
-) {
-    guard let name = name?.rawValue as String? else { return }
-    // The Darwin center calls back on the main thread.
-    MainActor.assumeIsolated { UITestVirtualController.run(name) }
+    func detach() {
+        SDL_CloseJoystick(joystick)
+        SDL_DetachVirtualJoystick(id)
+    }
 }
+#endif
 #endif

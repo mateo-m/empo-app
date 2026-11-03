@@ -225,9 +225,7 @@ final class ControllerSetup {
     private func press(_ input: Input) {
         let wasIdle = held.isEmpty
         held.insert(input.control)
-        // SDL reads pads also while Empo is in the background, for
-        // example while the user plays a game in Empo Player.
-        guard wasIdle, NSApp.isActive, let step,
+        guard wasIdle, SDLControllers.shared.isAppActive(), let step,
             !inputs.values.contains(where: { $0.control == input.control })
         else { return }
         inputs[step.id] = input

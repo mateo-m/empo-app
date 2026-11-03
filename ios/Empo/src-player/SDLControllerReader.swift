@@ -87,15 +87,14 @@ final class SDLControllerReader {
             close(event.gdevice.which)
             open(event.gdevice.which)
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN.rawValue, SDL_EVENT_GAMEPAD_BUTTON_UP.rawValue:
-            // SDL reads pads also while the app is in the background.
             // The poll when the app becomes active catches up.
-            guard NSApp.isActive, gamepads[event.gbutton.which] != nil,
+            guard SDLControllers.shared.isAppActive(), gamepads[event.gbutton.which] != nil,
                 let element = Self.name(SDL_GamepadButton(Int32(event.gbutton.button)))
             else { return }
             manager.feedButton(
                 controllerID: String(event.gbutton.which), element: element, pressed: event.gbutton.down)
         case SDL_EVENT_GAMEPAD_AXIS_MOTION.rawValue:
-            guard NSApp.isActive, gamepads[event.gaxis.which] != nil else { return }
+            guard SDLControllers.shared.isAppActive(), gamepads[event.gaxis.which] != nil else { return }
             let axis = SDL_GamepadAxis(Int32(event.gaxis.axis))
             axes[event.gaxis.which, default: [:]][axis] = event.gaxis.value
             feedAxis(axis, of: event.gaxis.which)
@@ -111,7 +110,7 @@ final class SDLControllerReader {
     /// Reads the state a controller holds right now. Only the elements
     /// the pad has get fed, so the reducer never sees false releases.
     private func poll(_ id: SDL_JoystickID) {
-        guard NSApp.isActive, let gamepad = gamepads[id] else { return }
+        guard SDLControllers.shared.isAppActive(), let gamepad = gamepads[id] else { return }
         for raw in 0..<SDL_GAMEPAD_BUTTON_COUNT.rawValue {
             let button = SDL_GamepadButton(raw)
             guard SDL_GamepadHasButton(gamepad, button), let element = Self.name(button) else { continue }

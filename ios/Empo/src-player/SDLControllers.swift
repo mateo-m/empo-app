@@ -11,6 +11,11 @@ final class SDLControllers {
     /// mapping line for each controller.
     static let savedMappingsURL = URL.applicationSupportDirectory.appending(path: "controller-mappings.txt")
 
+    /// SDL reads pads also while the app is in the background, for
+    /// example while the user plays a game in Empo Player. A press there
+    /// is not for this app.
+    var isAppActive: () -> Bool = { NSApp.isActive }
+
     private var listeners: [UUID: (SDL_Event) -> Void] = [:]
     private var pump: Timer?
     /// The mapping line that SDL has now for each controller GUID.

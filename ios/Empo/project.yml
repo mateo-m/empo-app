@@ -666,6 +666,7 @@ targets:
     platform: iOS
     sources:
       - Tests
+      - TestsShared
     dependencies:
       - target: Empo
     settings:
@@ -673,6 +674,24 @@ targets:
         TEST_TARGET_NAME: Empo
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
         CODE_SIGNING_ALLOWED: NO
+  EmpoMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - TestsMac
+      - TestsShared
+    dependencies:
+      - target: EmpoMac
+    settings:
+      base:
+        TEST_TARGET_NAME: EmpoMac
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Empo.app/Contents/MacOS/Empo
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mac-tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-player/SDLControllers.h
+        HEADER_SEARCH_PATHS: *sdlHeaders
+        CODE_SIGN_IDENTITY: "-"
 schemes:
   Empo:
     build:
@@ -695,6 +714,11 @@ schemes:
     build:
       targets:
         EmpoMac: all
+        EmpoMacTests: [test]
+    test:
+      config: Debug
+      targets:
+        - EmpoMacTests
     run:
       config: Debug
     archive:
