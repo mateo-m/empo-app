@@ -47,10 +47,13 @@ runs:
         echo "Build data in $DIR"
 
     - name: Install xcodegen
-      # Two runners on one Mac run this at the same time. A second brew
-      # process waits for or fails on the lock of the first one.
+      # Two runners on one Mac run this at the same time, and a second
+      # brew install fails on the lock of the first one.
       shell: bash
-      run: command -v xcodegen >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+      run: |
+        command -v xcodegen >/dev/null ||
+          HOMEBREW_NO_AUTO_UPDATE=1 lockf -k /tmp/empo-ci-brew.lock \
+            sh -c 'command -v xcodegen >/dev/null || brew install xcodegen'
 
     - name: Fetch ANGLE
       shell: bash
