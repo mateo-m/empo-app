@@ -32,6 +32,12 @@ if [ ! -f "$VERSION_FILE" ]; then
     exit 1
 fi
 
+# Xcode and a script can run this at the same time. lockf runs one at a
+# time, and the second then finds ANGLE in place.
+if [ -z "${FETCH_ANGLE_LOCKED:-}" ]; then
+    FETCH_ANGLE_LOCKED=1 exec lockf -k "$ANGLE_DIR.lock" "$0" "$@"
+fi
+
 # shellcheck disable=SC1090
 . "$VERSION_FILE" # sets ANGLE_VERSION, ANGLE_SHA256 and ANGLE_ASSET
 
@@ -50,7 +56,11 @@ if [ -f "$STAMP" ] &&
     exit 0
 fi
 
-TMPDIR="$(mktemp -d)"
+# The work folder is next to ANGLE_DIR, on the same disk, so mv only
+# renames. A run that was killed leaves its work folder, and the lock
+# makes sure that no other run uses one now.
+rm -rf "$ANGLE_DIR".??????
+TMPDIR="$(mktemp -d "$ANGLE_DIR.XXXXXX")"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "fetch-angle: hydrating $ANGLE_VERSION from $DEPS_REPO"
@@ -70,9 +80,17 @@ if [ "$ACTUAL_SHA" != "$ANGLE_SHA256" ]; then
 fi
 
 # The tarball holds <sdk>/include and <sdk>/lib for iphoneos,
-# iphonesimulator and macosx, relative to ANGLE_DIR.
-mkdir -p "$ANGLE_DIR"
-tar -xzf "$TMPDIR/$ANGLE_ASSET" -C "$ANGLE_DIR"
+# iphonesimulator and macosx, relative to ANGLE_DIR. ANGLE_DIR also
+# holds the tracked .version, so each SDK folder is replaced on its own.
+# The stamp goes first, so a run that stops halfway is not trusted.
+mkdir "$TMPDIR/angle"
+tar -xzf "$TMPDIR/$ANGLE_ASSET" -C "$TMPDIR/angle"
+rm -f "$STAMP"
+for SDK_DIR in "$TMPDIR/angle"/*/; do
+    SDK="$(basename "$SDK_DIR")"
+    rm -rf "${ANGLE_DIR:?}/$SDK"
+    mv "$SDK_DIR" "$ANGLE_DIR/$SDK"
+done
 
 echo "$ANGLE_VERSION" >"$STAMP"
 echo "fetch-angle: hydrated $ANGLE_VERSION ($ANGLE_SHA256)"
