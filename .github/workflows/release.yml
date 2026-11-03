@@ -110,9 +110,11 @@ jobs:
 
       - name: Resolve version
         id: version
+        env:
+          INPUT_BUMP: ${{ inputs.bump }}
         run: |
           set -e
-          BUMP="${{ inputs.bump }}"
+          BUMP="$INPUT_BUMP"
           case "$BUMP" in
             major | minor | patch)
               LATEST_TAG=$(git tag --list "v*.*.*" --sort=-v:refname | head -n 1)
@@ -234,7 +236,15 @@ jobs:
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "Releasing v$VERSION (build $BUILD)"
 
-      - uses: ./.github/actions/prepare-xcode-project
+      # A dry run can build a ref from before the shared setup step
+      # existed, so the step comes from this workflow's own commit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-actions
+          sparse-checkout: .github/actions
+
+      - uses: ./.release-actions/.github/actions/prepare-xcode-project
 
       - name: Build Release (iphoneos)
         # Build the SCHEME, not the target. A -target build resolves
@@ -409,10 +419,12 @@ jobs:
     steps:
       - name: Resolve version
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -e
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
+            VERSION="$INPUT_VERSION"
             if [ -z "$VERSION" ]; then
               echo "::error::announce mode needs the version input (e.g. 0.4.0)"
               exit 1
