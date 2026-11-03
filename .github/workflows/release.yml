@@ -245,6 +245,10 @@ jobs:
           sparse-checkout: .github/actions
 
       - uses: ./.release-actions/.github/actions/prepare-xcode-project
+        env:
+          # Older refs have a tools/fetch-angle.sh that downloads ANGLE
+          # with gh, which needs a login.
+          GH_TOKEN: ${{ github.token }}
 
       - name: Build Release (iphoneos)
         # Build the SCHEME, not the target. A -target build resolves
