@@ -13,7 +13,8 @@ final class SDLControllers {
 
     private var listeners: [UUID: (SDL_Event) -> Void] = [:]
     private var pump: Timer?
-    private var addedMappings: Set<String> = []
+    /// The mapping line that SDL has now for each controller GUID.
+    private var appliedMappings: [String: String] = [:]
 
     private init() {
         // SDL catches SIGINT and SIGTERM to post its own quit event, and
@@ -70,11 +71,15 @@ final class SDLControllers {
     /// mapping, also when the line is the same, and a reload reads each
     /// trigger as released.
     func add(mappings: [String]) {
-        for line in mappings where !addedMappings.contains(line) {
+        for line in mappings where appliedMappings[Self.guid(ofMapping: line)] != line {
             if SDL_AddGamepadMapping(line) >= 0 {
-                addedMappings.insert(line)
+                appliedMappings[Self.guid(ofMapping: line)] = line
             }
         }
+    }
+
+    private static func guid(ofMapping line: String) -> String {
+        String(line.prefix { $0 != "," })
     }
 
     /// The connected joysticks, or with `gamepadsOnly` the connected
@@ -100,6 +105,19 @@ final class SDLControllers {
         return String(cString: text)
     }
 
+    private static let optionalButtons: [SDL_GamepadButton] = [
+        SDL_GAMEPAD_BUTTON_LEFT_PADDLE1, SDL_GAMEPAD_BUTTON_LEFT_PADDLE2,
+        SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2,
+        SDL_GAMEPAD_BUTTON_TOUCHPAD,
+    ]
+
+    /// The paddles and the touchpad that the mapping of `gamepad` has.
+    static func optionalElements(of gamepad: OpaquePointer) -> Set<String> {
+        Set(
+            optionalButtons.filter { SDL_GamepadHasButton(gamepad, $0) }
+                .compactMap { SDL_GetGamepadStringForButton($0).map { String(cString: $0) } })
+    }
+
     static func savedMappingLines() -> [String] {
         let text = (try? String(contentsOf: savedMappingsURL, encoding: .utf8)) ?? ""
         return text.split(separator: "\n").map(String.init)
@@ -111,8 +129,8 @@ final class SDLControllers {
         guard SDL_AddGamepadMapping(mapping) >= 0 else {
             throw MappingRefused(reason: String(cString: SDL_GetError()))
         }
-        addedMappings.insert(mapping)
-        let guid = String(mapping.prefix { $0 != "," })
+        let guid = Self.guid(ofMapping: mapping)
+        appliedMappings[guid] = mapping
         var lines = Self.savedMappingLines().filter { !$0.hasPrefix(guid + ",") }
         lines.append(mapping)
         try FileManager.default.createDirectory(

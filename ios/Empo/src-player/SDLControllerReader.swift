@@ -10,12 +10,6 @@ final class SDLControllerReader {
     private var gamepads: [SDL_JoystickID: OpaquePointer] = [:]
     private var listener: UUID?
 
-    private static let optionalButtons: [SDL_GamepadButton] = [
-        SDL_GAMEPAD_BUTTON_LEFT_PADDLE1, SDL_GAMEPAD_BUTTON_LEFT_PADDLE2,
-        SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2,
-        SDL_GAMEPAD_BUTTON_TOUCHPAD,
-    ]
-
     init(manager: ControllerInputManager) {
         self.manager = manager
     }
@@ -48,10 +42,9 @@ final class SDLControllerReader {
         else { return }
         gamepads[id] = gamepad
         logDevice(id, gamepad: gamepad)
-        let optional = Self.optionalButtons.filter { SDL_GamepadHasButton(gamepad, $0) }.compactMap(Self.name)
         manager.padConnected(
             String(id), isExtended: SDL_GamepadHasAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX),
-            optionalElements: Set(optional))
+            optionalElements: SDLControllers.optionalElements(of: gamepad))
         poll(id)
     }
 
@@ -83,7 +76,10 @@ final class SDLControllerReader {
         case SDL_EVENT_GAMEPAD_REMOVED.rawValue:
             close(event.gdevice.which)
         case SDL_EVENT_GAMEPAD_REMAPPED.rawValue:
-            poll(event.gdevice.which)
+            // SDL sends no release for a control that the new mapping
+            // drops. The close releases each held control.
+            close(event.gdevice.which)
+            open(event.gdevice.which)
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN.rawValue, SDL_EVENT_GAMEPAD_BUTTON_UP.rawValue:
             // SDL reads pads also while the app is in the background.
             // The poll when the app becomes active catches up.
@@ -94,7 +90,8 @@ final class SDLControllerReader {
                 controllerID: String(event.gbutton.which), element: element, pressed: event.gbutton.down)
         case SDL_EVENT_GAMEPAD_AXIS_MOTION.rawValue:
             guard NSApp.isActive else { return }
-            feedAxis(SDL_GamepadAxis(Int32(event.gaxis.axis)), of: event.gaxis.which)
+            feedAxis(
+                SDL_GamepadAxis(Int32(event.gaxis.axis)), of: event.gaxis.which, value: event.gaxis.value)
         default:
             break
         }
@@ -107,26 +104,29 @@ final class SDLControllerReader {
     /// Reads the state a controller holds right now. Only the elements
     /// the pad has get fed, so the reducer never sees false releases.
     private func poll(_ id: SDL_JoystickID) {
-        guard let gamepad = gamepads[id] else { return }
+        guard NSApp.isActive, let gamepad = gamepads[id] else { return }
         for raw in 0..<SDL_GAMEPAD_BUTTON_COUNT.rawValue {
             let button = SDL_GamepadButton(raw)
             guard SDL_GamepadHasButton(gamepad, button), let element = Self.name(button) else { continue }
             manager.feedButton(
                 controllerID: String(id), element: element, pressed: SDL_GetGamepadButton(gamepad, button))
         }
-        for axis in [
-            SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_RIGHTX,
-            SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER,
-        ] where SDL_GamepadHasAxis(gamepad, axis) {
+        for raw in 0..<SDL_GAMEPAD_AXIS_COUNT.rawValue {
+            let axis = SDL_GamepadAxis(raw)
+            guard SDL_GamepadHasAxis(gamepad, axis) else { continue }
             feedAxis(axis, of: id)
         }
     }
 
-    private func feedAxis(_ axis: SDL_GamepadAxis, of id: SDL_JoystickID) {
+    /// `value` is the value of an event. The pad's state can be newer
+    /// than the event, and a press and its release in one pump would
+    /// then give no press.
+    private func feedAxis(_ axis: SDL_GamepadAxis, of id: SDL_JoystickID, value event: Int16? = nil) {
         guard let gamepad = gamepads[id] else { return }
         let controllerID = String(id)
-        func value(_ axis: SDL_GamepadAxis) -> Float {
-            max(-1, Float(SDL_GetGamepadAxis(gamepad, axis)) / Float(SDL_JOYSTICK_AXIS_MAX))
+        func value(_ other: SDL_GamepadAxis) -> Float {
+            let raw = (other == axis ? event : nil) ?? SDL_GetGamepadAxis(gamepad, other)
+            return max(-1, Float(raw) / Float(SDL_JOYSTICK_AXIS_MAX))
         }
         switch axis {
         case SDL_GAMEPAD_AXIS_LEFTX, SDL_GAMEPAD_AXIS_LEFTY:

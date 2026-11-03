@@ -122,7 +122,7 @@ final class ControllerSetup {
     }
 
     let controller: ConnectedControllers.Controller
-    let steps: [BindingsCatalog.Row] = BindingsCatalog.sections(includingOptional: []).flatMap(\.elements)
+    let steps: [BindingsCatalog.Row]
     private(set) var stepIndex = 0
     private(set) var inputs: [String: Input] = [:]
     private(set) var saveFailed = false
@@ -135,6 +135,14 @@ final class ControllerSetup {
 
     init(controller: ConnectedControllers.Controller) {
         self.controller = controller
+        // A saved setup replaces the whole mapping, so the steps include
+        // each paddle and the touchpad that the mapping has now.
+        let gamepad = SDL_OpenGamepad(controller.id)
+        defer { SDL_CloseGamepad(gamepad) }
+        steps = BindingsCatalog.sections(
+            includingOptional: gamepad.map(SDLControllers.optionalElements) ?? []
+        )
+        .flatMap(\.elements)
     }
 
     var step: BindingsCatalog.Row? { steps.indices.contains(stepIndex) ? steps[stepIndex] : nil }
@@ -184,9 +192,6 @@ final class ControllerSetup {
     }
 
     private func handle(_ event: SDL_Event) {
-        // SDL reads pads also while Empo is in the background, for
-        // example while the user plays a game in Empo Player.
-        guard NSApp.isActive else { return }
         switch event.type {
         case SDL_EVENT_JOYSTICK_BUTTON_DOWN.rawValue where event.jbutton.which == controller.id:
             press(.button(Int32(event.jbutton.button)))
@@ -224,7 +229,9 @@ final class ControllerSetup {
     private func press(_ input: Input) {
         let wasIdle = held.isEmpty
         held.insert(input.control)
-        guard wasIdle, let step,
+        // SDL reads pads also while Empo is in the background, for
+        // example while the user plays a game in Empo Player.
+        guard wasIdle, NSApp.isActive, let step,
             !inputs.values.contains(where: { $0.control == input.control })
         else { return }
         inputs[step.id] = input
