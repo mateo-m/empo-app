@@ -37,7 +37,8 @@ on:
   workflow_dispatch:
 
 # A new push to a pull request makes its older run useless. A push to
-# main never cancels: each commit on main gets its own result.
+# main never stops a run that has started, but GitHub replaces a run
+# that still waits in the group with the newer one.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -94,7 +95,15 @@ jobs:
           }
           case "$EVENT" in
             pull_request)
-              FILES=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename') ||
+              # The file list stops at 3000 files.
+              COUNT=$(gh api "repos/$REPO/pulls/$PR_NUMBER" --jq .changed_files) || COUNT=
+              if [ -z "$COUNT" ] || [ "$COUNT" -ge 3000 ]; then
+                full_gate "::warning::could not read every changed file: running every job"
+              fi
+              # A moved file counts at its old path too, so a code file
+              # moved into docs/ still runs every job.
+              FILES=$(gh api "repos/$REPO/pulls/$PR_NUMBER/files" --paginate \
+                --jq '.[] | .filename, (.previous_filename // empty)') ||
                 full_gate "::warning::could not read the changed files: running every job"
               ;;
             push)
@@ -120,7 +129,7 @@ jobs:
               esac
               # The compare endpoint lists at most 300 files.
               FILES=$(gh api "repos/$REPO/compare/$BEFORE...$SHA" \
-                --jq 'if (.files | length) < 300 then .files[].filename else error("too many files") end') ||
+                --jq 'if (.files | length) < 300 then .files[] | .filename, (.previous_filename // empty) else error("too many files") end') ||
                 full_gate "::warning::could not read the changed files: running every job"
               ;;
             *)
@@ -165,8 +174,9 @@ jobs:
           if swift --version 2>/dev/null | grep -q 'Swift version 6\.4'; then
             echo "swift=true" >>"$GITHUB_OUTPUT"
           fi
-          command -v shellcheck >/dev/null && command -v yamllint >/dev/null &&
-            echo "apt=true" >>"$GITHUB_OUTPUT" || true
+          if command -v shellcheck >/dev/null && command -v yamllint >/dev/null; then
+            echo "apt=true" >>"$GITHUB_OUTPUT"
+          fi
 
       - name: Cache Swift toolchain
         if: steps.preinstalled.outputs.swift != 'true'
@@ -365,7 +375,16 @@ jobs:
           submodules: false
           clean: false
 
+      # The checkout runs with `clean: false`, because its clean also
+      # deletes ios/Dependencies and the Swift package builds. The fetch
+      # scripts compare a stamp in ios/Dependencies with the pins, so a
+      # kept folder skips the downloads.
+      - name: Remove untracked files, but keep the downloaded cores and package builds
+        run: git clean -ffdx -e /ios/Dependencies/ -e .build/
+
       - uses: ./.github/actions/prepare-xcode-project
+        with:
+          build-data: simulator
 
       # macOS is the only runner that can run every check: Linux
       # Foundation has no legacy text encodings. EMPO_TESTS_NO_SKIP=1 turns a skip
@@ -378,8 +397,6 @@ jobs:
 
       - name: Build (iOS Simulator)
         working-directory: ios/Empo
-        env:
-          DERIVED_DATA: ${{ runner.tool_cache }}/empo-ci/simulator
         run: |
           set -o pipefail
           xcodebuild \
@@ -394,8 +411,6 @@ jobs:
       # boot of a new Simulator takes about 30 seconds, so the runner
       # keeps it for the next run.
       - name: Start the app on the runner's Simulator
-        env:
-          DERIVED_DATA: ${{ runner.tool_cache }}/empo-ci/simulator
         run: |
           APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Empo.app"
           [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
@@ -403,6 +418,11 @@ jobs:
             [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
             "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
           NAME="empo-ci-$RUNNER_NAME-${RUNTIME##*.}"
+          # Delete this runner's Simulators of older iOS versions.
+          xcrun simctl list devices -j |
+            jq -r --arg prefix "empo-ci-$RUNNER_NAME-" --arg name "$NAME" \
+              '.devices[][] | select((.name | startswith($prefix)) and .name != $name) | .udid' |
+            while read -r OLD; do xcrun simctl delete "$OLD"; done
           UDID="$(xcrun simctl list devices available -j |
             jq -r --arg name "$NAME" 'first(.devices[][] | select(.name == $name) | .udid) // empty')"
           [ -n "$UDID" ] || UDID="$(xcrun simctl create "$NAME" "$DEVICE_TYPE" "$RUNTIME")"
@@ -443,13 +463,16 @@ jobs:
           submodules: false
           clean: false
 
+      - name: Remove untracked files, but keep the downloaded cores and package builds
+        run: git clean -ffdx -e /ios/Dependencies/ -e .build/
+
       - uses: ./.github/actions/prepare-xcode-project
+        with:
+          build-data: mac
 
       - name: Build the Mac app and open each core
-        env:
-          EMPO_MAC_DERIVED_DATA: ${{ runner.tool_cache }}/empo-ci/mac
         run: |
-          scripts/package-mac.sh "$(sed -n 's/^ *MARKETING_VERSION: //p' ios/Empo/project.yml)"
+          EMPO_MAC_DERIVED_DATA="$DERIVED_DATA" scripts/package-mac.sh "$(sed -n 's/^ *MARKETING_VERSION: //p' ios/Empo/project.yml)"
 
   # The aggregate gate. Its check-run name matches the ruleset's one
   # required context, "CI", exactly. The jobs above have descriptive
