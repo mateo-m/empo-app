@@ -401,7 +401,7 @@ final class ControllerInputManagerTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Same scheme as the manager's `controllerID`, so a log line
+    /// Same scheme as the reader's `controllerID`, so a log line
     /// matches its pad by identity.
     private func id(of pad: GCController) -> String {
         String(UInt(bitPattern: ObjectIdentifier(pad)))

@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import Foundation
-import GameController
 import GameProbe
 
 #if canImport(UIKit)
@@ -11,8 +10,10 @@ import UIKit
 import AppKit
 #endif
 
-/// Host-side physical controller input (SPEC section 10.2). Maps GCController
-/// elements to keyboard scancodes via the merged four-layer map (section 9).
+/// Host-side physical controller input (SPEC section 10.2). Maps
+/// controller elements to keyboard scancodes via the merged four-layer
+/// map (section 9). A reader turns each pad's input into SDL element
+/// names: Apple's GameController on iOS, SDL on the Mac.
 @MainActor
 final class ControllerInputManager {
     /// Dispatches action targets: (action id, pressed). Wired to
@@ -65,14 +66,19 @@ final class ControllerInputManager {
     /// SDL element names for optional hardware (paddles, touchpad) that
     /// at least one currently connected controller exposes.
     var exposedOptionalElements: Set<String> {
-        var exposed = Set<String>()
-        for controller in connectedControllers.values {
-            for entry in Self.optionalButtons(of: controller.physicalInputProfile) {
-                exposed.insert(entry.element)
-            }
-        }
-        return exposed
+        connectedControllers.values.reduce(into: []) { $0.formUnion($1.optionalElements) }
     }
+
+    private struct ConnectedPad {
+        let isExtended: Bool
+        let optionalElements: Set<String>
+    }
+
+    #if os(macOS)
+    private typealias Reader = SDLControllerReader
+    #else
+    private typealias Reader = GameControllerReader
+    #endif
 
     private var sessionActive = false
     private var reducer = ControllerStateReducer()
@@ -81,13 +87,12 @@ final class ControllerInputManager {
     // element -> action id held by that element, mirroring
     // elementPressScancode so hold actions get their release edge.
     private var elementPressAction: [String: String] = [:]
-    private var connectedControllers: [String: GCController] = [:]
+    private var connectedControllers: [String: ConnectedPad] = [:]
     private var heldStickDirections: [String: Set<ControllerStickMapper.Direction>] = [:]
+    private lazy var reader = Reader(manager: self)
 
     private let keys: HeldKeys<KeyHolder>
 
-    private var connectObserver: NSObjectProtocol?
-    private var disconnectObserver: NSObjectProtocol?
     private var activeObserver: NSObjectProtocol?
 
     init(keys: HeldKeys<KeyHolder>) {
@@ -111,32 +116,9 @@ final class ControllerInputManager {
         sessionActive = true
         hasHadControllerThisSession = false
 
-        connectObserver = NotificationCenter.default.addObserver(
-            forName: .GCControllerDidConnect,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let controller = notification.object as? GCController else { return }
-            Task { @MainActor in
-                self?.attach(controller)
-            }
-        }
-
-        disconnectObserver = NotificationCenter.default.addObserver(
-            forName: .GCControllerDidDisconnect,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            guard let controller = notification.object as? GCController else { return }
-            Task { @MainActor in
-                self?.detach(controller)
-            }
-        }
-
-        // Element callbacks stop while the app is inactive unless
-        // `GCController.shouldMonitorBackgroundEvents` is on. A release
-        // in that window never arrives, so the key stays pressed until
-        // this re-read.
+        // No pad input reaches this manager while the app is inactive.
+        // A release in that window never arrives, so the key stays
+        // pressed until this re-read.
         #if canImport(UIKit)
         let didBecomeActive = UIApplication.didBecomeActiveNotification
         #else
@@ -148,39 +130,23 @@ final class ControllerInputManager {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.pollAllControllers()
+                self?.reader.pollAll()
             }
         }
 
-        var controllers = GCController.controllers()
-        #if DEBUG
-        controllers += [UITestVirtualController.controller].compactMap { $0 }
-        #endif
-        for controller in controllers {
-            attach(controller)
-        }
+        reader.start()
     }
 
     func stop() {
         sessionActive = false
         releaseAllHeldInputs()
 
-        if let connectObserver {
-            NotificationCenter.default.removeObserver(connectObserver)
-        }
-        if let disconnectObserver {
-            NotificationCenter.default.removeObserver(disconnectObserver)
-        }
         if let activeObserver {
             NotificationCenter.default.removeObserver(activeObserver)
         }
-        connectObserver = nil
-        disconnectObserver = nil
         activeObserver = nil
 
-        for controller in connectedControllers.values {
-            clearHandlers(on: controller)
-        }
+        reader.stop()
         connectedControllers.removeAll()
         controllersWithLoggedInput.removeAll()
         heldStickDirections.removeAll()
@@ -192,27 +158,9 @@ final class ControllerInputManager {
     /// Reports every connected device to `controls.json.log`, whether
     /// or not the mapper can use it. A bug report about a controller
     /// that "does nothing" is unanswerable without this: it tells
-    /// apart a pad iOS never exposed, a pad with element names Empo
-    /// does not know, and a pad that works but is bound elsewhere.
+    /// apart a pad the system never exposed, a pad with element names
+    /// Empo does not know, and a pad that works but is bound elsewhere.
     var deviceLogHandler: ((String) -> Void)?
-
-    private func logDevice(_ controller: GCController) {
-        guard let deviceLogHandler else { return }
-        let profile = controller.physicalInputProfile
-        let elements = profile.elements.keys.sorted().joined(separator: ", ")
-        deviceLogHandler(
-            """
-            controller connected: \(controller.vendorName ?? "unnamed") \
-            [\(controller.productCategory)] \
-            id=\(Self.controllerID(controller)) \
-            profile=\(type(of: profile)) \
-            extended=\(controller.extendedGamepad != nil) \
-            micro=\(controller.microGamepad != nil) \
-            mappable=\(Self.isMappable(controller)) \
-            elements=[\(elements)]
-            """
-        )
-    }
 
     /// One line per controller per session, on its first edge. With
     /// the "connected" line it tells apart a pad whose handlers never
@@ -226,27 +174,15 @@ final class ControllerInputManager {
         deviceLogHandler("controller input: id=\(controllerID) first element=\(element)")
     }
 
-    private static func controllerID(_ controller: GCController) -> String {
-        String(UInt(bitPattern: ObjectIdentifier(controller)))
-    }
+    // MARK: - Reader events
 
-    private func attach(_ controller: GCController) {
-        guard sessionActive else { return }
-        #if DEBUG
-        guard UITestVirtualController.admits(controller) else { return }
-        #endif
-        logDevice(controller)
-        guard Self.isMappable(controller) else { return }
-        let id = Self.controllerID(controller)
-        guard connectedControllers[id] == nil else {
-            installHandler(on: controller)
-            return
-        }
-
+    /// The reader calls this before it feeds the pad's first input.
+    func padConnected(_ controllerID: String, isExtended: Bool, optionalElements: Set<String>) {
+        guard sessionActive, connectedControllers[controllerID] == nil else { return }
         let priorCount = connectedControllers.count
-        connectedControllers[id] = controller
+        connectedControllers[controllerID] = ConnectedPad(
+            isExtended: isExtended, optionalElements: optionalElements)
         hasHadControllerThisSession = true
-        installHandler(on: controller)
 
         overlay?.update {
             $0.setExtendedController(hasExtendedController, isFirstController: priorCount == 0)
@@ -254,15 +190,13 @@ final class ControllerInputManager {
         connectionHandler?()
     }
 
-    private func detach(_ controller: GCController) {
-        let id = Self.controllerID(controller)
-        guard connectedControllers[id] != nil else { return }
+    func padDisconnected(_ controllerID: String) {
+        guard connectedControllers[controllerID] != nil else { return }
         let hadExtendedController = hasExtendedController
-        connectedControllers.removeValue(forKey: id)
+        connectedControllers.removeValue(forKey: controllerID)
 
-        clearHandlers(on: controller)
-        heldStickDirections = heldStickDirections.filter { !$0.key.hasPrefix(id + ":") }
-        let edges = reducer.removeController(id)
+        heldStickDirections = heldStickDirections.filter { !$0.key.hasPrefix(controllerID + ":") }
+        let edges = reducer.removeController(controllerID)
         dispatch(edges: edges)
 
         if connectedControllers.isEmpty {
@@ -274,166 +208,11 @@ final class ControllerInputManager {
     }
 
     private var hasExtendedController: Bool {
-        connectedControllers.values.contains { $0.extendedGamepad != nil }
+        connectedControllers.values.contains { $0.isExtended }
     }
 
-    /// The handlers sit on the elements, not on the profile. The
-    /// typed profile handlers (`GCExtendedGamepad.valueChangedHandler`
-    /// and `GCPhysicalInputProfile.valueDidChangeHandler`) never fire
-    /// for a snapshot controller, and an 8BitDo FlipPad that reaches
-    /// iOS as a `GCMicroGamepad` with 18 elements gave Empo no input
-    /// through them, while Delta read the same pad with element
-    /// handlers (issue #140).
-    ///
-    /// Each handler feeds the value it received. The framework queues
-    /// handlers on `handlerQueue` asynchronously, so a handler that
-    /// re-reads the element sees the latest value, and a press and
-    /// its release queued in one turn collapse into no edge.
-    private func installHandler(on controller: GCController) {
-        let controllerID = Self.controllerID(controller)
-        clearHandlers(on: controller)
-        controller.handlerQueue = .main
-        let profile = controller.physicalInputProfile
-
-        for entry in Self.digitalButtons(of: profile) {
-            entry.button.pressedChangedHandler = { [weak self] _, _, pressed in
-                Self.onMain {
-                    self?.feedButton(controllerID: controllerID, element: entry.element, pressed: pressed)
-                }
-            }
-        }
-        for entry in Self.triggers(of: profile) {
-            entry.button.valueChangedHandler = { [weak self] _, value, _ in
-                Self.onMain {
-                    self?.feedButton(controllerID: controllerID, element: entry.element, value: value)
-                }
-            }
-        }
-        for entry in Self.sticks(of: profile) {
-            entry.dpad.valueChangedHandler = { [weak self] _, x, y in
-                Self.onMain {
-                    self?.feedStick(controllerID: controllerID, stick: entry.element, x: x, y: y)
-                }
-            }
-        }
-        pollProfile(controllerID: controllerID, controller: controller)
-    }
-
-    /// `handlerQueue` is the main queue for every pad this manager
-    /// owns, so the hop is for a queue that other code moved.
-    private static func onMain(_ body: @escaping @MainActor @Sendable () -> Void) {
-        if Thread.isMainThread {
-            MainActor.assumeIsolated(body)
-        } else {
-            DispatchQueue.main.async(execute: body)
-        }
-    }
-
-    private func clearHandlers(on controller: GCController) {
-        let profile = controller.physicalInputProfile
-        for entry in Self.digitalButtons(of: profile) {
-            entry.button.pressedChangedHandler = nil
-        }
-        for entry in Self.triggers(of: profile) {
-            entry.button.valueChangedHandler = nil
-        }
-        for entry in Self.sticks(of: profile) {
-            entry.dpad.valueChangedHandler = nil
-        }
-    }
-
-    /// Rejects devices with only vendor-named elements the mapper
-    /// cannot use.
-    private static func isMappable(_ controller: GCController) -> Bool {
-        let profile = controller.physicalInputProfile
-        return !digitalButtons(of: profile).isEmpty || !triggers(of: profile).isEmpty
-            || !sticks(of: profile).isEmpty
-    }
-
-    private typealias NamedButton = (element: String, button: GCControllerButtonInput)
-
-    /// The GCInput constants are the same strings on every profile, so
-    /// the reducer, the resolved map, and the remap UI see one
-    /// vocabulary for all controller classes.
-    private static let profileButtonElements: [(name: String, element: String)] = [
-        (GCInputButtonA, "a"), (GCInputButtonB, "b"),
-        (GCInputButtonX, "x"), (GCInputButtonY, "y"),
-        (GCInputLeftShoulder, "leftshoulder"), (GCInputRightShoulder, "rightshoulder"),
-        (GCInputButtonMenu, "start"), (GCInputButtonOptions, "back"),
-        (GCInputButtonHome, "guide"),
-        (GCInputLeftThumbstickButton, "leftstick"), (GCInputRightThumbstickButton, "rightstick"),
-    ]
-
-    private static func digitalButtons(of profile: GCPhysicalInputProfile) -> [NamedButton] {
-        var buttons: [NamedButton] = profileButtonElements.compactMap { entry in
-            profile.buttons[entry.name].map { (entry.element, $0) }
-        }
-        if let dpad = profile.dpads[GCInputDirectionPad] {
-            buttons += [
-                ("dpup", dpad.up), ("dpdown", dpad.down), ("dpleft", dpad.left), ("dpright", dpad.right),
-            ]
-        }
-        return buttons + optionalButtons(of: profile)
-    }
-
-    /// The typed accessors come first. The header does not promise
-    /// that a DualSense keys its touchpad button under the DualShock
-    /// name.
-    private static func optionalButtons(of profile: GCPhysicalInputProfile) -> [NamedButton] {
-        if let xbox = profile as? GCXboxGamepad {
-            return [
-                ("paddle1", xbox.paddleButton1), ("paddle2", xbox.paddleButton2),
-                ("paddle3", xbox.paddleButton3), ("paddle4", xbox.paddleButton4),
-            ].compactMap { element, button in button.map { (element, $0) } }
-        }
-        if let dualSense = profile as? GCDualSenseGamepad {
-            return [("touchpad", dualSense.touchpadButton)]
-        }
-        let named: [(name: String, element: String)] = [
-            (GCInputXboxPaddleOne, "paddle1"), (GCInputXboxPaddleTwo, "paddle2"),
-            (GCInputXboxPaddleThree, "paddle3"), (GCInputXboxPaddleFour, "paddle4"),
-            (GCInputDualShockTouchpadButton, "touchpad"),
-        ]
-        return named.compactMap { entry in profile.buttons[entry.name].map { (entry.element, $0) } }
-    }
-
-    private static func triggers(of profile: GCPhysicalInputProfile) -> [NamedButton] {
-        [(GCInputLeftTrigger, "lefttrigger"), (GCInputRightTrigger, "righttrigger")]
-            .compactMap { name, element in profile.buttons[name].map { (element, $0) } }
-    }
-
-    private static func sticks(
-        of profile: GCPhysicalInputProfile
-    ) -> [(element: String, dpad: GCControllerDirectionPad)] {
-        [(GCInputLeftThumbstick, "left"), (GCInputRightThumbstick, "right")]
-            .compactMap { name, element in profile.dpads[name].map { (element, $0) } }
-    }
-
-    /// Reads the state a controller holds right now. Only the elements
-    /// the hardware exposes get fed. Absent names stay untouched so
-    /// the reducer never sees false releases.
-    private func pollProfile(controllerID: String, controller: GCController) {
-        let profile = controller.physicalInputProfile
-        for entry in Self.digitalButtons(of: profile) {
-            feedButton(controllerID: controllerID, element: entry.element, pressed: entry.button.isPressed)
-        }
-        for entry in Self.triggers(of: profile) {
-            feedButton(controllerID: controllerID, element: entry.element, value: entry.button.value)
-        }
-        for entry in Self.sticks(of: profile) {
-            feedStick(
-                controllerID: controllerID, stick: entry.element,
-                x: entry.dpad.xAxis.value, y: entry.dpad.yAxis.value)
-        }
-    }
-
-    private func pollAllControllers() {
-        for (controllerID, controller) in connectedControllers {
-            pollProfile(controllerID: controllerID, controller: controller)
-        }
-    }
-
-    private func feedStick(controllerID: String, stick: String, x: Float, y: Float) {
+    /// `x` grows to the right and `y` grows up.
+    func feedStick(controllerID: String, stick: String, x: Float, y: Float) {
         let key = "\(controllerID):\(stick)"
         let active = ControllerStickMapper.directions(x: x, y: y, held: heldStickDirections[key] ?? [])
         heldStickDirections[key] = active
@@ -442,11 +221,11 @@ final class ControllerInputManager {
         }
     }
 
-    private func feedButton(controllerID: String, element: String, pressed: Bool) {
+    func feedButton(controllerID: String, element: String, pressed: Bool) {
         feedAxis(controllerID: controllerID, element: element, value: pressed ? 1 : 0, isAxis: false)
     }
 
-    private func feedButton(controllerID: String, element: String, value: Float) {
+    func feedButton(controllerID: String, element: String, value: Float) {
         feedAxis(controllerID: controllerID, element: element, value: value, isAxis: true)
     }
 

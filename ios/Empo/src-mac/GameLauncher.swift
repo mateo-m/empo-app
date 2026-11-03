@@ -182,7 +182,8 @@ final class GameLauncher {
         PlayerLiveSettings(
             bindingLayers: BindingLayers.overrideLayers(for: container, manifest: manifest),
             fastForwardMultiplier: FastForwardArbiter.usableMultiplier(
-                GameSettings.load(from: container.empoStateURL).speedMultiplier))
+                GameSettings.load(from: container.empoStateURL).speedMultiplier),
+            controllerMappings: SDLControllers.savedMappingLines())
     }
 
     private func session(of process: Process) -> Session? {

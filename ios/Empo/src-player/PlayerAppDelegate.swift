@@ -55,7 +55,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             NSApp.applicationIconImage = icon
         }
         endWithEmpo()
-        startGame()
+        prepareGame()
         actions.pauseMenu = { [weak self] in self?.togglePause(nil) }
         actions.runtime.bind(
             fastForwardMultiplier: launch.live.fastForwardMultiplier, cheatsAvailable: launch.supportsCheats)
@@ -67,10 +67,14 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             self?.handleAction(action, pressed: pressed) ?? false
         }
         applyBindings(launch.live.bindingLayers)
+        // SDL's first scan for controllers runs the main run loop. With
+        // the game queued, that run loop would start the game inside the
+        // scan, and the game holds the main thread until it ends.
         #if DEBUG
         UITestVirtualController.connectIfRequested()
         #endif
         controllers.start()
+        runGame()
         readLiveChanges()
         NSApp.activate()
     }
@@ -97,6 +101,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func apply(_ live: PlayerLiveSettings) {
         guard !gameEnded else { return }
+        SDLControllers.shared.add(mappings: live.controllerMappings)
         applyBindings(live.bindingLayers)
         guard live.fastForwardMultiplier != actions.runtime.fastForwardMultiplier else { return }
         actions.runtime.reconcile(fastForwardMultiplier: live.fastForwardMultiplier)
@@ -136,7 +141,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         if getppid() == 1 { Self.endNow() }
     }
 
-    private func startGame() {
+    private func prepareGame() {
         core.setLauncherIdentity("empo")
         core.setCABundlePath(launch.caBundlePath)
         core.setDebugLogPath(launch.debugLogPath)
@@ -180,7 +185,9 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                 }
             }, context)
         core.setGamePath(launch.gamePath)
+    }
 
+    private func runGame() {
         // gamecore_run_app may hold the main thread for the whole game,
         // so it runs from a run loop callout and not from a main queue
         // block (GameCore.h).
