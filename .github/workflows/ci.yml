@@ -417,9 +417,11 @@ jobs:
             [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
             "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
           NAME="empo-ci-$RUNNER_NAME-${RUNTIME##*.}"
-          # Delete this runner's Simulators of older iOS versions.
+          # Delete this runner's Simulators of older iOS versions. "iOS-"
+          # is part of the prefix, so mateo-mac does not delete the
+          # Simulators of mateo-mac-2.
           xcrun simctl list devices -j |
-            jq -r --arg prefix "empo-ci-$RUNNER_NAME-" --arg name "$NAME" \
+            jq -r --arg prefix "empo-ci-$RUNNER_NAME-iOS-" --arg name "$NAME" \
               '.devices[][] | select((.name | startswith($prefix)) and .name != $name) | .udid' |
             while read -r OLD; do xcrun simctl delete "$OLD"; done
           UDID="$(xcrun simctl list devices available -j |
