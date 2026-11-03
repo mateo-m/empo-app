@@ -41,10 +41,11 @@ on:
 permissions:
   contents: read
 
-# A new push to a pull request cancels its older build. Deploys share
-# one group with no cancel, so a deploy never stops halfway.
+# A new push to a pull request cancels its older build. The runs that
+# deploy share one group with no cancel, so they run one after the other,
+# and a run that still waits gives way to a newer one.
 concurrency:
-  group: docs-${{ github.ref }}
+  group: docs-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -82,9 +83,6 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
-    concurrency:
-      group: pages
-      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
