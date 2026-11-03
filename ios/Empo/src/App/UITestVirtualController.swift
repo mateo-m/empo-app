@@ -110,8 +110,10 @@ enum UITestVirtualController {
 
     private static var isConnected: Bool { pad != nil }
 
+    /// Physical pads stay hidden while a virtual pad is attached, so
+    /// they cannot add input to a test.
     static func admits(_ candidate: SDL_JoystickID) -> Bool {
-        mode == nil || candidate == pad?.id
+        SDLVirtualPad.attached.isEmpty ? mode == nil : SDLVirtualPad.attached.contains(candidate)
     }
 
     private static func connect() {
@@ -144,6 +146,8 @@ private func padCommandCallback(
 /// the gamepad button and axis numbers. Another pad gets no mapping.
 @MainActor
 final class SDLVirtualPad {
+    private(set) static var attached: Set<SDL_JoystickID> = []
+
     let id: SDL_JoystickID
     private let joystick: OpaquePointer?
 
@@ -161,6 +165,7 @@ final class SDLVirtualPad {
             return SDL_AttachVirtualJoystick(&desc)
         }
         joystick = SDL_OpenJoystick(id)
+        Self.attached.insert(id)
         // SDL takes the first value of an axis as its rest value. A
         // virtual joystick sends a value only when it changes.
         let triggers = [SDL_GAMEPAD_AXIS_LEFT_TRIGGER, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER].map {
@@ -193,6 +198,7 @@ final class SDLVirtualPad {
     }
 
     func detach() {
+        Self.attached.remove(id)
         SDL_CloseJoystick(joystick)
         SDL_DetachVirtualJoystick(id)
     }

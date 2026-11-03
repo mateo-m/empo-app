@@ -33,8 +33,9 @@ final class SDLControllerReaderTests: XCTestCase {
         manager.updateResolvedMap([
             "a": .action("confirm"), "+leftx": .action("right"), "-lefty": .action("up"),
         ])
-        manager.start()
+        // The pad comes first. The manager then reads only test pads.
         pad = SDLVirtualPad(name: "Empo Reader Test \(name)", isRecognized: true)
+        manager.start()
         try await waitUntil { self.connections == 1 }
     }
 
@@ -120,5 +121,22 @@ final class SDLControllerReaderTests: XCTestCase {
         becomeActive()
         try await waitUntil { self.actions.count == 2 }
         XCTAssertEqual(actions, ["up down", "up up"])
+    }
+
+    func testOtherPadsStayHiddenWhileATestPadIsAttached() async throws {
+        // A plain SDL virtual joystick stands in for a physical pad.
+        var desc = SDL_VirtualJoystickDesc()
+        desc.version = UInt32(MemoryLayout<SDL_VirtualJoystickDesc>.size)
+        desc.type = UInt16(SDL_JOYSTICK_TYPE_GAMEPAD.rawValue)
+        desc.nbuttons = UInt16(SDL_GAMEPAD_BUTTON_COUNT.rawValue)
+        let other = "Empo Reader Test Other Pad".withCString { name in
+            desc.name = name
+            return SDL_AttachVirtualJoystick(&desc)
+        }
+        defer { SDL_DetachVirtualJoystick(other) }
+        manager.stop()
+        manager.start()
+        try await settle()
+        XCTAssertEqual(connections, 2)
     }
 }
