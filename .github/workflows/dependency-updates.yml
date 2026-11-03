@@ -1,0 +1,84 @@
+---
+# Keeps one pull request open that moves the core and ANGLE pins to the
+# newest releases. A core repository can send a `core-released` event to
+# start this at once. Without the event, the daily run finds the release.
+name: Dependency updates
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [core-released]
+
+concurrency:
+  group: dependency-updates
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  pins:
+    name: Update the pins
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      BRANCH: deps/update-pins
+      TITLE: "build(deps): update the core and ANGLE pins"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Update the pins and open a pull request
+        run: |
+          set -euo pipefail
+          changes=$(scripts/update-pins.sh)
+          mapfile -t files < <(git diff --name-only)
+          if [ "${#files[@]}" = 0 ]; then
+              echo "every pin is current"
+              exit 0
+          fi
+          printf '%s\n' "$changes"
+
+          if git fetch --depth=1 origin "$BRANCH" 2>/dev/null &&
+              git diff --quiet FETCH_HEAD -- "${files[@]}"; then
+              echo "$BRANCH already has these pins"
+              exit 0
+          fi
+
+          base=$(git rev-parse HEAD)
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null; then
+              gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" -f sha="$base" -F force=true >/dev/null
+          else
+              gh api "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base" >/dev/null
+          fi
+
+          # The rules ask for a signed commit on every branch. GitHub signs
+          # a commit that this API makes, but not one that git pushes.
+          for f in "${files[@]}"; do
+              jq -n --arg path "$f" --arg contents "$(base64 -w0 "$f")" '{$path, $contents}'
+          done | jq -s \
+              --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' \
+              --arg repo "$REPO" --arg branch "$BRANCH" --arg head "$base" --arg headline "$TITLE" \
+              '{$query, variables: {input: {
+                  branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                  expectedHeadOid: $head,
+                  message: {$headline},
+                  fileChanges: {additions: .}}}}' |
+              gh api graphql --input - >/dev/null
+
+          body="because new core or ANGLE releases are out"$'\n\n'"- ${changes//$'\n'/$'\n'- }"
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+              gh pr edit "$pr" --title "$TITLE" --body "$body"
+          else
+              gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$body"
+          fi
+
+          # GitHub starts no pull_request run for a push or a pull request
+          # that GITHUB_TOKEN makes. A workflow_dispatch run is the
+          # exception, and its checks count for the pull request.
+          gh workflow run ci.yml --ref "$BRANCH"
