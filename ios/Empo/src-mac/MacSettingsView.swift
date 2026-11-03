@@ -8,6 +8,9 @@ struct MacSettingsView: View {
     var body: some View {
         TabView {
             Tab("General", systemImage: "gearshape") { GeneralSettings() }
+            Tab("Controller", systemImage: "gamecontroller") {
+                ControllerButtonsForm(game: nil).frame(height: 560)
+            }
             Tab("Advanced", systemImage: "wrench.and.screwdriver") { AdvancedSettings() }
         }
         .frame(width: 540)

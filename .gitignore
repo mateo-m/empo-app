@@ -32,11 +32,17 @@ ios/Dependencies/ANGLE/iphonesimulator/lib/
 ios/Dependencies/ANGLE/macosx/include/
 ios/Dependencies/ANGLE/macosx/lib/
 ios/Dependencies/ANGLE/.fetched-version
+ios/Dependencies/ANGLE.*
 
 # The mkxp-z core release, fetched by cores/mkxp/fetch.sh.
 # Version-pinned via cores/mkxp/.version (tracked).
 ios/Dependencies/mkxp-core/
 ios/Dependencies/mkxp-core.*
+
+# The SDL library of the Mac app, built by tools/build-sdl.sh.
+ios/Dependencies/SDL/macosx/
+ios/Dependencies/SDL/.lock
+ios/Dependencies/SDL/work.*
 
 # The engine history that tools/changelog-page.ts reads.
 .engine-history/

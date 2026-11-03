@@ -98,11 +98,9 @@ struct AddButtonSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let actions, !actions.isAvailable(action.id) {
-                    Text(
-                        "Fast forward is off for this game. The button shows in games that have Fast forward on."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    Text(BindingsCatalog.unavailableActionNote(action.id, in: .addButtonSheet))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer()

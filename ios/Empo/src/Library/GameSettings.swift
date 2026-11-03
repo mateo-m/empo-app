@@ -219,8 +219,10 @@ struct GameSettings: GameSettingsGroup {
     @Setting<Bool?, RuntimeFlag> var touchMouse: Bool?
 
     /// `RuntimeFlag` fields that something re-pushes to the engine
-    /// while a game runs. `PlayerRuntimeState.reconcile` owns those
-    /// pushes and calls the check below to keep this list honest.
+    /// while a game runs. On iOS, `PlayerRuntimeState.reconcile(container:)`
+    /// owns those pushes and calls the check below to keep this list
+    /// honest. On the Mac, `GameLauncher.sendLiveSettings` sends
+    /// `speedMultiplier`. The Mac has no touch mouse.
     private static let runtimeAppliedFields: Set<String> = [
         "speedMultiplier",
         "touchMouse",
@@ -243,8 +245,8 @@ struct GameSettings: GameSettingsGroup {
             guard !runtimeAppliedFields.contains(key) else { continue }
             assertionFailure(
                 "GameSettings.\(key) is RuntimeFlag but nothing re-applies it "
-                    + "mid-session - add the push to PlayerRuntimeState.reconcile "
-                    + "and name the field in runtimeAppliedFields"
+                    + "mid-session - add the push to PlayerRuntimeState.reconcile(container:) "
+                    + "and GameLauncher.sendLiveSettings, and name the field in runtimeAppliedFields"
             )
         }
         #endif
@@ -262,7 +264,7 @@ struct GameSettings: GameSettingsGroup {
     }
 
     /// The value the engine bridge takes for `touchMouse`. Both the
-    /// launch push and `PlayerRuntimeState.reconcile` read this, so
+    /// launch push and `PlayerRuntimeState.reconcile(container:)` read this, so
     /// the default lives in one place.
     var touchMouseEnabled: Bool {
         touchMouse ?? GameConfigDefaults.engineTouchMouse

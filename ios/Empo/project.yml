@@ -9,8 +9,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: 0.10.2
-    CURRENT_PROJECT_VERSION: 794
+    MARKETING_VERSION: 0.10.4
+    CURRENT_PROJECT_VERSION: 802
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
     # settings. xcodebuild's parser treats them specially. yamllint
@@ -432,6 +432,15 @@ targets:
       - *generateGitInfo
       - *wrapMkxp
       - *wrapPsdk
+      - &buildSDL
+        name: Build SDL
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          "${PROJECT_DIR}/../../tools/build-sdl.sh"
+          RESOURCES="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}"
+          mkdir -p "$RESOURCES"
+          cp "${PROJECT_DIR}/../Dependencies/SDL/macosx/gamecontrollerdb.txt" "$RESOURCES/"
     sources:
       - path: vendor/libmspack
         type: group
@@ -452,7 +461,6 @@ targets:
           - App/EngineState.swift
           - App/GameSession.swift
           - App/PauseManager.swift
-          - App/UITestVirtualController.swift
           - App/AppState.swift
           - App/CrashTracker.swift
           - App/GameReport.swift
@@ -486,6 +494,20 @@ targets:
         type: group
       - path: src-player/PlayerLaunch.swift
         group: src-player
+      - path: src-player/SDLControllers.swift
+        group: src-player
+      - path: src-player/SDLControllerReader.swift
+        group: src-player
+      - path: src/Player/BindingLayers.swift
+      - path: src/Player/BindingResetViews.swift
+      - path: src/Player/BindingStore.swift
+      - path: src/Player/BindingsCatalog.swift
+      - path: src/Player/ControllerInputManager.swift
+      - path: src/Player/EmpoAction+Localized.swift
+      - path: src/Player/OverlayVisibilityController.swift
+      - path: src/Player/PlayerRuntimeState.swift
+      - path: src/Player/PressedRowHighlight.swift
+      - path: src/Player/UserControlsFile.swift
       - path: src/App/GitInfo.generated.swift
         optional: true
       - path: PrivacyInfo.xcprivacy
@@ -511,11 +533,19 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES # yamllint disable-line rule:truthy
         LOCALIZATION_PREFERS_STRING_CATALOGS: YES # yamllint disable-line rule:truthy
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-mac/EmpoMac-Bridging-Header.h
+        HEADER_SEARCH_PATHS: &sdlHeaders
+          - $(inherited)
+          - $(PROJECT_DIR)/../Dependencies/SDL/macosx/include
         OTHER_LDFLAGS:
           - -larchive
           - -lz
           - -lbz2
           - -liconv
+          - &sdlLibrary $(PROJECT_DIR)/../Dependencies/SDL/macosx/lib/libSDL3.a
+          - &sdlIOKit -framework IOKit
+          - &sdlForceFeedback -framework ForceFeedback
+          - &sdlCoreHaptics -weak_framework CoreHaptics
+          - &sdlGameController -framework GameController
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev
@@ -553,12 +583,16 @@ targets:
     type: application
     platform: macOS
     deploymentTarget: "26.0"
+    preBuildScripts:
+      - *buildSDL
     sources:
       - path: src-player
         excludes:
           - EmpoPlayer.entitlements
       - path: src/Player/ControllerInputManager.swift
       - path: src/Player/OverlayVisibilityController.swift
+      - path: src/App/UITestVirtualController.swift
+      - path: src/Player/PlayerRuntimeState.swift
       - path: src/App/KeyHolder.swift
       - path: src/App/GameCoreSessionConfig.swift
       - path: Resources/Localizable.xcstrings
@@ -584,6 +618,13 @@ targets:
         SWIFT_EMIT_LOC_STRINGS: YES # yamllint disable-line rule:truthy
         LOCALIZATION_PREFERS_STRING_CATALOGS: YES # yamllint disable-line rule:truthy
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-player/EmpoPlayer-Bridging-Header.h
+        HEADER_SEARCH_PATHS: *sdlHeaders
+        OTHER_LDFLAGS:
+          - *sdlLibrary
+          - *sdlIOKit
+          - *sdlForceFeedback
+          - *sdlCoreHaptics
+          - *sdlGameController
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev.player
@@ -625,6 +666,7 @@ targets:
     platform: iOS
     sources:
       - Tests
+      - TestsShared
     dependencies:
       - target: Empo
     settings:
@@ -632,6 +674,24 @@ targets:
         TEST_TARGET_NAME: Empo
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
         CODE_SIGNING_ALLOWED: NO
+  EmpoMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "26.0"
+    sources:
+      - TestsMac
+      - TestsShared
+    dependencies:
+      - target: EmpoMac
+    settings:
+      base:
+        TEST_TARGET_NAME: EmpoMac
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Empo.app/Contents/MacOS/Empo
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mac-tests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-player/SDLControllers.h
+        HEADER_SEARCH_PATHS: *sdlHeaders
+        CODE_SIGN_IDENTITY: "-"
 schemes:
   Empo:
     build:
@@ -654,6 +714,11 @@ schemes:
     build:
       targets:
         EmpoMac: all
+        EmpoMacTests: [test]
+    test:
+      config: Debug
+      targets:
+        - EmpoMacTests
     run:
       config: Debug
     archive:

@@ -247,6 +247,11 @@ struct MkxpCore: GameCore {
         return MkxpSettingsState(container: container)
     }
 
+    @MainActor func launchedSettings(for container: GameContainer) -> (any CoreLaunchedSettings)? {
+        Self.migrateOldSettings(in: container)
+        return MkxpLaunchedSettings(container: container)
+    }
+
     /// Older builds kept the engine settings in `game_settings.json`.
     /// Moving them rebuilds `mkxp.json`, so the display settings must
     /// leave that file first.
