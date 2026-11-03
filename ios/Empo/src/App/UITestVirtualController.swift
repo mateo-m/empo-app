@@ -32,6 +32,7 @@ enum UITestVirtualController {
 
     private enum Command {
         case buttonA(pressed: Bool)
+        case paddle(pressed: Bool)
         case leftStick(x: Float, y: Float)
     }
 
@@ -40,6 +41,8 @@ enum UITestVirtualController {
     private static let commands: [String: [Command]] = [
         "a.down": [.buttonA(pressed: true)],
         "a.up": [.buttonA(pressed: false)],
+        "paddle.down": [.paddle(pressed: true)],
+        "paddle.up": [.paddle(pressed: false)],
         "stick.right": [.leftStick(x: 1, y: 0)],
         "stick.upright": [.leftStick(x: 0.7, y: 0.7)],
         "stick.center": [.leftStick(x: 0, y: 0)],
@@ -94,6 +97,9 @@ enum UITestVirtualController {
         switch command {
         case .buttonA(let pressed):
             pad.buttonA.setValue(pressed ? 1 : 0)
+        case .paddle:
+            // GameController's extended gamepad has no paddles.
+            break
         case .leftStick(let x, let y):
             pad.leftThumbstick.setValueForXAxis(x, yAxis: y)
         }
@@ -149,6 +155,8 @@ enum UITestVirtualController {
         switch command {
         case .buttonA(let pressed):
             SDL_SetJoystickVirtualButton(joystick, Int32(SDL_GAMEPAD_BUTTON_SOUTH.rawValue), pressed)
+        case .paddle(let pressed):
+            SDL_SetJoystickVirtualButton(joystick, Int32(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1.rawValue), pressed)
         case .leftStick(let x, let y):
             // SDL's y axis grows down.
             SDL_SetJoystickVirtualAxis(
