@@ -8,9 +8,8 @@
 # - Reads version + expected sha256 from ios/Dependencies/ANGLE/.version
 # - Skips work when a stamp file matches the requested version and the
 #   binaries are already on disk
-# - Uses `gh release download` so auth piggybacks on the contributor's
-#   GitHub login (no PATs to manage). When empo-deps goes public, swap
-#   to plain curl (no auth needed for public release assets).
+# - Downloads the release asset with curl. empo-deps is public, so no
+#   login or token is needed.
 # - Verifies the downloaded tarball's sha256 before extracting
 
 set -euo pipefail
@@ -51,30 +50,14 @@ if [ -f "$STAMP" ] &&
     exit 0
 fi
 
-if ! command -v gh >/dev/null 2>&1; then
-    cat >&2 <<MSG
-fetch-angle: \`gh\` CLI not found.
-
-Install with: brew install gh && gh auth login
-
-empo-deps is a private repo for now, so the build needs gh to
-download its release assets. When empo-deps goes public, this script
-will fall back to plain curl.
-MSG
-    exit 1
-fi
-
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "fetch-angle: hydrating $ANGLE_VERSION from $DEPS_REPO"
 
-if ! "$REPO_ROOT/scripts/gh-retry.sh" release download "$ANGLE_VERSION" \
-    --repo "$DEPS_REPO" \
-    --pattern "$ANGLE_ASSET" \
-    --dir "$TMPDIR" \
-    --clobber 2>&1; then
-    echo "fetch-angle: gh release download failed for $DEPS_REPO@$ANGLE_VERSION" >&2
+if ! curl -fL --retry 3 -o "$TMPDIR/$ANGLE_ASSET" \
+    "https://github.com/$DEPS_REPO/releases/download/$ANGLE_VERSION/$ANGLE_ASSET"; then
+    echo "fetch-angle: download failed for $DEPS_REPO@$ANGLE_VERSION" >&2
     exit 1
 fi
 
