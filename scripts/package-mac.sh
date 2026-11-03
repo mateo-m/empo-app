@@ -74,8 +74,12 @@ STAGE="$OUT/dmg"
 mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/Empo.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname Empo -srcfolder "$STAGE" -format UDZO -ov "$DMG" >&2 ||
-    fail "hdiutil could not create $(basename "$DMG")"
+# diskutil writes its progress to stderr on one line with no line end,
+# so show its output only when it fails.
+if ! DISKUTIL_LOG=$(diskutil image create from --format UDZO --volumeName Empo "$STAGE" "$DMG" 2>&1); then
+    echo "$DISKUTIL_LOG" >&2
+    fail "diskutil could not create $(basename "$DMG")"
+fi
 rm -rf "$STAGE"
 
 echo "$DMG"
