@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.4 - 2026-11-03
+
+### Features
+
+- Read controllers through SDL and set up unknown ones in settings (#228) ([`4570493`](https://github.com/mateo-m/empo-app/commit/4570493337778aae4c0fc0093498ecc6e2a9f734))
+
 ## 0.10.3 - 2026-11-02
 
 ### Features
