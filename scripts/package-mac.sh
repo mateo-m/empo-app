@@ -7,6 +7,9 @@
 #
 # Usage: scripts/package-mac.sh <version>
 # EMPO_CORES in the environment ships only the cores it names.
+# EMPO_MAC_DERIVED_DATA in the environment keeps the build data in that
+# folder, so the next build compiles only what changed. Without it,
+# each build starts clean.
 # Prints the path of the disk image on its last line.
 #
 # The app has an ad hoc signature only (no Developer ID, no
@@ -18,7 +21,7 @@ VERSION="${1:?usage: $0 <version>}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$REPO_ROOT/ios/Empo"
 OUT="$REPO_ROOT/build/mac-release"
-DERIVED_DATA="$OUT/DerivedData"
+DERIVED_DATA="${EMPO_MAC_DERIVED_DATA:-$OUT/DerivedData}"
 APP="$DERIVED_DATA/Build/Products/Release/Empo.app"
 # A fixed name, so releases/latest/download/Empo-mac.dmg always
 # points to the newest one.
@@ -74,8 +77,12 @@ STAGE="$OUT/dmg"
 mkdir -p "$STAGE"
 ditto "$APP" "$STAGE/Empo.app"
 ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname Empo -srcfolder "$STAGE" -format UDZO -ov "$DMG" >&2 ||
-    fail "hdiutil could not create $(basename "$DMG")"
+# diskutil writes its progress to stderr on one line with no line end,
+# so show its output only when it fails.
+if ! DISKUTIL_LOG=$(diskutil image create from --format UDZO --volumeName Empo "$STAGE" "$DMG" 2>&1); then
+    echo "$DISKUTIL_LOG" >&2
+    fail "diskutil could not create $(basename "$DMG")"
+fi
 rm -rf "$STAGE"
 
 echo "$DMG"

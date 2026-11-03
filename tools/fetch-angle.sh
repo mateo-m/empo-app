@@ -8,9 +8,8 @@
 # - Reads version + expected sha256 from ios/Dependencies/ANGLE/.version
 # - Skips work when a stamp file matches the requested version and the
 #   binaries are already on disk
-# - Uses `gh release download` so auth piggybacks on the contributor's
-#   GitHub login (no PATs to manage). When empo-deps goes public, swap
-#   to plain curl (no auth needed for public release assets).
+# - Downloads the release asset with curl. empo-deps is public, so no
+#   login or token is needed.
 # - Verifies the downloaded tarball's sha256 before extracting
 
 set -euo pipefail
@@ -33,6 +32,12 @@ if [ ! -f "$VERSION_FILE" ]; then
     exit 1
 fi
 
+# Xcode and a script can run this at the same time. lockf runs one at a
+# time, and the second then finds ANGLE in place.
+if [ -z "${FETCH_ANGLE_LOCKED:-}" ]; then
+    FETCH_ANGLE_LOCKED=1 exec lockf -k "$ANGLE_DIR.lock" "$0" "$@"
+fi
+
 # shellcheck disable=SC1090
 . "$VERSION_FILE" # sets ANGLE_VERSION, ANGLE_SHA256 and ANGLE_ASSET
 
@@ -51,30 +56,18 @@ if [ -f "$STAMP" ] &&
     exit 0
 fi
 
-if ! command -v gh >/dev/null 2>&1; then
-    cat >&2 <<MSG
-fetch-angle: \`gh\` CLI not found.
-
-Install with: brew install gh && gh auth login
-
-empo-deps is a private repo for now, so the build needs gh to
-download its release assets. When empo-deps goes public, this script
-will fall back to plain curl.
-MSG
-    exit 1
-fi
-
-TMPDIR="$(mktemp -d)"
+# The work folder is next to ANGLE_DIR, on the same disk, so mv only
+# renames. A run that was killed leaves its work folder, and the lock
+# makes sure that no other run uses one now.
+rm -rf "$ANGLE_DIR".??????
+TMPDIR="$(mktemp -d "$ANGLE_DIR.XXXXXX")"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 echo "fetch-angle: hydrating $ANGLE_VERSION from $DEPS_REPO"
 
-if ! "$REPO_ROOT/scripts/gh-retry.sh" release download "$ANGLE_VERSION" \
-    --repo "$DEPS_REPO" \
-    --pattern "$ANGLE_ASSET" \
-    --dir "$TMPDIR" \
-    --clobber 2>&1; then
-    echo "fetch-angle: gh release download failed for $DEPS_REPO@$ANGLE_VERSION" >&2
+if ! curl -fL --retry 3 -o "$TMPDIR/$ANGLE_ASSET" \
+    "https://github.com/$DEPS_REPO/releases/download/$ANGLE_VERSION/$ANGLE_ASSET"; then
+    echo "fetch-angle: download failed for $DEPS_REPO@$ANGLE_VERSION" >&2
     exit 1
 fi
 
@@ -87,9 +80,17 @@ if [ "$ACTUAL_SHA" != "$ANGLE_SHA256" ]; then
 fi
 
 # The tarball holds <sdk>/include and <sdk>/lib for iphoneos,
-# iphonesimulator and macosx, relative to ANGLE_DIR.
-mkdir -p "$ANGLE_DIR"
-tar -xzf "$TMPDIR/$ANGLE_ASSET" -C "$ANGLE_DIR"
+# iphonesimulator and macosx, relative to ANGLE_DIR. ANGLE_DIR also
+# holds the tracked .version, so each SDK folder is replaced on its own.
+# The stamp goes first, so a run that stops halfway is not trusted.
+mkdir "$TMPDIR/angle"
+tar -xzf "$TMPDIR/$ANGLE_ASSET" -C "$TMPDIR/angle"
+rm -f "$STAMP"
+for SDK_DIR in "$TMPDIR/angle"/*/; do
+    SDK="$(basename "$SDK_DIR")"
+    rm -rf "${ANGLE_DIR:?}/$SDK"
+    mv "$SDK_DIR" "$ANGLE_DIR/$SDK"
+done
 
 echo "$ANGLE_VERSION" >"$STAMP"
 echo "fetch-angle: hydrated $ANGLE_VERSION ($ANGLE_SHA256)"

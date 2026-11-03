@@ -26,7 +26,9 @@ fi
 
 # shellcheck disable=SC1090
 . "$PIN"
-BUILT="$SDL_VERSION $SDL_SHA256 $GAMECONTROLLERDB_COMMIT $GAMECONTROLLERDB_SHA256"
+# The hash of this script is part of the marker, so a change to the
+# build flags builds SDL again.
+BUILT="$SDL_VERSION $SDL_SHA256 $GAMECONTROLLERDB_COMMIT $GAMECONTROLLERDB_SHA256 $(shasum -a 256 "$0" | cut -d' ' -f1)"
 if [ "$(cat "$DEST/.built-pin" 2>/dev/null)" = "$BUILT" ]; then
     exit 0
 fi
