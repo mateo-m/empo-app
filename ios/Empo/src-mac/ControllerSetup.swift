@@ -122,7 +122,11 @@ final class ControllerSetup {
     }
 
     let controller: ConnectedControllers.Controller
-    let steps: [BindingsCatalog.Row]
+    /// The paddles and the touchpad are steps for every controller. A
+    /// mapping can lack a control that the controller has, and a saved
+    /// setup replaces the whole mapping.
+    let steps = BindingsCatalog.sections(includingOptional: BindingsCatalog.optionalElements)
+        .flatMap(\.elements)
     private(set) var stepIndex = 0
     private(set) var inputs: [String: Input] = [:]
     private(set) var saveFailed = false
@@ -135,14 +139,6 @@ final class ControllerSetup {
 
     init(controller: ConnectedControllers.Controller) {
         self.controller = controller
-        // A saved setup replaces the whole mapping, so the steps include
-        // each paddle and the touchpad that the mapping has now.
-        let gamepad = SDL_OpenGamepad(controller.id)
-        defer { SDL_CloseGamepad(gamepad) }
-        steps = BindingsCatalog.sections(
-            includingOptional: gamepad.map(SDLControllers.optionalElements) ?? []
-        )
-        .flatMap(\.elements)
     }
 
     var step: BindingsCatalog.Row? { steps.indices.contains(stepIndex) ? steps[stepIndex] : nil }
