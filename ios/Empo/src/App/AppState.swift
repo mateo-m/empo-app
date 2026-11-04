@@ -82,7 +82,20 @@ class AppState {
             return
         }
 
-        guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil else { return }
+        guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil, launchTask == nil
+        else { return }
+        // The hard stop of 7.6 ends a restore in flight before the
+        // launch moves saves, makes folders, or reads the settings.
+        launchTask = Task { @MainActor [weak self] in
+            await RestoreCoordinator.shared.stopForGameLaunch()
+            guard let self else { return }
+            launchTask = nil
+            guard phase == nil, PauseManager.shared.pausedGame == nil else { return }
+            launch(game)
+        }
+    }
+
+    private func launch(_ game: GameEntry) {
         let start: GameStart
         do {
             start = try GameStart(game: game)
@@ -110,11 +123,8 @@ class AppState {
         )
 
         // The hop to the next main-actor turn lets SwiftUI commit
-        // `phase = .loading` before the engine takes the path. The
-        // hard stop of 7.6 ends a restore in flight before the game
-        // reads its files.
+        // `phase = .loading` before the engine takes the path.
         Task { @MainActor in
-            await RestoreCoordinator.shared.stopForGameLaunch()
             session.launchGamePath(game.path)
         }
     }
@@ -174,6 +184,7 @@ class AppState {
     @ObservationIgnored private var quitOnPause = false
     @ObservationIgnored private var quitTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
+    @ObservationIgnored private var launchTask: Task<Void, Never>?
 
     /// Pauses the game, so the library comes back the same way, and
     /// kills it once the core says it paused. The game is never marked
