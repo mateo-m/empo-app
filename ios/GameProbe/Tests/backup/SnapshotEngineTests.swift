@@ -180,14 +180,6 @@ final class SnapshotEngineTests: XCTestCase {
     /// It sleeps between the reads instead of yielding, so the run
     /// under test gets the processor. A yield loop starves it on a
     /// busy host, which is what a parallel test run is.
-    private func waitForArrivals(_ count: Int, at latch: TransferLatch) async -> Bool {
-        for _ in 0..<400 {
-            if await latch.arrivedCount >= count { return true }
-            try? await Task.sleep(nanoseconds: 5_000_000)
-        }
-        return await latch.arrivedCount >= count
-    }
-
     private func blobPaths(_ target: FakeBackupTarget) -> [String] {
         target.objectPaths().filter { $0.contains("/blobs/") }
     }
@@ -846,7 +838,7 @@ final class SnapshotEngineTests: XCTestCase {
         let payload = request(games: [game(gameName)])
         let running = Task { [engine] in await engine.run(payload) }
 
-        let arrived = await waitForArrivals(4, at: latch)
+        let arrived = await latch.waitForArrivals(4)
         XCTAssertTrue(arrived, "the run never reached the first blob upload")
         try changeTheSave(of: gameName, to: "the save moved while the run copied it")
         await latch.open()
@@ -879,7 +871,7 @@ final class SnapshotEngineTests: XCTestCase {
 
         let payload = request(games: [game(gameName)])
         let running = Task { [engine] in await engine.run(payload) }
-        _ = await waitForArrivals(4, at: latch)
+        _ = await latch.waitForArrivals(4)
         try changeTheSave(of: gameName, to: "the save moved while the run copied it")
         await latch.open()
         _ = await running.value
@@ -926,7 +918,7 @@ final class SnapshotEngineTests: XCTestCase {
             freeSpaceBytes: .max)
         let running = Task { await engine.run(restore) }
 
-        let arrived = await waitForArrivals(reads + 1, at: latch)
+        let arrived = await latch.waitForArrivals(reads + 1)
         XCTAssertTrue(arrived)
         running.cancel()
         await latch.open()
@@ -1048,7 +1040,7 @@ final class SnapshotEngineTests: XCTestCase {
 
         let payload = request(games: [game(gameName)])
         let running = Task { [engine] in await engine.run(payload) }
-        _ = await waitForArrivals(4, at: latch)
+        _ = await latch.waitForArrivals(4)
 
         let held = await recorder.plan
         XCTAssertGreaterThan(held.plannedBytes, 0)

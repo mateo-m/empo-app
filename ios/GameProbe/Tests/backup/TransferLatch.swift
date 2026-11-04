@@ -10,6 +10,8 @@ actor TransferLatch {
     /// a later call raises it.
     private let holdFrom: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var arrivalWaiters: [UUID: (count: Int, continuation: CheckedContinuation<Bool, Never>)] =
+        [:]
 
     /// How many transfers reached the latch.
     private(set) var arrivedCount = 0
@@ -21,6 +23,9 @@ actor TransferLatch {
 
     func wait() async {
         arrivedCount += 1
+        for (id, waiter) in arrivalWaiters where waiter.count <= arrivedCount {
+            resumeArrival(id, with: true)
+        }
         guard !isOpen, arrivedCount >= holdFrom else { return }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             waiters.append(continuation)
@@ -35,14 +40,20 @@ actor TransferLatch {
         for continuation in waiting { continuation.resume() }
     }
 
-    /// Waits until `count` transfers reach the latch, or until the
-    /// yield budget runs out. Returns whether the count arrived.
-    func waitForArrivals(_ count: Int, yields: Int = 10_000) async -> Bool {
-        var left = yields
-        while arrivedCount < count, left > 0 {
-            left -= 1
-            await Task.yield()
+    /// Waits until `count` transfers reach the latch. Returns false
+    /// only when `timeoutNanoseconds` passes first.
+    func waitForArrivals(_ count: Int, timeoutNanoseconds: UInt64 = 30_000_000_000) async -> Bool {
+        guard arrivedCount < count else { return true }
+        let id = UUID()
+        let timer = Task {
+            try? await Task.sleep(nanoseconds: timeoutNanoseconds)
+            self.resumeArrival(id, with: false)
         }
-        return arrivedCount >= count
+        defer { timer.cancel() }
+        return await withCheckedContinuation { arrivalWaiters[id] = (count, $0) }
+    }
+
+    private func resumeArrival(_ id: UUID, with arrived: Bool) {
+        arrivalWaiters.removeValue(forKey: id)?.continuation.resume(returning: arrived)
     }
 }
