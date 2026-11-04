@@ -9,11 +9,14 @@ import UIKit
 struct RemoveTargetSheet: View {
 
     let item: BackupTargetItem
-    let remove: (Bool) -> Void
+    /// Answers the failure line, or `nil` once the location is gone.
+    let remove: (Bool) async -> String?
 
     @Environment(\.dismiss) private var dismiss
     @State private var deletesBackups = false
     @State private var refusal: TargetRemovalRefusal?
+    @State private var isRemoving = false
+    @State private var failure: String?
 
     private var sheet: TargetRemovalSheet {
         TargetRemovalRules.sheet(
@@ -29,6 +32,13 @@ struct RemoveTargetSheet: View {
             SheetBodyText(sheet.body, naming: item.descriptor.displayName)
             Toggle(sheet.deleteLabel, isOn: $deletesBackups)
                 .font(.subheadline)
+                .disabled(isRemoving)
+            if let failure {
+                Label(failure, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             if let refusal {
                 SheetBodyText(refusal.line)
                     .foregroundStyle(.red)
@@ -38,10 +48,15 @@ struct RemoveTargetSheet: View {
                             .buttonStyle(SecondaryButtonStyle(size: .md))
                     }
                 }
+            } else if deletesBackups {
+                SheetDestructiveButton(isRemoving ? "Deleting…" : sheet.confirmLabel) { confirm() }
+                    .disabled(isRemoving)
             } else {
-                SheetPrimaryButton(sheet.confirmLabel) { confirm() }
+                SheetPrimaryButton(isRemoving ? "Removing…" : sheet.confirmLabel) { confirm() }
+                    .disabled(isRemoving)
             }
         }
+        .interactiveDismissDisabled(isRemoving)
     }
 
     private func confirm() {
@@ -67,7 +82,13 @@ struct RemoveTargetSheet: View {
     }
 
     private func finish(deletesBackups: Bool) {
-        remove(deletesBackups)
-        dismiss()
+        guard !isRemoving else { return }
+        isRemoving = true
+        failure = nil
+        Task {
+            failure = await remove(deletesBackups)
+            isRemoving = false
+            if failure == nil { dismiss() }
+        }
     }
 }

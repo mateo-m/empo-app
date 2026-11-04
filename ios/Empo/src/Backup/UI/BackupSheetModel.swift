@@ -164,15 +164,22 @@ final class BackupSheetModel {
 
     /// This game's snapshots on every target and every namespace,
     /// newest first.
-    func snapshots() async -> [SnapshotRow] {
+    /// It throws only when no location answered, so one location
+    /// that is down does not hide the backups on the others.
+    func snapshots() async throws -> [SnapshotRow] {
         let marker = GameIdentities.versionMarker(for: container)
         var rows: [SnapshotRow] = []
+        var failure: Error?
         for descriptor in BackupTargets.load() {
             guard let provider = await BackupTargets.provider(for: descriptor) else { continue }
             let scan = RestoreScan(provider: provider, descriptor: descriptor)
-            rows +=
-                (try? await scan.rows(of: .game(key: gameKey), localMarker: marker)) ?? []
+            do {
+                rows += try await scan.rows(of: .game(key: gameKey), localMarker: marker)
+            } catch {
+                failure = error
+            }
         }
+        if rows.isEmpty, let failure { throw failure }
         return RestorePicker.newestFirst(rows)
     }
 
@@ -181,7 +188,7 @@ final class BackupSheetModel {
     ) async -> RestoreOutcome {
         guard let descriptor = BackupTargets.load().first(where: { $0.id == row.targetId }),
             let provider = await BackupTargets.provider(for: descriptor)
-        else { return .failed("this location is not set up on this device") }
+        else { return .failed("This location isn't set up on this device any more.") }
         let outcome = await RestoreCoordinator.shared.restore(
             row, into: container, provider: provider, descriptor: descriptor,
             scope: scope, replacesTheTree: replacesTheTree)

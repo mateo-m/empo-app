@@ -12,8 +12,31 @@ struct NamespaceGamesScreen: View {
     let row: BackupNamespaceRow
 
     @State private var contents: NamespaceContents?
+    @State private var failed = false
 
     var body: some View {
+        Group {
+            if failed {
+                BackupsUnreadableView { Task { await load() } }
+            } else {
+                list
+            }
+        }
+        .navigationTitle(NamespaceListRules.title(of: row))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            contents = try await model.contents(of: targetId, namespaceId: row.namespaceId)
+        } catch {
+            failed = true
+        }
+    }
+
+    private var list: some View {
         List {
             ReadFirst(value: contents?.games) { sections in
                 if sections.isEmpty {
@@ -33,7 +56,7 @@ struct NamespaceGamesScreen: View {
                     } label: {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text(section.name)
-                            Text("\(section.rows.count) snapshots")
+                            Text(NamespaceListRules.backups(section.rows.count))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
@@ -42,10 +65,22 @@ struct NamespaceGamesScreen: View {
                 preferences
             }
         }
-        .navigationTitle(NamespaceListRules.title(of: row))
-        .navigationBarTitleDisplayMode(.inline)
-        .task {
-            contents = await model.contents(of: targetId, namespaceId: row.namespaceId)
+    }
+}
+
+/// What a backup list shows when Empo could not read the location.
+/// An empty list would say there are no backups, which is not true.
+struct BackupsUnreadableView: View {
+
+    let retry: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label("Couldn't read the backups", systemImage: "exclamationmark.icloud")
+        } description: {
+            Text(RestoreNotices.scanFailedLine)
+        } actions: {
+            Button("Try again", action: retry)
         }
     }
 }
@@ -65,7 +100,7 @@ extension NamespaceGamesScreen {
                 } label: {
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("Settings")
-                        Text("\(rows.count) snapshots")
+                        Text(NamespaceListRules.backups(rows.count))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

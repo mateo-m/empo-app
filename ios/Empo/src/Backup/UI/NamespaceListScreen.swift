@@ -13,8 +13,37 @@ struct NamespaceListScreen: View {
 
     @State private var rows: [BackupNamespaceRow]?
     @State private var confirmation: NamespaceDeleteConfirmationItem?
+    @State private var failed = false
 
     var body: some View {
+        Group {
+            if failed {
+                BackupsUnreadableView { Task { await load() } }
+            } else {
+                list
+            }
+        }
+        .navigationTitle("Devices")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await load() }
+        .sheet(item: $confirmation) { item in
+            NamespaceDeleteSheet(confirmation: item.confirmation) {
+                try await model.deleteNamespace(item.namespaceId, targetId: targetId)
+                await load()
+            }
+        }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            rows = try await model.namespaces(of: targetId)
+        } catch {
+            failed = true
+        }
+    }
+
+    private var list: some View {
         List {
             ReadFirst(value: rows) { rows in
                 ForEach(rows, id: \.namespaceId) { row in
@@ -25,7 +54,7 @@ struct NamespaceListScreen: View {
                             VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text(NamespaceListRules.title(of: row))
                                 Text(
-                                    "\(row.snapshotCount) snapshots, "
+                                    "\(NamespaceListRules.backups(row.snapshotCount)), "
                                         + BackupText.bytes(row.totalBytes)
                                 )
                                 .font(.footnote)
@@ -41,17 +70,6 @@ struct NamespaceListScreen: View {
                             Button("Delete", role: .destructive) { ask(about: row) }
                         }
                     }
-                }
-            }
-        }
-        .navigationTitle("Devices")
-        .navigationBarTitleDisplayMode(.inline)
-        .task { rows = (try? await model.namespaces(of: targetId)) ?? [] }
-        .sheet(item: $confirmation) { item in
-            NamespaceDeleteSheet(confirmation: item.confirmation) {
-                Task {
-                    await model.deleteNamespace(item.namespaceId, targetId: targetId)
-                    rows = (try? await model.namespaces(of: targetId)) ?? []
                 }
             }
         }
@@ -82,9 +100,11 @@ struct NamespaceDeleteConfirmationItem: Identifiable {
 private struct NamespaceDeleteSheet: View {
 
     let confirmation: NamespaceDeleteConfirmation
-    let delete: () -> Void
+    let delete: () async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isDeleting = false
+    @State private var failed = false
 
     var body: some View {
         StandardSheet(
@@ -101,10 +121,32 @@ private struct NamespaceDeleteSheet: View {
                 }
             }
             SheetFootnote(confirmation.spaceLine)
-            SheetDestructiveButton(confirmation.buttonLabel) {
-                delete()
-                dismiss()
+            if failed {
+                Label(
+                    "Empo couldn't delete all of these backups. Try again.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.footnote)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            SheetDestructiveButton(isDeleting ? "Deleting…" : confirmation.buttonLabel) {
+                Task { await run() }
+            }
+            .disabled(isDeleting)
         }
+        .interactiveDismissDisabled(isDeleting)
+    }
+
+    private func run() async {
+        isDeleting = true
+        failed = false
+        do {
+            try await delete()
+            dismiss()
+        } catch {
+            failed = true
+        }
+        isDeleting = false
     }
 }

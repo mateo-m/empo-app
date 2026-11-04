@@ -62,7 +62,7 @@ public enum RestoreLeftovers {
             title: "Delete the replaced game files?",
             body:
                 "A restore moved these files aside. They hold \(sizeText) of the game files "
-                + "\(gameName) had before that restore.",
+                + "\(gameName) had before that restore. You can't undo this.",
             buttonLabel: "Delete")
     }
 
@@ -74,7 +74,7 @@ public enum RestoreLeftovers {
             title: count == 1 ? "Delete 1 replaced file?" : "Delete \(count) replaced files?",
             body:
                 "A restore moved \(copies) aside and wrote the backup's files in their place. "
-                + "The moved files hold \(sizeText).",
+                + "The moved files hold \(sizeText). You can't undo this.",
             buttonLabel: count == 1 ? "Delete 1 file" : "Delete \(count) files")
     }
 

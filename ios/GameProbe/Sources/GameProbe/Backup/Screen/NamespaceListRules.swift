@@ -62,10 +62,14 @@ public struct NamespaceDeleteConfirmation: Equatable, Sendable {
 public enum NamespaceListRules {
 
     public static let spaceLine =
-        "This removes these backups from the server right away. Your other backups are not affected."
+        "Empo deletes these backups from the location now. You can't undo this. Your other backups stay."
 
     public static func title(of row: BackupNamespaceRow) -> String {
-        row.isEarlierSpace ? "This device, earlier space" : row.deviceName
+        row.isEarlierSpace ? "This device, older backups" : row.deviceName
+    }
+
+    public static func backups(_ count: Int) -> String {
+        count == 1 ? "1 backup" : "\(count) backups"
     }
 
     /// The namespace this device writes to is marked and carries no
@@ -86,7 +90,7 @@ public enum NamespaceListRules {
         for row: BackupNamespaceRow, dateRangeText: String
     ) -> NamespaceDeleteConfirmation? {
         guard canDelete(row) else { return nil }
-        let snapshots = row.snapshotCount == 1 ? "1 snapshot" : "\(row.snapshotCount) snapshots"
+        let snapshots = backups(row.snapshotCount)
         let games = row.gameCount == 1 ? "1 game" : "\(row.gameCount) games"
         return NamespaceDeleteConfirmation(
             title: "Delete the backups from \(title(of: row))?",

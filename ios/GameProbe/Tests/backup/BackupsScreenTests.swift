@@ -80,9 +80,11 @@ final class BackupsScreenTests: XCTestCase {
         let row = TargetRowRules.row(
             TargetRowFacts(
                 descriptor: target(label: "Homelab", accountHint: "homelab.lan"),
-                failure: .unreachable(), failedAt: failedAt, failedAtText: "14:03"))
-        XCTAssertEqual(row.stateLine, "Couldn't connect at 14:03")
-        XCTAssertNil(row.action)
+                failure: .unreachable(), failedAt: failedAt,
+                failedAtText: "yesterday at 14:03"))
+        XCTAssertEqual(row.stateLine, "Couldn't connect yesterday at 14:03")
+        XCTAssertEqual(row.action, .tryAgain)
+        XCTAssertTrue(row.state.isProblem)
     }
 
     func testAServerThatAnsweredDoesNotReadAsNoConnection() {
@@ -90,10 +92,25 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowRules.row(
                 TargetRowFacts(
                     descriptor: target(), failure: .unreachable(cause), failedAt: failedAt,
-                    failedAtText: "14:03")
+                    failedAtText: "at 14:03")
             ).stateLine
         }
         XCTAssertEqual(lines, ["Server error at 14:03", "Server busy at 14:03"])
+    }
+
+    func testAFullLocationOffersTryAgainAndNotAButtonThatDoesNothing() {
+        XCTAssertEqual(TargetRowRules.action(for: .full(reason: "")), .tryAgain)
+        XCTAssertEqual(TargetRowAction.tryAgain.label, "Try again")
+        XCTAssertTrue(QuotaCheck.prunedAndStillFullLine.contains("storage limit"))
+        XCTAssertFalse(QuotaCheck.prunedAndStillFullLine.contains("cap"))
+    }
+
+    func testOnlyAProblemDrawsAsOne() {
+        XCTAssertFalse(TargetRowState.current.isProblem)
+        XCTAssertFalse(TargetRowState.paused.isProblem)
+        XCTAssertFalse(TargetRowState.placeholder.isProblem)
+        XCTAssertFalse(TargetRowState.cannotOpen(.accountOff).isProblem)
+        XCTAssertTrue(TargetRowState.needsSignIn.isProblem)
     }
 
     func testAForegroundOnlyTargetCarriesThePermanentLine() {
@@ -201,7 +218,7 @@ final class BackupsScreenTests: XCTestCase {
             return XCTFail("a checked box on an unreachable target must refuse")
         }
         XCTAssertEqual(
-            refusal.line, "Empo cannot delete the backups while Dropbox is unreachable.")
+            refusal.line, "Empo can't delete the backups while it can't connect to Dropbox.")
         XCTAssertEqual(refusal.actions, [.removeWithoutDeleting, .cancel])
         XCTAssertEqual(refusal.actions.count, 2)
     }
@@ -223,6 +240,10 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertEqual(checked.confirmLabel, "Remove and delete")
         XCTAssertEqual(checked.title, "Remove Dropbox?")
         XCTAssertEqual(checked.deleteLabel, "Also delete this iPhone's backups on Dropbox")
+        XCTAssertTrue(checked.body.hasSuffix("You can't undo this."), checked.body)
+        XCTAssertFalse(
+            TargetRemovalRules.sheet(target: reachable, deleteBackups: false).body
+                .contains("undo"))
     }
 
     // MARK: - 6 and 7. The namespace list
@@ -247,19 +268,19 @@ final class BackupsScreenTests: XCTestCase {
     func testANamespaceLeftByASplitNamesItself() {
         XCTAssertEqual(
             NamespaceListRules.title(of: namespace(isEarlierSpace: true)),
-            "This device, earlier space")
+            "This device, older backups")
     }
 
     func testTheDestructiveButtonNamesTheExactSnapshotCount() {
         let confirmation = NamespaceListRules.confirmation(
             for: namespace(snapshots: 34, games: 5),
             dateRangeText: "4 March to 2 August 2026")
-        XCTAssertEqual(confirmation?.buttonLabel, "Delete 34 snapshots")
+        XCTAssertEqual(confirmation?.buttonLabel, "Delete 34 backups")
         XCTAssertEqual(
-            confirmation?.lines, ["Old iPhone", "5 games", "34 snapshots", "4 March to 2 August 2026"])
+            confirmation?.lines, ["Old iPhone", "5 games", "34 backups", "4 March to 2 August 2026"])
         XCTAssertEqual(
             confirmation?.spaceLine,
-            "This removes these backups from the server right away. Your other backups are not affected.")
+            "Empo deletes these backups from the location now. You can't undo this. Your other backups stay.")
     }
 
     func testTheDestructiveButtonCountsOneSnapshotInTheSingular() {
@@ -267,7 +288,7 @@ final class BackupsScreenTests: XCTestCase {
             NamespaceListRules.confirmation(
                 for: namespace(snapshots: 1, games: 1), dateRangeText: "2 August 2026"
             )?.buttonLabel,
-            "Delete 1 snapshot")
+            "Delete 1 backup")
     }
 
     // MARK: - 8. The notification sheet

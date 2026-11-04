@@ -26,7 +26,7 @@ struct FirstBackupAskSheet: View {
     var body: some View {
         StandardSheet(
             title: BackupModePicker.askTitle,
-            barAction: SheetBarAction("Not now") { dismiss() }
+            barAction: SheetBarAction(BackupModePicker.skipLabel) { dismiss() }
         ) {
             SheetBodyText(
                 BackupModePicker.askBody(
@@ -52,6 +52,8 @@ struct FirstBackupAskSheet: View {
 
             SheetQuietButton(BackupModePicker.saveFileEditorLabel) { showsTheEditor = true }
                 .disabled(model.editor == nil)
+
+            SheetFootnote(BackupModePicker.skipLine(gameName: model.gameName))
         }
         .task { await model.load() }
         .sheet(isPresented: $showsTheEditor) {

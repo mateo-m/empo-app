@@ -90,6 +90,11 @@ final class BackupSheetTests: XCTestCase {
             targets: [target("a", daysAgo: nil)], isRunning: false, now: now)
         XCTAssertEqual(never.state, .neverRun)
 
+        let neverAndLate = GameBackupStatusRules.status(
+            targets: [target("a", daysAgo: nil, playedDaysAgo: 9)], isRunning: false, now: now)
+        XCTAssertEqual(neverAndLate.state, .stale(days: nil))
+        XCTAssertEqual(neverAndLate.line(), "Never backed up")
+
         XCTAssertEqual(
             GameBackupStatusRules.status(targets: [], isRunning: false, now: now).state, .notSetUp)
     }
@@ -118,7 +123,7 @@ final class BackupSheetTests: XCTestCase {
                 target("b", name: "homelab", daysAgo: 0),
             ], isRunning: false, now: now)
         XCTAssertEqual(one.targetLabel, "Dropbox")
-        XCTAssertEqual(one.causeLine, "Dropbox needs you to sign in again")
+        XCTAssertEqual(one.causeLine, "Dropbox needs you to sign in again.")
 
         let two = GameBackupStatusRules.status(
             targets: [
@@ -272,9 +277,11 @@ final class BackupSheetTests: XCTestCase {
             gameName: "Ib", sizeText: "1.2 GB")
         XCTAssertTrue(tree.body.contains("1.2 GB"))
         XCTAssertTrue(tree.body.contains("Ib"))
+        XCTAssertTrue(tree.body.hasSuffix("You can't undo this."))
 
         let copies = RestoreLeftovers.displacedCopiesConfirmation(count: 4, sizeText: "12 MB")
         XCTAssertEqual(copies.buttonLabel, "Delete 4 files")
+        XCTAssertTrue(copies.body.hasSuffix("You can't undo this."))
         XCTAssertEqual(
             RestoreLeftovers.displacedCopiesConfirmation(count: 1, sizeText: "3 MB").buttonLabel,
             "Delete 1 file")

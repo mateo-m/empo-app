@@ -10,9 +10,7 @@ struct BackupTargetItem: Identifiable {
     var row: TargetRow
     var usage: TargetUsage
     var games: [TargetGameUsage]
-    var capabilities: TargetCapabilities
     var pendingDeletions: Int
-    var lastSweep: Date?
 
     var id: String { descriptor.id }
 }
@@ -103,7 +101,7 @@ final class BackupsScreenModel {
                 reach: descriptor.provider == .iCloudDrive ? iCloudReach : .open,
                 failure: status?.failure,
                 failedAt: status?.failedAt,
-                failedAtText: (status?.failedAt).map(BackupText.time) ?? "",
+                failedAtText: (status?.failedAt).map(BackupText.when) ?? "",
                 supportsBackgroundTransfer: capabilities?.supportsBackgroundTransfer ?? true,
                 lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs))
             facts.append(row)
@@ -115,10 +113,8 @@ final class BackupsScreenModel {
                         reading: status?.quota, capBytes: descriptor.capBytes,
                         bytesWrittenHere: written),
                     games: games,
-                    capabilities: capabilities ?? TargetCapabilities(),
                     pendingDeletions: ((try? store?.pendingDeletions(targetId: descriptor.id))
-                        ?? []).count,
-                    lastSweep: try? store?.lastSweep(targetId: descriptor.id)))
+                        ?? []).count))
         }
         self.items = items
         self.history = runs
@@ -244,8 +240,9 @@ final class BackupsScreenModel {
             try BackupKeychain.removeSecret(targetId: targetId)
             try BackupTargets.update { $0.removeAll { $0.id == targetId } }
         } catch {
+            BackupLog.line("BackupsScreenModel", "removing \(targetId) failed: \(error)")
             await refresh()
-            return "Empo could not remove this location: \(error.localizedDescription)"
+            return "Empo couldn't remove this location. Try again."
         }
         await refresh()
         return nil
@@ -261,13 +258,13 @@ final class BackupsScreenModel {
         try await provider.deleteEverything(under: paths.namespacePrefix + "/")
     }
 
-    func deleteNamespace(_ namespaceId: String, targetId: String) async {
+    func deleteNamespace(_ namespaceId: String, targetId: String) async throws {
         guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
         else { return }
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
-        try? await provider.deleteEverything(under: paths.namespacePrefix + "/")
-        await refresh()
+        defer { Task { await refresh() } }
+        try await provider.deleteEverything(under: paths.namespacePrefix + "/")
     }
 
     // MARK: - The namespace list, per 13.9
@@ -297,12 +294,12 @@ final class BackupsScreenModel {
     /// What one namespace holds, per 11.3. The trailing game
     /// section carries the snapshots that match no installed game,
     /// and the preference snapshots are the rollback points of 10.9.
-    func contents(of targetId: String, namespaceId: String) async -> NamespaceContents {
+    func contents(of targetId: String, namespaceId: String) async throws -> NamespaceContents {
         guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
-            let provider = await BackupTargets.provider(for: descriptor),
-            let scanned = try? await RestoreScan(provider: provider, descriptor: descriptor)
-                .namespace(namespaceId, localMarkers: Self.localMarkers())
+            let provider = await BackupTargets.provider(for: descriptor)
         else { return NamespaceContents(games: [], preferences: []) }
+        let scanned = try await RestoreScan(provider: provider, descriptor: descriptor)
+            .namespace(namespaceId, localMarkers: Self.localMarkers())
         let names = BackupGameNames()
         let sections = RestorePicker.sections(
             scanned.gameRows, among: GameIdentities.installedIdentities())

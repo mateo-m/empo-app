@@ -67,10 +67,10 @@ public enum TargetRemovalRules {
         let name = target.displayName
         return TargetRemovalSheet(
             title: "Remove \(name)?",
-            body: """
-                Empo stops backing up to \(name). \
-                The backups already there stay in your account.
-                """,
+            body: deleteBackups
+                ? "Empo stops backing up to \(name) and deletes \(deviceName)'s backups there. "
+                    + "You can't undo this."
+                : "Empo stops backing up to \(name). The backups already there stay in your account.",
             deleteLabel: "Also delete \(deviceName)'s backups on \(name)",
             confirmLabel: deleteBackups ? "Remove and delete" : "Remove")
     }
@@ -88,7 +88,7 @@ public enum TargetRemovalRules {
         guard case .unreachable = state else { return .removeAndDelete }
         return .refuse(
             TargetRemovalRefusal(
-                line: "Empo cannot delete the backups while \(target.displayName) is unreachable.",
+                line: "Empo can't delete the backups while it can't connect to \(target.displayName).",
                 actions: [.removeWithoutDeleting, .cancel]))
     }
 }

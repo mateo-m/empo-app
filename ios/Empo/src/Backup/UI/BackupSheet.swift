@@ -136,8 +136,8 @@ struct BackupSheet: View {
             Text(
                 "Empo asks about games over "
                     + "\(BackupText.bytes(BackupThreshold.defaultBytes)). "
-                    + "A change to saves and settings only keeps the whole-game backups "
-                    + "already made until retention drops them."
+                    + "If you switch to saves and settings only, Empo keeps the whole-game "
+                    + "backups it already made until they're old enough to delete."
             )
         }
     }

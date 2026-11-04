@@ -68,4 +68,13 @@ public enum BackupModePicker {
     ) -> String {
         "\(gameName) is \(sizeText). \(targetLabel) asks about games over \(thresholdText)."
     }
+
+    /// A game with no answer stays out of every backup, so the
+    /// dismiss button must not read as "later".
+    public static let skipLabel = "Skip"
+
+    public static func skipLine(gameName: String) -> String {
+        "If you skip, Empo doesn't back up \(gameName) until you choose. "
+            + "You can choose later in the game's settings, under Backup."
+    }
 }

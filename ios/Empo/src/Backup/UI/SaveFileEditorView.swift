@@ -138,6 +138,13 @@ struct GameFilePicker: View {
         }
         .navigationTitle(url.lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let directory {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add this folder") { add(directory) }
+                }
+            }
+        }
     }
 
     private func row(_ entry: URL, isDirectory: Bool) -> some View {
