@@ -44,7 +44,12 @@ enum PreferenceRestore {
             return false
         }
 
-        apply(plan)
+        do {
+            try apply(plan)
+        } catch {
+            PreferenceRollbackUndo.clear(applicationSupport: BackupRoot.layout.applicationSupport)
+            return false
+        }
         return true
     }
 
@@ -55,9 +60,13 @@ enum PreferenceRestore {
             let undo = PreferenceRollbackUndo.read(
                 applicationSupport: BackupRoot.layout.applicationSupport, at: date)
         else { return false }
-        apply(
-            PreferenceRollback.plan(
-                current: DevicePreferences.currentDefaults(), snapshot: undo.values))
+        do {
+            try apply(
+                PreferenceRollback.plan(
+                    current: DevicePreferences.currentDefaults(), snapshot: undo.values))
+        } catch {
+            return false
+        }
         PreferenceRollbackUndo.clear(applicationSupport: BackupRoot.layout.applicationSupport)
         return true
     }
@@ -67,9 +76,11 @@ enum PreferenceRestore {
             applicationSupport: BackupRoot.layout.applicationSupport, at: date) != nil
     }
 
-    private static func apply(_ plan: PreferenceRollbackPlan) {
+    /// A removal the sync state did not record comes back from the
+    /// group on the next pass, so nothing changes without it.
+    private static func apply(_ plan: PreferenceRollbackPlan) throws {
         if SyncStore.state().hasJoined, !plan.deletes.isEmpty {
-            try? SyncStore.update {
+            try SyncStore.update {
                 $0.removedPreferenceKeys = Array(Set($0.removedPreferenceKeys).union(plan.deletes))
                     .sorted()
             }
