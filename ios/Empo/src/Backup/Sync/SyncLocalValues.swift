@@ -89,7 +89,8 @@ enum SyncLocalValues {
             identities.forget(profile: local)
         }
 
-        for (id, profile) in model.liveProfiles {
+        for (id, profile) in model.liveProfiles
+        where LayoutProfileStore.validatedName(profile.name) == profile.name {
             let local = identities.name(ofId: id)
             if let local, local != profile.name {
                 _ = store.renameProfile(from: local, to: profile.name)

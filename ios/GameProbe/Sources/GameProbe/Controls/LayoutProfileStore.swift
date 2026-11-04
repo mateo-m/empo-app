@@ -80,7 +80,8 @@ public struct LayoutProfileStore {
     }
 
     public func profileExists(_ name: String) -> Bool {
-        FileManager.default.fileExists(atPath: controlsURL(name).path)
+        Self.validatedName(name) != nil
+            && FileManager.default.fileExists(atPath: controlsURL(name).path)
     }
 
     public struct ProfileRead {
@@ -135,6 +136,8 @@ public struct LayoutProfileStore {
     /// ignored at resolution.
     @discardableResult
     public func writeProfile(_ name: String, touch: TouchSection) -> Bool {
+        // A synced name such as ".." would resolve outside the root.
+        guard Self.validatedName(name) != nil else { return false }
         let preservedBindings = readProfile(name)?.bindings
         guard
             let data = ControlsManifestSerializer.serialize(
@@ -177,6 +180,7 @@ public struct LayoutProfileStore {
     /// Clears every pin to the profile first, so no game dangles.
     @discardableResult
     public func deleteProfile(_ name: String) -> Bool {
+        guard Self.validatedName(name) != nil else { return false }
         updatePins(matching: name, to: .followChain)
         do {
             try FileManager.default.removeItem(at: profileURL(name))
@@ -296,6 +300,7 @@ public struct LayoutProfileStore {
     // MARK: - Log
 
     public func appendLog(_ name: String, file: String = "controls.json", line: String) {
+        guard Self.validatedName(name) != nil else { return }
         let url = logURL(name, file: file)
         let fm = FileManager.default
         try? fm.createDirectory(at: profileURL(name), withIntermediateDirectories: true)

@@ -184,6 +184,21 @@ final class LayoutProfilesTests: XCTestCase {
 
     // MARK: - Name validation
 
+    func testANameThatLeavesTheProfilesFolderTouchesNothing() throws {
+        let fm = FileManager.default
+        XCTAssertFalse(store.writeProfile("..", touch: sampleTouch()))
+        XCTAssertFalse(fm.fileExists(atPath: root.appendingPathComponent("controls.json").path))
+        XCTAssertFalse(store.writeProfile("a/../../Games", touch: sampleTouch()))
+        XCTAssertFalse(fm.fileExists(atPath: gamesRoot.appendingPathComponent("controls.json").path))
+
+        XCTAssertTrue(store.createProfile("Kept", touch: sampleTouch()))
+        XCTAssertFalse(store.deleteProfile(".."))
+        XCTAssertFalse(store.deleteProfile("."))
+        XCTAssertFalse(store.deleteProfile(""))
+        XCTAssertTrue(fm.fileExists(atPath: gamesRoot.path))
+        XCTAssertTrue(store.profileExists("Kept"))
+    }
+
     func testNameValidation() {
         XCTAssertEqual(LayoutProfileStore.validatedName("  Lefty  "), "Lefty")
         XCTAssertNil(LayoutProfileStore.validatedName(""))
