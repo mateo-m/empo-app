@@ -23,20 +23,21 @@ struct AddTargetSheet: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(services, id: \.self) { service in
-                        Button {
-                            start(service)
-                        } label: {
-                            serviceRow(service)
-                        }
-                        // The sheet's brand tint would color the whole label.
-                        .tint(.primary)
-                        .disabled(isGreyed(service) || isWorking)
-                    }
+                    serviceRows(services.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
+                } header: {
+                    Text("Accounts")
                 } footer: {
-                    if isGreyed(.iCloudDrive) {
-                        Text("This version of Empo can't use iCloud Drive.")
-                    }
+                    Text(
+                        isGreyed(.iCloudDrive)
+                            ? "Sign in with an account you already have. This version of Empo can't use iCloud Drive."
+                            : "Sign in with an account you already have.")
+                }
+                Section {
+                    serviceRows(services.filter(BackupTargetAdd.signsInThroughTheForm))
+                } header: {
+                    Text("Servers and storage")
+                } footer: {
+                    Text("For storage you set up yourself. You need its address and sign-in details.")
                 }
                 if let failure {
                     Section {
@@ -65,6 +66,19 @@ struct AddTargetSheet: View {
                     dismiss()
                 }
             }
+        }
+    }
+
+    private func serviceRows(_ services: [BackupProviderKind]) -> some View {
+        ForEach(services, id: \.self) { service in
+            Button {
+                start(service)
+            } label: {
+                serviceRow(service)
+            }
+            // The sheet's brand tint would color the whole label.
+            .tint(.primary)
+            .disabled(isGreyed(service) || isWorking)
         }
     }
 
