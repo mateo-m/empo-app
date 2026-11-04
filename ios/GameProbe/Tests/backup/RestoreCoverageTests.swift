@@ -78,6 +78,15 @@ final class RestoreCoverageTests: XCTestCase {
 
     // MARK: - Staged blobs, per 11.9
 
+    func testACompressedBlobPastTheCompressionLimitIsRefusedWhateverItsStatedSize() throws {
+        let content = Data(count: Int(SnapshotEngine.compressionSizeLimit) + 1)
+        let entry = SnapshotManifest.Entry(
+            root: .container, path: "UserData/save.rxdata", size: .max,
+            modifiedAt: stamp, hash: ContentHash.hex(of: content), compression: .zlib)
+
+        XCTAssertFalse(RestoreStaging.holds(try BlobCodec.encodeZlib(content), entry: entry))
+    }
+
     func testAStagedBlobVerifiesBeforeItIsSkipped() {
         let content = Data("a save file".utf8)
         let encoded = BlobCodec.encode(content)
