@@ -27,6 +27,23 @@ public enum ProgressPill {
         case complete
     }
 
+    /// The stop reason for a stop that no stale cause names, or
+    /// `nil` where the pill can only say that the target did not
+    /// finish.
+    public static func stopReason(of stop: BackupRunStop, targetLabel: String) -> String? {
+        switch stop {
+        case .offline:
+            return "couldn't connect to \(targetLabel)"
+        case .throttled:
+            return "\(targetLabel) asked Empo to wait"
+        case .readOnlyFormat(.newerFormatVersion):
+            return "\(targetLabel) needs a newer version of Empo"
+        case .readOnlyFormat(.unreadableFormat), .needsSignIn, .blocked, .full, .quotaShortfall, .rejected, .writerConflict,
+            .gameStarted, .paused:
+            return nil
+        }
+    }
+
     /// Whether the pill is on screen.
     ///
     /// A run with nothing to upload never shows it. The pill hides

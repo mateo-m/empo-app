@@ -281,6 +281,20 @@ final class RunProgressTests: XCTestCase {
 
     // MARK: - The pill's four wordings, per 13.2
 
+    func testThePillNamesAStopThatNoStaleCauseNames() {
+        XCTAssertEqual(
+            ProgressPill.stopReason(of: .offline, targetLabel: "NAS"), "couldn't connect to NAS")
+        XCTAssertEqual(
+            ProgressPill.stopReason(of: .throttled(retryAfter: 30), targetLabel: "NAS"),
+            "NAS asked Empo to wait")
+        XCTAssertEqual(
+            ProgressPill.stopReason(of: .readOnlyFormat(.newerFormatVersion(9)), targetLabel: "NAS"),
+            "NAS needs a newer version of Empo")
+        XCTAssertNil(
+            ProgressPill.stopReason(of: .readOnlyFormat(.unreadableFormat), targetLabel: "NAS"))
+        XCTAssertNil(ProgressPill.stopReason(of: .needsSignIn, targetLabel: "NAS"))
+    }
+
     func testThePillSaysTheFourLinesOfThirteenTwo() {
         XCTAssertEqual(ProgressPill.line(.checking(gameName: nil)), "Checking for changes…")
         XCTAssertEqual(

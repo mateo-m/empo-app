@@ -33,6 +33,7 @@ final class BackupPass: BackupRunning {
             names: names, progress: progress, targetCount: targets.count)
         var rows: [BackupPassTarget] = []
         var didFinish = true
+        var stopNeedsTheUser = false
 
         for descriptor in targets {
             guard !Task.isCancelled else {
@@ -66,22 +67,31 @@ final class BackupPass: BackupRunning {
             BackupRunMonitor.shared.targetEnds()
             guard let result else {
                 didFinish = false
+                if BackupRunMonitor.shared.stopLine == nil {
+                    BackupRunMonitor.shared.stopLine = "\(descriptor.displayName) did not finish"
+                }
                 continue
             }
             if result.stop == .gameStarted { BackupRunMonitor.shared.pause = .gameRunning }
             let causes = Self.causes(of: result)
             if result.outcome != .success {
                 didFinish = false
-                if BackupRunMonitor.shared.stopLine == nil, result.stop != .gameStarted {
+                // A stop that only the user can clear replaces one
+                // that clears by itself.
+                let needsTheUser = !causes.isEmpty
+                if result.stop != .gameStarted,
+                    BackupRunMonitor.shared.stopLine == nil || (needsTheUser && !stopNeedsTheUser)
+                {
                     BackupRunMonitor.shared.stopLine = Self.stopLine(
-                        of: result, causes: causes, label: descriptor.label)
+                        of: result, causes: causes, label: descriptor.displayName)
+                    stopNeedsTheUser = needsTheUser
                 }
             }
             // A run the system cut short proves nothing about the
             // target, so it must not re-arm a notification, per 7.11.
             guard result.outcome == .success || !causes.isEmpty else { continue }
             rows.append(
-                BackupPassTarget(id: descriptor.id, label: descriptor.label, causes: causes))
+                BackupPassTarget(id: descriptor.id, label: descriptor.displayName, causes: causes))
         }
 
         BackupRunMonitor.shared.runEnds()
@@ -240,7 +250,8 @@ final class BackupPass: BackupRunning {
             return cause.line(targetLabel: label, deviceName: device)
         }
         guard let cause = BackupFailFastCause.allCases.first(where: causes.contains) else {
-            return "\(label) did not finish"
+            return result.stop.flatMap { ProgressPill.stopReason(of: $0, targetLabel: label) }
+                ?? "\(label) did not finish"
         }
         return cause.staleCause.line(targetLabel: label, deviceName: device)
     }
