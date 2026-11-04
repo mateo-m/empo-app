@@ -43,6 +43,15 @@ public enum RestoreScope: String, Codable, Sendable, CaseIterable, Equatable {
         }
     }
 
+    /// Whether this scope writes the UserDefaults export, which the
+    /// caller then applies as the live settings.
+    public func restoresTheSettingsFile(of manifest: SnapshotManifest) -> Bool {
+        manifest.entries.contains {
+            $0.root == .preferences && PreferencesMemberPath($0.path) == .userDefaultsExport
+                && covers($0)
+        }
+    }
+
     /// The library stream carries a bucket under the `.preferences`
     /// root with a `rescued-saves/` path, not under `.rescuedSaves`.
     private static func isRescuedSave(_ entry: SnapshotManifest.Entry) -> Bool {

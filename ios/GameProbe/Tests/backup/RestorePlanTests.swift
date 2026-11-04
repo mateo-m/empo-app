@@ -275,6 +275,17 @@ final class RestorePlanTests: XCTestCase {
             ["rescued-saves/Long Gone/.empo-origin.json", "rescued-saves/Long Gone/Save1.rxdata"])
     }
 
+    func testOnlyAScopeThatWritesTheSettingsFileAppliesIt() {
+        let snapshot = manifest([
+            entry(PreferencesMemberPath.userDefaultsExportName, root: .preferences, source: nil),
+            entry("rescued-saves/Long Gone/Save1.rxdata", root: .preferences, source: nil),
+        ])
+
+        XCTAssertTrue(RestoreScope.preferences.restoresTheSettingsFile(of: snapshot))
+        XCTAssertTrue(RestoreScope.wholeGame.restoresTheSettingsFile(of: snapshot))
+        XCTAssertFalse(RestoreScope.rescuedSaves.restoresTheSettingsFile(of: snapshot))
+    }
+
     func testTheWholeGameScopeRestoresEveryEntry() {
         let plan = RestorePlanner.plan(
             manifest: manifest([entry("UserData/save.rxdata"), entry("Game/Data.rvdata")]),

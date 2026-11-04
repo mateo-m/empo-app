@@ -210,8 +210,9 @@ final class RestoreCoordinator {
         }
         // The rollback of 10.9. The stream carries one export file,
         // and applying it is what makes the snapshot the live
-        // settings.
+        // settings. A Rescued Saves restore leaves that file out.
         if case .finished = outcome, request.stream == .preferences,
+            scope.restoresTheSettingsFile(of: manifest),
             !PreferenceRestore.applyTheRestoredFile()
         {
             outcome = .failed(Self.settingsUnchangedLine)
