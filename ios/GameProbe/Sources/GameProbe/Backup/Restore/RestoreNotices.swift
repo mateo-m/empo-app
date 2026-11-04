@@ -37,8 +37,8 @@ public enum RestoreNotices {
     public static func partialPathsLine(count: Int) -> String? {
         guard count > 0 else { return nil }
         if count == 1 {
-            return "1 file was being written when this backup ran and was left out."
+            return "1 file was being written when this backup ran. Empo restored it as it was then."
         }
-        return "\(count) files were being written when this backup ran and were left out."
+        return "\(count) files were being written when this backup ran. Empo restored them as they were then."
     }
 }

@@ -384,14 +384,14 @@ final class RestorePlanTests: XCTestCase {
         XCTAssertEqual(plan.partialPaths, ["UserData/quick.rxdata"])
         XCTAssertEqual(
             RestoreNotices.partialPathsLine(count: plan.partialPaths.count),
-            "1 file was being written when this backup ran and was left out.")
+            "1 file was being written when this backup ran. Empo restored it as it was then.")
     }
 
     func testTheSummaryStaysSilentWhenNoPathWasPartial() {
         XCTAssertNil(RestoreNotices.partialPathsLine(count: 0))
         XCTAssertEqual(
             RestoreNotices.partialPathsLine(count: 3),
-            "3 files were being written when this backup ran and were left out.")
+            "3 files were being written when this backup ran. Empo restored them as they were then.")
     }
 
     // MARK: - Helpers
