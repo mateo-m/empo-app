@@ -33,11 +33,13 @@ tip. It applies additional iOS fixes from `ios/Dependencies/sdl2/` via
   lifecycle on the iOS 27 SDK requires this, because iOS does not
   display legacy `initWithFrame:` windows.
 
-After you edit the SDL submodule, regenerate the patch:
+The build applies the patch to the working tree and does not commit
+it. After you edit the SDL submodule, compare the working tree with
+the pinned fork tip to regenerate the patch:
 
 ```sh
 cd ios/Dependencies/sources/sdl2
-git diff origin/mkxp-z-2.28.1..HEAD > ../sdl2/empo-ios.patch
+git diff d3ac4c374 > ../../sdl2/empo-ios.patch
 ```
 
 ## iOS build instructions
