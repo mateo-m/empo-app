@@ -86,6 +86,8 @@ struct TargetDetailScreen: View {
                         Text(item.row.stateLine)
                             .font(.footnote)
                             .foregroundStyle(item.row.state.isProblem ? Color.red : Color.secondary)
+                            // The List sizes this four-line header too short and cuts the last line.
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 usage(item)
