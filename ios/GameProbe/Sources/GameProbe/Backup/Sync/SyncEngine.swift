@@ -44,6 +44,7 @@ public final class SyncEngine {
 
     /// What this device held at the last pass.
     private var lastLocalValues: SyncDocumentModel?
+    private typealias SeenCopy = (namespaceId: String, modifiedAt: Date, targetId: String)
 
     public init(
         document: any SyncDocumentStore,
@@ -98,14 +99,14 @@ public final class SyncEngine {
         var mine = SyncDocumentModel()
         updateIdentities { mine = local.read(identities: &$0) }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
-        lastLocalValues = mine
         let removed = state.state().removedPreferenceKeys
         if publishes, !isNew {
             try? document.write(held.overlaid(with: mine, removingPreferences: removed))
         }
 
+        var seen: [SeenCopy] = []
         for descriptor in enabled {
-            await merge(from: descriptor, groupId: groupId)
+            seen += await merge(from: descriptor, groupId: groupId)
         }
 
         if isNew, let fetched = try? document.model(),
@@ -127,6 +128,18 @@ public final class SyncEngine {
         } catch {
             return .failed("the local document could not be saved: \(error)")
         }
+        // Only a saved pass counts as read. A pass that stops before
+        // the save reads the same copies and local values again.
+        lastLocalValues = mine
+        if !seen.isEmpty {
+            updateState("what this pass read") { state in
+                for copy in seen {
+                    state.saw(
+                        namespaceId: copy.namespaceId, at: copy.modifiedAt,
+                        targetId: copy.targetId)
+                }
+            }
+        }
         if !removed.isEmpty {
             try? state.update { $0.removedPreferenceKeys.removeAll { removed.contains($0) } }
         }
@@ -141,7 +154,10 @@ public final class SyncEngine {
 
     // MARK: - Steps 1 and 2: read and merge
 
-    private func merge(from descriptor: TargetDescriptor, groupId: String) async {
+    private func merge(
+        from descriptor: TargetDescriptor, groupId: String
+    ) async -> [SeenCopy] {
+        var seen: [SeenCopy] = []
         let namespaces = await targets.namespaces(of: descriptor)
         let progress =
             state.state().progress(ofTarget: descriptor.id)
@@ -163,11 +179,10 @@ public final class SyncEngine {
             rebuildConflicts(
                 before: before, deviceName: namespace.record?.name ?? "another device")
             if let modifiedAt = object.modifiedAt {
-                updateState("what this pass read of \(descriptor.label)") {
-                    $0.saw(namespaceId: namespace.id, at: modifiedAt, targetId: descriptor.id)
-                }
+                seen.append((namespace.id, modifiedAt, descriptor.id))
             }
         }
+        return seen
     }
 
     /// The profile rule of 10.6: the merged winner keeps the name,

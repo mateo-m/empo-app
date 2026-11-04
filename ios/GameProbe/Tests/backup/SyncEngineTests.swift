@@ -68,7 +68,10 @@ final class SyncEngineTests: XCTestCase {
             losing[profileId] = nil
         }
 
+        var failsToSave = false
+
         func save() throws {
+            if failsToSave { throw CocoaError(.fileWriteNoPermission) }
             saved = held
             steps.append("save")
         }
@@ -324,6 +327,33 @@ final class SyncEngineTests: XCTestCase {
         // A second pass that read it again would find no bytes and
         // change nothing, so the state row is the proof.
         _ = await engine.run(.now)
+        XCTAssertEqual(state.value.progress(ofTarget: "t1")?.seenNamespaces["other"], stamp)
+    }
+
+    func testACopyAndALocalChangeAreTakenAgainAfterASaveThatFailed() async throws {
+        let document = FakeDocument()
+        document.failsToSave = true
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["layout": .string("list")])
+
+        let state = FakeState(groupId: "g1")
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+
+        guard case .failed = await engine.run(.afterALocalChange) else {
+            return XCTFail("the pass did not report the failed save")
+        }
+        XCTAssertNil(state.value.progress(ofTarget: "t1")?.seenNamespaces["other"])
+
+        document.failsToSave = false
+        document.steps = []
+        let outcome = await engine.run(.afterALocalChange)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertTrue(document.steps.contains("merge"))
         XCTAssertEqual(state.value.progress(ofTarget: "t1")?.seenNamespaces["other"], stamp)
     }
 
