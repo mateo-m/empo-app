@@ -52,6 +52,7 @@ final class PackageExportModel {
         task = Task { [weak self] in
             guard let self else { return }
             let plan = await source.plan()
+            guard !Task.isCancelled else { return }
             guard !plan.streams.isEmpty else {
                 phase = .failed("This device holds nothing to export.")
                 return
@@ -68,15 +69,30 @@ final class PackageExportModel {
         let device = UIDevice.current.name
         let freeSpaceBytes = Self.freeSpaceBytes
         do {
-            let built = try await Task.detached(priority: .userInitiated) { [weak self] in
+            let show: @MainActor @Sendable (PackageBuildProgress) -> Void = { [weak self] value in
+                self?.progress = value
+            }
+            let job = Task.detached(priority: .userInitiated) {
                 try plan.build(
                     localRoot: localRoot,
                     sourceDevice: device,
                     freeSpaceBytes: freeSpaceBytes
                 ) { value in
-                    Task { @MainActor in self?.progress = value }
+                    Task { await show(value) }
                 }
-            }.value
+            }
+            // A detached task does not inherit the cancel of `task`,
+            // so Cancel has to reach the build by hand.
+            let built = try await withTaskCancellationHandler {
+                try await job.value
+            } onCancel: {
+                job.cancel()
+            }
+            // A build that ended as Cancel came in keeps no ZIP.
+            guard !Task.isCancelled else {
+                built.delete(localRoot: localRoot)
+                return
+            }
             record = built
             phase = .saving
         } catch PackageBuildFailure.notEnoughSpace(let shortfall) {

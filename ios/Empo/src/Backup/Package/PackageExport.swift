@@ -19,9 +19,10 @@ enum PackageExport {
     static func libraryPlan() async -> PackagePlan {
         var streams: [PackagePlan.Stream] = []
         for container in GameContainer.discover() {
+            guard !Task.isCancelled else { return PackagePlan(gameName: nil, streams: []) }
             streams.append(await stream(of: container, gameName: BackupGameNames.name(of: container)))
         }
-        if let preferences = preferencesStream() { streams.append(preferences) }
+        if let preferences = await preferencesStream() { streams.append(preferences) }
         return PackagePlan(gameName: nil, streams: streams)
     }
 
@@ -31,7 +32,9 @@ enum PackageExport {
     ) async -> PackagePlan.Stream {
         let mode = await self.mode(of: container)
         let request = await GameBackupSets.request(for: container, mode: mode)
-        let set = BackupSetResolver.resolve(request)
+        // The walk of a full-mode tree takes seconds, and the sheet
+        // must still draw and take Cancel meanwhile.
+        let set = await Task.detached { BackupSetResolver.resolve(request) }.value
         let identity = GameIdentities.identity(for: container)
         return PackagePlan.Stream(
             key: identity.gameKey,
@@ -49,10 +52,10 @@ enum PackageExport {
     /// The stream that belongs to no game, per 5.3, with the
     /// UserDefaults export of 10.1 written into staging first.
     @MainActor
-    private static func preferencesStream() -> PackagePlan.Stream? {
+    private static func preferencesStream() async -> PackagePlan.Stream? {
         guard let file = DevicePreferences.writeTheExportFile() else { return nil }
         let request = GameBackupSets.libraryRequest(userDefaultsExportFile: file)
-        let set = BackupSetResolver.resolveLibraryStream(request)
+        let set = await Task.detached { BackupSetResolver.resolveLibraryStream(request) }.value
         guard !set.members.isEmpty else { return nil }
         return PackagePlan.Stream(
             key: BackupStream.preferencesKey,
