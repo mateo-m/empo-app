@@ -229,6 +229,19 @@ enum BackupTargetAdd {
     private static func check(
         _ descriptor: TargetDescriptor, provider: some BackupProvider
     ) async -> Outcome {
+        // The probe upload goes through the background session, which
+        // retries a host that does not answer for up to 7 days. A
+        // mistyped address must fail here, while the user waits.
+        if signsInThroughTheForm(descriptor.provider) {
+            do {
+                _ = try await provider.list(
+                    prefix: PermissionCheck.makeProbePath(root: descriptor.root))
+            } catch {
+                if case .offline = error {
+                    return .failed("Empo could not reach this address. Check it and try again.")
+                }
+            }
+        }
         guard
             let result = try? await BackupTargets.addAfterPermissionCheck(
                 descriptor, provider: provider)
