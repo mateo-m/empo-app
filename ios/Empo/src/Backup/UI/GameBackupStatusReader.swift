@@ -20,18 +20,24 @@ enum GameBackupStatusReader {
         now: Date
     ) -> GameBackupRead {
         let network = BackupScheduler.shared.networkCause
+        let interrupted = (try? store?.interruptedRunTally()) ?? InterruptedRunTally()
         let targets = descriptors.map { descriptor in
             let clock = try? store?.staleness(targetId: descriptor.id, gameKey: gameKey)
             let failure = (try? store?.targetStatus(targetId: descriptor.id))?.failure
             let tally =
                 (try? store?.partialTally(targetId: descriptor.id, gameKey: gameKey)) ?? [:]
-            return GameTargetState(
+            var state = GameTargetState(
                 targetId: descriptor.id,
                 displayName: descriptor.displayName,
                 isPaused: descriptor.isPaused,
                 cause: StaleCause.of(failure) ?? PartialPathClock.cause(tally) ?? network,
                 lastSuccessAt: clock?.lastSuccessAt,
                 lastPlayedAt: lastPlayedAt)
+            if state.cause == nil {
+                state.cause = interrupted.cause(
+                    level: Staleness.level(of: state.freshness, now: now))
+            }
+            return state
         }
         return GameBackupRead(
             status: GameBackupStatusRules.status(

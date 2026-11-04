@@ -406,9 +406,9 @@ final class BackupScheduler {
         // the run covered.
         record(.interrupted)
 
-        let now = Date()
+        // The process died at an unknown time after the start.
         for var row in open {
-            row.finishedAt = now
+            row.finishedAt = row.startedAt
             row.detail = Self.interruptedDetail
             try? store.recordRun(row)
         }
