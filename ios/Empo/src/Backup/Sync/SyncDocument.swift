@@ -116,26 +116,26 @@ enum SyncDocument {
     static func losingControls(
         of document: Document, profileId: String
     ) throws
-        -> [String: JSONValue]
+        -> [[String: JSONValue]]
     {
         guard let map = try mapId(document, .ROOT, Key.layoutProfiles),
             let entry = try mapId(document, map, profileId),
             let controls = try mapId(document, entry, Key.controls)
-        else { return [:] }
+        else { return [] }
 
-        var out: [String: JSONValue] = [:]
+        var out: [[String: JSONValue]] = []
         for (key, winner) in try document.mapEntries(obj: controls) {
             guard case .Scalar(.String(let winning)) = winner else { continue }
             let all = try document.getAll(obj: controls, key: key)
             guard all.count > 1 else { continue }
             let texts = all.compactMap { value -> String? in
-                guard case .Scalar(.String(let text)) = value else { return nil }
+                guard case .Scalar(.String(let text)) = value, text != winning else { return nil }
                 return text
             }
-            guard let losing = texts.sorted().first(where: { $0 != winning }),
-                let parsed = json(of: losing)
-            else { continue }
-            out[key] = parsed
+            for (rank, value) in texts.sorted().compactMap(json(of:)).enumerated() {
+                if out.count == rank { out.append([:]) }
+                out[rank][key] = value
+            }
         }
         return out
     }

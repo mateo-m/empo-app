@@ -46,8 +46,11 @@ public protocol SyncDocumentStore: AnyObject {
     func heads() -> [String]
 
     /// The control leaves the merge left with more than one value,
-    /// per 10.6, mapped to the value the merge did not pick.
-    func losingControls(profileId: String) -> [String: JSONValue]
+    /// per 10.6. Each map is one version that lost: the first holds
+    /// the first value of each leaf that the merge did not pick, the
+    /// second the second, and so on. Three devices can leave two
+    /// losing values on one leaf.
+    func losingControls(profileId: String) -> [[String: JSONValue]]
 
     /// Writes the winner of each leaf back, which is how the merge
     /// resolves a conflict.

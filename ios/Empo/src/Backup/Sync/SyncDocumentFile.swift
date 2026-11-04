@@ -67,8 +67,8 @@ final class AutomergeDocumentStore: SyncDocumentStore {
         SyncDocument.heads(of: document)
     }
 
-    func losingControls(profileId: String) -> [String: JSONValue] {
-        (try? SyncDocument.losingControls(of: document, profileId: profileId)) ?? [:]
+    func losingControls(profileId: String) -> [[String: JSONValue]] {
+        (try? SyncDocument.losingControls(of: document, profileId: profileId)) ?? []
     }
 
     func resolveControls(profileId: String, keys: [String]) {

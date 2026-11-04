@@ -25,7 +25,8 @@ final class SyncEngineTests: XCTestCase {
         /// What the engine did, in order.
         var steps: [String] = []
         var rejects: SyncCopyRejection?
-        var losing: [String: [String: JSONValue]] = [:]
+        var losing: [String: [[String: JSONValue]]] = [:]
+        var failsToWrite = false
         var resolved: [String] = []
 
         func load() {
@@ -35,6 +36,7 @@ final class SyncEngineTests: XCTestCase {
         func model() throws -> SyncDocumentModel { held }
 
         func write(_ model: SyncDocumentModel) throws {
+            if failsToWrite { throw CocoaError(.fileWriteNoPermission) }
             held = model
             writes.append(model)
             steps.append("write")
@@ -59,8 +61,8 @@ final class SyncEngineTests: XCTestCase {
         var heldHeads = ["h1"]
         func heads() -> [String] { heldHeads }
 
-        func losingControls(profileId: String) -> [String: JSONValue] {
-            losing[profileId] ?? [:]
+        func losingControls(profileId: String) -> [[String: JSONValue]] {
+            losing[profileId] ?? []
         }
 
         func resolveControls(profileId: String, keys: [String]) {
@@ -518,7 +520,7 @@ final class SyncEngineTests: XCTestCase {
         document.held.layoutProfiles = [
             "p1": SyncProfile(name: "Pad", controls: ["a": .string("left")])
         ]
-        document.losing = ["p1": ["a": .string("right")]]
+        document.losing = ["p1": [["a": .string("right")]]]
 
         let targets = FakeTargets()
         targets.descriptors = [target("t1")]
@@ -539,6 +541,53 @@ final class SyncEngineTests: XCTestCase {
         // The winner goes back on the leaf, or the same conflict
         // answers every later pass.
         XCTAssertEqual(document.resolved, ["p1"])
+    }
+
+    func testEveryLosingVersionOfThreeDevicesKeepsAProfile() async throws {
+        let document = FakeDocument()
+        document.held.layoutProfiles = [
+            "p1": SyncProfile(name: "Pad", controls: ["a": .string("left")])
+        ]
+        document.losing = ["p1": [["a": .string("right")], ["a": .string("up")]]]
+
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes()
+
+        let state = FakeState(groupId: "g1")
+        _ = await engine(
+            document: document, targets: targets, state: state, local: FakeLocalValues()
+        ).run(.now)
+
+        let saved = try XCTUnwrap(document.saved)
+        let kept = saved.layoutProfiles.filter { $0.key != "p1" }
+            .compactMap { $0.value.controls["a"] }
+        XCTAssertEqual(kept.count, 2)
+        XCTAssertTrue(kept.contains(.string("right")))
+        XCTAssertTrue(kept.contains(.string("up")))
+    }
+
+    func testAConflictStaysUnresolvedWhenItsProfileIsNotWritten() async throws {
+        let document = FakeDocument()
+        document.held.layoutProfiles = [
+            "p1": SyncProfile(name: "Pad", controls: ["a": .string("left")])
+        ]
+        document.losing = ["p1": [["a": .string("right")]]]
+
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes()
+        document.failsToWrite = true
+
+        _ = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"),
+            local: FakeLocalValues()
+        ).run(.now)
+
+        XCTAssertTrue(document.resolved.isEmpty)
+        XCTAssertNotNil(document.losing["p1"])
     }
 
     // MARK: - What stops a pass before it starts

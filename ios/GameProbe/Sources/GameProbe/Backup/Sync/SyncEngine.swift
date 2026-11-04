@@ -199,26 +199,37 @@ public final class SyncEngine {
     private func rebuildConflicts(before: [String: SyncProfile], deviceName: String) {
         guard let after = try? document.model() else { return }
         var model = after
-        var didChange = false
+        var resolved: [String: [String]] = [:]
 
         for (id, winner) in after.liveProfiles {
-            let losing = document.losingControls(profileId: id)
-            guard !losing.isEmpty else { continue }
-            var version = winner
-            version.controls.merge(losing) { _, lost in lost }
-            // The losing value is this device's own where it matches
-            // what the document held before the merge.
-            let mineLost = losing.contains { before[id]?.controls[$0.key] == $0.value }
-            let (conflictId, profile) = SyncProfileConflict.conflictProfile(
-                id: id, losing: version,
-                deviceName: mineLost ? device.name : deviceName)
-            model.layoutProfiles[conflictId] = profile
-            document.resolveControls(profileId: id, keys: Array(losing.keys))
-            didChange = true
+            let versions = document.losingControls(profileId: id)
+            for losing in versions {
+                var version = winner
+                version.controls.merge(losing) { _, lost in lost }
+                // The losing value is this device's own where it
+                // matches what the document held before the merge.
+                let mineLost = losing.contains { before[id]?.controls[$0.key] == $0.value }
+                let (conflictId, profile) = SyncProfileConflict.conflictProfile(
+                    id: id, losing: version,
+                    deviceName: mineLost ? device.name : deviceName)
+                model.layoutProfiles[conflictId] = profile
+            }
+            let keys = Set(versions.flatMap(\.keys))
+            if !keys.isEmpty { resolved[id] = keys.sorted() }
         }
 
-        guard didChange else { return }
-        try? document.write(model)
+        guard !resolved.isEmpty else { return }
+        // Resolving drops the losing values, so it waits until the
+        // profiles that keep them are in the document.
+        do {
+            try document.write(model)
+        } catch {
+            note("the conflict profiles were not written: \(error)")
+            return
+        }
+        for (id, keys) in resolved.sorted(by: { $0.key < $1.key }) {
+            document.resolveControls(profileId: id, keys: keys)
+        }
     }
 
     // MARK: - Steps 5 and 6: write the copy back
