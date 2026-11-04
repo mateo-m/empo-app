@@ -96,6 +96,12 @@ public final class SyncEngine {
         // maps that never shared a history, so one side's keys would
         // vanish.
         let isNew = document.heads().isEmpty
+        if isNew {
+            // A lost document takes its history with it. What this
+            // device read and confirmed belongs to that history, as on
+            // a join, so the pass reads every copy again.
+            updateState("the progress of the lost history") { $0.targets = [] }
+        }
         var mine = SyncDocumentModel()
         updateIdentities { mine = local.read(identities: &$0) }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }

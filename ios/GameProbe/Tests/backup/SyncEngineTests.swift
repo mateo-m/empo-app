@@ -255,6 +255,36 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("below"))
     }
 
+    /// The local document was lost after earlier passes. The copies
+    /// those passes read belong to the lost history, so the new
+    /// document reads them again.
+    func testALostDocumentReadsTheCopiesAnEarlierPassAlreadyRead() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["titlePosition": .string("below")])
+
+        let state = FakeState(groupId: "g1")
+        state.value.targets = [
+            SyncTargetProgress(
+                targetId: "t1", confirmedHeads: ["lost"], seenNamespaces: ["other": stamp])
+        ]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.steps, ["load", "merge", "write", "save"])
+        XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("below"))
+        XCTAssertEqual(targets.puts, ["t1"])
+    }
+
     // MARK: - The pass stops feeding itself
 
     func testAPassAfterALocalChangeWithNothingNewStopsBeforeItWrites() async throws {
