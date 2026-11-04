@@ -75,7 +75,8 @@ final class BackupScheduler {
     /// 11.3 closes while one is, per the third row of that section.
     private(set) var isRunning = false
     private var foregroundWait: Task<Void, Never>?
-    private var runTask: Task<Void, Never>?
+    /// The pass in flight, whatever started it, so that Pause stops it.
+    private var runTask: Task<BackupPassResult, Never>?
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
 
     // MARK: - Launch
@@ -217,12 +218,10 @@ final class BackupScheduler {
     }
 
     /// Every manual pass starts here, under the system task or
-    /// without one, so that Pause finds it in `runTask`.
+    /// without one.
     @discardableResult
     func startManualRun(_ press: ManualBackupPress, progress: Progress? = nil) -> Task<Void, Never> {
-        let task = Task { _ = await run(trigger: .manual, press: press, progress: progress) }
-        runTask = task
-        return task
+        Task { _ = await run(trigger: .manual, press: press, progress: progress) }
     }
 
     /// Pause, from the run block of 13.4 or the Backup sheet of
@@ -339,15 +338,26 @@ final class BackupScheduler {
         BackupBadges.shared.invalidate()
         defer {
             isRunning = false
+            runTask = nil
             BackupNetwork.allowsThisRunOverCellular = false
             BackupBadges.shared.invalidate()
         }
         progress?.totalUnitCount = 1
 
-        let result = await runner.runBackup(
-            scope: BackupTriggerPlan.scope(of: trigger, press: press),
-            trigger: trigger,
-            progress: progress)
+        let pass = Task {
+            await runner.runBackup(
+                scope: BackupTriggerPlan.scope(of: trigger, press: press),
+                trigger: trigger,
+                progress: progress)
+        }
+        runTask = pass
+        // The system cancels the task of a background grant when the
+        // grant expires, and that cancel must reach the pass too.
+        let result = await withTaskCancellationHandler {
+            await pass.value
+        } onCancel: {
+            pass.cancel()
+        }
 
         close(progress)
         record(result.didFinish ? .succeeded : .otherFailure)
