@@ -285,7 +285,8 @@ final class DeviceChecks: XCTestCase {
         note("Resume button shows: \(empo.buttons["Resume"].firstMatch.exists)")
         note("Sign in button shows: \(empo.buttons["Sign in"].firstMatch.exists)")
         shot("row-paused")
-        let backUpNow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Back up now'")).firstMatch
+        let backUpNow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Back up now'"))
+            .firstMatch
         XCTAssertTrue(backUpNow.waitForExistence(timeout: 120), "no Back up now button")
         note("Back up now reads: \(backUpNow.label), enabled \(backUpNow.isEnabled)")
         backUpNow.tap()
@@ -347,7 +348,8 @@ final class DeviceChecks: XCTestCase {
         signIn.tap()
         XCTAssertTrue(empo.navigationBars["WebDAV server"].waitForExistence(timeout: 10), "no sign-in form")
         note("form fields: \(empo.textFields.allElementsBoundByIndex.map { "\($0.value ?? "")" })")
-        fillIfEmpty(hint: "https://cloud.example.com/remote.php/dav/files/alice", with: env["EMPO_ADDRESS"] ?? "")
+        fillIfEmpty(
+            hint: "https://cloud.example.com/remote.php/dav/files/alice", with: env["EMPO_ADDRESS"] ?? "")
         fillIfEmpty(hint: "alice", with: env["EMPO_USER"] ?? "")
         fill(hint: "", with: env["EMPO_PASSWORD"] ?? "", secret: true)
         hideKeyboard()
@@ -415,7 +417,8 @@ final class DeviceChecks: XCTestCase {
         for _ in 0..<4 where !cancel.exists {
             let labels = empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
             note("picker buttons: \(labels.suffix(8))")
-            guard let parent = ["On My iPhone", "Browse", "Locations"].first(where: { labels.contains($0) }) else {
+            guard let parent = ["On My iPhone", "Browse", "Locations"].first(where: { labels.contains($0) })
+            else {
                 break
             }
             empo.buttons[parent].firstMatch.tap()
@@ -481,7 +484,8 @@ final class DeviceChecks: XCTestCase {
 
     private func setMode(_ label: String) {
         openGameBackupSheet()
-        let modeRow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'What gets backed up'")).firstMatch
+        let modeRow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'What gets backed up'"))
+            .firstMatch
         note("mode row before: \(modeRow.label)")
         modeRow.tap()
         sleep(1)
@@ -508,8 +512,12 @@ final class DeviceChecks: XCTestCase {
         shot("export-picker")
         dismissThePicker()
         let saveAgain = empo.buttons["Save again"].firstMatch
-        note("Save again shows: \(saveAgain.waitForExistence(timeout: 10)), Delete shows: \(empo.buttons["Delete"].firstMatch.exists)")
-        note("choice texts: \(empo.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY > 400 }.map(\.label))")
+        note(
+            "Save again shows: \(saveAgain.waitForExistence(timeout: 10)), Delete shows: \(empo.buttons["Delete"].firstMatch.exists)"
+        )
+        note(
+            "choice texts: \(empo.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY > 400 }.map(\.label))"
+        )
         shot("export-choice")
         saveAgain.tap()
         note("Files picker shows again: \(save.waitForExistence(timeout: 30))")
@@ -550,12 +558,15 @@ final class DeviceChecks: XCTestCase {
         var lastLine = ""
         while !save.exists, Date().timeIntervalSince(began) < 900 {
             let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
-            let line = texts.drop(while: { $0 != "Export backup" }).dropFirst().prefix(3).joined(separator: " | ")
+            let line = texts.drop(while: { $0 != "Export backup" }).dropFirst().prefix(3).joined(
+                separator: " | ")
             if line != lastLine {
                 note("export sheet: \(line)")
                 lastLine = line
             }
-            if empo.buttons.matching(identifier: "Done").allElementsBoundByIndex.count > 1 || line.contains("free space") || line.contains("could not") {
+            if empo.buttons.matching(identifier: "Done").allElementsBoundByIndex.count > 1
+                || line.contains("free space") || line.contains("could not")
+            {
                 shot("export-stopped")
             }
             sleep(5)
@@ -581,7 +592,9 @@ final class DeviceChecks: XCTestCase {
             empo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.543)).tap()
         }
         sleep(4)
-        note("export sheet gone: \(!empo.staticTexts["Export backup"].firstMatch.exists), Backup sheet shows: \(empo.buttons["Export backup"].firstMatch.exists)")
+        note(
+            "export sheet gone: \(!empo.staticTexts["Export backup"].firstMatch.exists), Backup sheet shows: \(empo.buttons["Export backup"].firstMatch.exists)"
+        )
         shot("after-export")
         empo.terminate()
     }
@@ -593,9 +606,16 @@ final class DeviceChecks: XCTestCase {
         files.launch()
         sleep(3)
         shot("files-launch")
-        note("files buttons: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.prefix(20))")
+        note(
+            "files buttons: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.prefix(20))"
+        )
         let browse = files.tabBars.buttons["Browse"].firstMatch
-        if browse.exists { browse.tap(); sleep(1); browse.tap(); sleep(1) }
+        if browse.exists {
+            browse.tap()
+            sleep(1)
+            browse.tap()
+            sleep(1)
+        }
         let onMyIPhone = files.staticTexts["On My iPhone"].firstMatch
         if !onMyIPhone.exists, files.buttons["Browse"].firstMatch.exists {
             files.buttons["Browse"].firstMatch.tap()
@@ -609,36 +629,49 @@ final class DeviceChecks: XCTestCase {
         shot("files-on-my-iphone")
         empoFolder.tap()
         sleep(2)
-        let zip = files.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'In Search of Immortality-Empo-backup'")).firstMatch
+        let zip = files.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH 'In Search of Immortality-Empo-backup'")
+        ).firstMatch
         note("ZIP shows: \(zip.waitForExistence(timeout: 10)), label \(zip.exists ? zip.label : "")")
         shot("files-empo-folder")
         zip.press(forDuration: 1.2)
         sleep(2)
         shot("files-zip-menu")
-        note("menu buttons: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(20))")
+        note(
+            "menu buttons: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(20))"
+        )
         let openWith = files.buttons["Open With"].firstMatch
         note("Open With shows: \(openWith.waitForExistence(timeout: 5))")
         openWith.tap()
         sleep(3)
         shot("files-open-with")
         let any = files.descendants(matching: .any)
-        let empoTarget = any.matching(NSPredicate(format: "label == 'Empo' OR label BEGINSWITH 'Empo,'")).firstMatch
-        note("Empo in Open With: \(empoTarget.waitForExistence(timeout: 5)), label \(empoTarget.exists ? empoTarget.label : "")")
-        note("open with labels: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(20)), cells \(files.cells.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.prefix(12))")
+        let empoTarget = any.matching(NSPredicate(format: "label == 'Empo' OR label BEGINSWITH 'Empo,'"))
+            .firstMatch
+        note(
+            "Empo in Open With: \(empoTarget.waitForExistence(timeout: 5)), label \(empoTarget.exists ? empoTarget.label : "")"
+        )
+        note(
+            "open with labels: \(files.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(20)), cells \(files.cells.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.prefix(12))"
+        )
         if empoTarget.exists { empoTarget.tap() }
         note("Empo in front: \(empo.wait(for: .runningForeground, timeout: 20))")
         sleep(3)
         if empo.staticTexts["Something went wrong"].firstMatch.exists { empo.buttons["OK"].firstMatch.tap() }
         let importBar = empo.navigationBars["Import backup"].firstMatch
         note("import sheet shows: \(importBar.waitForExistence(timeout: 20))")
-        note("import texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(8))")
+        note(
+            "import texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(8))"
+        )
         shot("import-sheet")
     }
 
     /// The row is a plain button whose label is the name plus the
     /// size. The library card behind the sheet has the bare name.
     private var importRow: XCUIElement {
-        empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'In Search of Immortality' AND label ENDSWITH 'B'")).firstMatch
+        empo.buttons.matching(
+            NSPredicate(format: "label BEGINSWITH 'In Search of Immortality' AND label ENDSWITH 'B'")
+        ).firstMatch
     }
 
     /// 019 checks 4 and 5. The restore lands over the game this phone
@@ -650,12 +683,18 @@ final class DeviceChecks: XCTestCase {
         row.tap()
         let restore = empo.buttons["Restore"].firstMatch
         note("restore sheet shows: \(restore.waitForExistence(timeout: 10))")
-        note("restore texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        note(
+            "restore texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))"
+        )
         shot("restore-sheet")
         restore.tap()
         sleep(15)
-        note("after restore texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
-        note("after restore buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        note(
+            "after restore texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))"
+        )
+        note(
+            "after restore buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))"
+        )
         shot("after-restore")
         for name in ["Done", "Cancel"] where empo.buttons[name].firstMatch.exists {
             empo.buttons[name].firstMatch.tap()
@@ -664,7 +703,9 @@ final class DeviceChecks: XCTestCase {
         shot("after-import-close")
         openGameBackupSheet()
         for _ in 0..<3 { empo.swipeUp() }
-        note("backup sheet texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(10))")
+        note(
+            "backup sheet texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(10))"
+        )
         shot("backup-sheet-after-import")
         empo.terminate()
     }
@@ -692,14 +733,20 @@ final class DeviceChecks: XCTestCase {
         launchEmpo(arguments: ["-debugLogs", "YES"])
         let title = empo.staticTexts["Resume the restore?"].firstMatch
         note("resume question shows: \(title.waitForExistence(timeout: 15))")
-        note("question texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
-        note("question buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))")
+        note(
+            "question texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))"
+        )
+        note(
+            "question buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(6))"
+        )
         shot("resume-question")
         let stop = empo.buttons["Stop restore"].firstMatch
         stop.tap()
         let stopTitle = empo.staticTexts["Stop the restore?"].firstMatch
         note("stop step shows: \(stopTitle.waitForExistence(timeout: 10))")
-        note("stop texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(4))")
+        note(
+            "stop texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(4))"
+        )
         shot("stop-step")
         stop.tap()
         sleep(3)
@@ -728,10 +775,13 @@ final class DeviceChecks: XCTestCase {
         var footnote = ""
         while scope.exists, footnote.isEmpty, Date().timeIntervalSince(start) < 900 {
             sleep(5)
-            footnote = empo.staticTexts.allElementsBoundByIndex.map(\.label)
+            footnote =
+                empo.staticTexts.allElementsBoundByIndex.map(\.label)
                 .first { $0.hasPrefix("This device needs") || $0 == "The restore stopped." } ?? ""
         }
-        note("restore sheet gone after \(Int(Date().timeIntervalSince(start))) s: \(!scope.exists), footnote: \(footnote)")
+        note(
+            "restore sheet gone after \(Int(Date().timeIntervalSince(start))) s: \(!scope.exists), footnote: \(footnote)"
+        )
         shot("whole-game-restored")
         let done = empo.buttons["Done"].firstMatch
         if done.exists { done.tap() }
@@ -751,9 +801,13 @@ final class DeviceChecks: XCTestCase {
         let start = Date()
         while !importBar.exists, Date().timeIntervalSince(start) < 300 {
             sleep(10)
-            note("after Resume texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(5))")
+            note(
+                "after Resume texts: \(empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.suffix(5))"
+            )
         }
-        note("import sheet shows after the resume, \(Int(Date().timeIntervalSince(start))) s: \(importBar.exists)")
+        note(
+            "import sheet shows after the resume, \(Int(Date().timeIntervalSince(start))) s: \(importBar.exists)"
+        )
         shot("after-resume")
         let done = empo.buttons["Done"].firstMatch
         if done.exists { done.tap() }
@@ -867,10 +921,12 @@ final class DeviceChecks: XCTestCase {
         note("sheet tree:\n\(empo.debugDescription)")
         shot("sheet-game-paused")
         noteLocks()
-        let modeRow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'What gets backed up'")).firstMatch
+        let modeRow = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'What gets backed up'"))
+            .firstMatch
         modeRow.tap()
         sleep(1)
-        let slim = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Saves and settings only'")).firstMatch
+        let slim = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Saves and settings only'"))
+            .firstMatch
         let slimText = empo.staticTexts["Saves and settings only"].firstMatch
         (slim.exists ? slim : slimText).tap()
         sleep(1)
@@ -919,13 +975,17 @@ final class DeviceChecks: XCTestCase {
     }
 
     private func noteLocks() {
-        let names = ["What gets backed up", "Save files", "Back up now", "Pause", "Restore from backup", "Export backup"]
+        let names = [
+            "What gets backed up", "Save files", "Back up now", "Pause", "Restore from backup",
+            "Export backup",
+        ]
         for name in names {
             let element = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
             note("\(name): \(element.exists ? (element.isEnabled ? "enabled" : "disabled") : "absent")")
         }
-        for line in ["A backup of this game is running.", "Close In Search of Immortality to use these."] {
-            if empo.staticTexts[line].firstMatch.exists { note("footer: \(line)") }
+        for line in ["A backup of this game is running.", "Close In Search of Immortality to use these."]
+        where empo.staticTexts[line].firstMatch.exists {
+            note("footer: \(line)")
         }
     }
 
@@ -1046,7 +1106,6 @@ final class DeviceChecks: XCTestCase {
         XCTFail("the pill never read \"\(prefix)\" within \(Int(timeout)) s, last: \(pillLine())")
     }
 
-
     // MARK: - 011, 012, 016: targets added through the form
 
     private var env: [String: String] { ProcessInfo.processInfo.environment }
@@ -1078,7 +1137,10 @@ final class DeviceChecks: XCTestCase {
         row.tap()
         XCTAssertTrue(empo.navigationBars[service].waitForExistence(timeout: 10), "no \(service) form")
         fill(hint: service == "S3 storage" ? "My bucket" : "My server", with: name)
-        fill(hint: service == "S3 storage" ? "https://s3.eu-west-1.amazonaws.com" : "https://cloud.example.com/remote.php/dav/files/alice", with: env["EMPO_ADDRESS"] ?? "")
+        fill(
+            hint: service == "S3 storage"
+                ? "https://s3.eu-west-1.amazonaws.com"
+                : "https://cloud.example.com/remote.php/dav/files/alice", with: env["EMPO_ADDRESS"] ?? "")
         if service == "S3 storage" {
             fill(hint: "my-saves", with: env["EMPO_BUCKET"] ?? "")
             fill(hint: "eu-west-1", with: env["EMPO_REGION"] ?? "")
@@ -1106,7 +1168,9 @@ final class DeviceChecks: XCTestCase {
         shot("form-\(name)")
         let add = empo.buttons.matching(identifier: "Add").allElementsBoundByIndex.last
         for _ in 0..<3 where !(add?.isHittable ?? false) { empo.swipeUp() }
-        note("form Add enabled: \(add?.isEnabled ?? false), fields: \(empo.textFields.allElementsBoundByIndex.map { "\($0.value ?? "")" })")
+        note(
+            "form Add enabled: \(add?.isEnabled ?? false), fields: \(empo.textFields.allElementsBoundByIndex.map { "\($0.value ?? "")" })"
+        )
         add?.tap()
         sleep(3)
         if empo.navigationBars[service].exists, let add {
@@ -1122,7 +1186,9 @@ final class DeviceChecks: XCTestCase {
         let refused = empo.staticTexts["\(name) refused a step"].firstMatch
         let start = Date()
         while !ready.exists, !refused.exists, Date().timeIntervalSince(start) < 120 { sleep(1) }
-        note("permission sheet after \(Int(Date().timeIntervalSince(start))) s: ready \(ready.exists), refused \(refused.exists)")
+        note(
+            "permission sheet after \(Int(Date().timeIntervalSince(start))) s: ready \(ready.exists), refused \(refused.exists)"
+        )
     }
 
     private func texts() -> [String] {
@@ -1150,7 +1216,9 @@ final class DeviceChecks: XCTestCase {
         }
         openBackupsScreen()
         shot("fresh-backups")
-        note("Backups screen texts: \(texts().prefix(12)), buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })")
+        note(
+            "Backups screen texts: \(texts().prefix(12)), buttons: \(empo.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty })"
+        )
         // The first request to a LAN address on a fresh install earns
         // the local network ask of iOS. The check fails while the ask
         // is open, so a second Add is part of the check.
@@ -1183,10 +1251,12 @@ final class DeviceChecks: XCTestCase {
         var askSeen = false
         var idleSince = Date()
         while Date().timeIntervalSince(idleSince) < 90, !(restoreSeen && askSeen) {
-            if !askSeen, empo.staticTexts["Empo can tell you when a backup stops"].exists {
+            if !askSeen, empo.staticTexts["Know when a backup stops"].exists {
                 askSeen = true
                 shot("fresh-notification-ask")
-                note("notification ask texts: \(texts().suffix(8)), system alerts: \(springboard.alerts.count)")
+                note(
+                    "notification ask texts: \(texts().suffix(8)), system alerts: \(springboard.alerts.count)"
+                )
                 empo.buttons["Not now"].firstMatch.tap()
                 sleep(2)
                 idleSince = Date()
@@ -1224,7 +1294,9 @@ final class DeviceChecks: XCTestCase {
     private func restoreEverything(within cap: TimeInterval) {
         shot("fresh-restore-sheet")
         note("restore sheet texts: \(texts())")
-        note("restore sheet switches: \(empo.switches.allElementsBoundByIndex.map { "\($0.label)=\($0.value ?? "")" })")
+        note(
+            "restore sheet switches: \(empo.switches.allElementsBoundByIndex.map { "\($0.label)=\($0.value ?? "")" })"
+        )
         let restore = empo.buttons["Restore"].firstMatch
         note("Restore enabled: \(restore.isEnabled)")
         restore.tap()
@@ -1237,7 +1309,8 @@ final class DeviceChecks: XCTestCase {
             note("no adopt alert after Restore")
         }
         let done = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Restored '")).firstMatch
-        let progress = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Restoring'")).firstMatch
+        let progress = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Restoring'"))
+            .firstMatch
         let start = Date()
         var last = ""
         while !done.exists, Date().timeIntervalSince(start) < cap {
@@ -1269,7 +1342,9 @@ final class DeviceChecks: XCTestCase {
         sleep(2)
         let texts = empo.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }
         note("detail texts: \(texts.prefix(8))")
-        note("detail usage line: \(texts.first { $0.contains(" used") || $0.contains("backed up here") } ?? "(none)")")
+        note(
+            "detail usage line: \(texts.first { $0.contains(" used") || $0.contains("backed up here") } ?? "(none)")"
+        )
         note("usage bar shows: \(empo.progressIndicators.firstMatch.exists)")
         shot("detail-\(name)")
     }
@@ -1316,9 +1391,10 @@ final class DeviceChecks: XCTestCase {
         } else if hint.isEmpty {
             // An index into the field list races the keyboard, which
             // re-lays the form. The one field with no hint is stable.
-            field = fields.matching(
-                NSPredicate(format: "placeholderValue == nil OR placeholderValue == ''")
-            ).firstMatch
+            field =
+                fields.matching(
+                    NSPredicate(format: "placeholderValue == nil OR placeholderValue == ''")
+                ).firstMatch
         } else {
             field = fields.matching(NSPredicate(format: "placeholderValue == %@", hint)).firstMatch
         }
@@ -1343,7 +1419,9 @@ final class DeviceChecks: XCTestCase {
                 usleep(60_000)
             }
             if "\(field.value ?? "")".count == text.count { return }
-            note("the field holds \("\(field.value ?? "")".count) characters after attempt \(attempt), typing again")
+            note(
+                "the field holds \("\(field.value ?? "")".count) characters after attempt \(attempt), typing again"
+            )
             field.press(forDuration: 1.2)
             let selectAll = empo.menuItems["Select All"].firstMatch
             if selectAll.waitForExistence(timeout: 2) { selectAll.tap() }
@@ -1361,7 +1439,9 @@ final class DeviceChecks: XCTestCase {
     private func notePermissionSheet() {
         // The status card under the sheet redraws during a run, so an
         // index into the tree can point at a text that is gone.
-        let texts = empo.staticTexts.allElementsBoundByAccessibilityElement.map(\.label).filter { !$0.isEmpty }
+        let texts = empo.staticTexts.allElementsBoundByAccessibilityElement.map(\.label).filter {
+            !$0.isEmpty
+        }
         note("sheet texts: \(texts.suffix(10))")
         let marks = empo.images.allElementsBoundByAccessibilityElement.map(\.label).filter { !$0.isEmpty }
         note("sheet marks: \(marks.suffix(6))")
@@ -1375,9 +1455,12 @@ final class DeviceChecks: XCTestCase {
         note("pill at the stop: \"\(watchThePill(within: 300))\"")
         shot("writer-stop")
         openBackupsScreen()
-        let question = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Another device,'")).firstMatch
+        let question = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Another device,'"))
+            .firstMatch
         note("question shows: \(question.waitForExistence(timeout: 10)), reads \"\(question.label)\"")
-        note("answers: \(["Keep separate", "Take over"].map { "\($0)=\(empo.buttons[$0].firstMatch.exists)" })")
+        note(
+            "answers: \(["Keep separate", "Take over"].map { "\($0)=\(empo.buttons[$0].firstMatch.exists)" })"
+        )
         note("target rows: \(targetRows())")
         shot("writer-question")
         guard question.exists else { return }
@@ -1388,7 +1471,9 @@ final class DeviceChecks: XCTestCase {
         empo.navigationBars.buttons.firstMatch.tap()
         note("pill at the end: \"\(watchThePill(within: cap))\"")
         openBackupsScreen()
-        let line = empo.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Another device was using'")).firstMatch
+        let line = empo.staticTexts.matching(
+            NSPredicate(format: "label BEGINSWITH 'Another device was using'")
+        ).firstMatch
         note("split line shows: \(line.waitForExistence(timeout: 10))")
         note("target rows: \(targetRows())")
         shot("writer-split")
@@ -1399,7 +1484,8 @@ final class DeviceChecks: XCTestCase {
     }
 
     private func targetRows() -> [String] {
-        empo.buttons.matching(NSPredicate(format: "label CONTAINS ' at '")).allElementsBoundByIndex.map(\.label)
+        empo.buttons.matching(NSPredicate(format: "label CONTAINS ' at '")).allElementsBoundByIndex.map(
+            \.label)
     }
 
     /// Follows the pill until it settles, and returns its last line.
@@ -1414,7 +1500,9 @@ final class DeviceChecks: XCTestCase {
                 last = line
             }
             if line != "(no pill)" { seen = true }
-            if seen, line == "(no pill)" || line.hasPrefix("Backup complete") || line.hasPrefix("Backup stopped") {
+            if seen,
+                line == "(no pill)" || line.hasPrefix("Backup complete") || line.hasPrefix("Backup stopped")
+            {
                 sleep(3)
                 if pillLine() == "(no pill)" || pillLine() == line { return line }
             }
@@ -1438,8 +1526,11 @@ final class DeviceChecks: XCTestCase {
         devices.tap()
         let planted = empo.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", device)).firstMatch
         let start = Date()
-        note("planted row shows: \(planted.waitForExistence(timeout: 180)) after \(Int(Date().timeIntervalSince(start))) s")
-        let rows = empo.buttons.matching(NSPredicate(format: "label CONTAINS 'snapshots'")).allElementsBoundByIndex.map(\.label)
+        note(
+            "planted row shows: \(planted.waitForExistence(timeout: 180)) after \(Int(Date().timeIntervalSince(start))) s"
+        )
+        let rows = empo.buttons.matching(NSPredicate(format: "label CONTAINS 'snapshots'"))
+            .allElementsBoundByIndex.map(\.label)
         note("device rows: \(rows)")
         shot("devices-before")
         guard planted.exists else { return }
@@ -1459,7 +1550,8 @@ final class DeviceChecks: XCTestCase {
         let began = Date()
         while planted.exists, Date().timeIntervalSince(began) < 180 { sleep(2) }
         note("planted row gone: \(!planted.exists) after \(Int(Date().timeIntervalSince(began))) s")
-        let after = empo.buttons.matching(NSPredicate(format: "label CONTAINS 'snapshots'")).allElementsBoundByIndex.map(\.label)
+        let after = empo.buttons.matching(NSPredicate(format: "label CONTAINS 'snapshots'"))
+            .allElementsBoundByIndex.map(\.label)
         note("device rows after: \(after)")
         shot("devices-after")
     }
@@ -1483,7 +1575,8 @@ final class DeviceChecks: XCTestCase {
         shot("library-export-start")
         while !save.exists, !stopped, Date().timeIntervalSince(began) < 1800 {
             let texts = visibleTexts()
-            let line = texts.drop(while: { !$0.hasPrefix("Export") }).dropFirst().prefix(3).joined(separator: " | ")
+            let line = texts.drop(while: { !$0.hasPrefix("Export") }).dropFirst().prefix(3).joined(
+                separator: " | ")
             if line != lastLine {
                 note("export sheet: \(line)")
                 lastLine = line
@@ -1497,7 +1590,8 @@ final class DeviceChecks: XCTestCase {
         note("Files picker shows: \(save.exists) after \(Int(Date().timeIntervalSince(began))) s")
         shot("library-export-end")
         guard save.exists else {
-            if let done = empo.buttons.matching(identifier: "Done").allElementsBoundByIndex.last, done.exists {
+            if let done = empo.buttons.matching(identifier: "Done").allElementsBoundByIndex.last, done.exists
+            {
                 done.tap()
             }
             return
@@ -1505,7 +1599,9 @@ final class DeviceChecks: XCTestCase {
         dismissThePicker()
         let saveAgain = empo.buttons["Save again"].firstMatch
         let delete = empo.buttons["Delete"].firstMatch
-        note("choice shows: \(saveAgain.waitForExistence(timeout: 10)), texts: \(empo.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY > 400 }.map(\.label))")
+        note(
+            "choice shows: \(saveAgain.waitForExistence(timeout: 10)), texts: \(empo.staticTexts.allElementsBoundByIndex.filter { $0.frame.minY > 400 }.map(\.label))"
+        )
         shot("library-export-choice")
         if env["EMPO_KEEP"] == "YES" {
             saveAgain.tap()
@@ -1552,7 +1648,9 @@ final class DeviceChecks: XCTestCase {
             }
             if line.hasPrefix("Backing up"), uploadSince == nil { uploadSince = Date() }
             if line != "(no pill)" { seen = true }
-            if seen, line == "(no pill)" || line.hasPrefix("Backup complete") || line.hasPrefix("Backup stopped") {
+            if seen,
+                line == "(no pill)" || line.hasPrefix("Backup complete") || line.hasPrefix("Backup stopped")
+            {
                 sleep(3)
                 if pillLine() == "(no pill)" || pillLine() == line { break }
             }
@@ -1575,7 +1673,8 @@ final class DeviceChecks: XCTestCase {
         }
         openBackupsScreen()
         sleep(2)
-        let rows = empo.buttons.matching(NSPredicate(format: "label CONTAINS ' at '")).allElementsBoundByIndex.map(\.label)
+        let rows = empo.buttons.matching(NSPredicate(format: "label CONTAINS ' at '")).allElementsBoundByIndex
+            .map(\.label)
         note("target rows: \(rows)")
         shot("rows-after-run")
     }
@@ -1667,7 +1766,8 @@ final class DeviceChecks: XCTestCase {
         for _ in 0..<4 where !target.waitForExistence(timeout: 2) { empo.swipeDown() }
         if target.exists {
             target.tap()
-            _ = empo.navigationBars.matching(NSPredicate(format: "identifier != 'Backups'")).firstMatch.waitForExistence(timeout: 5)
+            _ = empo.navigationBars.matching(NSPredicate(format: "identifier != 'Backups'")).firstMatch
+                .waitForExistence(timeout: 5)
             sleep(1)
             shot("detail-1")
             empo.swipeUp()

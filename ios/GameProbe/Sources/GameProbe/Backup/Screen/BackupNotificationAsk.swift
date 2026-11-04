@@ -41,13 +41,10 @@ public enum BackupNotificationRowAction: Equatable, Sendable {
 /// chance only on a user who already said yes.
 public enum BackupNotificationAsk {
 
-    public static let title = "Empo can tell you when a backup stops"
+    public static let title = "Know when a backup stops"
 
-    public static let body = """
-        You get a message only when a backup stops and only you can start it again: \
-        a service needs a new sign-in, a service is full, or this iPhone has no space left. \
-        A backup that works stays quiet.
-        """
+    public static let body =
+        "Empo only notifies you when you need to fix something, like signing in again or freeing up space."
 
     public static let notNowLabel = "Not now"
     public static let turnOnLabel = "Turn on"
