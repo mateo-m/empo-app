@@ -36,12 +36,13 @@ enum SyncJoin {
     /// a history give the root a second `preferences` map, and
     /// Automerge answers one of the two, so the group's keys would
     /// read as absent here. This device's own values are not lost
-    /// with it: step 4 of 10.5 reads them from the device and writes
-    /// them over the merged document.
+    /// with it: the next pass reads them from the device and writes
+    /// them over the group's copies.
     static func join(_ group: DiscoveredSyncGroup) {
-        AutomergeDocumentStore.delete()
-        try? SyncStore.update { $0.join(group.groupId, at: Date()) }
-        SyncPass.shared.schedule(.now)
+        SyncPass.shared.join {
+            AutomergeDocumentStore.delete()
+            try? SyncStore.update { $0.join(group.groupId, at: Date()) }
+        }
     }
 
     /// The first target makes a group, per 10.4. A device with a

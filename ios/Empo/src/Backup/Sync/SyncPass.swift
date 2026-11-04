@@ -26,6 +26,10 @@ final class SyncPass {
 
     private var state = State.new
     private var engine: SyncEngine?
+    /// A join that waits for the pass in flight. That pass holds the
+    /// old group's document in memory and saves it after its reads,
+    /// which would bring back the file the join deletes.
+    private var joinAfterThePass: (@MainActor () -> Void)?
 
     /// True while a pass writes the merged document to the device.
     /// The writes post the same notifications a user change does,
@@ -92,6 +96,17 @@ final class SyncPass {
         }
     }
 
+    /// Runs `change` when no pass is in flight, then asks for a pass.
+    func join(_ change: @escaping @MainActor () -> Void) {
+        guard case .running = state else {
+            change()
+            schedule(.now)
+            return
+        }
+        joinAfterThePass = change
+        state = .running(newsArrived: true)
+    }
+
     /// One pass. It answers nothing, because the user never waits
     /// for it, per 10.11.
     func run(_ trigger: SyncTrigger = .now) async {
@@ -119,6 +134,10 @@ final class SyncPass {
     private func runTheNextPass() {
         guard case .running(let newsArrived) = state else { return }
         state = .idle
+        if let join = joinAfterThePass {
+            joinAfterThePass = nil
+            join()
+        }
         if newsArrived { schedule(.now) }
     }
 
