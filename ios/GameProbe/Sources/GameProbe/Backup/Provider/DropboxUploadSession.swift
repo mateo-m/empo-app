@@ -37,14 +37,16 @@ public struct DropboxUploadSession: Codable, Equatable, Sendable {
     /// Whether a later `put` may carry on from this record.
     ///
     /// Four things have to hold. The session id has to be there, the
-    /// file has to be the same size, the offset has to name real work
-    /// that is not yet finished, and the session has to be inside the
-    /// 7 days of 9.2. A record that fails any of them is dead weight,
-    /// and the caller starts a new session.
+    /// file has to be the same size, the offset has to name real work,
+    /// and the session has to be inside the 7 days of 9.2. A record
+    /// that fails any of them is dead weight, and the caller starts a
+    /// new session. A record at the end of the file skips to `finish`,
+    /// because the process can die after the last chunk and before
+    /// the commit.
     public func isUsable(at now: Date, forFileOfSize size: Int64) -> Bool {
         guard !sessionId.isEmpty else { return false }
         guard fileSize == size else { return false }
-        guard offset > 0, offset < size else { return false }
+        guard offset > 0, offset <= size else { return false }
         return now.timeIntervalSince(startedAt) < Self.lifetime
     }
 
@@ -56,5 +58,12 @@ public struct DropboxUploadSession: Codable, Equatable, Sendable {
     public static func isDead(errorSummary: String) -> Bool {
         let summary = errorSummary.lowercased()
         return summary.contains("not_found") || summary.contains("closed")
+    }
+
+    /// Whether a failed `finish` leaves a cursor no later run can use.
+    /// Dropbox puts every cursor fault of `finish` under
+    /// `lookup_failed`, `incorrect_offset` included.
+    public static func finishLostTheCursor(errorSummary: String) -> Bool {
+        isDead(errorSummary: errorSummary) || errorSummary.lowercased().contains("lookup_failed")
     }
 }

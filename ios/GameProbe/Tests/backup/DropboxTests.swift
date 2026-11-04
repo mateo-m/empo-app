@@ -323,13 +323,32 @@ final class DropboxTests: XCTestCase {
         XCTAssertFalse(session.isUsable(at: outside, forFileOfSize: 200 * 1024 * 1024))
     }
 
-    func testSessionAtZeroOrAtTheEndIsNotUsable() {
+    func testSessionAtZeroIsNotUsable() {
         let now = Date(timeIntervalSince1970: 1_000_000)
         let size: Int64 = 200 * 1024 * 1024
-        for offset in [Int64(0), size] {
-            let session = DropboxUploadSession(
-                sessionId: "s1", offset: offset, fileSize: size, startedAt: now)
-            XCTAssertFalse(session.isUsable(at: now, forFileOfSize: size))
+        let session = DropboxUploadSession(
+            sessionId: "s1", offset: 0, fileSize: size, startedAt: now)
+        XCTAssertFalse(session.isUsable(at: now, forFileOfSize: size))
+    }
+
+    func testSessionWithEveryByteSentResumesAtTheCommit() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let size: Int64 = 200 * 1024 * 1024
+        let session = DropboxUploadSession(
+            sessionId: "s1", offset: size, fileSize: size, startedAt: now)
+        XCTAssertTrue(session.isUsable(at: now, forFileOfSize: size))
+        XCTAssertTrue(Dropbox.chunks(ofFileSize: size, from: session.offset).isEmpty)
+    }
+
+    func testAFinishThatCannotFindTheCursorDropsIt() {
+        for summary in [
+            "lookup_failed/not_found/..", "lookup_failed/closed/..",
+            "lookup_failed/incorrect_offset/..",
+        ] {
+            XCTAssertTrue(DropboxUploadSession.finishLostTheCursor(errorSummary: summary), summary)
+        }
+        for summary in ["too_many_write_operations/..", "path/insufficient_space/.."] {
+            XCTAssertFalse(DropboxUploadSession.finishLostTheCursor(errorSummary: summary), summary)
         }
     }
 
