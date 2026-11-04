@@ -53,7 +53,7 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// It lives here and not on one provider, because 9.7 names two
     /// providers that never answer and two more that answer on some
     /// servers alone.
-    public static let noSpaceQueryLine = "This service does not report free space."
+    public static let noSpaceQueryLine = "This service doesn't show how much free space is left."
 
     /// The error a file of this size earns, or `nil` when it fits.
     ///

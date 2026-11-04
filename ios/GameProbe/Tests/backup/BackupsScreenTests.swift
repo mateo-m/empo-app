@@ -187,7 +187,10 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertEqual(usage, .bytesWritten(2_400_000_000))
         XCTAssertEqual(
             TargetUsageRules.line(usage, usedText: "2.4 GB"),
-            "2.4 GB backed up here. This service does not report free space.")
+            "2.4 GB backed up here. This service doesn't show how much free space is left.")
+        XCTAssertEqual(
+            TargetUsageRules.line(.bytesWritten(0), usedText: "Zero KB"),
+            "Nothing backed up here yet. This service doesn't show how much free space is left.")
     }
 
     func testATargetThatAnsweredOnceAndStoppedFallsBackWithNoError() {

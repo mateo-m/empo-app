@@ -51,6 +51,8 @@ public enum TargetUsageRules {
         switch usage {
         case .bar:
             return "\(usedText) of \(limitText) used"
+        case .bytesWritten(0):
+            return "Nothing backed up here yet. \(TargetCapabilities.noSpaceQueryLine)"
         case .bytesWritten:
             return "\(usedText) backed up here. \(TargetCapabilities.noSpaceQueryLine)"
         }

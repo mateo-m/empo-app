@@ -228,7 +228,7 @@ final class WebDAVTests: XCTestCase {
         XCTAssertNil(QuotaCheck.shortfall(
                 pendingBytes: 999, reading: today, capBytes: nil, storedBytes: 0))
         XCTAssertEqual(
-            TargetCapabilities.noSpaceQueryLine, "This service does not report free space.")
+            TargetCapabilities.noSpaceQueryLine, "This service doesn't show how much free space is left.")
     }
 
     // MARK: - The error map, per test 4
