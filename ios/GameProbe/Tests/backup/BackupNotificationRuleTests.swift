@@ -102,6 +102,22 @@ final class BackupNotificationRuleTests: XCTestCase {
         XCTAssertEqual(ledger.post(causes: [.deviceStorageLow], targetId: "t3"), [])
     }
 
+    func testLowDeviceStorageOnOneTargetOfAPassPostsOnceAcrossPasses() {
+        var ledger = BackupNotificationLedger()
+        let pass: [(targetId: String, causes: Set<BackupFailFastCause>)] = [
+            ("t1", [.deviceStorageLow]), ("t2", []),
+        ]
+
+        let first = ledger.post(pass: pass)
+        let second = ledger.post(pass: pass)
+
+        XCTAssertEqual(first.flatMap(\.causes), [.deviceStorageLow])
+        XCTAssertTrue(second.flatMap(\.causes).isEmpty)
+        XCTAssertEqual(
+            ledger.post(pass: [("t1", []), ("t2", [])]).flatMap(\.causes), [])
+        XCTAssertEqual(ledger.post(pass: pass).flatMap(\.causes), [.deviceStorageLow])
+    }
+
     // MARK: - Permission
 
     func testEmpoAsksForPermissionAfterTheFirstTargetAndNeverAtFirstLaunch() {

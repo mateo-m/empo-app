@@ -425,12 +425,6 @@ final class BackupScheduler {
     /// no cause re-arms, so a clean target must come through here.
     private func report(_ targets: [BackupPassTarget]) {
         guard let store else { return }
-        for target in targets {
-            BackupNotifier.report(
-                causes: target.causes,
-                targetId: target.id,
-                targetLabel: target.label,
-                store: store)
-        }
+        BackupNotifier.report(targets, store: store)
     }
 }

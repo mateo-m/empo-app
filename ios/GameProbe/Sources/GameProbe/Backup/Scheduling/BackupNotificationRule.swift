@@ -134,4 +134,21 @@ public struct BackupNotificationLedger: Equatable, Sendable {
         }
         return toPost
     }
+
+    /// Takes what one pass found on every target it touched, and
+    /// returns what to post for each one.
+    ///
+    /// The device cause has one key for all targets. Without this,
+    /// a clean target after a low one re-arms it, and every pass
+    /// posts it again.
+    public mutating func post(
+        pass: [(targetId: String, causes: Set<BackupFailFastCause>)]
+    ) -> [(targetId: String, causes: [BackupFailFastCause])] {
+        let deviceIsLow = pass.contains { $0.causes.contains(.deviceStorageLow) }
+        return pass.map { target in
+            var causes = target.causes
+            if deviceIsLow { causes.insert(.deviceStorageLow) }
+            return (target.targetId, post(causes: causes, targetId: target.targetId))
+        }
+    }
 }

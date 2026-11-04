@@ -16,13 +16,14 @@ import UserNotifications
 enum BackupNotifier {
 
     /// iOS asks this only while Empo is on screen. The pill of 13.2
-    /// already says what stopped, so the notice stays silent there
-    /// and reaches the user only when Empo is away.
+    /// says what stopped when it shows, so the notice stays silent
+    /// then. A run that stops before it plans an upload shows no
+    /// pill, so the notice shows instead.
     private final class Presenter: NSObject, UNUserNotificationCenterDelegate {
         func userNotificationCenter(
             _ center: UNUserNotificationCenter, willPresent notification: UNNotification
         ) async -> UNNotificationPresentationOptions {
-            []
+            await MainActor.run { BackupRunMonitor.shared.showsPill } ? [] : [.banner, .sound]
         }
     }
 
@@ -59,26 +60,23 @@ enum BackupNotifier {
         await spendTheSystemPrompt()
     }
 
-    /// Posts what one run found on one target, and keeps the ledger
-    /// so nothing posts twice.
+    /// Posts what one pass found on every target it touched, and
+    /// keeps the ledger so nothing posts twice.
     ///
     /// The ledger lives in `state.sqlite`. A rebuilt cache re-arms
     /// every cause, which costs the user one repeated notification
     /// and never a missed one.
-    static func report(
-        causes: Set<BackupFailFastCause>,
-        targetId: String,
-        targetLabel: String,
-        store: BackupStateStore
-    ) {
+    static func report(_ targets: [BackupPassTarget], store: BackupStateStore) {
         var ledger = (try? store.notificationLedger()) ?? BackupNotificationLedger()
-        let toPost = ledger.post(causes: causes, targetId: targetId)
+        let toPost = ledger.post(pass: targets.map { ($0.id, $0.causes) })
         try? store.saveNotificationLedger(ledger)
-        BackupLog.line(
-            "BackupNotifier",
-            "\(targetLabel) carries \(causes.count) cause, posts \(toPost.count)")
-        for cause in toPost {
-            post(cause, targetLabel: targetLabel)
+        for (target, posts) in zip(targets, toPost) {
+            BackupLog.line(
+                "BackupNotifier",
+                "\(target.label) carries \(target.causes.count) cause, posts \(posts.causes.count)")
+            for cause in posts.causes {
+                post(cause, targetLabel: target.label)
+            }
         }
     }
 
