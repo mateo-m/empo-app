@@ -207,7 +207,8 @@ public actor RestoreEngine {
             // A compressed blob is under the 32 MB limit of 6.4, so
             // one of them in memory is the peak cost.
             let bytes = try Data(contentsOf: staged)
-            try BlobCodec.decode(bytes, algorithm: .zlib).write(to: destination, options: .atomic)
+            try BlobCodec.decode(bytes, algorithm: .zlib, maxBytes: Int(clamping: entry.size))
+                .write(to: destination, options: .atomic)
         }
     }
 

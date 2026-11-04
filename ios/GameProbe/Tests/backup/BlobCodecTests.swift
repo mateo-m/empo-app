@@ -157,6 +157,19 @@ final class BlobCodecTests: XCTestCase {
         }
     }
 
+    func testAStreamThatInflatesPastItsStatedSizeStops() throws {
+        let original = Data(count: 4 * 1_024 * 1_024)
+        let framed = try BlobCodec.encodeZlib(original)
+
+        XCTAssertThrowsError(
+            try BlobCodec.decode(framed, algorithm: .zlib, maxBytes: 1_024)
+        ) { error in
+            XCTAssertEqual(error as? BlobCodec.Failure, .largerThanStated)
+        }
+        XCTAssertEqual(
+            try BlobCodec.decode(framed, algorithm: .zlib, maxBytes: original.count), original)
+    }
+
     func testBytesThatAreNoZlibStreamAreRejected() {
         for bytes in [Data(), Data([0x00]), Data([0x00, 0x00, 0x01, 0x02, 0x03, 0x04])] {
             XCTAssertThrowsError(try BlobCodec.decode(bytes, algorithm: .zlib)) { error in

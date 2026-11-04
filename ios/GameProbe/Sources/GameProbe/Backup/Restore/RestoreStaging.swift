@@ -22,7 +22,8 @@ public enum RestoreStaging {
     /// `zlib` blob is under the 32 MB limit of 6.4, so one of them in
     /// memory is the peak cost.
     public static func holds(_ bytes: Data, entry: SnapshotManifest.Entry) -> Bool {
-        guard let decoded = try? BlobCodec.decode(bytes, algorithm: entry.compression) else {
+        guard let decoded = try? BlobCodec.decode(
+            bytes, algorithm: entry.compression, maxBytes: Int(clamping: entry.size)) else {
             return false
         }
         return ContentHash.hex(of: decoded) == entry.hash

@@ -56,6 +56,8 @@ public enum BlobCodec {
         case corruptZlibStream
         /// The stream inflated, but its Adler-32 does not match.
         case checksumMismatch
+        /// The stream inflates past the size its manifest entry states.
+        case largerThanStated
     }
 
     /// Compresses `data` and keeps whichever result is smaller.
@@ -75,12 +77,16 @@ public enum BlobCodec {
         return framed
     }
 
-    public static func decode(_ bytes: Data, algorithm: BlobCompression) throws -> Data {
+    /// `maxBytes` stops a small hostile stream that inflates to more
+    /// memory than the device has.
+    public static func decode(
+        _ bytes: Data, algorithm: BlobCompression, maxBytes: Int = .max
+    ) throws -> Data {
         switch algorithm {
         case .stored:
             return bytes
         case .zlib:
-            return try zlibDecompress(bytes)
+            return try zlibDecompress(bytes, maxBytes: maxBytes)
         }
     }
 
@@ -156,7 +162,7 @@ public enum BlobCodec {
         return out
     }
 
-    private static func zlibDecompress(_ bytes: Data) throws -> Data {
+    private static func zlibDecompress(_ bytes: Data, maxBytes: Int) throws -> Data {
         let frame = Data(bytes)
         guard frame.count >= 6 else { throw Failure.corruptZlibStream }
         let method = frame[frame.startIndex]
@@ -168,7 +174,7 @@ public enum BlobCodec {
         }
 
         let body = Data(frame.dropFirst(2).dropLast(4))
-        let out = try inflateRawDeflate(body)
+        let out = try inflateRawDeflate(body, maxBytes: maxBytes)
 
         let tail = frame.suffix(4)
         var expected: UInt32 = 0
@@ -179,7 +185,7 @@ public enum BlobCodec {
 
     /// Inflates a raw DEFLATE body through the streaming API, so the
     /// output size does not have to be guessed up front.
-    private static func inflateRawDeflate(_ body: Data) throws -> Data {
+    private static func inflateRawDeflate(_ body: Data, maxBytes: Int) throws -> Data {
         let stream = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1)
         defer { stream.deallocate() }
         guard
@@ -207,6 +213,7 @@ public enum BlobCodec {
                 let produced = bufferSize - stream.pointee.dst_size
                 guard status == COMPRESSION_STATUS_OK || status == COMPRESSION_STATUS_END
                 else { throw Failure.corruptZlibStream }
+                guard produced <= maxBytes - out.count else { throw Failure.largerThanStated }
                 if produced > 0 { out.append(buffer, count: produced) }
                 if status == COMPRESSION_STATUS_END { return }
                 // No input left and no output made: the stream ended
@@ -225,15 +232,20 @@ public enum BlobCodec {
         ZlibArchive.archive(data: data)
     }
 
-    private static func zlibDecompress(_ bytes: Data) throws -> Data {
+    // SWCompression inflates in one call, so the limit only applies
+    // after it. This path only runs the tests on Linux.
+    private static func zlibDecompress(_ bytes: Data, maxBytes: Int) throws -> Data {
+        let out: Data
         do {
-            return try ZlibArchive.unarchive(archive: Data(bytes))
+            out = try ZlibArchive.unarchive(archive: Data(bytes))
         } catch let error as ZlibError {
             if case .wrongAdler32 = error { throw Failure.checksumMismatch }
             throw Failure.corruptZlibStream
         } catch {
             throw Failure.corruptZlibStream
         }
+        guard out.count <= maxBytes else { throw Failure.largerThanStated }
+        return out
     }
 
     #endif
