@@ -60,7 +60,7 @@ extension NamespaceGamesScreen {
             Section {
                 NavigationLink {
                     PreferenceSnapshotListScreen(rows: rows) { row in
-                        await model.restore(row, scope: .savesAndSettings)
+                        await model.restore(row, scope: .preferences)
                     }
                 } label: {
                     VStack(alignment: .leading, spacing: Spacing.xs) {
