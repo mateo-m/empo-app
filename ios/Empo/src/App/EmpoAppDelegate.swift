@@ -1,11 +1,13 @@
 import BackgroundTasks
 import UIKit
 
-/// Two things need an app delegate and reach no other way.
+/// Three things need an app delegate and reach no other way.
 ///
 /// 1. `BGTaskScheduler` wants every launch handler in place before
 ///    launch ends, per its header. A scene delegate is too late.
-/// 2. iOS wakes the app for a finished background transfer through
+/// 2. A background launch connects no scene, so the backup schedule
+///    starts here.
+/// 3. iOS wakes the app for a finished background transfer through
 ///    `application(_:handleEventsForBackgroundURLSession:completionHandler:)`
 ///    alone.
 @objc(EmpoAppDelegate)
@@ -17,6 +19,7 @@ final class EmpoAppDelegate: UIResponder, UIApplicationDelegate {
     ) -> Bool {
         BackupTaskScheduler.register()
         BackupNotifier.start()
+        BackupScheduler.shared.start()
         return true
     }
 

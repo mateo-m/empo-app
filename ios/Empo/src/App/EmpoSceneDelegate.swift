@@ -16,9 +16,6 @@ final class EmpoSceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
         AppWindow.install(in: windowScene)
-        // The backup schedule of SPEC 7. It watches the app lifetime,
-        // so it starts once the scene connects.
-        BackupScheduler.shared.start()
         // The preference sync of SPEC 10. It runs when Empo opens,
         // per 10.11.
         BackupLaunchGate.shared.whenOpen { SyncPass.shared.start() }

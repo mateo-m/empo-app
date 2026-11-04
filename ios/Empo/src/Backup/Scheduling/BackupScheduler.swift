@@ -81,11 +81,6 @@ final class BackupScheduler {
 
     // MARK: - Launch
 
-    /// Starts the schedule. The scene delegate calls this once.
-    ///
-    /// `BackupTaskScheduler.register()` is not here. iOS wants every
-    /// launch handler in place before launch ends, so the app
-    /// delegate calls it earlier.
     func start() {
         guard !didStart else { return }
         didStart = true
@@ -327,8 +322,6 @@ final class BackupScheduler {
             trigger.rawValue, networkCause == nil ? "clear" : BackupNetwork.waitingLine)
 
         guard let runner else {
-            // Ticket 008 brings the first provider. Until then the
-            // gates run and the pass stops here.
             log("%@ has no runner yet", trigger.rawValue)
             close(progress)
             return false
