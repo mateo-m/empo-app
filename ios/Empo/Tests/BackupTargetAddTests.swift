@@ -38,7 +38,8 @@ final class BackupTargetAddTests: XCTestCase {
         guard case .failed(let line) = outcome else {
             return XCTFail("the add did not fail: \(String(describing: outcome))")
         }
-        XCTAssertEqual(line, "Empo could not reach this address. Check it and try again.")
+        XCTAssertEqual(
+            line, "Empo couldn't reach this address. Check it and your connection, then try again.")
     }
 }
 

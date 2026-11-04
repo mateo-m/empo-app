@@ -89,7 +89,7 @@ final class BackupLiveTests: XCTestCase {
     func testAWrongS3SecretDoesNotAdd() async throws {
         // S3 answers a wrong secret with `SignatureDoesNotMatch`.
         try await assertAWrongSecretDoesNotAdd(
-            .s3, secretField: "secretAccessKey", fails: .permissionDenied
+            .s3, secretField: "secretAccessKey", fails: .authExpired
         ) {
             await BackupTargetAdd.s3(form: $0)
         }
