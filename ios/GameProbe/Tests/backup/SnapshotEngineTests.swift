@@ -942,6 +942,45 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(save, "played after the backup")
     }
 
+    func testARestoreRefusesAManifestPathThatLeavesTheGame() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let manifestPath = paths.manifestPath(
+            stream: BackupStream(key: key(gameName)), snapshotId: snapshotId)
+        var manifest = try SnapshotManifest.decode(
+            compressed: try XCTUnwrap(target.contents(atPath: manifestPath)))
+        let save = try XCTUnwrap(manifest.entries.firstIndex { $0.path == "Game/save1.dat" })
+        manifest.entries[save].path = "../Escaped/save1.dat"
+        try target.seed(path: manifestPath, contents: try manifest.compressedData())
+        try changeTheSave(of: gameName, to: "played after the backup")
+
+        let engine = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot)
+        let outcome = await engine.run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: BackupStream(key: key(gameName)),
+                snapshotId: snapshotId,
+                scope: .wholeGame,
+                destination: MemberSource(container: container(gameName)),
+                freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the restore took the path: \(outcome)")
+        }
+        let escaped = container(gameName).deletingLastPathComponent()
+            .appendingPathComponent("Escaped/save1.dat")
+        XCTAssertFalse(fm.fileExists(atPath: escaped.path))
+        let kept = try String(
+            contentsOf: container(gameName).appendingPathComponent("Game/save1.dat"),
+            encoding: .utf8)
+        XCTAssertEqual(kept, "played after the backup")
+    }
+
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
 
     func testTheRunReportsOnePlanForTheStreamAndConfirmsEveryBlobOfIt() async throws {

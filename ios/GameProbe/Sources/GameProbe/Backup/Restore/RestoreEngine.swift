@@ -72,6 +72,12 @@ public actor RestoreEngine {
         } catch {
             return .failed(Self.line(of: error))
         }
+        // The manifest comes from the storage service. A path that
+        // leaves its root, or names the root itself, would write
+        // outside the game.
+        guard manifest.entries.allSatisfy({ Self.staysUnderItsRoot($0.path) }) else {
+            return .failed(Self.unreadableLine)
+        }
 
         let plan = RestorePlanner.plan(
             manifest: manifest,
@@ -348,6 +354,12 @@ public actor RestoreEngine {
     }
 
     private static let unreadableLine = "this backup could not be read"
+
+    private static func staysUnderItsRoot(_ path: String) -> Bool {
+        guard (try? PackageValidation.checkThePath(path)) != nil else { return false }
+        return !path.split(separator: "/", omittingEmptySubsequences: false)
+            .contains { $0.isEmpty || $0 == "." }
+    }
 
     private static func line(of error: Error) -> String {
         guard let providerError = error as? BackupProviderError,
