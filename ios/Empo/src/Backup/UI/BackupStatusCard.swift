@@ -4,9 +4,9 @@ import SwiftUI
 /// The card at the top of the Backups screen, per SPEC 13.4.
 ///
 /// One symbol, one headline, one line under it. While a run moves,
-/// the ring fills, the run line takes the second row, and a bar
-/// shows the share done. The ring turns into the checkmark when the
-/// run ends.
+/// the ring spins until the run knows its size, then fills, and the
+/// run line takes the second row. The ring turns into the checkmark
+/// when the run ends.
 struct BackupStatusCard: View {
 
     let status: BackupsScreenStatus
@@ -73,19 +73,16 @@ struct BackupStatusCard: View {
                             .font(.footnote)
                             .monospacedDigit()
                             .foregroundStyle(.secondary)
-                            .lineLimit(
-                                monitor.isRunning ? 2 : Int.max,
-                                reservesSpace: monitor.isRunning
-                            )
+                            // One line while a run moves, so the card
+                            // keeps one height as the bytes left change.
+                            // The middle goes, so the game and the bytes
+                            // left both stay.
+                            .lineLimit(monitor.isRunning ? 1 : nil)
+                            .truncationMode(.middle)
                             .contentTransition(.opacity)
                             .id(mark)
                             .transition(swap)
                     }
-                }
-                if monitor.isRunning {
-                    progress
-                        .padding(.top, Spacing.xs)
-                        .transition(swap)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -94,10 +91,6 @@ struct BackupStatusCard: View {
         .animation(reduceMotion ? nil : Motion.standard, value: mark)
         .animation(reduceMotion ? nil : Motion.standard, value: headline)
         .accessibilityElement(children: .combine)
-    }
-
-    private var progress: some View {
-        ProgressBar(fraction: monitor.fraction)
     }
 
     @ViewBuilder private var symbol: some View {
