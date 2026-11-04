@@ -1022,7 +1022,7 @@ final class SnapshotEngineTests: XCTestCase {
         let result = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
 
         XCTAssertEqual(result.stop, .gameStarted)
-        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.outcome, .cancelled)
         XCTAssertEqual(result.streams.filter { $0.streamKey != BackupStream.preferences.key }.count, 1)
         XCTAssertNil(TargetFailure.of(.gameStarted))
         XCTAssertNil(BackupNotificationRule.failFastCause(of: .gameStarted))
@@ -1040,6 +1040,41 @@ final class SnapshotEngineTests: XCTestCase {
         let confirmCount = await gate.confirmCount
         XCTAssertEqual(confirmCount, 1)
         XCTAssertTrue(result.streams.isEmpty)
+    }
+
+    func testAPauseKeepsTheTargetFailureOfAnEarlierRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: stateURL) }
+        let clock = self.clock!
+        let earlier = try BackupStateStore(url: stateURL)
+        try earlier.recordTargetFailure(targetId: targetId, failure: .needsSignIn, at: clock.now)
+        earlier.close()
+        let engine = SnapshotEngine(
+            provider: target,
+            store: try BackupStateStore(url: stateURL),
+            localRoot: localRoot,
+            clock: FakeBackupClock(),
+            now: { clock.now })
+        let latch = TransferLatch(holdFrom: 1)
+        await target.setLatch(latch)
+
+        let runRequest = request(games: [game(gameName)])
+        let running = Task { await engine.run(runRequest) }
+        let arrived = await latch.waitForArrivals(1)
+        XCTAssertTrue(arrived)
+        running.cancel()
+        await latch.open()
+        let result = await running.value
+
+        XCTAssertEqual(result.stop, .paused)
+        XCTAssertEqual(result.outcome, .cancelled)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertEqual(try store.targetStatus(targetId: targetId)?.failure, .needsSignIn)
+        XCTAssertEqual(try store.runHistory().first?.outcome, .cancelled)
     }
 
     func testProgressAdvancesOnAConfirmedBlobAndNotOnAStartedUpload() async throws {

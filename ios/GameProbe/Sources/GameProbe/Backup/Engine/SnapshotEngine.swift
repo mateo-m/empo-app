@@ -144,7 +144,9 @@ public actor SnapshotEngine {
         _ context: RunContext, startedAt: Date, stop: BackupRunStop?
     ) -> BackupRunResult {
         let outcome: BackupRunOutcome
-        if stop != nil {
+        if stop == .paused || stop == .gameStarted {
+            outcome = .cancelled
+        } else if stop != nil {
             outcome = .failed
         } else if context.streams.contains(where: \.isShortOfASnapshot) {
             outcome = .partial
@@ -172,13 +174,16 @@ public actor SnapshotEngine {
         save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")
         save(try store.clearIntent(kind: .pausedRun), "the end of the paused run")
         // The target row of 13.5 outlives this run, and a run that
-        // reached the target clears what an earlier one left.
-        save(
-            try store.recordTargetFailure(
-                targetId: context.request.descriptor.id,
-                failure: stop.flatMap(TargetFailure.of),
-                at: now),
-            "the target failure of \(context.request.descriptor.id)")
+        // reached the target clears what an earlier one left. A pause
+        // can land before the first request, so it proves nothing.
+        if stop != .paused {
+            save(
+                try store.recordTargetFailure(
+                    targetId: context.request.descriptor.id,
+                    failure: stop.flatMap(TargetFailure.of),
+                    at: now),
+                "the target failure of \(context.request.descriptor.id)")
+        }
         // The usage line of the detail screen reads this row.
         if let quota = context.quota {
             save(
@@ -233,7 +238,7 @@ public actor SnapshotEngine {
         case .gameStarted:
             return "a game started, the rest waits for the session end"
         case .paused:
-            return "the user paused the run"
+            return "paused by you or by iOS"
         }
     }
 
