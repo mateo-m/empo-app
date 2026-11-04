@@ -67,7 +67,7 @@ final class PermissionCheckTests: XCTestCase {
     func testTheStepsCarryTheWordsTheAddSheetShows() async {
         let result = await run(on: makeTarget())
 
-        XCTAssertEqual(result.steps.map(\.label), ["write", "list", "delete", "free space"])
+        XCTAssertEqual(result.steps.map(\.label), ["Save a test file", "Find the test file", "Delete the test file", "Read the free space"])
     }
 
     // MARK: - One failing step at a time

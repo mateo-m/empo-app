@@ -3,10 +3,8 @@ import SwiftUI
 
 /// The service list of SPEC 13.7.
 ///
-/// It names services and the user's own labels, and it never says
-/// "provider". The iCloud entry follows the runtime gate of 9.1:
-/// hidden while the probe answers nil, greyed when the build cannot
-/// open it.
+/// The iCloud entry follows the runtime gate of 9.1: hidden while the
+/// probe answers nil, greyed when the build cannot open it.
 struct AddTargetSheet: View {
 
     let iCloudReach: TargetReach
@@ -26,17 +24,24 @@ struct AddTargetSheet: View {
             List {
                 Section {
                     ForEach(services, id: \.self) { service in
-                        Button(service.serviceName) { start(service) }
-                            .disabled(isGreyed(service) || isWorking)
+                        Button {
+                            start(service)
+                        } label: {
+                            serviceRow(service)
+                        }
+                        // The sheet's brand tint would color the whole label.
+                        .tint(.primary)
+                        .disabled(isGreyed(service) || isWorking)
                     }
                 } footer: {
                     if isGreyed(.iCloudDrive) {
-                        Text("This build cannot open iCloud Drive.")
+                        Text("This version of Empo can't use iCloud Drive.")
                     }
                 }
                 if let failure {
                     Section {
-                        Text(failure).foregroundStyle(.red)
+                        Label(failure, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
                     }
                 }
             }
@@ -48,17 +53,38 @@ struct AddTargetSheet: View {
                 }
             }
             .overlay {
-                if isWorking { ProgressView() }
+                if isWorking { CheckingOverlay() }
             }
             .navigationDestination(item: $typing) { service in
-                TargetFormScreen(service: service, failure: failure, isWorking: isWorking) {
-                    values in
-                    Task { await finish(await add(service, values: values)) }
-                }
-                .overlay {
-                    if isWorking { ProgressView() }
+                TargetFormScreen(service: service) { values in
+                    service == .s3
+                        ? await BackupTargetAdd.s3(form: values)
+                        : await BackupTargetAdd.webdav(form: values)
+                } done: { descriptor, result in
+                    added(descriptor, result)
+                    dismiss()
                 }
             }
+        }
+    }
+
+    private func serviceRow(_ service: BackupProviderKind) -> some View {
+        HStack(spacing: Spacing.lg) {
+            AccountAvatar(photo: nil, provider: service, size: 32)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text(service.serviceName).foregroundStyle(.primary)
+                if let examples = examples(of: service) {
+                    Text(examples).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func examples(of service: BackupProviderKind) -> String? {
+        switch service {
+        case .s3: return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
+        case .webdav: return "Nextcloud, ownCloud, Synology, Koofr"
+        case .iCloudDrive, .dropbox, .googleDrive, .sftp: return nil
         }
     }
 
@@ -72,38 +98,28 @@ struct AddTargetSheet: View {
         case .s3, .webdav, .sftp:
             typing = service
         case .iCloudDrive, .dropbox, .googleDrive:
-            Task { await finish(await add(service, values: [:])) }
+            Task { await signIn(service) }
         }
     }
 
-    private func add(
-        _ service: BackupProviderKind, values: [String: String]
-    ) async -> BackupTargetAdd.Outcome {
-        guard !isWorking else { return .cancelled }
+    private func signIn(_ service: BackupProviderKind) async {
+        guard !isWorking else { return }
         isWorking = true
         defer { isWorking = false }
+        let outcome: BackupTargetAdd.Outcome
         switch service {
         case .iCloudDrive:
-            return await BackupTargetAdd.iCloud()
-        case .dropbox, .googleDrive:
+            outcome = await BackupTargetAdd.iCloud()
+        default:
             guard let screen = await OAuthSignIn.screenForTheSheet() else {
-                return .failed("Empo found no screen to sign in from.")
+                failure = BackupTargetAdd.noSignInScreenLine
+                return
             }
-            return service == .dropbox
+            outcome =
+                service == .dropbox
                 ? await BackupTargetAdd.dropbox(presenting: screen)
                 : await BackupTargetAdd.googleDrive(presenting: screen)
-        case .s3:
-            return await BackupTargetAdd.s3(form: values)
-        case .webdav:
-            return await BackupTargetAdd.webdav(form: values)
-        case .sftp:
-            // `offeredServices` draws no SFTP row, so nothing
-            // reaches this. The kind stays for the format of 5.
-            return .failed("Empo has no SFTP location.")
         }
-    }
-
-    private func finish(_ outcome: BackupTargetAdd.Outcome) async {
         switch outcome {
         case .checked(let descriptor, let result):
             added(descriptor, result)
@@ -116,33 +132,24 @@ struct AddTargetSheet: View {
     }
 }
 
-/// The add form of SPEC 13.7. Each provider states its own fields,
-/// and the host field carries the storage warning of 5.7.
+/// The add form of SPEC 13.7, and the sign-in form of 8.8 for the
+/// services the user types.
+///
+/// A failed check keeps the form and what the user typed, and names
+/// the cause above the button.
 struct TargetFormScreen: View {
 
     let service: BackupProviderKind
-    let submitTitle: String
-    let lockedFields: Set<String>
-    let failure: String?
-    let isWorking: Bool
-    let submit: ([String: String]) -> Void
+    var values: [String: String] = [:]
+    var lockedFields: Set<String> = []
+    var submitTitle = "Add"
+    let submit: ([String: String]) async -> BackupTargetAdd.Outcome
+    let done: (TargetDescriptor, PermissionCheckResult) -> Void
 
-    @State private var values: [String: String]
-
-    init(
-        service: BackupProviderKind, values: [String: String] = [:],
-        lockedFields: Set<String> = [], submitTitle: String = "Add",
-        failure: String? = nil, isWorking: Bool = false,
-        submit: @escaping ([String: String]) -> Void
-    ) {
-        self.service = service
-        self.submitTitle = submitTitle
-        self.lockedFields = lockedFields
-        self.failure = failure
-        self.isWorking = isWorking
-        self.submit = submit
-        _values = State(initialValue: values)
-    }
+    @State private var typed: [String: String] = [:]
+    @State private var isWorking = false
+    @State private var failure: String?
+    @FocusState private var focused: String?
 
     private var fields: [TargetFormField] {
         switch service {
@@ -152,52 +159,182 @@ struct TargetFormScreen: View {
         }
     }
 
+    private var groups: [String] {
+        fields.map(\.group).reduce(into: []) { groups, group in
+            if !groups.contains(group) { groups.append(group) }
+        }
+    }
+
+    private var typingFields: [String] {
+        fields.filter { $0.kind != .toggle && !lockedFields.contains($0.name) }.map(\.name)
+    }
+
     private var isComplete: Bool {
-        fields.filter(\.isRequired).allSatisfy { !(values[$0.name] ?? "").isEmpty }
+        fields.filter(\.isRequired).allSatisfy { !(typed[$0.name] ?? "").isEmpty }
     }
 
     var body: some View {
-        Form {
-            ForEach(fields, id: \.name) { field in
-                Section {
-                    let locked = lockedFields.contains(field.name)
-                    // A disabled TextField in a Form keeps the primary text color.
-                    input(field)
-                        .disabled(locked)
-                        .foregroundStyle(locked ? .secondary : .primary)
-                } footer: {
-                    if let note = field.note { Text(note) }
+        ScrollViewReader { scroll in
+            Form {
+                ForEach(groups, id: \.self) { group in
+                    Section(group) {
+                        ForEach(fields.filter { $0.group == group }, id: \.name) { field in
+                            row(field)
+                        }
+                    }
                 }
-            }
-            Section {
-                Button(submitTitle) { submit(values) }
+                if let failure {
+                    Section {
+                        Label(failure, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                            .accessibilityAddTraits(.isStaticText)
+                    }
+                    .id("failure")
+                }
+                Section {
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        HStack {
+                            Text(isWorking ? "Checking…" : submitTitle)
+                            if isWorking {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
                     .accessibilityIdentifier("submitTarget")
                     .disabled(!isComplete || isWorking)
-            } footer: {
-                if let failure { Text(failure).foregroundStyle(.red) }
+                } footer: {
+                    Text(TransportSecurity.storageWarning)
+                }
+            }
+            .disabled(isWorking)
+            .onChange(of: failure) { _, failure in
+                guard failure != nil else { return }
+                withAnimation { scroll.scrollTo("failure", anchor: .center) }
+                UIAccessibility.post(notification: .announcement, argument: failure)
             }
         }
+        .onAppear { typed = values }
+        .onChange(of: typed) { failure = nil }
         .navigationTitle(service.serviceName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button(submitTitle) { Task { await send() } }
+                    .disabled(!isComplete || isWorking)
+            }
+        }
+    }
+
+    private func send() async {
+        guard isComplete, !isWorking else { return }
+        focused = nil
+        isWorking = true
+        defer { isWorking = false }
+        switch await submit(typed) {
+        case .checked(let descriptor, let result) where result.allowsAdd:
+            done(descriptor, result)
+        case .checked(_, let result):
+            failure =
+                result.failureLine(for: service) ?? "Empo couldn't check this location. Try again."
+        case .cancelled:
+            failure = nil
+        case .failed(let line):
+            failure = line
+        }
+    }
+
+    @ViewBuilder private func row(_ field: TargetFormField) -> some View {
+        let locked = lockedFields.contains(field.name)
+        let note =
+            locked ? "To change this, remove the location and add it again." : field.note
+        if field.kind == .toggle {
+            Toggle(isOn: toggle(field)) {
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    Text(field.label)
+                    if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+                }
+            }
+            .disabled(locked)
+        } else {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text(field.label)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                input(field)
+                    .focused($focused, equals: field.name)
+                    .submitLabel(field.name == typingFields.last ? .done : .next)
+                    .onSubmit { next(after: field.name) }
+                    .disabled(locked)
+                    // A disabled TextField in a Form keeps the primary text color.
+                    .foregroundStyle(locked ? .secondary : .primary)
+                    .accessibilityLabel(field.label)
+                if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+            }
+            .padding(.vertical, Spacing.xxs)
+        }
+    }
+
+    private func next(after name: String) {
+        guard let index = typingFields.firstIndex(of: name),
+            index + 1 < typingFields.count
+        else {
+            Task { await send() }
+            return
+        }
+        focused = typingFields[index + 1]
+    }
+
+    private func toggle(_ field: TargetFormField) -> Binding<Bool> {
+        Binding(
+            get: { BackupTargetAdd.isOn(field.name, in: typed) },
+            set: { typed[field.name] = $0 ? "true" : "false" })
     }
 
     @ViewBuilder private func input(_ field: TargetFormField) -> some View {
         let text = Binding(
-            get: { values[field.name] ?? "" },
-            set: { values[field.name] = $0 })
+            get: { typed[field.name] ?? "" },
+            set: { typed[field.name] = $0 })
+        let prompt = field.hint.isEmpty ? nil : Text(field.hint)
         switch field.kind {
-        case .text:
-            TextField(field.label, text: text, prompt: Text(field.hint))
+        case .text where field.name == "label":
+            TextField(field.label, text: text, prompt: prompt)
+                .textInputAutocapitalization(.words)
+        case .text, .toggle:
+            TextField(field.label, text: text, prompt: prompt)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                // Without a type, iOS takes the key ID beside a hidden
+                // field for a user name and offers to save a password.
+                .textContentType(field.name == "accessKeyId" ? .oneTimeCode : nil)
+        case .address:
+            TextField(field.label, text: text, prompt: prompt)
+                .keyboardType(.URL)
+                .textContentType(.URL)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        case .userName:
+            TextField(field.label, text: text, prompt: prompt)
+                .textContentType(.username)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        case .password:
+            SecureField(field.label, text: text, prompt: prompt)
+                .textContentType(.password)
         case .secret:
-            SecureField(field.label, text: text, prompt: Text(field.hint))
-        case .toggle:
-            Toggle(
-                field.label,
-                isOn: Binding(
-                    get: { BackupTargetAdd.isOn(field.name, in: values) },
-                    set: { values[field.name] = $0 ? "true" : "false" }))
+            SecureField(field.label, text: text, prompt: prompt)
+                .textContentType(.oneTimeCode)
         }
+    }
+}
+
+/// What the add sheet shows while a sign-in or a check runs.
+struct CheckingOverlay: View {
+    var body: some View {
+        ProgressView("Checking the location…")
+            .padding(Spacing.xl)
+            .background(.regularMaterial, in: .rect(cornerRadius: 16))
     }
 }

@@ -26,7 +26,8 @@ struct PermissionCheckSheet: View {
             }
         } else {
             StandardSheet(
-                title: "\(target.displayName) refused a step",
+                title: "Couldn't add \(target.displayName)",
+                emblem: "exclamationmark.triangle",
                 barAction: SheetBarAction("Close") { dismiss() }
             ) {
                 SheetCard {
@@ -35,8 +36,8 @@ struct PermissionCheckSheet: View {
                         stepRow(step)
                     }
                 }
-                if let failure = result.failure {
-                    SheetBodyText(message(of: failure))
+                if let line = result.failureLine(for: target.provider) {
+                    SheetBodyText(line)
                 }
             }
         }
@@ -73,9 +74,11 @@ struct PermissionCheckSheet: View {
             Image(systemName: symbol(of: step.outcome))
                 .foregroundStyle(color(of: step.outcome))
                 .frame(width: 22)
-            Text(step.label.prefix(1).uppercased() + step.label.dropFirst())
+            Text(step.label)
             Spacer(minLength: 0)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(step.label), \(spokenOutcome(of: step.outcome))")
         .padding(.horizontal, Spacing.lg)
         .frame(minHeight: 44)
     }
@@ -97,20 +100,12 @@ struct PermissionCheckSheet: View {
         }
     }
 
-    /// A `rejected` message reaches the user word for word, and a
-    /// certificate failure already carries the system-trust line of
-    /// 8.11.
-    private func message(of failure: BackupProviderError) -> String {
-        switch failure {
-        case .rejected(let message): return message
-        case .authExpired: return "This location needs you to sign in again."
-        case .permissionDenied: return "This location refused the request."
-        case .outOfSpace: return "This location has no room left."
-        case .offline: return "Empo could not reach this location."
-        case .serverError: return "This location had a server error. Try again later."
-        case .notFound: return "This location holds no folder at that path."
-        case .throttled(let seconds):
-            return "This location asked Empo to wait \(Int(seconds)) seconds."
+    private func spokenOutcome(of outcome: PermissionCheckOutcome) -> String {
+        switch outcome {
+        case .passed: return "done"
+        case .skipped: return "skipped"
+        case .failed: return "failed"
+        case .notRun: return "not tried"
         }
     }
 }

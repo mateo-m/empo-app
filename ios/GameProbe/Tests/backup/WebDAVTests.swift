@@ -250,7 +250,7 @@ final class WebDAVTests: XCTestCase {
         guard case .rejected(let message) = WebDAV.error(status: 423) else {
             return XCTFail("423 is a refusal the user has to read")
         }
-        XCTAssertEqual(message, "the server answered 423")
+        XCTAssertEqual(message, "The server refused the request.")
     }
 
     func testALockedPathCarriesTheServersOwnWords() {
@@ -261,7 +261,9 @@ final class WebDAVTests: XCTestCase {
             <s:message>The resource is locked</s:message></d:error>
             """.utf8)
         let error = WebDAV.error(status: 423, body: body)
-        XCTAssertEqual(error, .rejected(message: "the server answered 423: The resource is locked"))
+        XCTAssertEqual(
+            error,
+            .rejected(message: "The server refused the request. It said: “The resource is locked”"))
         XCTAssertTrue(error.effect.stopsTheRun)
     }
 
@@ -417,14 +419,17 @@ final class WebDAVTests: XCTestCase {
         XCTAssertNil(flags.rejection(forFileOfSize: .max))
     }
 
-    func testTheAddFormCarriesTheStorageWarningBesideTheAddress() {
+    func testTheAddFormGroupsItsFieldsAndExplainsEachOne() {
         let names = WebDAV.addFormFields.map(\.name)
         XCTAssertEqual(names, ["label", "address", "root", "username", "password"])
+        XCTAssertEqual(Set(WebDAV.addFormFields.map(\.group)), ["Name", "Server", "Sign-in"])
+        for field in WebDAV.addFormFields {
+            XCTAssertFalse(field.hint.isEmpty && field.note == nil, field.name)
+        }
         XCTAssertEqual(
-            WebDAV.addFormFields.first { $0.name == "address" }?.note,
-            TransportSecurity.storageWarning)
+            WebDAV.addFormFields.first { $0.name == "password" }?.kind, .password)
         XCTAssertEqual(
-            WebDAV.addFormFields.first { $0.name == "password" }?.kind, .secret)
+            WebDAV.addFormFields.first { $0.name == "username" }?.kind, .userName)
         // The folder is the one field the user may leave empty.
         XCTAssertEqual(WebDAV.addFormFields.filter { !$0.isRequired }.map(\.name), ["root"])
     }

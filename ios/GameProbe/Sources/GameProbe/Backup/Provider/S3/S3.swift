@@ -452,12 +452,12 @@ public enum S3 {
             // pass makes one. Only a missing key drops from the
             // cache and uploads again, per 8.4.
             if failure.code == "NoSuchBucket" {
-                return .rejected(message: message(from: failure, status: status))
+                return refusal(failure)
             }
             return .notFound
         case Status.conflict:
             if notFoundCodes.contains(failure.code) { return .notFound }
-            return .rejected(message: message(from: failure, status: status))
+            return refusal(failure)
         case Status.tooManyRequests, Status.unavailable:
             return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
         case Status.insufficientStorage:
@@ -465,34 +465,29 @@ public enum S3 {
         case Status.serverError..<600:
             return .serverError(status: status)
         default:
-            return .rejected(message: message(from: failure, status: status))
+            return refusal(failure)
         }
     }
 
     private static func forbidden(_ failure: Failure) -> BackupProviderError {
         switch failure.code {
-        case "SignatureDoesNotMatch", "AccessDenied", "AllAccessDisabled",
-            "InvalidBucketState":
+        case "AccessDenied", "AllAccessDisabled", "InvalidBucketState":
             // The key works and the rights do not cover the call. A
             // re-sign-in does not add a right, so 8.4 blocks the
             // target, per 9.4.
             return .permissionDenied
-        case "InvalidAccessKeyId", "ExpiredToken", "TokenRefreshRequired":
-            // The service does not know this key any more. The fix is
-            // a new key, which is what needs-sign-in asks for.
+        case "SignatureDoesNotMatch", "InvalidAccessKeyId", "ExpiredToken",
+            "TokenRefreshRequired":
+            // A wrong secret key signs wrong. The fix is the keys
+            // again, which is what needs-sign-in asks for.
             return .authExpired
         default:
-            return .rejected(message: message(from: failure, status: Status.forbidden))
+            return refusal(failure)
         }
     }
 
-    /// What a `rejected` shows the user, word for word, per 8.4.
-    private static func message(from failure: Failure, status: Int) -> String {
-        let text = failure.message.trimmingCharacters(in: .whitespacesAndNewlines)
-        let code = failure.code.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty && code.isEmpty { return "the bucket answered \(status)" }
-        if text.isEmpty { return "the bucket answered \(status): \(code)" }
-        return "the bucket answered \(status): \(text)"
+    private static func refusal(_ failure: Failure) -> BackupProviderError {
+        .refusal(by: "The bucket", said: failure.message)
     }
 
     /// Whether a failed upload has to abort what it started.
@@ -526,20 +521,32 @@ public enum S3 {
     /// moment the user types someone else's host name.
     public static let addFormFields: [TargetFormField] = [
         TargetFormField(
-            name: "label", label: "Name", hint: "My bucket"),
+            name: "label", label: "Name", hint: "My bucket",
+            note: "The name Empo shows for this location.", group: "Name"),
         TargetFormField(
-            name: "address", label: "Address",
-            hint: "https://s3.eu-west-1.amazonaws.com",
-            note: TransportSecurity.storageWarning),
-        TargetFormField(name: "bucket", label: "Bucket", hint: "my-saves"),
-        TargetFormField(name: "region", label: "Region", hint: "eu-west-1"),
+            name: "address", label: "Address", hint: "https://s3.us-east-1.amazonaws.com",
+            kind: .address, note: "Your storage service lists this address as its S3 endpoint.",
+            group: "Bucket"),
+        TargetFormField(name: "bucket", label: "Bucket", hint: "my-saves", group: "Bucket"),
         TargetFormField(
-            name: "root", label: "Folder in the bucket", hint: "empo", isRequired: false),
-        TargetFormField(name: "accessKeyId", label: "Access key", hint: ""),
+            name: "region", label: "Region", hint: "us-east-1",
+            note: "Cloudflare R2 uses auto.", group: "Bucket"),
         TargetFormField(
-            name: "secretAccessKey", label: "Secret key", hint: "", kind: .secret),
+            name: "root", label: "Folder (optional)", hint: "backups",
+            isRequired: false,
+            note: "Empo makes its own Empo folder in here. Leave it empty to make it at the top of the bucket.",
+            group: "Bucket"),
         TargetFormField(
-            name: "usesPathStyle", label: "Put the bucket name in the path", kind: .toggle,
-            isRequired: false),
+            name: "usesPathStyle", label: "Bucket name in the address path", kind: .toggle,
+            isRequired: false,
+            note: "On for MinIO and most servers you run yourself. Off for Amazon S3.",
+            group: "Bucket"),
+        TargetFormField(
+            name: "accessKeyId", label: "Access key ID", hint: "AKIAIOSFODNN7EXAMPLE",
+            group: "Keys"),
+        TargetFormField(
+            name: "secretAccessKey", label: "Secret access key", kind: .secret,
+            note: "Make a key that can read, write, and delete files in this bucket only.",
+            group: "Keys"),
     ]
 }

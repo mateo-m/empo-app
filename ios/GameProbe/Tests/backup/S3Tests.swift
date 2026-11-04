@@ -28,15 +28,14 @@ final class S3Tests: XCTestCase {
 
     // MARK: - 3. The error map, per 8.4
 
-    func testAWrongSignatureBlocksTheTarget() {
+    func testAWrongSecretKeyAsksForTheKeysAgain() {
         let error = S3.error(
             status: 403,
             failure: failure(
                 code: "SignatureDoesNotMatch",
                 message: "The request signature we calculated does not match."))
-        XCTAssertEqual(error, .permissionDenied)
-        // A re-sign-in does not add a right, per 8.4.
-        XCTAssertEqual(error.effect, .blocked)
+        XCTAssertEqual(error, .authExpired)
+        XCTAssertEqual(error.effect, .needsSignIn)
     }
 
     func testADeniedCallBlocksTheTarget() {
@@ -102,11 +101,10 @@ final class S3Tests: XCTestCase {
             failure: failure(
                 code: "NoSuchBucket", message: "The specified bucket does not exist."))
         XCTAssertEqual(
-            error, .rejected(message: "the bucket answered 404: The specified bucket does not exist.")
-        )
-        XCTAssertEqual(
-            error.effect,
-            .stopAndShow(message: "the bucket answered 404: The specified bucket does not exist."))
+            error,
+            .rejected(
+                message: "The bucket refused the request. It said: “The specified bucket does not exist.”"))
+        XCTAssertTrue(error.effect.stopsTheRun)
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
@@ -122,12 +120,13 @@ final class S3Tests: XCTestCase {
                 code: "EntityTooLarge", message: "Your proposed upload exceeds the maximum."))
         XCTAssertEqual(
             error,
-            .rejected(message: "the bucket answered 400: Your proposed upload exceeds the maximum."))
+            .rejected(
+                message: "The bucket refused the request. It said: “Your proposed upload exceeds the maximum.”"))
     }
 
-    func testAFailureWithNoBodyStillNamesTheStatus() {
+    func testAFailureWithNoBodyShowsNoStatusNumber() {
         XCTAssertEqual(
-            S3.error(status: 418), .rejected(message: "the bucket answered 418"))
+            S3.error(status: 418), .rejected(message: "The bucket refused the request."))
     }
 
     // MARK: - 4. The upload plan of 9.4
@@ -558,22 +557,29 @@ final class S3Tests: XCTestCase {
 
     // MARK: - The add form of 13.7
 
-    func testTheAddFormCarriesTheStorageWarningBesideTheAddress() {
-        let address = S3.addFormFields.first { $0.name == "address" }
-        XCTAssertEqual(address?.note, TransportSecurity.storageWarning)
-        XCTAssertTrue(TransportSecurity.storageWarning.contains("read your saves"))
-        // 5.7 is the rule: no other field carries the line.
-        XCTAssertEqual(S3.addFormFields.compactMap(\.note).count, 1)
+    func testTheStorageWarningSaysTheBackupsAreNotEncrypted() {
+        XCTAssertTrue(TransportSecurity.storageWarning.contains("doesn't encrypt"))
+        XCTAssertNil(S3.addFormFields.first { $0.note == TransportSecurity.storageWarning })
+    }
+
+    func testEveryFieldOfTheAddFormShowsAnExampleOrAHelpLine() {
+        for field in S3.addFormFields where field.kind != .toggle {
+            XCTAssertFalse(field.hint.isEmpty && field.note == nil, field.name)
+        }
+        XCTAssertEqual(
+            Set(S3.addFormFields.map(\.group)), ["Name", "Bucket", "Keys"])
     }
 
     func testTheAddFormAsksForTheKeyAsASecretAndForNothingElseHidden() {
         let secrets = S3.addFormFields.filter { $0.kind == .secret }
         XCTAssertEqual(secrets.map(\.name), ["secretAccessKey"])
         XCTAssertEqual(
+            S3.addFormFields.first { $0.name == "address" }?.kind, .address)
+        XCTAssertEqual(
             S3.addFormFields.map(\.name),
             [
-                "label", "address", "bucket", "region", "root", "accessKeyId",
-                "secretAccessKey", "usesPathStyle",
+                "label", "address", "bucket", "region", "root", "usesPathStyle",
+                "accessKeyId", "secretAccessKey",
             ])
         // The folder and the style are the two the user may leave.
         XCTAssertEqual(

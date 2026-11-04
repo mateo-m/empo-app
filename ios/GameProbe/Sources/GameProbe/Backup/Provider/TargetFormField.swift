@@ -7,13 +7,16 @@ import Foundation
 /// is what the two agree on.
 public struct TargetFormField: Equatable, Sendable {
 
-    /// What the field holds.
+    /// What the field holds. The form picks the keyboard by it.
     public enum Kind: Equatable, Sendable {
-        /// One line of text.
         case text
-        /// One line the screen hides and the Keychain keeps, per 6.7.
+        case address
+        case userName
+        /// A password the user may keep in their password manager.
+        case password
+        /// A hidden key that is not a sign-in password, so iOS must
+        /// not offer to save it.
         case secret
-        /// On or off.
         case toggle
     }
 
@@ -26,9 +29,10 @@ public struct TargetFormField: Equatable, Sendable {
     public let kind: Kind
     /// Whether the add button waits for this field.
     public let isRequired: Bool
-    /// The line beside the field, per 13.7. Only the host field of a
-    /// service the user hosts carries one.
+    /// The help line under the field.
     public let note: String?
+    /// The heading of the form section the field sits in.
+    public let group: String
 
     public init(
         name: String,
@@ -36,7 +40,8 @@ public struct TargetFormField: Equatable, Sendable {
         hint: String = "",
         kind: Kind = .text,
         isRequired: Bool = true,
-        note: String? = nil
+        note: String? = nil,
+        group: String
     ) {
         self.name = name
         self.label = label
@@ -44,5 +49,6 @@ public struct TargetFormField: Equatable, Sendable {
         self.kind = kind
         self.isRequired = isRequired
         self.note = note
+        self.group = group
     }
 }

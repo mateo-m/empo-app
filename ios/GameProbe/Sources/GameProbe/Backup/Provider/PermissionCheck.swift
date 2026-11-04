@@ -11,10 +11,10 @@ public enum PermissionCheckStep: String, CaseIterable, Equatable, Sendable {
     /// The word the add sheet shows, per 13.7.
     public var label: String {
         switch self {
-        case .write: return "write"
-        case .list: return "list"
-        case .delete: return "delete"
-        case .freeSpace: return "free space"
+        case .write: return "Save a test file"
+        case .list: return "Find the test file"
+        case .delete: return "Delete the test file"
+        case .freeSpace: return "Read the free space"
         }
     }
 }
@@ -141,7 +141,7 @@ public enum PermissionCheck {
                 PermissionCheckStepResult(
                     step: .write,
                     outcome: .failed(
-                        .rejected(message: "this device could not write the probe file"))))
+                        .rejected(message: "This device is full. Free up space, then try again."))))
             return skipRest()
         }
         defer { try? FileManager.default.removeItem(at: probeFile) }

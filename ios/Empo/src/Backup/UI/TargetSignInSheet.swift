@@ -9,24 +9,26 @@ struct TargetSignInSheet: View {
     let signedIn: (TargetDescriptor, PermissionCheckResult) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var isWorking = false
-    @State private var failure: String?
 
     var body: some View {
         NavigationStack {
             TargetFormScreen(
                 service: target.provider, values: known, lockedFields: Set(locked.keys),
-                submitTitle: "Sign in", failure: failure, isWorking: isWorking
-            ) { values in
-                Task { await submit(values) }
+                submitTitle: "Sign in"
+            ) { typed in
+                let values = typed.merging(locked) { _, kept in kept }
+                return target.provider == .s3
+                    ? await BackupTargetAdd.s3(form: values, existing: target)
+                    : await BackupTargetAdd.webdav(form: values, existing: target)
+            } done: { descriptor, result in
+                signedIn(descriptor, result)
+                dismiss()
             }
+            .navigationTitle("Sign in to \(target.displayName)")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
                 }
-            }
-            .overlay {
-                if isWorking { ProgressView() }
             }
         }
     }
@@ -37,28 +39,5 @@ struct TargetSignInSheet: View {
     /// can type it.
     private var locked: [String: String] {
         known.filter { BackupTargetAdd.locationFields.contains($0.key) }
-    }
-
-    private func submit(_ typed: [String: String]) async {
-        guard !isWorking else { return }
-        let values = typed.merging(locked) { _, kept in kept }
-        isWorking = true
-        defer { isWorking = false }
-        if AppSettings.shared.debugLogs {
-            BackupLog.line("TargetSignInSheet", "\(target.id) signs in through the form")
-        }
-        let outcome =
-            target.provider == .s3
-            ? await BackupTargetAdd.s3(form: values, existing: target)
-            : await BackupTargetAdd.webdav(form: values, existing: target)
-        switch outcome {
-        case .checked(let descriptor, let result):
-            signedIn(descriptor, result)
-            dismiss()
-        case .cancelled:
-            failure = nil
-        case .failed(let line):
-            failure = line
-        }
     }
 }

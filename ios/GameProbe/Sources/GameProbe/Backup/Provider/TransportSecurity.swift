@@ -26,8 +26,7 @@ public enum TransportSecurity {
     /// at the moment the user types someone else's host name. The
     /// rule behind it is 5.7: Empo writes the saves as they are.
     public static let storageWarning =
-        "Empo stores backups as they are."
-        + " A person who can read this storage can read your saves."
+        "Empo doesn't encrypt backups. Anyone who can open this storage can read your saves."
 
     /// Why Empo refuses this address before any request, or `nil`
     /// when the address is one it takes.
@@ -39,7 +38,7 @@ public enum TransportSecurity {
         guard let url, let scheme = url.scheme?.lowercased(), let host = url.host,
             !host.isEmpty
         else {
-            return .rejected(message: "Empo cannot read that address. Type it again.")
+            return .rejected(message: "Empo can't read that address. Check it, then try again.")
         }
         guard scheme == "https" else { return .rejected(message: plainAddressMessage) }
         return nil

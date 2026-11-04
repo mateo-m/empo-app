@@ -17,6 +17,11 @@ enum BackupTargetAdd {
         /// The user closed the browser.
         case cancelled
         case failed(String)
+
+        var addedTheLocation: Bool {
+            if case .checked(_, let result) = self { return result.allowsAdd }
+            return false
+        }
     }
 
     /// The services the add sheet offers, with iCloud under the
@@ -50,7 +55,7 @@ enum BackupTargetAdd {
 
     static func dropbox(presenting screen: UIViewController) async -> Outcome {
         guard DropboxSignIn.isConfigured else {
-            return .failed("This build carries no Dropbox app key.")
+            return .failed("Dropbox isn't available in this version of Empo.")
         }
         let descriptor = TargetDescriptor(
             id: UUID().uuidString,
@@ -67,14 +72,14 @@ enum BackupTargetAdd {
             return .failed(error.localizedDescription)
         }
         guard let provider = DropboxGate.shared.target(for: descriptor) else {
-            return .failed("Dropbox signed in and still cannot open.")
+            return .failed(openFailedLine)
         }
         return await check(descriptor, provider: provider)
     }
 
     static func googleDrive(presenting screen: UIViewController) async -> Outcome {
         guard GoogleDriveSignIn.isConfigured else {
-            return .failed("This build carries no Google Drive client id.")
+            return .failed("Google Drive isn't available in this version of Empo.")
         }
         let descriptor = TargetDescriptor(
             id: UUID().uuidString,
@@ -91,7 +96,7 @@ enum BackupTargetAdd {
             return .failed(error.localizedDescription)
         }
         guard let provider = GoogleDriveGate.shared.target(for: descriptor) else {
-            return .failed("Google Drive signed in and still cannot open.")
+            return .failed(openFailedLine)
         }
         return await check(descriptor, provider: provider)
     }
@@ -102,7 +107,7 @@ enum BackupTargetAdd {
     /// its folder, and its backup policy.
     static func s3(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
         guard let address = URL(string: form["address"] ?? "") else {
-            return .failed("Type the address of the service.")
+            return .failed("Enter the address.")
         }
         let bucket = S3Bucket(
             address: address,
@@ -124,9 +129,14 @@ enum BackupTargetAdd {
         do {
             let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
-            return await check(descriptor, provider: provider)
+            let outcome = await check(descriptor, provider: provider)
+            if existing == nil, !outcome.addedTheLocation {
+                S3Gate.shared.forget(targetId: descriptor.id)
+                try? S3ConnectionStore.remove(targetId: descriptor.id)
+            }
+            return outcome
         } catch {
-            return .failed("The access key could not go in the Keychain.")
+            return .failed(keychainFailedLine)
         }
     }
 
@@ -142,7 +152,7 @@ enum BackupTargetAdd {
 
     static func webdav(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
         guard let address = URL(string: form["address"] ?? "") else {
-            return .failed("Type the address of the server.")
+            return .failed("Enter the address.")
         }
         let server = WebDAVServer(address: address, username: form["username"] ?? "")
         if let refusal = server.refusal { return .failed(line(of: refusal)) }
@@ -156,9 +166,14 @@ enum BackupTargetAdd {
         do {
             let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
-            return await check(descriptor, provider: provider)
+            let outcome = await check(descriptor, provider: provider)
+            if existing == nil, !outcome.addedTheLocation {
+                WebDAVGate.shared.forget(targetId: descriptor.id)
+                try? WebDAVConnectionStore.remove(targetId: descriptor.id)
+            }
+            return outcome
         } catch {
-            return .failed("The password could not go in the Keychain.")
+            return .failed(keychainFailedLine)
         }
     }
 
@@ -214,7 +229,7 @@ enum BackupTargetAdd {
             return await check(target, provider: provider)
         case .dropbox, .googleDrive:
             guard let screen = await OAuthSignIn.screenForTheSheet() else {
-                return .failed("Empo found no screen to sign in from.")
+                return .failed(noSignInScreenLine)
             }
             do {
                 let signedIn =
@@ -228,11 +243,11 @@ enum BackupTargetAdd {
                 return .failed(error.localizedDescription)
             }
             guard let provider = await BackupTargets.provider(for: target) else {
-                return .failed("The service signed in and still cannot open.")
+                return .failed(openFailedLine)
             }
             return await check(target, provider: provider)
         case .s3, .webdav, .sftp:
-            return .failed("Type the password of this location again to use it.")
+            return .failed("Enter the password for this location again.")
         }
     }
 
@@ -252,7 +267,7 @@ enum BackupTargetAdd {
                     prefix: PermissionCheck.makeProbePath(root: descriptor.root))
             } catch {
                 if case .offline = error {
-                    return .failed("Empo could not reach this address. Check it and try again.")
+                    return .failed(BackupProviderError.offline.line(for: descriptor.provider))
                 }
             }
         }
@@ -260,7 +275,7 @@ enum BackupTargetAdd {
             let result = try? await BackupTargets.addAfterPermissionCheck(
                 descriptor, provider: provider)
         else {
-            return .failed("The permission check could not run.")
+            return .failed("Empo couldn't check this location. Try again.")
         }
         if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             try? store.recordTargetQuota(
@@ -277,7 +292,11 @@ enum BackupTargetAdd {
     private static func line(of error: BackupProviderError) -> String {
         switch error {
         case .rejected(let message): return message
-        default: return "Empo cannot use this address."
+        default: return "Empo can't use this address. Check it and try again."
         }
     }
+
+    static let noSignInScreenLine = "Empo couldn't show the sign-in page. Try again."
+    private static let openFailedLine = "Empo couldn't open this location after you signed in. Try again."
+    private static let keychainFailedLine = "Empo couldn't save the sign-in on this device. Try again."
 }

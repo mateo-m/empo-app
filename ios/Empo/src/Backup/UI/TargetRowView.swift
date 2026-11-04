@@ -39,14 +39,6 @@ struct TargetRowView: View {
         return hint
     }
 
-    private var stateColor: Color {
-        switch row.state {
-        case .current, .paused, .cannotOpen: return .secondary
-        case .placeholder, .needsSignIn, .blockedByPermissions, .rejected, .full, .unreachable:
-            return .brand
-        }
-    }
-
     var body: some View {
         HStack(spacing: Spacing.lg) {
             AccountAvatar(photo: target.accountPhoto, provider: target.provider, size: 36)
@@ -57,7 +49,7 @@ struct TargetRowView: View {
                 }
                 Text(row.stateLine)
                     .font(.footnote)
-                    .foregroundStyle(stateColor)
+                    .foregroundStyle(row.state.isProblem ? Color.red : Color.secondary)
                 if let line = row.foregroundOnlyLine {
                     Text(line)
                         .font(.footnote)

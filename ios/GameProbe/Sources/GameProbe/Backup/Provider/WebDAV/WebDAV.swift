@@ -392,7 +392,7 @@ public enum WebDAV {
         case Status.locked:
             // Another client holds a lock. It is not Empo's to break,
             // and the user is the one who can clear it.
-            return .rejected(message: message(fromBody: body, status: status))
+            return refusal(fromBody: body)
         case Status.tooManyRequests, Status.unavailable:
             return .throttled(
                 retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
@@ -401,22 +401,18 @@ public enum WebDAV {
         case Status.serverError..<600:
             return .serverError(status: status)
         default:
-            return .rejected(message: message(fromBody: body, status: status))
+            return refusal(fromBody: body)
         }
     }
 
-    /// What a `rejected` shows the user, word for word, per 8.4.
-    ///
     /// A server that speaks WebDAV writes its reason in a `message`
-    /// element. Apache `mod_dav` answers a page of HTML instead, and
-    /// the status is then all there is to say.
-    public static func message(fromBody body: Data, status: Int) -> String {
-        let stated = "the server answered \(status)"
-        guard let xml = String(data: body, encoding: .utf8) else { return stated }
+    /// element. Apache `mod_dav` answers a page of HTML instead, with
+    /// no reason to quote.
+    static func refusal(fromBody body: Data) -> BackupProviderError {
+        let xml = String(data: body, encoding: .utf8) ?? ""
         let said =
             DAVXML.value("message", in: xml) ?? DAVXML.value("responsedescription", in: xml) ?? ""
-        guard !said.isEmpty else { return stated }
-        return "\(stated): \(said)"
+        return .refusal(by: "The server", said: said)
     }
 
     // MARK: - The add form of 13.7
@@ -428,16 +424,23 @@ public enum WebDAV {
     /// moment the user types their own host name. It is the same
     /// copy the S3 form carries.
     public static let addFormFields: [TargetFormField] = [
-        TargetFormField(name: "label", label: "Name", hint: "My server"),
+        TargetFormField(
+            name: "label", label: "Name", hint: "My server",
+            note: "The name Empo shows for this location.", group: "Name"),
         TargetFormField(
             name: "address", label: "Address",
-            hint: "https://cloud.example.com/remote.php/dav/files/alice",
-            note: TransportSecurity.storageWarning),
+            hint: "https://cloud.example.com/remote.php/dav/files/you", kind: .address,
+            note: "The WebDAV address your server shows in its settings.", group: "Server"),
         TargetFormField(
-            name: "root", label: "Folder on the server", hint: "empo", isRequired: false),
-        TargetFormField(name: "username", label: "User name", hint: "alice"),
+            name: "root", label: "Folder (optional)", hint: "backups", isRequired: false,
+            note: "Empo makes its own Empo folder in here. Leave it empty to make it at the address itself.",
+            group: "Server"),
         TargetFormField(
-            name: "password", label: "Password", hint: "", kind: .secret,
-            note: "An app password of your server fits here."),
+            name: "username", label: "User name", hint: "you", kind: .userName,
+            group: "Sign-in"),
+        TargetFormField(
+            name: "password", label: "Password", kind: .password,
+            note: "If your server uses two-step sign-in, make an app password for Empo.",
+            group: "Sign-in"),
     ]
 }
