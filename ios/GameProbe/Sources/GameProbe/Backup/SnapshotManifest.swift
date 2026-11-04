@@ -245,7 +245,14 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
         try BlobCodec.encodeZlib(jsonData())
     }
 
-    public static func decode(compressed data: Data) throws -> SnapshotManifest {
-        try decode(json: BlobCodec.decode(data, algorithm: .zlib))
+    /// About 300 bytes per file, so near 850,000 files. The manifest
+    /// comes from the storage service, and a small hostile one could
+    /// inflate past the memory of the device.
+    public static let inflatedSizeLimit = 256 * 1_024 * 1_024
+
+    public static func decode(
+        compressed data: Data, maxBytes: Int = inflatedSizeLimit
+    ) throws -> SnapshotManifest {
+        try decode(json: BlobCodec.decode(data, algorithm: .zlib, maxBytes: maxBytes))
     }
 }

@@ -56,8 +56,8 @@ public enum BlobCodec {
         case corruptZlibStream
         /// The stream inflated, but its Adler-32 does not match.
         case checksumMismatch
-        /// The stream inflates past the size its manifest entry states.
-        case largerThanStated
+        /// The stream inflates past the limit its caller set.
+        case tooLarge
     }
 
     /// Compresses `data` and keeps whichever result is smaller.
@@ -213,7 +213,7 @@ public enum BlobCodec {
                 let produced = bufferSize - stream.pointee.dst_size
                 guard status == COMPRESSION_STATUS_OK || status == COMPRESSION_STATUS_END
                 else { throw Failure.corruptZlibStream }
-                guard produced <= maxBytes - out.count else { throw Failure.largerThanStated }
+                guard produced <= maxBytes - out.count else { throw Failure.tooLarge }
                 if produced > 0 { out.append(buffer, count: produced) }
                 if status == COMPRESSION_STATUS_END { return }
                 // No input left and no output made: the stream ended
@@ -244,7 +244,7 @@ public enum BlobCodec {
         } catch {
             throw Failure.corruptZlibStream
         }
-        guard out.count <= maxBytes else { throw Failure.largerThanStated }
+        guard out.count <= maxBytes else { throw Failure.tooLarge }
         return out
     }
 

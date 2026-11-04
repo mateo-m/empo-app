@@ -164,7 +164,7 @@ final class BlobCodecTests: XCTestCase {
         XCTAssertThrowsError(
             try BlobCodec.decode(framed, algorithm: .zlib, maxBytes: 1_024)
         ) { error in
-            XCTAssertEqual(error as? BlobCodec.Failure, .largerThanStated)
+            XCTAssertEqual(error as? BlobCodec.Failure, .tooLarge)
         }
         XCTAssertEqual(
             try BlobCodec.decode(framed, algorithm: .zlib, maxBytes: original.count), original)

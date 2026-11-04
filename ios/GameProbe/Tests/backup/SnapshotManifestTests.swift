@@ -112,6 +112,22 @@ final class SnapshotManifestTests: XCTestCase {
         XCTAssertEqual(try SnapshotManifest.decode(compressed: compressed), manifest)
     }
 
+    func testACompressedManifestThatInflatesPastTheLimitIsRefused() throws {
+        let manifest = try SnapshotManifest.decode(
+            json: BackupFixtures.data("manifest-v1.json"))
+        let compressed = try manifest.compressedData()
+        let size = try manifest.jsonData().count
+
+        XCTAssertThrowsError(
+            try SnapshotManifest.decode(compressed: compressed, maxBytes: size - 1)
+        ) { error in
+            XCTAssertEqual(error as? BlobCodec.Failure, .tooLarge)
+        }
+        XCTAssertEqual(
+            try SnapshotManifest.decode(compressed: compressed, maxBytes: size), manifest)
+        XCTAssertEqual(SnapshotManifest.inflatedSizeLimit, 256 * 1_024 * 1_024)
+    }
+
     // MARK: - Rejections
 
     /// An entry this reader cannot store or restore stops the read,
