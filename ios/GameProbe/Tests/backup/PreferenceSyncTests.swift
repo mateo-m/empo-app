@@ -337,6 +337,20 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertEqual(TouchSectionSyncCoder.section(of: controls).landscape, nil)
     }
 
+    func testAControlAtAWholeNumberReadsBackUnchanged() throws {
+        let section = TouchSection(
+            portrait: TouchLayout(
+                dpad: DPadSpec(x: 0, y: 0.5, size: nil, opacity: 1, style: .dpad),
+                buttons: nil, actionButtons: nil),
+            landscape: nil)
+        let controls = TouchSectionSyncCoder.controls(of: section)
+        let text = try JSONEncoder().encode(JSONValue.object(controls))
+        let readBack = try JSONDecoder().decode(JSONValue.self, from: text)
+        XCTAssertEqual(readBack, .object(controls))
+        XCTAssertNotEqual(JSONValue.int(1), .double(1.5))
+        XCTAssertNotEqual(JSONValue.int(1), .string("1"))
+    }
+
     func testEachGlobalBindingTakesItsOwnLeaf() {
         let map = BindingMap(entries: [.key("KeyZ"): .key("KeyX")])
         let entries = BindingMapSyncCoder.entries(of: map)

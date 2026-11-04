@@ -49,6 +49,23 @@ public enum JSONValue: Codable, Equatable, Sendable {
         }
     }
 
+    /// JSON has one number type. `JSONEncoder` writes `1.0` as `1`,
+    /// which reads back as `.int`, so a whole number must equal the
+    /// same double.
+    public static func == (left: JSONValue, right: JSONValue) -> Bool {
+        switch (left, right) {
+        case (.null, .null): return true
+        case (.bool(let a), .bool(let b)): return a == b
+        case (.int(let a), .int(let b)): return a == b
+        case (.double(let a), .double(let b)): return a == b
+        case (.int(let a), .double(let b)), (.double(let b), .int(let a)): return Double(a) == b
+        case (.string(let a), .string(let b)): return a == b
+        case (.array(let a), .array(let b)): return a == b
+        case (.object(let a), .object(let b)): return a == b
+        default: return false
+        }
+    }
+
     public var string: String? {
         if case .string(let value) = self { return value }
         return nil
