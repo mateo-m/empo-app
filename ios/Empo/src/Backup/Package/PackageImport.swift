@@ -12,9 +12,11 @@ import GameProbe
 enum PackageImport {
 
     /// Moves the picked ZIP into staging and records it, per 12.6.
-    static func stage(
+    /// A full-game ZIP can be gigabytes, so the copy runs off the
+    /// main actor.
+    nonisolated static func stage(
         picked: URL, localRoot: URL = BackupRoot.layout.root, at date: Date = Date()
-    ) throws -> PackageRecord {
+    ) async throws -> PackageRecord {
         let record = PackageRecord(
             id: UUID().uuidString,
             kind: .imported,
@@ -44,9 +46,9 @@ enum PackageImport {
 
     /// Opens a staged package. It throws a `PackageRejection` where
     /// the package fails a check of 12.6.
-    static func open(
+    nonisolated static func open(
         _ record: PackageRecord, localRoot: URL = BackupRoot.layout.root
-    ) throws -> PackageSource {
+    ) async throws -> PackageSource {
         try PackageSource(zip: record.zipURL(localRoot: localRoot), packageId: record.id)
     }
 

@@ -23,11 +23,17 @@ final class PackageImportModel {
     var sourceDevice: String { source?.manifest.sourceDevice ?? "" }
     var exportedAt: Date? { source?.manifest.exportedAt }
 
-    func read(_ picked: URL) {
+    func read(_ picked: URL) async {
         do {
-            let record = try PackageImport.stage(picked: picked)
+            let record = try await PackageImport.stage(picked: picked)
+            // The copy can't stop part way, so a sheet that closed
+            // during it deletes the staged package here.
+            guard !Task.isCancelled else {
+                PackageImport.finish(record)
+                return
+            }
             self.record = record
-            let source = try PackageImport.open(record)
+            let source = try await PackageImport.open(record)
             self.source = source
             rows = PackageImport.rows(of: source)
             for row in rows {
@@ -131,7 +137,7 @@ struct PackageImportSheet: View {
             }
         }
         .tint(.brand)
-        .task { model.read(picked) }
+        .task { await model.read(picked) }
         .onDisappear { model.close() }
         .sheet(item: $chosen) { row in
             RestoreSnapshotSheet(
