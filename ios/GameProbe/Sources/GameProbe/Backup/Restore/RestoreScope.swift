@@ -37,9 +37,23 @@ public enum RestoreScope: String, Codable, Sendable, CaseIterable, Equatable {
         case .savesAndSettings:
             return SaveMemberRule.isSaveMember(entry)
         case .rescuedSaves:
-            return entry.root == .rescuedSaves
+            return Self.isRescuedSave(entry)
         case .preferences:
-            return entry.root != .rescuedSaves && SaveMemberRule.isSaveMember(entry)
+            return !Self.isRescuedSave(entry) && SaveMemberRule.isSaveMember(entry)
+        }
+    }
+
+    /// The library stream carries a bucket under the `.preferences`
+    /// root with a `rescued-saves/` path, not under `.rescuedSaves`.
+    private static func isRescuedSave(_ entry: SnapshotManifest.Entry) -> Bool {
+        switch entry.root {
+        case .rescuedSaves:
+            return true
+        case .preferences:
+            guard case .rescuedSavesBucket = PreferencesMemberPath(entry.path) else { return false }
+            return true
+        case .container, .sharedData:
+            return false
         }
     }
 }

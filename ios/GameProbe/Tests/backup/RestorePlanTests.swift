@@ -256,20 +256,23 @@ final class RestorePlanTests: XCTestCase {
     /// The two rows of 11.4 split one preferences snapshot, so each
     /// scope leaves the other row's files alone.
     func testTheTwoFreshInstallScopesSplitThePreferencesSnapshot() {
-        let snapshot = manifest([
-            entry("empo-defaults.json", root: .preferences, source: nil),
-            entry("profiles/one.json", root: .preferences, source: nil),
-            entry("bucket/save.rxdata", root: .rescuedSaves, source: nil),
-        ])
+        let stream = BackupSetResolver.resolveLibraryStream(
+            LibraryBackupSetRequest(
+                profilesDirectory: BackupFixtures.url("profiles"),
+                rescuedSavesBuckets: [
+                    "Long Gone": BackupFixtures.url("rescued").appendingPathComponent("Long Gone")
+                ]))
+        let snapshot = manifest(
+            stream.members.map { entry($0.path, root: $0.root, source: nil) })
 
         XCTAssertEqual(
             RestorePlanner.plan(manifest: snapshot, scope: .preferences)
                 .steps.map(\.entry.path),
-            ["empo-defaults.json", "profiles/one.json"])
+            ["profiles/Default/layout.json", "profiles/Landscape/layout.json"])
         XCTAssertEqual(
             RestorePlanner.plan(manifest: snapshot, scope: .rescuedSaves)
                 .steps.map(\.entry.path),
-            ["bucket/save.rxdata"])
+            ["rescued-saves/Long Gone/.empo-origin.json", "rescued-saves/Long Gone/Save1.rxdata"])
     }
 
     func testTheWholeGameScopeRestoresEveryEntry() {
