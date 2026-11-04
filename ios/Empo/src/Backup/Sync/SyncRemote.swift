@@ -90,12 +90,12 @@ final class ProviderSyncTargets: SyncTargets {
 
     func putTheDocument(to path: String, on target: TargetDescriptor) async -> String? {
         guard let provider = await BackupTargets.provider(for: target) else {
-            return "this device could not open the target"
+            return "this device could not open the location"
         }
         do {
             try await provider.put(localFile: AutomergeDocumentStore.url, path: path)
             guard try await provider.confirm(path: path) == .confirmed else {
-                return "the target did not confirm the copy"
+                return "the location did not confirm the copy"
             }
         } catch {
             return String(describing: error)

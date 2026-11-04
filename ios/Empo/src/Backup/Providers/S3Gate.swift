@@ -18,7 +18,7 @@ final class S3Gate {
 
     static let kind = BackupProviderKind.s3
     /// What the row reads while the target holds no key, per 13.5.
-    static let noKeyLine = "type the access key of this bucket to use this target"
+    static let noKeyLine = "type the access key of this bucket to use this location"
 
     /// One target per id, so four transfers in flight share one
     /// record of what is already committed.

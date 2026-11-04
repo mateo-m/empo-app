@@ -25,7 +25,7 @@ final class WebDAVGate {
     static let kind = BackupProviderKind.webdav
     /// What the row reads while the target holds no password, per
     /// 13.5.
-    static let noPasswordLine = "type the password of this server to use this target"
+    static let noPasswordLine = "type the password of this server to use this location"
 
     /// One target per id, so four transfers in flight share one
     /// record of what is already committed and which collections are

@@ -99,7 +99,7 @@ struct AddTargetSheet: View {
         case .sftp:
             // `offeredServices` draws no SFTP row, so nothing
             // reaches this. The kind stays for the format of 5.
-            return .failed("Empo has no SFTP target.")
+            return .failed("Empo has no SFTP location.")
         }
     }
 
@@ -196,7 +196,7 @@ struct TargetFormScreen: View {
             Toggle(
                 field.label,
                 isOn: Binding(
-                    get: { values[field.name] == "true" },
+                    get: { BackupTargetAdd.isOn(field.name, in: values) },
                     set: { values[field.name] = $0 ? "true" : "false" }))
         }
     }

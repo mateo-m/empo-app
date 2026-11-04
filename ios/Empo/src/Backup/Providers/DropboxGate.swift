@@ -12,7 +12,7 @@ final class DropboxGate: OAuthProviderGate {
     static let kind = BackupProviderKind.dropbox
     static var service: OAuthService? { DropboxSignIn.service }
     static let noKeyLine = "this build carries no Dropbox app key"
-    static let noTokenLine = "sign in to Dropbox to use this target"
+    static let noTokenLine = "sign in to Dropbox to use this location"
 
     var stores: [String: OAuthTokenStore] = [:]
 

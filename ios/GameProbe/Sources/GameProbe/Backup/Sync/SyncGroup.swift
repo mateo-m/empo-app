@@ -88,7 +88,7 @@ public enum SyncGroupCopy {
 
     /// Two devices with no common target cannot sync.
     public static let noCommonTarget =
-        "To sync settings, add one backup target that both devices can open."
+        "To sync settings, add one backup location that both devices can open."
 
     public static func confirmation(of group: DiscoveredSyncGroup) -> String {
         let devices = group.deviceNames.isEmpty ? "another device" : list(group.deviceNames)

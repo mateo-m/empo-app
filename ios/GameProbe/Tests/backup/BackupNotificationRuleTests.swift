@@ -26,7 +26,7 @@ final class BackupNotificationRuleTests: XCTestCase {
     func testARightsBlockAsksForASignInAndNeverSaysFull() {
         XCTAssertEqual(
             BackupNotificationRule.failFastCause(
-                of: .blocked(reason: "this target refused the request.")),
+                of: .blocked(reason: "this location refused the request.")),
             .signInDead)
         let line = BackupNotificationRule.text(
             for: .signInDead, targetLabel: "empo-dev", deviceName: "iPhone")

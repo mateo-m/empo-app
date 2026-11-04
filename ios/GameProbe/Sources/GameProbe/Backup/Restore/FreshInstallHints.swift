@@ -24,7 +24,7 @@ public enum FreshInstallHints {
     /// cannot open, per 9.1. Ticket 017 greys the entry out.
     public static let iCloudUnavailableLine =
         "This library backed up to iCloud on the App Store version of Empo. This copy cannot open "
-        + "iCloud. Restore from another target, or install Empo from the App Store."
+        + "iCloud. Restore from another location, or install Empo from the App Store."
 
     /// The hint for one streamed descriptor.
     public static func line(

@@ -40,7 +40,7 @@ public enum StaleCause: Equatable, Sendable {
     /// The line the Backup sheet and the banner show. Tickets 016,
     /// 017, and 018 render it.
     public func line(targetLabel: String?, deviceName: String = "This device") -> String {
-        let target = targetLabel ?? "the backup target"
+        let target = targetLabel ?? "the backup location"
         switch self {
         case .waitingForWiFi:
             return "waiting for Wi-Fi"

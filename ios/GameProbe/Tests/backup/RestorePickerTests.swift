@@ -116,7 +116,7 @@ final class RestorePickerTests: XCTestCase {
 
     func testATargetWithNothingOnItHasNoSections() {
         XCTAssertTrue(RestorePicker.sections([], among: []).isEmpty)
-        XCTAssertEqual(RestoreNotices.emptyTargetLine, "No backups on this target yet")
+        XCTAssertEqual(RestoreNotices.emptyTargetLine, "No backups on this location yet")
     }
 
     // MARK: - The fresh-install merge, per 11.4 and row 5 of 11.2

@@ -225,7 +225,7 @@ struct BackupSheet: View {
     private var noTargetSection: some View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                Text("Empo backs up no game yet, because no backup target is set up.")
+                Text("Empo backs up no game yet, because no backup location is set up.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 NavigationLink("Set up backups") { BackupsScreen() }

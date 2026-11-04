@@ -283,7 +283,7 @@ final class RestoreCoordinator {
         guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
             let provider = await BackupTargets.provider(for: descriptor),
             let snapshotId = record.snapshotId
-        else { return .failed("this target is not configured on this device") }
+        else { return .failed("this location is not set up on this device") }
 
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         guard let namespaces = try? await scan.namespaces(),

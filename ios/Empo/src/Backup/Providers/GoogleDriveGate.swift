@@ -14,7 +14,7 @@ final class GoogleDriveGate: OAuthProviderGate {
     static let kind = BackupProviderKind.googleDrive
     static var service: OAuthService? { GoogleDriveSignIn.service }
     static let noKeyLine = "this build carries no Google Drive client id"
-    static let noTokenLine = "sign in to Google Drive to use this target"
+    static let noTokenLine = "sign in to Google Drive to use this location"
 
     var stores: [String: OAuthTokenStore] = [:]
 

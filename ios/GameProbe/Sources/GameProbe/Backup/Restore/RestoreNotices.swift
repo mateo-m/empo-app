@@ -11,7 +11,7 @@ public enum RestoreNotices {
     /// in 5.16.
     public static let newerEmpoLine =
         "Backups from a newer version of Empo. You can restore from them, but this Empo cannot "
-        + "back up to this target until you update."
+        + "back up to this location until you update."
 
     /// Whether the line shows for a namespace, read from a manifest
     /// the namespace holds, per 5.16.
@@ -26,7 +26,7 @@ public enum RestoreNotices {
 
     /// A target with nothing on it, reachable from both manual entry
     /// points.
-    public static let emptyTargetLine = "No backups on this target yet"
+    public static let emptyTargetLine = "No backups on this location yet"
 
     /// The completion summary, per 11.14.
     ///

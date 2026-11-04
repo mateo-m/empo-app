@@ -64,6 +64,6 @@ public struct TargetCapabilities: Equatable, Sendable {
     public func rejection(forFileOfSize size: Int64) -> BackupProviderError? {
         guard let maxFileSize, size > maxFileSize else { return nil }
         return .rejected(
-            message: "the file is \(size) bytes and this target takes at most \(maxFileSize)")
+            message: "the file is \(size) bytes and this location takes at most \(maxFileSize)")
     }
 }
