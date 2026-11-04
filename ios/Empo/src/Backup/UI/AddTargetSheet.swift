@@ -27,7 +27,7 @@ struct AddTargetSheet: View {
                 Section {
                     ForEach(services, id: \.self) { service in
                         Button(service.serviceName) { start(service) }
-                            .disabled(isGreyed(service))
+                            .disabled(isGreyed(service) || isWorking)
                     }
                 } footer: {
                     if isGreyed(.iCloudDrive) {
@@ -51,7 +51,8 @@ struct AddTargetSheet: View {
                 if isWorking { ProgressView() }
             }
             .navigationDestination(item: $typing) { service in
-                TargetFormScreen(service: service, failure: failure) { values in
+                TargetFormScreen(service: service, failure: failure, isWorking: isWorking) {
+                    values in
                     Task { await finish(await add(service, values: values)) }
                 }
                 .overlay {
@@ -78,6 +79,7 @@ struct AddTargetSheet: View {
     private func add(
         _ service: BackupProviderKind, values: [String: String]
     ) async -> BackupTargetAdd.Outcome {
+        guard !isWorking else { return .cancelled }
         isWorking = true
         defer { isWorking = false }
         switch service {
@@ -122,6 +124,7 @@ struct TargetFormScreen: View {
     let submitTitle: String
     let lockedFields: Set<String>
     let failure: String?
+    let isWorking: Bool
     let submit: ([String: String]) -> Void
 
     @State private var values: [String: String]
@@ -129,12 +132,14 @@ struct TargetFormScreen: View {
     init(
         service: BackupProviderKind, values: [String: String] = [:],
         lockedFields: Set<String> = [], submitTitle: String = "Add",
-        failure: String? = nil, submit: @escaping ([String: String]) -> Void
+        failure: String? = nil, isWorking: Bool = false,
+        submit: @escaping ([String: String]) -> Void
     ) {
         self.service = service
         self.submitTitle = submitTitle
         self.lockedFields = lockedFields
         self.failure = failure
+        self.isWorking = isWorking
         self.submit = submit
         _values = State(initialValue: values)
     }
@@ -167,7 +172,7 @@ struct TargetFormScreen: View {
             Section {
                 Button(submitTitle) { submit(values) }
                     .accessibilityIdentifier("submitTarget")
-                    .disabled(!isComplete)
+                    .disabled(!isComplete || isWorking)
             } footer: {
                 if let failure { Text(failure).foregroundStyle(.red) }
             }

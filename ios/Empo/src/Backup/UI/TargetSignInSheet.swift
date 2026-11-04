@@ -16,7 +16,7 @@ struct TargetSignInSheet: View {
         NavigationStack {
             TargetFormScreen(
                 service: target.provider, values: known, lockedFields: Set(locked.keys),
-                submitTitle: "Sign in", failure: failure
+                submitTitle: "Sign in", failure: failure, isWorking: isWorking
             ) { values in
                 Task { await submit(values) }
             }
@@ -40,6 +40,7 @@ struct TargetSignInSheet: View {
     }
 
     private func submit(_ typed: [String: String]) async {
+        guard !isWorking else { return }
         let values = typed.merging(locked) { _, kept in kept }
         isWorking = true
         defer { isWorking = false }
