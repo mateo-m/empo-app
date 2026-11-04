@@ -10,41 +10,61 @@ final class QuotaCheckTests: XCTestCase {
         QuotaReading(usedBytes: used, limitBytes: limit)
     }
 
-    func testTheSmallerOfTheLimitAndTheCapGoverns() {
+    func testTheSmallerRoomGoverns() {
         XCTAssertEqual(
-            QuotaCheck.effectiveLimit(reading: reading(used: 0, limit: 1_000), capBytes: 400),
+            QuotaCheck.freeBytes(
+                reading: reading(used: 0, limit: 1_000), capBytes: 400, storedBytes: 0),
             400)
         XCTAssertEqual(
-            QuotaCheck.effectiveLimit(reading: reading(used: 0, limit: 300), capBytes: 400),
+            QuotaCheck.freeBytes(
+                reading: reading(used: 0, limit: 300), capBytes: 400, storedBytes: 0),
+            300)
+    }
+
+    func testTheCapCountsEmposOwnBytesAndNotTheAccount() {
+        // The account holds 9,000 bytes of other files. Empo holds
+        // 100, so a cap of 400 leaves 300.
+        XCTAssertEqual(
+            QuotaCheck.freeBytes(
+                reading: reading(used: 9_100, limit: 100_000), capBytes: 400,
+                storedBytes: 100),
             300)
     }
 
     func testACapAloneGoverns() {
         XCTAssertEqual(
-            QuotaCheck.effectiveLimit(reading: reading(used: 0, limit: nil), capBytes: 400),
-            400)
+            QuotaCheck.freeBytes(
+                reading: reading(used: 0, limit: nil), capBytes: 400, storedBytes: 150),
+            250)
     }
 
     func testNoNumberGovernsWhenNeitherStatesOne() {
         XCTAssertNil(
-            QuotaCheck.effectiveLimit(reading: reading(used: 0, limit: nil), capBytes: nil))
-        XCTAssertNil(QuotaCheck.effectiveLimit(reading: nil, capBytes: nil))
+            QuotaCheck.freeBytes(
+                reading: reading(used: 0, limit: nil), capBytes: nil, storedBytes: 0))
+        XCTAssertNil(QuotaCheck.freeBytes(reading: nil, capBytes: nil, storedBytes: 0))
     }
 
     func testFreeBytesNeverGoesBelowZero() {
         XCTAssertEqual(
-            QuotaCheck.freeBytes(reading: reading(used: 900, limit: 500), capBytes: nil), 0)
+            QuotaCheck.freeBytes(
+                reading: reading(used: 900, limit: 500), capBytes: nil, storedBytes: 0),
+            0)
+        XCTAssertEqual(
+            QuotaCheck.freeBytes(reading: nil, capBytes: 100, storedBytes: 300), 0)
     }
 
     func testARunThatFitsIsNotRefused() {
         XCTAssertNil(
             QuotaCheck.shortfall(
-                pendingBytes: 100, reading: reading(used: 0, limit: 500), capBytes: nil))
+                pendingBytes: 100, reading: reading(used: 0, limit: 500), capBytes: nil,
+                storedBytes: 0))
     }
 
     func testARunThatCannotFitNamesTheShortfall() {
         let shortfall = QuotaCheck.shortfall(
-            pendingBytes: 700, reading: reading(used: 100, limit: 500), capBytes: nil)
+            pendingBytes: 700, reading: reading(used: 100, limit: 500), capBytes: nil,
+            storedBytes: 0)
 
         XCTAssertEqual(shortfall?.neededBytes, 700)
         XCTAssertEqual(shortfall?.freeBytes, 400)
@@ -54,16 +74,26 @@ final class QuotaCheckTests: XCTestCase {
     func testTheCapRefusesARunTheProviderWouldTake() {
         XCTAssertNil(
             QuotaCheck.shortfall(
-                pendingBytes: 300, reading: reading(used: 0, limit: 10_000), capBytes: nil))
+                pendingBytes: 300, reading: reading(used: 0, limit: 10_000), capBytes: nil,
+                storedBytes: 0))
         XCTAssertEqual(
             QuotaCheck.shortfall(
-                pendingBytes: 300, reading: reading(used: 0, limit: 10_000), capBytes: 200)?
+                pendingBytes: 300, reading: reading(used: 0, limit: 10_000), capBytes: 200,
+                storedBytes: 0)?
                 .missingBytes,
             100)
     }
 
-    func testAProviderThatAnswersNoSpaceQueryRefusesNothing() {
-        XCTAssertNil(QuotaCheck.shortfall(pendingBytes: 700, reading: nil, capBytes: 100))
+    func testTheCapRefusesARunOnATargetWithNoSpaceQuery() {
+        XCTAssertEqual(
+            QuotaCheck.shortfall(pendingBytes: 700, reading: nil, capBytes: 100, storedBytes: 0)?
+                .missingBytes,
+            600)
+    }
+
+    func testATargetWithNoSpaceQueryAndNoCapRefusesNothing() {
+        XCTAssertNil(
+            QuotaCheck.shortfall(pendingBytes: 700, reading: nil, capBytes: nil, storedBytes: 0))
     }
 
     func testTheBlockedLineNamesTheMissingBytesInHumanUnits() {

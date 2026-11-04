@@ -136,7 +136,8 @@ extension SnapshotEngine {
             lastSweepAt: try? store.lastSweep(targetId: targetId),
             now: now,
             reading: reading,
-            capBytes: request.descriptor.capBytes)
+            capBytes: request.descriptor.capBytes,
+            storedBytes: storedBytes(targetId: targetId))
 
         let runs = request.force || decision == .run || decision == .runOverdue
         guard runs else { return SweepResult(decision: decision) }

@@ -680,21 +680,28 @@ public actor SnapshotEngine {
         }
     }
 
-    /// Where the provider answers a space query, refuse a run that
-    /// cannot fit and name the shortfall, per 5.14.
+    /// Refuse a run that cannot fit under the provider quota or the
+    /// cap, and name the shortfall, per 5.14.
     func refuseARunThatCannotFit(
         _ context: RunContext, pending: [BackupSetMember]
     ) async throws {
-        guard provider.capabilities.canQueryQuota else { return }
-        if context.quota == nil {
+        if provider.capabilities.canQueryQuota, context.quota == nil {
             context.quota = try? await provider.quota()
         }
         let shortfall = QuotaCheck.shortfall(
             pendingBytes: pending.reduce(0) { $0 + $1.size },
             reading: context.quota,
-            capBytes: context.request.descriptor.capBytes)
+            capBytes: context.request.descriptor.capBytes,
+            storedBytes: storedBytes(targetId: context.request.descriptor.id))
         guard let shortfall else { return }
         throw BackupRunStop.quotaShortfall(shortfall)
+    }
+
+    /// What Empo holds on the target now, the number the cap of 5.14
+    /// counts. A state store that cannot answer counts nothing, as
+    /// the target screen does.
+    func storedBytes(targetId: String) -> Int64 {
+        ((try? store.usage(targetId: targetId)) ?? []).reduce(0) { $0 + $1.bytes }
     }
 
     /// The one effect of 8.4, as a run stop. A transient error keeps

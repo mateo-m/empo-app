@@ -651,6 +651,22 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(blobPaths(target).isEmpty)
     }
 
+    /// The cap limits what Empo stores, so it holds on a target that
+    /// reports no free space too.
+    func testTheCapRefusesARunOnATargetWithNoSpaceQuery() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget(capabilities: TargetCapabilities(canQueryQuota: false))
+        let engine = try makeEngine(target)
+
+        let result = await engine.run(request(games: [game(gameName)], capBytes: 4))
+
+        guard case .quotaShortfall(let shortfall)? = result.stop else {
+            return XCTFail("the run was not refused: \(String(describing: result.stop))")
+        }
+        XCTAssertEqual(shortfall.freeBytes, 4)
+        XCTAssertTrue(blobPaths(target).isEmpty)
+    }
+
     func testTheRunWritesTheSpaceReadingItTookAfterTheUploads() async throws {
         try makeGameTree(gameName)
         let target = makeTarget(

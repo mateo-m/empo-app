@@ -20,21 +20,21 @@ final class SweepScheduleTests: XCTestCase {
     func testASweepIsNotDueBeforeSevenDays() {
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: daysAgo(3), now: now, reading: nil, capBytes: nil),
+                lastSweepAt: daysAgo(3), now: now, reading: nil, capBytes: nil, storedBytes: 0),
             .notDue)
     }
 
     func testATargetThatNeverSweptIsOverdue() {
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: nil, now: now, reading: nil, capBytes: nil),
+                lastSweepAt: nil, now: now, reading: nil, capBytes: nil, storedBytes: 0),
             .runOverdue)
     }
 
     func testATargetWithNoSpaceQueryHasOnlyTheCalendar() {
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: daysAgo(8), now: now, reading: nil, capBytes: nil),
+                lastSweepAt: daysAgo(8), now: now, reading: nil, capBytes: nil, storedBytes: 0),
             .run)
     }
 
@@ -45,27 +45,36 @@ final class SweepScheduleTests: XCTestCase {
 
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: daysAgo(8), now: now, reading: reading, capBytes: nil),
+                lastSweepAt: daysAgo(8), now: now, reading: reading, capBytes: nil, storedBytes: 0),
             .queued)
     }
 
     func testEightyPercentUsageForcesTheSweep() {
         let reading = QuotaReading(usedBytes: 800, limitBytes: 1_000)
 
-        XCTAssertFalse(SweepSchedule.hasRoomToSpare(reading: reading, capBytes: nil))
+        XCTAssertFalse(SweepSchedule.hasRoomToSpare(reading: reading, capBytes: nil, storedBytes: 0))
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: daysAgo(8), now: now, reading: reading, capBytes: nil),
+                lastSweepAt: daysAgo(8), now: now, reading: reading, capBytes: nil, storedBytes: 0),
             .run)
     }
 
-    func testTheCapMovesTheEightyPercentMark() {
-        // 700 of 1000 leaves room to spare. Under a cap of 800 the
-        // same 700 bytes are past the mark.
+    func testTheCapCountsEmposOwnBytes() {
+        // The account holds 700 of 1000, mostly files that are not
+        // Empo's. Empo's 100 bytes are far from a cap of 800, and its
+        // 700 bytes are past the mark.
         let reading = QuotaReading(usedBytes: 700, limitBytes: 1_000)
 
-        XCTAssertTrue(SweepSchedule.hasRoomToSpare(reading: reading, capBytes: nil))
-        XCTAssertFalse(SweepSchedule.hasRoomToSpare(reading: reading, capBytes: 800))
+        XCTAssertTrue(
+            SweepSchedule.hasRoomToSpare(reading: reading, capBytes: 800, storedBytes: 100))
+        XCTAssertFalse(
+            SweepSchedule.hasRoomToSpare(reading: reading, capBytes: 800, storedBytes: 700))
+    }
+
+    func testTheCapForcesTheSweepOnATargetWithNoSpaceQuery() {
+        XCTAssertTrue(SweepSchedule.hasRoomToSpare(reading: nil, capBytes: 1_000, storedBytes: 100))
+        XCTAssertFalse(
+            SweepSchedule.hasRoomToSpare(reading: nil, capBytes: 1_000, storedBytes: 900))
     }
 
     func testPressureDoesNotOverrideTheCalendar() {
@@ -73,14 +82,14 @@ final class SweepScheduleTests: XCTestCase {
 
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: daysAgo(1), now: now, reading: reading, capBytes: nil),
+                lastSweepAt: daysAgo(1), now: now, reading: reading, capBytes: nil, storedBytes: 0),
             .notDue)
     }
 
     func testThirtyDaysMakesTheSweepOverdue() {
         XCTAssertEqual(
             SweepSchedule.decide(
-                lastSweepAt: daysAgo(31), now: now, reading: nil, capBytes: nil),
+                lastSweepAt: daysAgo(31), now: now, reading: nil, capBytes: nil, storedBytes: 0),
             .runOverdue)
     }
 }

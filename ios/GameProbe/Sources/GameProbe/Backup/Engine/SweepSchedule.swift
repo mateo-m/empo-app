@@ -8,10 +8,11 @@ import Foundation
 /// - An interrupted sweep is safe by construction, because it
 ///   deletes blobs and never manifests, so it resumes on the next
 ///   run. Nothing records where it stopped.
-/// - A sweep stays queued while a target that answers a space query
-///   reports usage under 80 percent of its cap or quota. Space
-///   pressure forces a sweep, not the calendar. A target that
-///   answers no space query has only the calendar.
+/// - A sweep stays queued while usage is under 80 percent of every
+///   limit that governs: the provider quota against the whole
+///   account, and the cap against Empo's own bytes. Space pressure
+///   forces a sweep, not the calendar. A target with neither limit
+///   has only the calendar.
 ///
 /// The clock is a parameter, so the rule is repeatable.
 public enum SweepSchedule {
@@ -47,20 +48,27 @@ public enum SweepSchedule {
         return now.timeIntervalSince(lastSweepAt) >= overdueAfter
     }
 
-    /// Whether the target reports enough room that the sweep waits.
-    public static func hasRoomToSpare(reading: QuotaReading?, capBytes: Int64?) -> Bool {
-        guard let reading,
-            let limit = QuotaCheck.effectiveLimit(reading: reading, capBytes: capBytes),
-            limit > 0
-        else { return false }
-        return Double(reading.usedBytes) < Double(limit) * pressureFraction
+    /// Whether the target has enough room that the sweep waits.
+    public static func hasRoomToSpare(
+        reading: QuotaReading?, capBytes: Int64?, storedBytes: Int64
+    ) -> Bool {
+        var usage: [Double] = []
+        if let reading, let limit = reading.limitBytes, limit > 0 {
+            usage.append(Double(reading.usedBytes) / Double(limit))
+        }
+        if let capBytes, capBytes > 0 {
+            usage.append(Double(storedBytes) / Double(capBytes))
+        }
+        return !usage.isEmpty && usage.allSatisfy { $0 < pressureFraction }
     }
 
     public static func decide(
-        lastSweepAt: Date?, now: Date, reading: QuotaReading?, capBytes: Int64?
+        lastSweepAt: Date?, now: Date, reading: QuotaReading?, capBytes: Int64?,
+        storedBytes: Int64
     ) -> Decision {
         guard isDue(lastSweepAt: lastSweepAt, now: now) else { return .notDue }
-        guard !hasRoomToSpare(reading: reading, capBytes: capBytes) else { return .queued }
+        guard !hasRoomToSpare(reading: reading, capBytes: capBytes, storedBytes: storedBytes)
+        else { return .queued }
         return isOverdue(lastSweepAt: lastSweepAt, now: now) ? .runOverdue : .run
     }
 }
