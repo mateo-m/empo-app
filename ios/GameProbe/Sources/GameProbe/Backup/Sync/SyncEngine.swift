@@ -89,16 +89,28 @@ public final class SyncEngine {
         // A document a newer Empo wrote still applies here. This
         // build only stops writing to it, per 10.10.
         let publishes = !SyncCopyValidation.readsButDoesNotPublish(held)
+        // A document with no history yet, after a join or on a new
+        // device, takes the group's copies first. A local write would
+        // make root maps of its own, and Automerge keeps one of two
+        // maps that never shared a history, so one side's keys would
+        // vanish.
+        let isNew = document.heads().isEmpty
         var mine = SyncDocumentModel()
         updateIdentities { mine = local.read(identities: &$0) }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
         lastLocalValues = mine
-        if publishes {
+        if publishes, !isNew {
             try? document.write(held.overlaid(with: mine))
         }
 
         for descriptor in enabled {
             await merge(from: descriptor, groupId: groupId)
+        }
+
+        if isNew, let fetched = try? document.model(),
+            !SyncCopyValidation.readsButDoesNotPublish(fetched)
+        {
+            try? document.write(fetched.overlaid(with: mine))
         }
 
         guard let merged = try? document.model() else {

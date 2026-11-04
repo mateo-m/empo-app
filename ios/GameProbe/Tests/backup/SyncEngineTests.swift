@@ -56,7 +56,8 @@ final class SyncEngineTests: XCTestCase {
             return .success(())
         }
 
-        func heads() -> [String] { ["h1"] }
+        var heldHeads = ["h1"]
+        func heads() -> [String] { heldHeads }
 
         func losingControls(profileId: String) -> [String: JSONValue] {
             losing[profileId] ?? [:]
@@ -205,6 +206,31 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(local.applied.count, 1)
     }
 
+    /// A document with no history writes nothing of its own before
+    /// the group's copies, or its root maps would hide the group's.
+    func testANewDocumentTakesTheGroupsCopiesBeforeItsOwnValues() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes([
+            "theme": .string("light"), "titlePosition": .string("below"),
+        ])
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.steps, ["load", "merge", "write", "save"])
+        XCTAssertEqual(document.saved?.preferences["theme"], .string("dark"))
+        XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("below"))
+    }
+
     // MARK: - The pass stops feeding itself
 
     func testAPassAfterALocalChangeWithNothingNewStopsBeforeItWrites() async throws {
@@ -284,7 +310,7 @@ final class SyncEngineTests: XCTestCase {
 
     func testARejectedCopyChangesNothingAndSaysWhy() async throws {
         let document = FakeDocument()
-        document.rejects = .unsupported(minimumWriterVersion: 9)
+        document.rejects = .unreadable("truncated")
         let targets = FakeTargets()
         targets.descriptors = [target("t1")]
         targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
