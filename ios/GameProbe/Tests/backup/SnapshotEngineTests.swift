@@ -922,6 +922,22 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(result.outcome, .success)
     }
 
+    func testTheRunReportsEveryGamesPlanBeforeItsFirstUpload() async throws {
+        try makeGameTree("Alpha")
+        try makeGameTree("Bravo")
+        let target = makeTarget()
+        let recorder = RunPlanRecorder()
+        let engine = try makeEngine(target, observer: recorder)
+
+        _ = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+
+        let plan = await recorder.plan
+        let plannedAtFirstConfirm = await recorder.plannedAtFirstConfirm
+        XCTAssertGreaterThan(plan.plannedBytes, 0)
+        XCTAssertEqual(plannedAtFirstConfirm, plan.plannedBytes)
+        XCTAssertEqual(plan.fraction, 1)
+    }
+
     func testAGameThatStartsMidRunStopsTheRunBeforeTheNextGame() async throws {
         try makeGameTree("Alpha")
         try makeGameTree("Bravo")
@@ -1030,6 +1046,7 @@ actor RunPlanRecorder: BackupRunObserver {
     private(set) var plan = BackupRunPlan()
     private(set) var plans: [(String, Int64)] = []
     private(set) var confirmCount = 0
+    private(set) var plannedAtFirstConfirm: Int64?
 
     func runPlanned(streamKey: String, bytes: Int64) {
         plans.append((streamKey, bytes))
@@ -1037,6 +1054,7 @@ actor RunPlanRecorder: BackupRunObserver {
     }
 
     func runConfirmed(streamKey: String, bytes: Int64) {
+        if plannedAtFirstConfirm == nil { plannedAtFirstConfirm = plan.plannedBytes }
         confirmCount += 1
         plan.confirm(streamKey: streamKey, bytes: bytes)
     }

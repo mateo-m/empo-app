@@ -320,72 +320,103 @@ public actor SnapshotEngine {
     // MARK: - The streams
 
     private func runStreams(_ context: RunContext) async throws {
+        let targetId = context.request.descriptor.id
+        var inputs: [StreamInput] = []
         // The prefs stream goes first on every run, per 7.8. It is
         // tiny, and it holds the controller maps and layout pins a
         // user would miss at once.
         if let preferences = context.request.preferences {
-            let set = BackupSetResolver.resolveLibraryStream(preferences, fm: fm)
-            try await runStream(
-                context,
-                stream: .preferences,
-                set: set,
-                source: MemberSource(library: preferences),
-                manifest: SnapshotManifest(mode: .slim, containerFolderName: ""),
-                kind: .preferences,
-                isOneOff: false)
+            inputs.append(
+                input(
+                    stream: .preferences,
+                    set: BackupSetResolver.resolveLibraryStream(preferences, fm: fm),
+                    source: MemberSource(library: preferences),
+                    header: SnapshotManifest(mode: .slim, containerFolderName: ""),
+                    kind: .preferences,
+                    isOneOff: false,
+                    isGame: false,
+                    targetId: targetId))
+        }
+        inputs += try order(context.request.games, targetId: targetId)
+
+        // The whole plan of 13.2 is known before the first upload, so
+        // the progress never falls back when the run reaches a game
+        // with more to upload.
+        for input in inputs {
+            await observer?.runPlanned(streamKey: input.stream.key, bytes: input.plan.changedBytes)
         }
 
-        for game in try order(context.request.games, targetId: context.request.descriptor.id) {
-            guard !Task.isCancelled else { throw BackupRunStop.paused }
-            guard await observer?.runMayGoOn() ?? true else { throw BackupRunStop.gameStarted }
-            var setRequest = game.set
-            if game.isOneOffFullSnapshot { setRequest.mode = .full }
-            let set = BackupSetResolver.resolve(setRequest, fm: fm)
-            let header = SnapshotManifest(
+        for input in inputs {
+            if input.isGame {
+                guard !Task.isCancelled else { throw BackupRunStop.paused }
+                guard await observer?.runMayGoOn() ?? true else { throw BackupRunStop.gameStarted }
+            }
+            try await runStream(context, input)
+        }
+    }
+
+    private func input(of game: BackupRunGame, targetId: String) -> StreamInput {
+        var setRequest = game.set
+        if game.isOneOffFullSnapshot { setRequest.mode = .full }
+        let set = BackupSetResolver.resolve(setRequest, fm: fm)
+        return input(
+            stream: game.stream,
+            set: set,
+            source: MemberSource(game: setRequest),
+            header: SnapshotManifest(
                 mode: set.mode,
                 containerFolderName: game.identity.folderName,
                 identityAlias: game.identity.aliases.last,
                 versionMarker: game.versionMarker,
                 sharedDataDirectory: set.sharedDataDirectory,
-                rescuedSavesBuckets: set.rescuedSavesBuckets)
-            try await runStream(
-                context,
-                stream: game.stream,
-                set: set,
-                source: MemberSource(game: setRequest),
-                manifest: header,
-                kind: PrunePlan.kind(hasLocalContainer: game.hasLocalContainer),
-                isOneOff: game.isOneOffFullSnapshot)
-        }
+                rescuedSavesBuckets: set.rescuedSavesBuckets),
+            kind: PrunePlan.kind(hasLocalContainer: game.hasLocalContainer),
+            isOneOff: game.isOneOffFullSnapshot,
+            isGame: true,
+            targetId: targetId)
+    }
+
+    private func input(
+        stream: BackupStream,
+        set: GameBackupSet,
+        source: MemberSource,
+        header: SnapshotManifest,
+        kind: StreamKind,
+        isOneOff: Bool,
+        isGame: Bool,
+        targetId: String
+    ) -> StreamInput {
+        let previous = (try? store.lastUploadedManifest(targetId: targetId, gameKey: stream.key))?
+            .manifest
+        return StreamInput(
+            stream: stream,
+            source: source,
+            header: header,
+            kind: kind,
+            isOneOff: isOneOff,
+            isGame: isGame,
+            previous: previous,
+            plan: SnapshotDiff.plan(members: set.members, previous: previous))
     }
 
     /// The games in the order of 7.8. One game at a time, never in
     /// parallel.
-    private func order(_ games: [BackupRunGame], targetId: String) throws -> [BackupRunGame] {
-        var byKey: [String: BackupRunGame] = [:]
+    private func order(_ games: [BackupRunGame], targetId: String) throws -> [StreamInput] {
+        var byKey: [String: StreamInput] = [:]
         var candidates: [RunCandidate] = []
         for game in games {
             let key = game.identity.gameKey
-            byKey[key] = game
+            let input = input(of: game, targetId: targetId)
+            byKey[key] = input
             let clock = try? store.staleness(targetId: targetId, gameKey: key)
             candidates.append(
                 RunCandidate(
                     gameKey: key,
                     lastSuccessAt: clock?.lastSuccessAt,
                     lastPlayedAt: game.lastPlayedAt,
-                    pendingBytes: pendingBytes(of: game, targetId: targetId)))
+                    pendingBytes: input.plan.changedBytes))
         }
         return RunOrdering.order(candidates, now: now).compactMap { byKey[$0.gameKey] }
-    }
-
-    /// What this game would upload now, for the third tiebreak of
-    /// 7.8. It is a stat pass and it hashes nothing, per 7.7.
-    private func pendingBytes(of game: BackupRunGame, targetId: String) -> Int64 {
-        let previous = try? store.lastUploadedManifest(
-            targetId: targetId, gameKey: game.identity.gameKey)
-        let set = BackupSetResolver.resolve(game.set, fm: fm)
-        let plan = SnapshotDiff.plan(members: set.members, previous: previous?.manifest)
-        return plan.changed.reduce(0) { $0 + $1.size }
     }
 
     // MARK: - Staging and hashing

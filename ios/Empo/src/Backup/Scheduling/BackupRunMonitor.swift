@@ -107,9 +107,15 @@ final class BackupRunMonitor: BackupRunObserver {
 
     nonisolated func runPlanned(streamKey: String, bytes: Int64) async {
         await MainActor.run {
-            stagingKey = nil
             plan.plan(streamKey: streamKey, bytes: bytes)
             report()
+        }
+    }
+
+    nonisolated func runUploads(streamKey: String) async {
+        await MainActor.run {
+            stagingKey = nil
+            plan.start(streamKey: streamKey)
         }
     }
 

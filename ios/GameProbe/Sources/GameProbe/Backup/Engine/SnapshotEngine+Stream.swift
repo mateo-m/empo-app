@@ -2,6 +2,18 @@ import Foundation
 
 extension SnapshotEngine {
 
+    /// One stream, resolved and diffed before the run uploads a byte.
+    struct StreamInput {
+        let stream: BackupStream
+        let source: MemberSource
+        let header: SnapshotManifest
+        let kind: StreamKind
+        let isOneOff: Bool
+        let isGame: Bool
+        let previous: SnapshotManifest?
+        let plan: SnapshotDiff.Plan
+    }
+
     /// What one stream carries from its plan to its manifest.
     ///
     /// One object per stream, so the upload of one member reads and
@@ -56,7 +68,7 @@ extension SnapshotEngine {
             self.route = route
             self.staging = staging
             self.snapshotId = snapshotId
-            self.plannedBytes = plan.changed.reduce(0) { $0 + $1.size }
+            self.plannedBytes = plan.changedBytes
             self.result = StreamResult(streamKey: stream.key, outcome: .blobsOnly)
             self.entries = plan.reused
             self.confirmed = confirmed
@@ -65,21 +77,10 @@ extension SnapshotEngine {
 
     // MARK: - One stream
 
-    func runStream(
-        _ context: RunContext,
-        stream: BackupStream,
-        set: GameBackupSet,
-        source: MemberSource,
-        manifest header: SnapshotManifest,
-        kind: StreamKind,
-        isOneOff: Bool
-    ) async throws {
-        await observer?.runStages(streamKey: stream.key)
-        guard
-            let run = try await decide(
-                context, stream: stream, set: set, source: source, manifest: header,
-                kind: kind, isOneOff: isOneOff)
-        else { return }
+    func runStream(_ context: RunContext, _ input: StreamInput) async throws {
+        await observer?.runStages(streamKey: input.stream.key)
+        guard let run = try await decide(context, input) else { return }
+        await observer?.runUploads(streamKey: input.stream.key)
 
         try? fm.createDirectory(at: run.staging, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: run.staging) }
@@ -97,27 +98,20 @@ extension SnapshotEngine {
     /// Everything the stream reads before it moves a byte, or `nil`
     /// where it writes nothing. A stream that stops here records its
     /// own outcome.
-    private func decide(
-        _ context: RunContext,
-        stream: BackupStream,
-        set: GameBackupSet,
-        source: MemberSource,
-        manifest header: SnapshotManifest,
-        kind: StreamKind,
-        isOneOff: Bool
-    ) async throws -> StreamRun? {
+    private func decide(_ context: RunContext, _ input: StreamInput) async throws -> StreamRun? {
         let targetId = context.request.descriptor.id
-        let previous = try? store.lastUploadedManifest(targetId: targetId, gameKey: stream.key)
+        let stream = input.stream
+        let previous = input.previous
+        let plan = input.plan
 
-        if let previous, !previous.manifest.access.allowsWrite {
-            guard case .readOnly(let restriction) = previous.manifest.access else { return nil }
+        if let previous, !previous.access.allowsWrite {
+            guard case .readOnly(let restriction) = previous.access else { return nil }
             throw BackupRunStop.readOnlyFormat(restriction)
         }
 
-        let plan = SnapshotDiff.plan(members: set.members, previous: previous?.manifest)
         if plan.changed.isEmpty,
-            !isOneOff,
-            !SnapshotDiff.earnsSnapshot(entries: plan.reused, previous: previous?.manifest)
+            !input.isOneOff,
+            !SnapshotDiff.earnsSnapshot(entries: plan.reused, previous: previous)
         {
             context.streams.append(StreamResult(streamKey: stream.key, outcome: .noChange))
             return nil
@@ -140,22 +134,19 @@ extension SnapshotEngine {
             confirmed[blob.hash] = blob.compression
         }
 
-        let run = StreamRun(
+        return StreamRun(
             stream: stream,
-            source: source,
-            header: header,
-            kind: kind,
-            isOneOff: isOneOff,
-            previous: previous?.manifest,
+            source: input.source,
+            header: input.header,
+            kind: input.kind,
+            isOneOff: input.isOneOff,
+            previous: previous,
             plan: plan,
             route: route,
             staging: BackupRootLayout(root: localRoot).staging
                 .appendingPathComponent(stream.key, isDirectory: true),
             snapshotId: BackupKeys.makeSnapshotId(date: now),
             confirmed: confirmed)
-        // Staging ends by producing the plan, per 13.2.
-        await observer?.runPlanned(streamKey: stream.key, bytes: run.plannedBytes)
-        return run
     }
 
     /// One member: stage it, put the blob where the target holds

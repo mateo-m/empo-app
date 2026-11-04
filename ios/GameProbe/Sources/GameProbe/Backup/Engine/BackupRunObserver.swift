@@ -16,9 +16,12 @@ public protocol BackupRunObserver: Sendable {
     func runStages(streamKey: String) async
 
     /// One stream froze its part of the plan: every blob this
-    /// snapshot needs. Staging ends by producing this number, and it
-    /// never changes again for this run.
+    /// snapshot needs. The engine reports every stream before the
+    /// first upload, and the number never changes again for this run.
     func runPlanned(streamKey: String, bytes: Int64) async
+
+    /// One stream starts to upload its part of the plan.
+    func runUploads(streamKey: String) async
 
     /// One blob is on the target, because the provider confirmed the
     /// upload or because the local cache proves the blob is already
@@ -32,5 +35,6 @@ public protocol BackupRunObserver: Sendable {
 
 extension BackupRunObserver {
     public func runStages(streamKey: String) async {}
+    public func runUploads(streamKey: String) async {}
     public func runMayGoOn() async -> Bool { true }
 }

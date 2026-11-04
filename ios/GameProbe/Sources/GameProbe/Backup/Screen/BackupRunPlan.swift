@@ -2,8 +2,8 @@ import Foundation
 
 /// The run plan of SPEC 13.2.
 ///
-/// Staging ends by producing it: every blob this snapshot needs,
-/// minus every blob the local cache proves present. **That sum
+/// The run produces it before the first upload: every blob this
+/// snapshot needs, minus every blob the local cache proves present. **That sum
 /// freezes for the life of the run.** Each blob the provider
 /// confirms adds its own size to the progress.
 ///
@@ -22,9 +22,12 @@ public struct BackupRunPlan: Equatable, Sendable {
     /// Freezes one stream's part of the plan. A second call for the
     /// same stream changes nothing.
     public mutating func plan(streamKey: String, bytes: Int64) {
-        self.streamKey = streamKey
         guard plannedByStream[streamKey] == nil else { return }
         plannedByStream[streamKey] = bytes
+    }
+
+    public mutating func start(streamKey: String) {
+        self.streamKey = streamKey
     }
 
     public mutating func confirm(streamKey: String, bytes: Int64) {

@@ -23,6 +23,11 @@ public enum SnapshotDiff {
             self.changed = changed
             self.reused = reused
         }
+
+        /// What the run uploads for this plan: the run plan of 13.2.
+        public var changedBytes: Int64 {
+            changed.reduce(0) { $0 + $1.size }
+        }
     }
 
     /// The key an entry and a member match on.
