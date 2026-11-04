@@ -107,21 +107,28 @@ struct BackupSheet: View {
             .disabled(!model.locks.canChangeMode)
 
             NavigationLink {
-                SaveFileEditorView(
-                    container: model.container,
-                    model: model.editor,
-                    canEdit: model.locks.canEditSaveFiles
-                ) { edited in
-                    Task { await model.setMarks(edited) }
+                if let editor = model.editor {
+                    SaveFileEditorView(
+                        container: model.container,
+                        model: editor,
+                        canEdit: model.locks.canEditSaveFiles
+                    ) { edited in
+                        Task { await model.setMarks(edited) }
+                    }
                 }
             } label: {
                 HStack {
                     Text("Save files")
                     Spacer()
-                    Text("\(model.editor.entries.count)")
-                        .foregroundStyle(.secondary)
+                    if let editor = model.editor {
+                        Text("\(editor.entries.count)")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView()
+                    }
                 }
             }
+            .disabled(model.editor == nil)
 
             row("In this backup", BackupText.bytes(model.mode == .slim ? model.slimBytes : model.fullBytes))
             row("Stored remotely", BackupText.bytes(model.storedBytes))

@@ -51,16 +51,19 @@ struct FirstBackupAskSheet: View {
             }
 
             SheetQuietButton(BackupModePicker.saveFileEditorLabel) { showsTheEditor = true }
+                .disabled(model.editor == nil)
         }
         .task { await model.load() }
         .sheet(isPresented: $showsTheEditor) {
             NavigationStack {
-                SaveFileEditorView(
-                    container: model.container,
-                    model: model.editor,
-                    canEdit: true
-                ) { edited in
-                    Task { await model.setMarks(edited) }
+                if let editor = model.editor {
+                    SaveFileEditorView(
+                        container: model.container,
+                        model: editor,
+                        canEdit: true
+                    ) { edited in
+                        Task { await model.setMarks(edited) }
+                    }
                 }
             }
             .tint(.brand)

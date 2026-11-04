@@ -30,7 +30,9 @@ final class BackupSheetModel {
     private(set) var slimBytes: Int64 = 0
     /// What this game holds on every target together.
     private(set) var storedBytes: Int64 = 0
-    private(set) var editor = SaveFileEditorModel()
+    /// `nil` until the files are read. An edit made on an empty
+    /// editor would save an empty mark list over the user's marks.
+    private(set) var editor: SaveFileEditorModel?
     private(set) var leftovers = GameLeftovers()
     private(set) var hasATarget = false
     /// The oversized writes of 3.6 this game still owes an answer.
@@ -75,11 +77,24 @@ final class BackupSheetModel {
     /// What a change to the game's own files changes. It resolves
     /// the backup set twice and walks the container, so only a
     /// write that moves a file asks for it.
+    ///
+    /// Both modes resolve, because the picker names both sizes
+    /// whichever mode the game is in.
     func readTheFiles() async {
+        readsOfTheFiles += 1
+        let read = readsOfTheFiles
         let intent = GameBackupIntent.load(from: container.empoStateURL)
-        await readTheSizes(intent: intent)
+        let full = await resolve(.full)
+        let slim = await resolve(.slim)
+        // A later read started meanwhile and holds newer marks.
+        guard read == readsOfTheFiles else { return }
+        fullBytes = full.totalSize
+        slimBytes = slim.totalSize
+        editor = SaveFileEditorModel.from(slim, manualMarks: intent.manualMarks)
         leftovers = RestoreLeftovers.inside(container.url)
     }
+
+    private var readsOfTheFiles = 0
 
     private func readTheStatus(_ descriptors: [TargetDescriptor], store: BackupStateStore?) {
         let read = GameBackupStatusReader.read(
@@ -90,17 +105,6 @@ final class BackupSheetModel {
             now: Date())
         status = read.status
         lastSuccessAt = read.lastSuccessAt
-    }
-
-    /// The two figures the mode picker needs, and the editor rows
-    /// beside them. Both modes resolve, because the picker names
-    /// both sizes whichever mode the game is in.
-    private func readTheSizes(intent: GameBackupIntent) async {
-        let full = await resolve(.full)
-        let slim = await resolve(.slim)
-        fullBytes = full.totalSize
-        slimBytes = slim.totalSize
-        editor = SaveFileEditorModel.from(slim, manualMarks: intent.manualMarks)
     }
 
     private func resolve(_ mode: BackupMode) async -> GameBackupSet {
