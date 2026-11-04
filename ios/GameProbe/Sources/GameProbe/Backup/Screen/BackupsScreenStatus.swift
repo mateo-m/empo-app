@@ -64,9 +64,14 @@ public enum BackupsScreenStatusRules {
                 line: "Check \(worst.title)", detail: worst.stateLine,
                 targetId: worst.targetId, isHealthy: false)
         }
-        guard let lastSuccessText else {
+        let backedUp = Set(targets.filter { $0.lastSuccessText != nil }.map(\.descriptor.id))
+        let notYet = enabled.filter { !backedUp.contains($0.targetId) }
+        guard notYet.isEmpty, let lastSuccessText else {
+            let detail =
+                notYet.count == 1 && enabled.count > 1
+                ? "No backup yet at \(notYet[0].title)" : "No backup yet"
             return BackupsScreenStatus(
-                line: readyLine, detail: "No backup yet", targetId: nil, isHealthy: true)
+                line: readyLine, detail: detail, targetId: nil, isHealthy: true)
         }
         return BackupsScreenStatus(
             line: healthyLine, detail: "Last backup \(lastSuccessText)",

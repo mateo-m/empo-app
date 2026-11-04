@@ -115,7 +115,7 @@ public struct GameBackupStatus: Equatable, Sendable {
             let day = lastSuccessText ?? "today"
             return "Backed up \(day)" + (targetLabel.map { " · \($0)" } ?? "")
         case .neverRun:
-            return "Never backed up"
+            return "Never backed up" + (targetLabel.map { " · \($0)" } ?? "")
         case .notSetUp:
             return "Not set up"
         }
@@ -176,8 +176,9 @@ public enum GameBackupStatusRules {
                 targetLabel: label(late))
         }
 
-        guard enabled.contains(where: { $0.lastSuccessAt != nil }) else {
-            return GameBackupStatus(state: .neverRun)
+        let notYet = enabled.filter { $0.lastSuccessAt == nil }
+        guard notYet.isEmpty else {
+            return GameBackupStatus(state: .neverRun, targetLabel: label(notYet))
         }
         return GameBackupStatus(state: .healthy, targetLabel: label(enabled))
     }

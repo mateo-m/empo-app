@@ -113,15 +113,28 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowFacts(
                 descriptor: target(id: "a", label: "Dropbox", isPaused: true),
                 failure: .needsSignIn),
-            TargetRowFacts(descriptor: target(id: "b", label: "Homelab")),
+            TargetRowFacts(
+                descriptor: target(id: "b", label: "Homelab"), lastSuccessText: "2 minutes ago"),
         ]
         let status = BackupsScreenStatusRules.status(of: targets, lastSuccessText: "today")
         XCTAssertEqual(status?.line, "All games backed up")
         XCTAssertEqual(status?.detail, "Last backup today")
         XCTAssertTrue(status?.isHealthy == true)
-        let fresh = BackupsScreenStatusRules.status(of: targets)
+        let fresh = BackupsScreenStatusRules.status(
+            of: [TargetRowFacts(descriptor: target(id: "b", label: "Homelab"))])
         XCTAssertEqual(fresh?.line, "Ready to back up")
         XCTAssertEqual(fresh?.detail, "No backup yet")
+    }
+
+    func testALocationWithNoBackupYetKeepsTheOthersFromCallingItDone() {
+        let targets = [
+            TargetRowFacts(
+                descriptor: target(id: "a", label: "Dropbox"), lastSuccessText: "2 minutes ago"),
+            TargetRowFacts(descriptor: target(id: "b", label: "Homelab")),
+        ]
+        let status = BackupsScreenStatusRules.status(of: targets, lastSuccessText: "today")
+        XCTAssertEqual(status?.line, "Ready to back up")
+        XCTAssertEqual(status?.detail, "No backup yet at Homelab")
     }
 
     func testAScreenWithNoTargetCarriesNoStatusLine() {

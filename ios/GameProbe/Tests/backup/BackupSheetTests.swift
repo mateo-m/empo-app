@@ -48,6 +48,17 @@ final class BackupSheetTests: XCTestCase {
             GameBackupStatusRules.lastSuccessAt(of: targets), now.addingTimeInterval(-3 * 86_400))
     }
 
+    func testAGameIsBackedUpOnlyWhenEveryLocationHoldsIt() {
+        let targets = [
+            target("dropbox", name: "Dropbox", daysAgo: 0),
+            target("nas", name: "NAS", daysAgo: nil),
+        ]
+        let status = GameBackupStatusRules.status(targets: targets, isRunning: false, now: now)
+
+        XCTAssertEqual(status.state, .neverRun)
+        XCTAssertEqual(status.line(), "Never backed up · NAS")
+    }
+
     func testEachStateOutranksTheOneBelowIt() {
         let dropbox = target("a", cause: .needsSignIn, daysAgo: 30)
         let running = GameBackupStatusRules.status(
