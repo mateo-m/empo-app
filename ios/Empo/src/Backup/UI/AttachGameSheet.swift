@@ -15,6 +15,7 @@ struct AttachGameSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var chosen: GameContainer?
+    @State private var failedGame: GameContainer?
 
     private let games: [GameContainer]
     private let names: [String: String]
@@ -61,6 +62,15 @@ struct AttachGameSheet: View {
         } message: {
             Text(AttachAction.confirmBody(targetGameName: name(of: chosen)))
         }
+        .alert(
+            AttachAction.failedTitle(targetGameName: name(of: failedGame)),
+            isPresented: Binding(
+                get: { failedGame != nil }, set: { if !$0 { failedGame = nil } })
+        ) {
+            Button(AttachAction.failedDismissLabel) { failedGame = nil }
+        } message: {
+            Text(AttachAction.failedBody)
+        }
     }
 
     private func name(of game: GameContainer?) -> String {
@@ -71,7 +81,14 @@ struct AttachGameSheet: View {
     private func attach() {
         guard let game = chosen else { return }
         chosen = nil
-        try? GameIdentities.attach(snapshot, to: game)
+        // The restore finds its game through the alias, so a restore
+        // with no saved alias would have no game to go into.
+        do {
+            try GameIdentities.attach(snapshot, to: game)
+        } catch {
+            failedGame = game
+            return
+        }
         dismiss()
         attached(game)
     }

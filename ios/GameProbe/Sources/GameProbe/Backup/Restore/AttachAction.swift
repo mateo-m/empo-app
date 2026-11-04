@@ -34,6 +34,13 @@ public enum AttachAction {
 
     public static let cancelLabel = "Cancel"
 
+    public static func failedTitle(targetGameName: String) -> String {
+        "Couldn't link this backup to \(targetGameName)"
+    }
+
+    public static let failedBody = "Nothing was restored."
+    public static let failedDismissLabel = "OK"
+
     public static func confirmLabel(targetGameName: String) -> String {
         "Restore into \(targetGameName)"
     }
