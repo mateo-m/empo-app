@@ -139,6 +139,11 @@ public final class SyncEngine {
         guard let merged = try? document.model() else {
             return .failed("the local document could not be read")
         }
+        // A change made during the downloads, such as a settings
+        // restore, is not in `mine`, and the apply would undo it.
+        var latest = SyncDocumentModel()
+        updateIdentities { latest = local.read(identities: &$0) }
+        guard latest == mine else { return .runAgain }
         updateIdentities { local.apply(merged, identities: &$0) }
 
         guard publishes, !SyncCopyValidation.readsButDoesNotPublish(merged) else {

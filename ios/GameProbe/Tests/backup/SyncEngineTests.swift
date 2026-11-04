@@ -87,6 +87,7 @@ final class SyncEngineTests: XCTestCase {
         var refuses: Set<String> = []
         var unlisted: Set<String> = []
         var puts: [String] = []
+        var duringRead: (() -> Void)?
 
         func enabled() -> [TargetDescriptor] { descriptors }
 
@@ -95,7 +96,8 @@ final class SyncEngineTests: XCTestCase {
         }
 
         func read(_ path: String, from target: TargetDescriptor) async -> Data? {
-            bytes[path]
+            duringRead?()
+            return bytes[path]
         }
 
         func write(_ data: Data, to path: String, on target: TargetDescriptor) async -> Bool {
@@ -211,6 +213,32 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(document.saved?.preferences["theme"], .string("dark"))
         XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("below"))
         XCTAssertEqual(local.applied.count, 1)
+    }
+
+    /// A settings restore can land while the pass downloads. The
+    /// values the pass read before are old by then.
+    func testALocalChangeDuringTheDownloadIsNotWrittenOver() async throws {
+        let document = FakeDocument()
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["titlePosition": .string("below")])
+        targets.duringRead = { local.mine.preferences["theme"] = .string("restored") }
+        let state = FakeState(groupId: "g1")
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+
+        let first = await engine.run(.now)
+        XCTAssertEqual(first, .runAgain)
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertNil(document.saved)
+
+        targets.duringRead = nil
+        let second = await engine.run(.now)
+        XCTAssertEqual(second, .done)
+        XCTAssertEqual(local.applied.last?.preferences["theme"], .string("restored"))
+        XCTAssertEqual(document.saved?.preferences["theme"], .string("restored"))
     }
 
     /// A rollback of 10.9 removed a key here. A missing local key is
