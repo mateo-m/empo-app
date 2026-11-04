@@ -52,6 +52,7 @@ final class BackupPass: BackupRunning {
                 // built yet. Neither is a failure the user can clear,
                 // so nothing notifies.
                 log("\(descriptor.label) cannot open in this build")
+                BackupRunMonitor.shared.targetEnds()
                 continue
             }
 

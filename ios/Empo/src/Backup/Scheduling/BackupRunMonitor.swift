@@ -46,8 +46,6 @@ final class BackupRunMonitor: BackupRunObserver {
     private var progress: Progress?
     private var targetCount = 0
     private var targetsDone = 0
-    /// What the plan had confirmed when the target in flight began.
-    private var confirmedBeforeThisTarget: Int64 = 0
     /// The bytes sent of the one upload in flight. A 300 MB blob
     /// confirms nothing for a minute, and the pill must still move.
     private var inFlightBytes: Int64 = 0
@@ -60,7 +58,6 @@ final class BackupRunMonitor: BackupRunObserver {
         self.progress = progress
         self.targetCount = targetCount
         targetsDone = 0
-        confirmedBeforeThisTarget = 0
         runningGameKeys = Set(names.keys)
         plan = BackupRunPlan()
         startedAt = Date()
@@ -78,7 +75,7 @@ final class BackupRunMonitor: BackupRunObserver {
 
     func targetEnds() {
         targetsDone += 1
-        confirmedBeforeThisTarget = plan.confirmedBytes
+        plan.targetEnds()
         inFlightBytes = 0
         report()
     }
@@ -132,23 +129,16 @@ final class BackupRunMonitor: BackupRunObserver {
         }
     }
 
-    /// One stream plans once, so the second target confirms the
-    /// same bytes again. The total counts the plan once per target.
     private func report() {
         guard let progress else { return }
         progress.totalUnitCount = max(1, totalBytes)
         progress.completedUnitCount = completedBytes
     }
 
-    private var totalBytes: Int64 { plan.plannedBytes * Int64(max(1, targetCount)) }
+    private var totalBytes: Int64 { plan.totalBytes(targetsLeft: targetCount - targetsDone) }
 
-    /// A finished target counts as one full share of the plan, whether
-    /// it confirmed every blob or already held them all. The target in
-    /// flight adds only what it confirmed itself.
     private var completedBytes: Int64 {
-        let doneTargets = plan.plannedBytes * Int64(targetsDone)
-        let thisTarget = plan.confirmedBytes - confirmedBeforeThisTarget
-        return min(totalBytes, doneTargets + thisTarget + inFlightBytes)
+        min(totalBytes, plan.completedBytes + inFlightBytes)
     }
 
     /// The share of every target's bytes that landed, or `nil`

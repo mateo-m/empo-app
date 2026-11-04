@@ -7,13 +7,21 @@ import Foundation
 /// freezes for the life of the run.** Each blob the provider
 /// confirms adds its own size to the progress.
 ///
-/// One stream plans once. A file that changes after that joins the
-/// next snapshot and never inflates this one.
+/// One stream plans once on each target. A file that changes after
+/// that joins the next snapshot and never inflates this one. Each
+/// target holds its own blobs, so each target plans again.
 public struct BackupRunPlan: Equatable, Sendable {
 
     private var plannedByStream: [String: Int64] = [:]
     private var confirmedByStream: [String: Int64] = [:]
+    /// What the target in flight confirmed.
     public private(set) var confirmedBytes: Int64 = 0
+    /// The plans of the targets that ended. An ended target counts its
+    /// whole plan, whether it confirmed every blob or stopped.
+    private var endedBytes: Int64 = 0
+    /// The plan of the last target that planned, which stands in for
+    /// each target the run has not reached.
+    private var lastTargetBytes: Int64 = 0
     /// The stream the run uploads now.
     public private(set) var streamKey: String?
 
@@ -25,6 +33,25 @@ public struct BackupRunPlan: Equatable, Sendable {
         guard plannedByStream[streamKey] == nil else { return }
         plannedByStream[streamKey] = bytes
     }
+
+    public mutating func targetEnds() {
+        endedBytes += plannedBytes
+        if !plannedByStream.isEmpty { lastTargetBytes = plannedBytes }
+        plannedByStream = [:]
+        confirmedByStream = [:]
+        confirmedBytes = 0
+        streamKey = nil
+    }
+
+    /// The bytes of every target of the run. A target that has not
+    /// planned yet counts the plan of the target in flight, or of the
+    /// last target that planned.
+    public func totalBytes(targetsLeft: Int) -> Int64 {
+        let estimate = plannedByStream.isEmpty ? lastTargetBytes : plannedBytes
+        return endedBytes + estimate * Int64(max(0, targetsLeft))
+    }
+
+    public var completedBytes: Int64 { endedBytes + confirmedBytes }
 
     public mutating func start(streamKey: String) {
         self.streamKey = streamKey
@@ -45,7 +72,7 @@ public struct BackupRunPlan: Equatable, Sendable {
     }
 
     /// A run with nothing to upload never shows the pill, per 13.2.
-    public var hasUploads: Bool { plannedBytes > 0 }
+    public var hasUploads: Bool { endedBytes + plannedBytes > 0 }
 
     /// `nil` until the first stream freezes its plan. The badge and
     /// the pill draw a spinner until then, per 13.3.

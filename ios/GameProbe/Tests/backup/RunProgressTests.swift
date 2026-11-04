@@ -74,6 +74,38 @@ final class RunProgressTests: XCTestCase {
         XCTAssertEqual(plan.plannedBytes, 3_000)
     }
 
+    func testEachTargetPlansItsOwnStreams() {
+        // The first target already holds the game. The second does not.
+        var plan = plan(0)
+        XCTAssertEqual(plan.totalBytes(targetsLeft: 2), 0)
+        plan.targetEnds()
+
+        plan.plan(streamKey: gameKey, bytes: 2_000)
+        XCTAssertTrue(plan.hasUploads)
+        XCTAssertEqual(plan.totalBytes(targetsLeft: 1), 2_000)
+        XCTAssertFalse(plan.isDone(gameKey))
+
+        plan.confirm(streamKey: gameKey, bytes: 500)
+        XCTAssertEqual(plan.completedBytes, 500)
+        XCTAssertEqual(plan.fraction(ofStream: gameKey), 0.25)
+    }
+
+    func testATargetThatHasNotPlannedCountsTheLastPlan() {
+        var plan = plan(1_000)
+        XCTAssertEqual(plan.totalBytes(targetsLeft: 2), 2_000)
+        plan.confirm(streamKey: gameKey, bytes: 1_000)
+        plan.targetEnds()
+
+        XCTAssertEqual(plan.totalBytes(targetsLeft: 1), 2_000)
+        XCTAssertEqual(plan.completedBytes, 1_000)
+
+        plan.plan(streamKey: gameKey, bytes: 300)
+        plan.confirm(streamKey: gameKey, bytes: 300)
+        plan.targetEnds()
+        XCTAssertEqual(plan.totalBytes(targetsLeft: 0), 1_300)
+        XCTAssertEqual(plan.completedBytes, 1_300)
+    }
+
     // MARK: - 4. What moves the progress
 
     func testProgressAdvancesOnAConfirmedBlobAndNotOnAStartedUpload() {
