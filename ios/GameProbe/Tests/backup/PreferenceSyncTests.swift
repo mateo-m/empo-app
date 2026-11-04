@@ -380,9 +380,9 @@ final class PreferenceSyncTests: XCTestCase {
             newer.preferences["theme"], .string("dark"),
             "it still reads the fields it knows")
 
-        let rejection = SyncCopyValidation.check(Data([1])) { _ in newer }.failure
-        XCTAssertEqual(
-            rejection, .unsupported(minimumWriterVersion: SyncSchema.writerVersion + 1))
+        XCTAssertNil(
+            SyncCopyValidation.check(Data([1])) { _ in newer }.failure,
+            "a copy it may not write still merges")
     }
 
     // MARK: - The state file

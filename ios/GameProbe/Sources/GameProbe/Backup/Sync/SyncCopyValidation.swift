@@ -7,9 +7,6 @@ public enum SyncCopyRejection: Error, Equatable, Sendable {
     /// Automerge could not read the bytes. A truncated copy and a
     /// corrupt copy both land here.
     case unreadable(String)
-    /// The document needs a writer this build does not have, per
-    /// 10.10.
-    case unsupported(minimumWriterVersion: Int)
 }
 
 /// Step 2 of the replication pass of 10.5.
@@ -27,16 +24,11 @@ public enum SyncCopyValidation {
         _ bytes: Data, read: (Data) throws -> SyncDocumentModel
     ) -> Result<SyncDocumentModel, SyncCopyRejection> {
         guard !bytes.isEmpty else { return .failure(.empty) }
-        let model: SyncDocumentModel
         do {
-            model = try read(bytes)
+            return .success(try read(bytes))
         } catch {
             return .failure(.unreadable(String(describing: error)))
         }
-        guard SyncSchema.canPublish(toDocumentRequiring: model.minimumWriterVersion) else {
-            return .failure(.unsupported(minimumWriterVersion: model.minimumWriterVersion))
-        }
-        return .success(model)
     }
 
     /// Whether this build still reads a document it may not write,
