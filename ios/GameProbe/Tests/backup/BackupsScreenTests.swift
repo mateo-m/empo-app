@@ -105,6 +105,12 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertFalse(QuotaCheck.prunedAndStillFullLine.contains("cap"))
     }
 
+    func testARefusedRequestOffersTryAgain() {
+        XCTAssertEqual(
+            TargetRowRules.action(for: .rejected(message: "The server refused the request.")),
+            .tryAgain)
+    }
+
     func testOnlyAProblemDrawsAsOne() {
         XCTAssertFalse(TargetRowState.current.isProblem)
         XCTAssertFalse(TargetRowState.paused.isProblem)

@@ -255,9 +255,9 @@ public enum TargetRowRules {
             return .signIn
         case .paused:
             return .resume
-        case .full, .unreachable:
+        case .full, .unreachable, .rejected:
             return .tryAgain
-        case .cannotOpen, .rejected, .current:
+        case .cannotOpen, .current:
             return nil
         }
     }
