@@ -119,6 +119,7 @@ struct GameSettingsView: View {
         if let backupModel {
             Section {
                 Button {
+                    model.save()
                     showBackupSheet = true
                 } label: {
                     HStack {
@@ -130,7 +131,7 @@ struct GameSettingsView: View {
                             .lineLimit(1)
                     }
                 }
-                .sheet(isPresented: $showBackupSheet) {
+                .sheet(isPresented: $showBackupSheet, onDismiss: model.reload) {
                     BackupSheet(model: backupModel)
                 }
             } footer: {

@@ -33,7 +33,7 @@ final class GameSettingsModel {
     let game: GameEntry
     let container: GameContainer
     let core: (any GameCore)?
-    let coreSettings: (any CoreSettings)?
+    private(set) var coreSettings: (any CoreSettings)?
 
     var settings: GameSettings
     let displayDefaults: GameDisplayDefaults
@@ -80,6 +80,12 @@ final class GameSettingsModel {
     func save() {
         settings.save(to: container.empoStateURL)
         coreSettings?.save()
+    }
+
+    /// A restore from the Backup sheet writes these files while the sheet is open.
+    func reload() {
+        settings = GameSettings.load(from: container.empoStateURL)
+        coreSettings = core?.makeSettings(for: container)
     }
 
     func resetToDefaults() {
