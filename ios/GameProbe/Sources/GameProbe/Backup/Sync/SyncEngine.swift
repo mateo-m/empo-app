@@ -99,8 +99,9 @@ public final class SyncEngine {
         updateIdentities { mine = local.read(identities: &$0) }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
         lastLocalValues = mine
+        let removed = state.state().removedPreferenceKeys
         if publishes, !isNew {
-            try? document.write(held.overlaid(with: mine))
+            try? document.write(held.overlaid(with: mine, removingPreferences: removed))
         }
 
         for descriptor in enabled {
@@ -110,7 +111,7 @@ public final class SyncEngine {
         if isNew, let fetched = try? document.model(),
             !SyncCopyValidation.readsButDoesNotPublish(fetched)
         {
-            try? document.write(fetched.overlaid(with: mine))
+            try? document.write(fetched.overlaid(with: mine, removingPreferences: removed))
         }
 
         guard let merged = try? document.model() else {
@@ -125,6 +126,9 @@ public final class SyncEngine {
             try document.save()
         } catch {
             return .failed("the local document could not be saved: \(error)")
+        }
+        if !removed.isEmpty {
+            try? state.update { $0.removedPreferenceKeys.removeAll { removed.contains($0) } }
         }
 
         // A join that landed during this pass left the group this

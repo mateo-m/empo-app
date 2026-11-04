@@ -24,7 +24,6 @@ enum PreferenceRestore {
     }
 
     /// Applies the file a restore just wrote.
-    @discardableResult
     static func applyTheRestoredFile(at date: Date = Date()) -> Bool {
         defer { try? FileManager.default.removeItem(at: restoredFile) }
         guard let data = try? Data(contentsOf: restoredFile),
@@ -36,10 +35,14 @@ enum PreferenceRestore {
         guard !plan.isEmpty else { return true }
 
         // The undo holds what the user had before, so it goes in
-        // before the first key moves.
-        try? PreferenceRollbackUndo(
-            savedAt: date, values: PreferenceExport.portableValues(of: current)
-        ).write(applicationSupport: BackupRoot.layout.applicationSupport)
+        // before the first key moves. With no undo, nothing moves.
+        do {
+            try PreferenceRollbackUndo(
+                savedAt: date, values: PreferenceExport.portableValues(of: current)
+            ).write(applicationSupport: BackupRoot.layout.applicationSupport)
+        } catch {
+            return false
+        }
 
         apply(plan)
         return true
@@ -67,6 +70,12 @@ enum PreferenceRestore {
     private static func apply(_ plan: PreferenceRollbackPlan) {
         DevicePreferences.apply(plan.sets)
         DevicePreferences.remove(plan.deletes)
+        if SyncStore.state().hasJoined, !plan.deletes.isEmpty {
+            try? SyncStore.update {
+                $0.removedPreferenceKeys = Array(Set($0.removedPreferenceKeys).union(plan.deletes))
+                    .sorted()
+            }
+        }
         SyncPass.shared.schedule(.now)
     }
 }

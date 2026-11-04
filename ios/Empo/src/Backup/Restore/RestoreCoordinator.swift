@@ -181,6 +181,9 @@ final class RestoreCoordinator {
         }
 
         runningGameKey = container.map { BackupKeys.gameKey(containerFolderName: $0.folderName) }
+        // `EmpoState/` always restores, so the snapshot's alias file
+        // replaces this one, the attach of 4.3 included.
+        let aliasesBefore = container.map { IdentityAliases.load(from: $0.empoStateURL) }
         let localRoot = BackupRoot.layout.root
         let task = Task<RestoreOutcome, Never> {
             let engine = RestoreEngine(provider: provider, store: store, localRoot: localRoot)
@@ -191,14 +194,22 @@ final class RestoreCoordinator {
         // their own. The grant covers the hash check and the copy
         // between two of them once the user has left the app.
         await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
-        let outcome = await task.value
+        var outcome = await task.value
         running = nil
         runningGameKey = nil
+        if let container, let aliasesBefore {
+            var aliases = IdentityAliases.load(from: container.empoStateURL)
+            if aliases.merge(aliasesBefore, forFolderName: container.folderName) {
+                try? aliases.save(to: container.empoStateURL)
+            }
+        }
         // The rollback of 10.9. The stream carries one export file,
         // and applying it is what makes the snapshot the live
         // settings.
-        if case .finished = outcome, request.stream == .preferences {
-            PreferenceRestore.applyTheRestoredFile()
+        if case .finished = outcome, request.stream == .preferences,
+            !PreferenceRestore.applyTheRestoredFile()
+        {
+            outcome = .failed(Self.settingsUnchangedLine)
         }
         log("restore of \(row.snapshotId): \(outcome)")
         return outcome
@@ -212,6 +223,7 @@ final class RestoreCoordinator {
     }
 
     private static let unreadableLine = "this backup could not be read"
+    private static let settingsUnchangedLine = "Your settings did not change. Try again."
 
     /// The hard stop of 7.6. A game launched, so the restore stops at
     /// once and leaves its record and its staged blobs. It returns

@@ -76,6 +76,16 @@ final class IdentityAliasesTests: XCTestCase {
 
     // MARK: - The file
 
+    func testAMergeKeepsTheRestoredAliasesAndAddsTheLocalOnesAfterThem() {
+        var restored = IdentityAliases(aliases: ["Old Quest"])
+        let local = IdentityAliases(aliases: ["Old Quest", "Fixture Quest"])
+
+        XCTAssertTrue(restored.merge(local, forFolderName: "Fixture Quest 2"))
+        XCTAssertEqual(restored.aliases, ["Old Quest", "Fixture Quest"])
+        XCTAssertEqual(restored.manifestAlias, "Fixture Quest")
+        XCTAssertFalse(restored.merge(local, forFolderName: "Fixture Quest 2"))
+    }
+
     func testAMissingFileGivesTheEmptyStore() {
         XCTAssertEqual(IdentityAliases.load(from: stateDirectory).aliases, [])
     }

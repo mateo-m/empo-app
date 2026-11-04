@@ -50,8 +50,13 @@ public struct SyncDocumentModel: Equatable, Sendable {
     /// "Not set here" is not a delete: a device that never set a
     /// preference must not clear it for everyone. A delete travels
     /// as its own record, which is what `deletedAt` is for.
-    public func overlaid(with local: SyncDocumentModel) -> SyncDocumentModel {
+    public func overlaid(
+        with local: SyncDocumentModel, removingPreferences removed: [String] = []
+    ) -> SyncDocumentModel {
         var out = self
+        for key in removed where local.preferences[key] == nil {
+            out.preferences[key] = nil
+        }
         out.preferences.merge(local.preferences) { _, mine in mine }
         out.controllerBindings.merge(local.controllerBindings) { _, mine in mine }
         out.targetDescriptors.merge(local.targetDescriptors) { _, mine in mine }

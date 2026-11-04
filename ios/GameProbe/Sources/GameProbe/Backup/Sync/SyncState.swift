@@ -25,6 +25,10 @@ public struct SyncState: Codable, Equatable, Sendable {
     /// The targets this device removed. The merged document still
     /// carries them, and a pass must not add them back here.
     public var removedTargetIds: [String]
+    /// The preferences a rollback of 10.9 removed here. A missing
+    /// local key is not a delete, so the next pass deletes these from
+    /// the document by name.
+    public var removedPreferenceKeys: [String]
 
     public init(
         version: Int = SyncState.currentVersion,
@@ -32,7 +36,8 @@ public struct SyncState: Codable, Equatable, Sendable {
         groupId: String? = nil,
         joinedAt: Date? = nil,
         targets: [SyncTargetProgress] = [],
-        removedTargetIds: [String] = []
+        removedTargetIds: [String] = [],
+        removedPreferenceKeys: [String] = []
     ) {
         self.version = version
         self.actorId = actorId
@@ -40,6 +45,7 @@ public struct SyncState: Codable, Equatable, Sendable {
         self.joinedAt = joinedAt
         self.targets = targets
         self.removedTargetIds = removedTargetIds
+        self.removedPreferenceKeys = removedPreferenceKeys
     }
 
     public init(from decoder: Decoder) throws {
@@ -51,6 +57,8 @@ public struct SyncState: Codable, Equatable, Sendable {
         targets = try values.decode([SyncTargetProgress].self, forKey: .targets)
         removedTargetIds =
             try values.decodeIfPresent([String].self, forKey: .removedTargetIds) ?? []
+        removedPreferenceKeys =
+            try values.decodeIfPresent([String].self, forKey: .removedPreferenceKeys) ?? []
     }
 
     public var hasJoined: Bool { groupId != nil }
@@ -107,6 +115,7 @@ public struct SyncState: Codable, Equatable, Sendable {
         // The new group has its own history, so nothing this device
         // uploaded before counts as confirmed.
         targets = []
+        removedPreferenceKeys = []
     }
 
     // MARK: - The file

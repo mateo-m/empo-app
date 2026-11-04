@@ -206,6 +206,27 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(local.applied.count, 1)
     }
 
+    /// A rollback of 10.9 removed a key here. A missing local key is
+    /// not a delete, so the key travels as a removal by name.
+    func testAPreferenceARollbackRemovedLeavesTheDocument() async throws {
+        let document = FakeDocument()
+        document.held.preferences = ["theme": .string("light"), "titlePosition": .string("below")]
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("light")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.removedPreferenceKeys = ["titlePosition"]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.saved?.preferences, ["theme": .string("light")])
+        XCTAssertEqual(state.value.removedPreferenceKeys, [])
+    }
+
     /// A document with no history writes nothing of its own before
     /// the group's copies, or its root maps would hide the group's.
     func testANewDocumentTakesTheGroupsCopiesBeforeItsOwnValues() async throws {

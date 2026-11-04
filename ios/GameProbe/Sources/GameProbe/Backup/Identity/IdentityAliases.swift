@@ -53,6 +53,15 @@ public struct IdentityAliases: Equatable, Sendable {
         return true
     }
 
+    @discardableResult
+    public mutating func merge(_ other: IdentityAliases, forFolderName folderName: String) -> Bool {
+        var changed = false
+        for alias in other.aliases where add(alias, forFolderName: folderName) {
+            changed = true
+        }
+        return changed
+    }
+
     /// The identity of a game whose container is `folderName`.
     public func identity(forFolderName folderName: String) -> GameIdentity {
         GameIdentity(folderName: folderName, aliases: aliases)
