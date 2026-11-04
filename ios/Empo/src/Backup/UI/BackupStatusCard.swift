@@ -71,7 +71,12 @@ struct BackupStatusCard: View {
                     ZStack(alignment: .leading) {
                         Text(detail)
                             .font(.footnote)
+                            .monospacedDigit()
                             .foregroundStyle(.secondary)
+                            .lineLimit(
+                                monitor.isRunning ? 2 : Int.max,
+                                reservesSpace: monitor.isRunning
+                            )
                             .contentTransition(.opacity)
                             .id(mark)
                             .transition(swap)
