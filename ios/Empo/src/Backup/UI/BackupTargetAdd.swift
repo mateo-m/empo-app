@@ -98,7 +98,9 @@ enum BackupTargetAdd {
 
     /// `id` is the target that signs in again. A new target takes a
     /// fresh id.
-    static func s3(form: [String: String], id: String = UUID().uuidString) async -> Outcome {
+    /// A sign-in passes the `existing` target, which keeps its id,
+    /// its folder, and its backup policy.
+    static func s3(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
         guard let address = URL(string: form["address"] ?? "") else {
             return .failed("Type the address of the service.")
         }
@@ -113,12 +115,12 @@ enum BackupTargetAdd {
             credentials: S3SigV4.Credentials(
                 accessKeyId: form["accessKeyId"] ?? "",
                 secretAccessKey: form["secretAccessKey"] ?? ""))
-        let descriptor = TargetDescriptor(
-            id: id,
-            provider: .s3,
-            label: form["label"] ?? bucket.name,
-            accountHint: connection.accountHint,
-            root: form["root"] ?? "")
+        var descriptor =
+            existing
+            ?? TargetDescriptor(
+                id: UUID().uuidString, provider: .s3, label: "", root: form["root"] ?? "")
+        descriptor.label = form["label"] ?? bucket.name
+        descriptor.accountHint = connection.accountHint
         do {
             let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
@@ -128,19 +130,19 @@ enum BackupTargetAdd {
         }
     }
 
-    static func webdav(form: [String: String], id: String = UUID().uuidString) async -> Outcome {
+    static func webdav(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
         guard let address = URL(string: form["address"] ?? "") else {
             return .failed("Type the address of the server.")
         }
         let server = WebDAVServer(address: address, username: form["username"] ?? "")
         if let refusal = server.refusal { return .failed(line(of: refusal)) }
         let connection = WebDAVConnection(server: server, password: form["password"] ?? "")
-        let descriptor = TargetDescriptor(
-            id: id,
-            provider: .webdav,
-            label: form["label"] ?? address.host ?? "WebDAV",
-            accountHint: connection.accountHint,
-            root: form["root"] ?? "")
+        var descriptor =
+            existing
+            ?? TargetDescriptor(
+                id: UUID().uuidString, provider: .webdav, label: "", root: form["root"] ?? "")
+        descriptor.label = form["label"] ?? address.host ?? "WebDAV"
+        descriptor.accountHint = connection.accountHint
         do {
             let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
@@ -162,6 +164,12 @@ enum BackupTargetAdd {
     /// What the sign-in form starts with. A placeholder of 8.8 knows
     /// its label and its root only, and a target that lost its
     /// password still knows its address and its user name.
+    /// A new place under the same target id would reuse the upload
+    /// cache of the old one, so a sign-in cannot change these.
+    static let locationFields: Set<String> = [
+        "address", "bucket", "region", "root", "usesPathStyle", "username",
+    ]
+
     static func signInForm(of target: TargetDescriptor) -> [String: String] {
         var values = ["label": target.label, "root": target.root]
         switch target.provider {
@@ -190,7 +198,10 @@ enum BackupTargetAdd {
     static func signInAgain(_ target: TargetDescriptor) async -> Outcome {
         switch target.provider {
         case .iCloudDrive:
-            return await iCloud()
+            guard let provider = await ICloudDriveGate.shared.target() else {
+                return .failed(TargetRowRules.iCloudOffLine)
+            }
+            return await check(target, provider: provider)
         case .dropbox, .googleDrive:
             guard let screen = await OAuthSignIn.screenForTheSheet() else {
                 return .failed("Empo found no screen to sign in from.")

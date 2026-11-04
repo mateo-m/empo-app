@@ -15,7 +15,7 @@ struct TargetSignInSheet: View {
     var body: some View {
         NavigationStack {
             TargetFormScreen(
-                service: target.provider, values: BackupTargetAdd.signInForm(of: target),
+                service: target.provider, values: known, lockedFields: Set(locked.keys),
                 submitTitle: "Sign in", failure: failure
             ) { values in
                 Task { await submit(values) }
@@ -31,7 +31,16 @@ struct TargetSignInSheet: View {
         }
     }
 
-    private func submit(_ values: [String: String]) async {
+    private var known: [String: String] { BackupTargetAdd.signInForm(of: target) }
+
+    /// A field this device has no value for stays open, so the user
+    /// can type it.
+    private var locked: [String: String] {
+        known.filter { BackupTargetAdd.locationFields.contains($0.key) }
+    }
+
+    private func submit(_ typed: [String: String]) async {
+        let values = typed.merging(locked) { _, kept in kept }
         isWorking = true
         defer { isWorking = false }
         if AppSettings.shared.debugLogs {
@@ -39,8 +48,8 @@ struct TargetSignInSheet: View {
         }
         let outcome =
             target.provider == .s3
-            ? await BackupTargetAdd.s3(form: values, id: target.id)
-            : await BackupTargetAdd.webdav(form: values, id: target.id)
+            ? await BackupTargetAdd.s3(form: values, existing: target)
+            : await BackupTargetAdd.webdav(form: values, existing: target)
         switch outcome {
         case .checked(let descriptor, let result):
             signedIn(descriptor, result)

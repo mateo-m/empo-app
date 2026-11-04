@@ -120,17 +120,20 @@ struct TargetFormScreen: View {
 
     let service: BackupProviderKind
     let submitTitle: String
+    let lockedFields: Set<String>
     let failure: String?
     let submit: ([String: String]) -> Void
 
     @State private var values: [String: String]
 
     init(
-        service: BackupProviderKind, values: [String: String] = [:], submitTitle: String = "Add",
+        service: BackupProviderKind, values: [String: String] = [:],
+        lockedFields: Set<String> = [], submitTitle: String = "Add",
         failure: String? = nil, submit: @escaping ([String: String]) -> Void
     ) {
         self.service = service
         self.submitTitle = submitTitle
+        self.lockedFields = lockedFields
         self.failure = failure
         self.submit = submit
         _values = State(initialValue: values)
@@ -152,7 +155,11 @@ struct TargetFormScreen: View {
         Form {
             ForEach(fields, id: \.name) { field in
                 Section {
+                    let locked = lockedFields.contains(field.name)
+                    // A disabled TextField in a Form keeps the primary text color.
                     input(field)
+                        .disabled(locked)
+                        .foregroundStyle(locked ? .secondary : .primary)
                 } footer: {
                     if let note = field.note { Text(note) }
                 }
