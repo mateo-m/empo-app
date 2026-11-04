@@ -63,6 +63,30 @@ public enum TransportSecurity {
         -1206,  // NSURLErrorClientCertificateRequired
     ]
 
+    /// The URL loading codes of a request that got no answer, which a
+    /// later pass may get. -1003 and -1006 are a host name that does
+    /// not resolve. The add form must stop on them at once, because
+    /// the background session retries them for days.
+    private static let noAnswerErrorCodes: Set<Int> = [
+        -1009,  // NSURLErrorNotConnectedToInternet
+        -1005,  // NSURLErrorNetworkConnectionLost
+        -1001,  // NSURLErrorTimedOut
+        -1004,  // NSURLErrorCannotConnectToHost
+        -1003,  // NSURLErrorCannotFindHost
+        -1006,  // NSURLErrorDNSLookupFailed
+        -1020,  // NSURLErrorDataNotAllowed
+        -1018,  // NSURLErrorInternationalRoamingOff
+    ]
+
+    /// The error kind of 8.4 for a request that got no HTTP answer.
+    public static func transportError(urlErrorCode code: Int, description: String)
+        -> BackupProviderError
+    {
+        if noAnswerErrorCodes.contains(code) { return .offline }
+        return certificateError(urlErrorCode: code, description: description)
+            ?? .rejected(message: description)
+    }
+
     /// Whether this URL loading code is a certificate failure.
     public static func isCertificateFailure(urlErrorCode code: Int) -> Bool {
         certificateErrorCodes.contains(code)

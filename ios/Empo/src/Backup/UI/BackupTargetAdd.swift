@@ -108,7 +108,7 @@ enum BackupTargetAdd {
             address: address,
             region: form["region"] ?? "",
             name: form["bucket"] ?? "",
-            usesPathStyle: form["usesPathStyle"] == "true")
+            usesPathStyle: isOn("usesPathStyle", in: form))
         if let refusal = bucket.refusal { return .failed(line(of: refusal)) }
         let connection = S3Connection(
             bucket: bucket,
@@ -128,6 +128,16 @@ enum BackupTargetAdd {
         } catch {
             return .failed("The access key could not go in the Keychain.")
         }
+    }
+
+    /// A toggle the user did not touch reads as the default of its
+    /// service.
+    static func isOn(_ toggle: String, in form: [String: String]) -> Bool {
+        if let value = form[toggle] { return value == "true" }
+        guard toggle == "usesPathStyle", let address = URL(string: form["address"] ?? "") else {
+            return false
+        }
+        return S3Bucket.prefersPathStyle(address: address)
     }
 
     static func webdav(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
@@ -222,13 +232,17 @@ enum BackupTargetAdd {
             }
             return await check(target, provider: provider)
         case .s3, .webdav, .sftp:
-            return .failed("Type the password of this target again to use it.")
+            return .failed("Type the password of this location again to use it.")
         }
     }
 
     private static func check(
         _ descriptor: TargetDescriptor, provider: some BackupProvider
     ) async -> Outcome {
+        var descriptor = descriptor
+        if let account = await (provider as? any AccountReading)?.account() {
+            descriptor.take(account)
+        }
         // The probe upload goes through the background session, which
         // retries a host that does not answer for up to 7 days. A
         // mistyped address must fail here, while the user waits.

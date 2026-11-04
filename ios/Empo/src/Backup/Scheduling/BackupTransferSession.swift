@@ -357,9 +357,14 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
             lock.lock()
             let gaveUp = pending[task.taskIdentifier]?.gaveUp ?? false
             lock.unlock()
+            let failure = error as NSError
             finish(
                 taskIdentifier: task.taskIdentifier,
-                with: .failure(gaveUp ? .offline : Self.providerError(error)))
+                with: .failure(
+                    gaveUp
+                        ? .offline
+                        : TransportSecurity.transportError(
+                            urlErrorCode: failure.code, description: failure.localizedDescription)))
             return
         }
         guard let http else {
@@ -380,25 +385,4 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
         systemWakeCompletion = nil
         DispatchQueue.main.async { completion?() }
     }
-
-    /// The transport error kinds of 8.4, for a request that got no
-    /// answer at all. A request that did get one goes back whole, and
-    /// the provider reads its own body.
-    private static func providerError(_ error: Error) -> BackupProviderError {
-        let error = error as NSError
-        switch error.code {
-        case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost,
-            NSURLErrorTimedOut, NSURLErrorCannotConnectToHost,
-            NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff:
-            return .offline
-        default:
-            // A certificate the system does not trust says so once,
-            // with the line of 8.11. A user who typed their own
-            // address is the one who needs to read it.
-            return TransportSecurity.certificateError(
-                urlErrorCode: error.code, description: error.localizedDescription)
-                ?? .rejected(message: error.localizedDescription)
-        }
-    }
-
 }
