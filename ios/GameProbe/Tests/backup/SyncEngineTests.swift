@@ -85,12 +85,13 @@ final class SyncEngineTests: XCTestCase {
         var bytes: [String: Data] = [:]
         var written: [String: Data] = [:]
         var refuses: Set<String> = []
+        var unlisted: Set<String> = []
         var puts: [String] = []
 
         func enabled() -> [TargetDescriptor] { descriptors }
 
-        func namespaces(of target: TargetDescriptor) async -> [SyncNamespace] {
-            held[target.id] ?? []
+        func namespaces(of target: TargetDescriptor) async -> [SyncNamespace]? {
+            unlisted.contains(target.id) ? nil : held[target.id] ?? []
         }
 
         func read(_ path: String, from target: TargetDescriptor) async -> Data? {
@@ -284,6 +285,61 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(outcome, .done)
         XCTAssertEqual(document.steps, ["load", "merge", "write", "save"])
         XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("below"))
+        XCTAssertEqual(targets.puts, ["t1"])
+    }
+
+    func testANewDocumentWritesNothingWhileATargetDoesNotList() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.unlisted = ["t1"]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
+        XCTAssertEqual(document.steps, ["load"])
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testANewDocumentWritesNothingWhileACopyDoesNotRead() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
+        XCTAssertEqual(document.steps, ["load"])
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testTheFirstDeviceOfAGroupWritesWithNoCopyToRead() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.saved?.preferences["theme"], .string("dark"))
         XCTAssertEqual(targets.puts, ["t1"])
     }
 

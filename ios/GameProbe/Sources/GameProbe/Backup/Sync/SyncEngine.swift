@@ -113,8 +113,16 @@ public final class SyncEngine {
         }
 
         var seen: [SeenCopy] = []
+        var readEveryCopy = true
         for descriptor in enabled {
-            seen += await merge(from: descriptor, groupId: groupId)
+            let read = await merge(from: descriptor, groupId: groupId)
+            seen += read.seen
+            readEveryCopy = readEveryCopy && read.isComplete
+        }
+        // A new document that missed a copy would start a history of
+        // its own, and a later merge would hide one side's root maps.
+        if isNew, !readEveryCopy {
+            return .failed("a new document waits for every copy of the group")
         }
 
         if isNew, let fetched = try? document.model(),
@@ -164,9 +172,10 @@ public final class SyncEngine {
 
     private func merge(
         from descriptor: TargetDescriptor, groupId: String
-    ) async -> [SeenCopy] {
+    ) async -> (seen: [SeenCopy], isComplete: Bool) {
         var seen: [SeenCopy] = []
-        let namespaces = await targets.namespaces(of: descriptor)
+        var isComplete = true
+        guard let namespaces = await targets.namespaces(of: descriptor) else { return ([], false) }
         let progress =
             state.state().progress(ofTarget: descriptor.id)
             ?? SyncTargetProgress(targetId: descriptor.id)
@@ -177,7 +186,10 @@ public final class SyncEngine {
             guard namespace.record?.syncGroupId == groupId, let object = namespace.document,
                 progress.readsAgain(namespaceId: namespace.id, copy: object)
             else { continue }
-            guard let bytes = await targets.read(object.path, from: descriptor) else { continue }
+            guard let bytes = await targets.read(object.path, from: descriptor) else {
+                isComplete = false
+                continue
+            }
             let before = (try? document.model())?.layoutProfiles ?? [:]
 
             if case .failure(let rejection) = document.merge(bytes) {
@@ -190,7 +202,7 @@ public final class SyncEngine {
                 seen.append((namespace.id, modifiedAt, object.sizeBytes, descriptor.id))
             }
         }
-        return seen
+        return (seen, isComplete)
     }
 
     /// The profile rule of 10.6: the merged winner keeps the name,

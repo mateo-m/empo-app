@@ -68,7 +68,8 @@ public protocol SyncTargets: AnyObject {
     /// paused.
     func enabled() -> [TargetDescriptor]
 
-    func namespaces(of target: TargetDescriptor) async -> [SyncNamespace]
+    /// `nil` where the target did not answer the listing.
+    func namespaces(of target: TargetDescriptor) async -> [SyncNamespace]?
     func read(_ path: String, from target: TargetDescriptor) async -> Data?
     func write(_ data: Data, to path: String, on target: TargetDescriptor) async -> Bool
 

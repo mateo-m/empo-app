@@ -34,10 +34,10 @@ enum SyncRemote {
     /// of each namespace that shares its group.
     static func namespaces(
         root: String, provider: some BackupProvider
-    ) async -> [SyncNamespace] {
+    ) async -> [SyncNamespace]? {
         let empo = BackupNamespacePaths(root: root, namespaceId: "")
         let prefix = empo.devicesPrefix + "/"
-        guard let objects = try? await provider.list(prefix: prefix) else { return [] }
+        guard let objects = try? await provider.list(prefix: prefix) else { return nil }
 
         var documents: [String: RemoteObject] = [:]
         var ids: Set<String> = []
@@ -73,8 +73,8 @@ final class ProviderSyncTargets: SyncTargets {
         BackupTargets.load().filter { !$0.isPaused }
     }
 
-    func namespaces(of target: TargetDescriptor) async -> [SyncNamespace] {
-        guard let provider = await BackupTargets.provider(for: target) else { return [] }
+    func namespaces(of target: TargetDescriptor) async -> [SyncNamespace]? {
+        guard let provider = await BackupTargets.provider(for: target) else { return nil }
         return await SyncRemote.namespaces(root: target.root, provider: provider)
     }
 

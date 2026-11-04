@@ -19,7 +19,7 @@ enum SyncJoin {
         for descriptor in BackupTargets.load() where !descriptor.isPaused {
             guard let provider = await BackupTargets.provider(for: descriptor) else { continue }
             for namespace in await SyncRemote.namespaces(
-                root: descriptor.root, provider: provider)
+                root: descriptor.root, provider: provider) ?? []
             where namespace.id != mine {
                 guard let record = namespace.record else { continue }
                 records.append(record)

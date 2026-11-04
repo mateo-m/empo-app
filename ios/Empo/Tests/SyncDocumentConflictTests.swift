@@ -43,6 +43,20 @@ final class SyncDocumentConflictTests: XCTestCase {
         XCTAssertTrue(try SyncDocument.losingControls(of: merged, profileId: "p1").isEmpty)
     }
 
+    func testTwoDocumentsWithNoSharedHistoryKeepOnlyOneSidesLayouts() throws {
+        let group = SyncDocument.make(actorId: UUID().uuidString)
+        try SyncDocument.write(layout("group"), to: group)
+        var mine = SyncDocumentModel()
+        mine.layoutProfiles = ["p2": SyncProfile(name: "Mine", controls: ["b": .string("x")])]
+        let alone = SyncDocument.make(actorId: UUID().uuidString)
+        try SyncDocument.write(mine, to: alone)
+
+        try group.merge(other: alone)
+
+        let profiles = try SyncDocument.model(of: group).layoutProfiles
+        XCTAssertEqual(profiles.count, 1)
+    }
+
     func testADeviceThatLostItsDocumentMergesOnlyWithANewActor() throws {
         let actorId = UUID().uuidString
         let lost = SyncDocument.make(actorId: actorId)
