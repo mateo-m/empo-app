@@ -145,10 +145,12 @@ public enum BackupSetResolver {
                     modifiedAt: stamp.modifiedAt))
         }
 
+        var buckets: [String] = []
         for name in request.rescuedSavesBuckets.keys.sorted() {
             guard let bucket = request.rescuedSavesBuckets[name],
                 !RescuedSaves.isExcludedFromBackup(bucket: bucket, fm: fm)
             else { continue }
+            buckets.append(name)
             members += files(under: bucket, fm: fm).map {
                 BackupSetMember(
                     root: .preferences,
@@ -158,7 +160,7 @@ public enum BackupSetResolver {
             }
         }
 
-        return GameBackupSet(mode: .slim, members: sorted(members))
+        return GameBackupSet(mode: .slim, members: sorted(members), rescuedSavesBuckets: buckets)
     }
 
     /// The shared data directory as the manifest header records it,

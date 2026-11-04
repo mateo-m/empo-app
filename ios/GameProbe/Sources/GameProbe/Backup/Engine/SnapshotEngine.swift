@@ -339,12 +339,15 @@ public actor SnapshotEngine {
         // user would miss at once.
         if let preferences = context.request.preferences {
             let scannedAt = now
+            let set = BackupSetResolver.resolveLibraryStream(preferences, fm: fm)
             inputs.append(
                 input(
                     stream: .preferences,
-                    set: BackupSetResolver.resolveLibraryStream(preferences, fm: fm),
+                    set: set,
                     source: MemberSource(library: preferences),
-                    header: SnapshotManifest(mode: .slim, containerFolderName: ""),
+                    header: SnapshotManifest(
+                        mode: .slim, containerFolderName: "",
+                        rescuedSavesBuckets: set.rescuedSavesBuckets),
                     kind: .preferences,
                     isOneOff: false,
                     isGame: false,

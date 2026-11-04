@@ -746,6 +746,23 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(prefsManifests.count, 1)
     }
 
+    /// A restore finds where a bucket file goes by the names the
+    /// header lists, so a bucket missing from the list cannot
+    /// restore.
+    func testThePrefsStreamHeaderNamesItsRescuedSavesBuckets() async throws {
+        let bucket = documents.appendingPathComponent("Rescued Saves/Lost Game", isDirectory: true)
+        try write("save", to: bucket.appendingPathComponent("slot1.sav"))
+        let preferences = LibraryBackupSetRequest(rescuedSavesBuckets: ["Lost Game": bucket])
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+
+        _ = await engine.run(request(games: [], preferences: preferences))
+
+        let path = try XCTUnwrap(
+            manifestPaths(target).first { $0.hasPrefix(paths.prefix(of: .preferences)) })
+        XCTAssertEqual(try manifest(on: target, at: path).rescuedSavesBuckets, ["Lost Game"])
+    }
+
     // MARK: - 11. Deleting a game and its backups, per 5.13
 
     func testDeletingAGameLeavesASharedDirectoryASecondGameNames() async throws {
