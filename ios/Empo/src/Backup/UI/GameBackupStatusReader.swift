@@ -45,7 +45,7 @@ enum GameBackupStatusReader {
                 isRunning: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
                 now: now),
             freshness: Staleness.worst(gameKey: gameKey, of: targets.map(\.freshness), now: now),
-            lastSuccessAt: targets.compactMap(\.lastSuccessAt).max())
+            lastSuccessAt: GameBackupStatusRules.lastSuccessAt(of: targets))
     }
 }
 

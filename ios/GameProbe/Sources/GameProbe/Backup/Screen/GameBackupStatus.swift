@@ -182,6 +182,12 @@ public enum GameBackupStatusRules {
         return GameBackupStatus(state: .healthy, targetLabel: label(enabled))
     }
 
+    /// The date the healthy line names. A paused target never wins a
+    /// state, so its date cannot stand beside the name of another.
+    public static func lastSuccessAt(of targets: [GameTargetState]) -> Date? {
+        targets.filter { !$0.isPaused }.compactMap(\.lastSuccessAt).max()
+    }
+
     private static let staleDays = Int(Staleness.staleAfter / 86_400)
 
     /// A cause that is not the clock and not the policy is a

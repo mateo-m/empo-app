@@ -35,6 +35,19 @@ final class BackupSheetTests: XCTestCase {
         XCTAssertEqual(ranks, [1, 2, 3, 4, 5, 6, 7, 8])
     }
 
+    func testThePausedTargetsDateIsNotTheHealthyLinesDate() {
+        let targets = [
+            target("dropbox", name: "Dropbox", daysAgo: 3, playedDaysAgo: 4),
+            target("nas", name: "NAS", paused: true, daysAgo: 0),
+        ]
+        let status = GameBackupStatusRules.status(targets: targets, isRunning: false, now: now)
+
+        XCTAssertEqual(status.state, .healthy)
+        XCTAssertEqual(status.targetLabel, "Dropbox")
+        XCTAssertEqual(
+            GameBackupStatusRules.lastSuccessAt(of: targets), now.addingTimeInterval(-3 * 86_400))
+    }
+
     func testEachStateOutranksTheOneBelowIt() {
         let dropbox = target("a", cause: .needsSignIn, daysAgo: 30)
         let running = GameBackupStatusRules.status(

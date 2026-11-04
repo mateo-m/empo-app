@@ -132,10 +132,14 @@ final class BackupsScreenModel {
             }
         }
         showsTheSplitLine = conflicts.showsTheSplitLine
+        // A paused location leaves the line, so its date cannot stand
+        // for the locations that still run.
+        let active = Set(descriptors.filter { !$0.isPaused }.map(\.id))
         self.status = BackupsScreenStatusRules.status(
             of: facts,
-            lastSuccessText: runs.first { $0.outcome == .success }?.finishedAt
-                .map(BackupText.day))
+            lastSuccessText: runs.first { run in
+                run.outcome == .success && active.contains(run.targetId)
+            }?.finishedAt.map(BackupText.day))
         await readTheNotificationPermission()
     }
 
