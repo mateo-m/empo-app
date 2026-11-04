@@ -74,10 +74,13 @@ public struct SyncState: Codable, Equatable, Sendable {
         replace(progress)
     }
 
-    public mutating func saw(namespaceId: String, at date: Date, targetId: String) {
+    public mutating func saw(
+        namespaceId: String, at date: Date, sizeBytes: Int64, targetId: String
+    ) {
         var progress = progress(ofTarget: targetId)
             ?? SyncTargetProgress(targetId: targetId)
         progress.seenNamespaces[namespaceId] = date
+        progress.seenSizes[namespaceId] = sizeBytes
         replace(progress)
     }
 

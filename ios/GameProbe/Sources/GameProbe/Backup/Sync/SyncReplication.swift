@@ -10,19 +10,35 @@ public struct SyncTargetProgress: Codable, Equatable, Sendable {
     /// merged, per 10.5 step 1. A target that reports no object age
     /// leaves it empty, and the pass reads every copy.
     public var seenNamespaces: [String: Date]
+    /// The size of each copy in `seenNamespaces`. WebDAV and Dropbox
+    /// give the modified time to the second, so a copy written again
+    /// in the same second keeps its time and changes only its size.
+    public var seenSizes: [String: Int64]
 
     public init(
-        targetId: String, confirmedHeads: [String] = [], seenNamespaces: [String: Date] = [:]
+        targetId: String, confirmedHeads: [String] = [], seenNamespaces: [String: Date] = [:],
+        seenSizes: [String: Int64] = [:]
     ) {
         self.targetId = targetId
         self.confirmedHeads = confirmedHeads.sorted()
         self.seenNamespaces = seenNamespaces
+        self.seenSizes = seenSizes
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        targetId = try values.decode(String.self, forKey: .targetId)
+        confirmedHeads = try values.decode([String].self, forKey: .confirmedHeads)
+        seenNamespaces = try values.decode([String: Date].self, forKey: .seenNamespaces)
+        seenSizes = try values.decodeIfPresent([String: Int64].self, forKey: .seenSizes) ?? [:]
     }
 
     /// Whether one namespace copy is worth reading again.
-    public func readsAgain(namespaceId: String, modifiedAt: Date?) -> Bool {
-        guard let modifiedAt, let seen = seenNamespaces[namespaceId] else { return true }
-        return modifiedAt > seen
+    public func readsAgain(namespaceId: String, copy: RemoteObject) -> Bool {
+        guard let modifiedAt = copy.modifiedAt, let seen = seenNamespaces[namespaceId],
+            let size = seenSizes[namespaceId]
+        else { return true }
+        return modifiedAt > seen || copy.sizeBytes != size
     }
 }
 

@@ -150,7 +150,7 @@ final class SyncEngineTests: XCTestCase {
     }
 
     private func namespace(
-        _ id: String, group: String?, modifiedAt: Date?
+        _ id: String, group: String?, modifiedAt: Date?, sizeBytes: Int64 = 10
     ) -> SyncNamespace {
         SyncNamespace(
             id: id,
@@ -158,7 +158,7 @@ final class SyncEngineTests: XCTestCase {
                 deviceId: id, model: "iPad", name: "the \(id) device", lastWriteAt: stamp,
                 syncGroupId: group),
             document: modifiedAt.map {
-                RemoteObject(path: "\(id)/document", sizeBytes: 10, modifiedAt: $0)
+                RemoteObject(path: "\(id)/document", sizeBytes: sizeBytes, modifiedAt: $0)
             })
     }
 
@@ -358,6 +358,26 @@ final class SyncEngineTests: XCTestCase {
         // change nothing, so the state row is the proof.
         _ = await engine.run(.now)
         XCTAssertEqual(state.value.progress(ofTarget: "t1")?.seenNamespaces["other"], stamp)
+    }
+
+    func testACopyWrittenAgainInTheSameSecondIsReadAgain() async throws {
+        let document = FakeDocument()
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes()
+
+        let state = FakeState(groupId: "g1")
+        let engine = engine(
+            document: document, targets: targets, state: state, local: FakeLocalValues())
+        _ = await engine.run(.now)
+
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp, sizeBytes: 12)]
+        document.steps = []
+        _ = await engine.run(.now)
+
+        XCTAssertTrue(document.steps.contains("merge"))
+        XCTAssertEqual(state.value.progress(ofTarget: "t1")?.seenSizes["other"], 12)
     }
 
     func testACopyAndALocalChangeAreTakenAgainAfterASaveThatFailed() async throws {

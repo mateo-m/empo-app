@@ -150,14 +150,24 @@ final class PreferenceSyncTests: XCTestCase {
 
     func testACopyIsReadAgainOnlyWhenItMoved() {
         let progress = SyncTargetProgress(
-            targetId: "t1", seenNamespaces: ["ns-1": stamp])
-        XCTAssertFalse(progress.readsAgain(namespaceId: "ns-1", modifiedAt: stamp))
+            targetId: "t1", seenNamespaces: ["ns-1": stamp], seenSizes: ["ns-1": 10])
+        func copy(at date: Date?, size: Int64 = 10) -> RemoteObject {
+            RemoteObject(path: "ns-1/document", sizeBytes: size, modifiedAt: date)
+        }
+        XCTAssertFalse(progress.readsAgain(namespaceId: "ns-1", copy: copy(at: stamp)))
         XCTAssertTrue(
-            progress.readsAgain(namespaceId: "ns-1", modifiedAt: stamp.addingTimeInterval(1)))
-        XCTAssertTrue(progress.readsAgain(namespaceId: "ns-2", modifiedAt: stamp))
+            progress.readsAgain(namespaceId: "ns-1", copy: copy(at: stamp.addingTimeInterval(1))))
         XCTAssertTrue(
-            progress.readsAgain(namespaceId: "ns-1", modifiedAt: nil),
+            progress.readsAgain(namespaceId: "ns-1", copy: copy(at: stamp, size: 11)),
+            "a copy written again in the same second keeps its time")
+        XCTAssertTrue(progress.readsAgain(namespaceId: "ns-2", copy: copy(at: stamp)))
+        XCTAssertTrue(
+            progress.readsAgain(namespaceId: "ns-1", copy: copy(at: nil)),
             "a target that reports no object age is read every pass")
+        XCTAssertTrue(
+            SyncTargetProgress(targetId: "t1", seenNamespaces: ["ns-1": stamp])
+                .readsAgain(namespaceId: "ns-1", copy: copy(at: stamp)),
+            "a state file from before the sizes reads every copy once")
     }
 
     func testATruncatedAndACorruptCopyChangeNothing() {
@@ -395,7 +405,7 @@ final class PreferenceSyncTests: XCTestCase {
 
         state.startAGroup(at: stamp)
         state.confirm(targetId: "t1", heads: ["aa"])
-        state.saw(namespaceId: "ns-1", at: stamp, targetId: "t1")
+        state.saw(namespaceId: "ns-1", at: stamp, sizeBytes: 10, targetId: "t1")
         try state.write(applicationSupport: support)
 
         let read = SyncState.read(applicationSupport: support, actorId: "actor-2")
@@ -403,6 +413,7 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertEqual(read.groupId, state.groupId)
         XCTAssertEqual(read.progress(ofTarget: "t1")?.confirmedHeads, ["aa"])
         XCTAssertEqual(read.progress(ofTarget: "t1")?.seenNamespaces["ns-1"], stamp)
+        XCTAssertEqual(read.progress(ofTarget: "t1")?.seenSizes["ns-1"], 10)
 
         var forgotten = read
         forgotten.forget(targetId: "t1")

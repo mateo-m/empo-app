@@ -44,7 +44,9 @@ public final class SyncEngine {
 
     /// What this device held at the last pass.
     private var lastLocalValues: SyncDocumentModel?
-    private typealias SeenCopy = (namespaceId: String, modifiedAt: Date, targetId: String)
+    private typealias SeenCopy = (
+        namespaceId: String, modifiedAt: Date, sizeBytes: Int64, targetId: String
+    )
 
     public init(
         document: any SyncDocumentStore,
@@ -142,7 +144,7 @@ public final class SyncEngine {
                 for copy in seen {
                     state.saw(
                         namespaceId: copy.namespaceId, at: copy.modifiedAt,
-                        targetId: copy.targetId)
+                        sizeBytes: copy.sizeBytes, targetId: copy.targetId)
                 }
             }
         }
@@ -173,7 +175,7 @@ public final class SyncEngine {
             // A copy of another group belongs to another person, per
             // 10.4, so the pass never reads it.
             guard namespace.record?.syncGroupId == groupId, let object = namespace.document,
-                progress.readsAgain(namespaceId: namespace.id, modifiedAt: object.modifiedAt)
+                progress.readsAgain(namespaceId: namespace.id, copy: object)
             else { continue }
             guard let bytes = await targets.read(object.path, from: descriptor) else { continue }
             let before = (try? document.model())?.layoutProfiles ?? [:]
@@ -185,7 +187,7 @@ public final class SyncEngine {
             rebuildConflicts(
                 before: before, deviceName: namespace.record?.name ?? "another device")
             if let modifiedAt = object.modifiedAt {
-                seen.append((namespace.id, modifiedAt, descriptor.id))
+                seen.append((namespace.id, modifiedAt, object.sizeBytes, descriptor.id))
             }
         }
         return seen
