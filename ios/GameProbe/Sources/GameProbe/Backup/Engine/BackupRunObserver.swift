@@ -28,6 +28,10 @@ public protocol BackupRunObserver: Sendable {
     /// there.
     func runConfirmed(streamKey: String, bytes: Int64) async
 
+    /// One blob of the plan starts to upload. Until its
+    /// `runConfirmed`, the only upload in flight is this blob's.
+    func runSendsBlob(bytes: Int64) async
+
     /// Asked before each game stream and before each of its files.
     /// `false` stops the run with
     /// `BackupRunStop.gameStarted`, per 7.6.
@@ -37,5 +41,6 @@ public protocol BackupRunObserver: Sendable {
 extension BackupRunObserver {
     public func runStages(streamKey: String) async {}
     public func runUploads(streamKey: String) async {}
+    public func runSendsBlob(bytes: Int64) async {}
     public func runMayGoOn() async -> Bool { true }
 }

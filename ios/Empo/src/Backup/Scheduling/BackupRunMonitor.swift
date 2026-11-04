@@ -49,6 +49,11 @@ final class BackupRunMonitor: BackupRunObserver {
     /// The bytes sent of the one upload in flight. A 300 MB blob
     /// confirms nothing for a minute, and the pill must still move.
     private var inFlightBytes: Int64 = 0
+    /// The size of the blob in flight, or 0 between blobs. The
+    /// snapshot files are not in the plan and must not move the
+    /// pill. A provider sends a blob to a temporary path or in
+    /// parts, so the transfer path does not name the blob.
+    private var inFlightBlobBytes: Int64 = 0
 
     // MARK: - What the pass reports
 
@@ -58,6 +63,8 @@ final class BackupRunMonitor: BackupRunObserver {
         self.progress = progress
         self.targetCount = targetCount
         targetsDone = 0
+        inFlightBytes = 0
+        inFlightBlobBytes = 0
         runningGameKeys = Set(names.keys)
         plan = BackupRunPlan()
         startedAt = Date()
@@ -77,6 +84,7 @@ final class BackupRunMonitor: BackupRunObserver {
         targetsDone += 1
         plan.targetEnds()
         inFlightBytes = 0
+        inFlightBlobBytes = 0
         report()
     }
 
@@ -84,7 +92,7 @@ final class BackupRunMonitor: BackupRunObserver {
     /// path monitor last said. The phone reported an expensive path
     /// after a launch from the lock screen and never took it back.
     func transferSent(bytes: Int64) {
-        inFlightBytes = bytes
+        inFlightBytes = min(bytes, inFlightBlobBytes)
         networkHold = nil
         report()
     }
@@ -120,10 +128,18 @@ final class BackupRunMonitor: BackupRunObserver {
         await MainActor.run { !BackupDeviceConditions.isSessionLive }
     }
 
+    nonisolated func runSendsBlob(bytes: Int64) async {
+        await MainActor.run {
+            inFlightBlobBytes = bytes
+            inFlightBytes = 0
+        }
+    }
+
     nonisolated func runConfirmed(streamKey: String, bytes: Int64) async {
         await MainActor.run {
             plan.confirm(streamKey: streamKey, bytes: bytes)
             inFlightBytes = 0
+            inFlightBlobBytes = 0
             networkHold = nil
             report()
         }

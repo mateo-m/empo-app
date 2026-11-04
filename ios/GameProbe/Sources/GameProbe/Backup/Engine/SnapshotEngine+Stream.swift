@@ -193,6 +193,7 @@ extension SnapshotEngine {
             // went up with, per 5.6.
             entry.compression = algorithm
         } else {
+            await observer?.runSendsBlob(bytes: member.size)
             let uploaded = try await uploadBlob(context, file: staged.file, hash: staged.hash)
             entry.compression = uploaded.compression
             run.result.uploadedBytes += uploaded.bytes
