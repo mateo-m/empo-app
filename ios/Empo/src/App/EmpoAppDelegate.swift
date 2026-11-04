@@ -20,6 +20,7 @@ final class EmpoAppDelegate: UIResponder, UIApplicationDelegate {
         BackupTaskScheduler.register()
         BackupNotifier.start()
         BackupScheduler.shared.start()
+        Task { await BackupTargets.readTheMissingAccounts() }
         return true
     }
 

@@ -15,7 +15,7 @@ import GameProbe
 /// App-folder access scopes every path to `/Apps/Empo`, so the target
 /// sees nothing else in the account and the descriptor carries an
 /// empty root.
-actor DropboxTarget: BackupProvider {
+actor DropboxTarget: BackupProvider, AccountReading {
 
     nonisolated let capabilities = Dropbox.capabilities
 
@@ -105,6 +105,15 @@ actor DropboxTarget: BackupProvider {
             guard answer.isSuccess else { throw Self.error(answer) }
             return Dropbox.quota(fromBody: answer.body)
         }
+    }
+
+    func account() async -> BackupAccount? {
+        // Like `get_space_usage`, the endpoint refuses a body.
+        guard var request = try? await apiRequest(.currentAccount) else { return nil }
+        request.setValue(nil, forHTTPHeaderField: "Content-Type")
+        guard let answer = try? await BackupAPISession.shared.send(request), answer.isSuccess
+        else { return nil }
+        return Dropbox.account(fromBody: answer.body)
     }
 
     // MARK: - list_folder

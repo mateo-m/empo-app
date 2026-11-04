@@ -19,6 +19,11 @@ struct OAuthService: Sendable {
     let additionalParameters: [String: String]
 }
 
+/// A service that can name the account it signed in to.
+protocol AccountReading: Sendable {
+    func account() async -> BackupAccount?
+}
+
 /// The one OAuth sign-in of SPEC 8.10, for every service that uses
 /// one.
 ///

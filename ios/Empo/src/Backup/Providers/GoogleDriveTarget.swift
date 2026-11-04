@@ -16,7 +16,7 @@ import GameProbe
 /// which is what 8.1 asks for. Two caches carry the cost of that: the
 /// id of the root folder, and the id of each path Empo has seen. A
 /// cold process fills the second one from the first `list`.
-actor GoogleDriveTarget: BackupProvider {
+actor GoogleDriveTarget: BackupProvider, AccountReading {
 
     nonisolated let capabilities = GoogleDrive.capabilities
 
@@ -117,6 +117,14 @@ actor GoogleDriveTarget: BackupProvider {
             try await self.check(answer)
             return GoogleDrive.quota(fromBody: answer.body)
         }
+    }
+
+    func account() async -> BackupAccount? {
+        guard let url = GoogleDrive.aboutURL(fields: "user"),
+            let request = try? await authorized(url),
+            let answer = try? await BackupAPISession.shared.send(request), answer.isSuccess
+        else { return nil }
+        return GoogleDrive.account(fromBody: answer.body)
     }
 
     // MARK: - The root folder

@@ -45,6 +45,7 @@ public enum Dropbox {
         case deleteBatch = "https://api.dropboxapi.com/2/files/delete_batch"
         case deleteBatchCheck = "https://api.dropboxapi.com/2/files/delete_batch/check"
         case spaceUsage = "https://api.dropboxapi.com/2/users/get_space_usage"
+        case currentAccount = "https://api.dropboxapi.com/2/users/get_current_account"
 
         public var url: URL? { URL(string: rawValue) }
     }
@@ -85,16 +86,17 @@ public enum Dropbox {
     /// A JSON argument that is safe in an HTTP header.
     ///
     /// Dropbox takes the argument of a content call in
-    /// `Dropbox-API-Arg`, and a header takes ASCII alone. Every name
-    /// Empo writes is hex or fixed ASCII, per 5.2, so this changes
-    /// nothing today and keeps a later name from breaking a request.
+    /// `Dropbox-API-Arg`, and a header takes ASCII alone. A JSON
+    /// escape holds 4 hex digits, so an emoji takes its UTF-16 pair.
     public static func headerSafe(_ json: String) -> String {
         var out = ""
         for character in json.unicodeScalars {
             if character.isASCII && character.value >= 0x20 && character.value != 0x7F {
                 out.unicodeScalars.append(character)
             } else {
-                out += String(format: "\\u%04x", character.value)
+                for unit in String(character).utf16 {
+                    out += String(format: "\\u%04x", unit)
+                }
             }
         }
         return out
@@ -233,8 +235,7 @@ public enum Dropbox {
         case Status.endpointError, Status.badRequest:
             return endpointError(summary: errorSummary)
         case Status.serverError..<600:
-            // Dropbox is up but unwell. 8.4 retries on the next pass.
-            return .offline
+            return .serverError(status: status)
         default:
             return .rejected(message: message(fromSummary: errorSummary, status: status))
         }
@@ -393,5 +394,14 @@ extension Dropbox {
         let allocation = root["allocation"] as? [String: Any]
         let allocated = (allocation?["allocated"] as? NSNumber)?.int64Value
         return QuotaReading(usedBytes: used, limitBytes: allocated)
+    }
+
+    public static func account(fromBody body: Data) -> BackupAccount? {
+        guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            return nil
+        }
+        return BackupAccount(
+            jsonName: (root["name"] as? [String: Any])?["display_name"],
+            email: root["email"], photo: root["profile_photo_url"])
     }
 }

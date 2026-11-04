@@ -77,8 +77,9 @@ final class GoogleDriveTests: XCTestCase {
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
-        XCTAssertEqual(GoogleDrive.error(status: 500), .offline)
-        XCTAssertEqual(GoogleDrive.error(status: 503), .offline)
+        XCTAssertEqual(GoogleDrive.error(status: 500), .serverError(status: 500))
+        XCTAssertEqual(GoogleDrive.error(status: 503), .serverError(status: 503))
+        XCTAssertEqual(GoogleDrive.error(status: 500).effect, .retryOnNextPass)
     }
 
     func testAnUnknownReasonReachesTheUserWordForWord() {
@@ -102,7 +103,7 @@ final class GoogleDriveTests: XCTestCase {
         let failure = GoogleDrive.failure(inBody: Data("<html>gateway</html>".utf8))
         XCTAssertEqual(failure.reason, "")
         XCTAssertEqual(
-            GoogleDrive.error(status: 502, failure: failure), .offline)
+            GoogleDrive.error(status: 502, failure: failure), .serverError(status: 502))
     }
 
     // MARK: - The truncated backoff of 9.3
@@ -461,5 +462,35 @@ final class GoogleDriveTests: XCTestCase {
 
     func testTwoBoundariesAreNotTheSame() {
         XCTAssertNotEqual(GoogleDrive.multipartBoundary(), GoogleDrive.multipartBoundary())
+    }
+
+    // MARK: - about.get, the user
+
+    func testTheUserAnswerGivesTheNameTheEmailAndThePhoto() {
+        let body = Data(
+            #"{"user":{"kind":"drive#user","displayName":"Player One","emailAddress":"player@example.com","photoLink":"https://lh3.googleusercontent.com/a/photo=s64","me":true}}"#
+                .utf8)
+        XCTAssertEqual(
+            GoogleDrive.account(fromBody: body),
+            BackupAccount(
+                name: "Player One", email: "player@example.com",
+                photo: URL(string: "https://lh3.googleusercontent.com/a/photo=s64")))
+    }
+
+    func testAUserWithNoPhotoStillAnswersItsNameAndEmail() {
+        let body = Data(#"{"user":{"displayName":"Player One","emailAddress":"p@example.com"}}"#.utf8)
+        XCTAssertEqual(
+            GoogleDrive.account(fromBody: body),
+            BackupAccount(name: "Player One", email: "p@example.com", photo: nil))
+        XCTAssertNil(GoogleDrive.account(fromBody: Data("{}".utf8)))
+    }
+
+    func testTheUserURLAsksOnlyForTheUser() {
+        XCTAssertEqual(
+            GoogleDrive.aboutURL(fields: "user")?.absoluteString,
+            "https://www.googleapis.com/drive/v3/about?fields=user")
+        XCTAssertEqual(
+            GoogleDrive.aboutURL()?.absoluteString,
+            "https://www.googleapis.com/drive/v3/about?fields=storageQuota")
     }
 }

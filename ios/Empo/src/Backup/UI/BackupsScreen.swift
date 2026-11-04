@@ -84,8 +84,7 @@ struct BackupsScreen: View {
         )
         .sheet(isPresented: $showsAddSheet) {
             AddTargetSheet(iCloudReach: model.iCloudReach) { descriptor, result in
-                addedTarget = PermissionCheckOutcomeSheet(
-                    targetLabel: descriptor.displayName, result: result)
+                addedTarget = PermissionCheckOutcomeSheet(target: descriptor, result: result)
                 Task {
                     await model.refresh()
                     pendingNotificationAsk = model.asksAboutNotifications()
@@ -103,8 +102,7 @@ struct BackupsScreen: View {
         }
         .sheet(item: $signingIn) { item in
             TargetSignInSheet(target: item.descriptor) { descriptor, result in
-                addedTarget = PermissionCheckOutcomeSheet(
-                    targetLabel: descriptor.displayName, result: result)
+                addedTarget = PermissionCheckOutcomeSheet(target: descriptor, result: result)
                 Task { await model.refresh() }
             }
         }
@@ -112,7 +110,7 @@ struct BackupsScreen: View {
             item: $addedTarget,
             onDismiss: showTheNextSheet,
             content: { outcome in
-                PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
+                PermissionCheckSheet(target: outcome.target, result: outcome.result)
             }
         )
         .sheet(item: $freshInstall, onDismiss: showTheNextSheet) { item in
@@ -290,7 +288,7 @@ struct BackupsScreen: View {
                     TargetDetailScreen(model: model, targetId: item.id)
                 } label: {
                     HStack(spacing: Spacing.lg) {
-                        TargetRowView(row: item.row, provider: item.descriptor.provider)
+                        TargetRowView(row: item.row, target: item.descriptor)
                         if let action = item.row.action, action != .makeSpace {
                             Button(action.label) { Task { await press(action, on: item) } }
                                 .buttonStyle(.bordered)
@@ -427,7 +425,7 @@ struct SyncJoinPrompt: Identifiable {
 
 /// The permission check of 8.7, waiting for its sheet.
 struct PermissionCheckOutcomeSheet: Identifiable {
-    let targetLabel: String
+    let target: TargetDescriptor
     let result: PermissionCheckResult
-    var id: String { targetLabel }
+    var id: String { target.id }
 }

@@ -105,4 +105,17 @@ enum BackupTargets {
         try add(target)
         return result
     }
+
+    /// Locations added before Empo read the account take it once.
+    static func readTheMissingAccounts() async {
+        for target in load() where target.accountName == nil && !target.isPlaceholder {
+            guard let reader = await provider(for: target) as? any AccountReading,
+                let account = await reader.account()
+            else { continue }
+            try? update { targets in
+                guard let index = targets.firstIndex(where: { $0.id == target.id }) else { return }
+                targets[index].take(account)
+            }
+        }
+    }
 }

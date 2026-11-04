@@ -53,14 +53,13 @@ struct TargetDetailScreen: View {
         .sheet(isPresented: $signsInThroughTheForm) {
             if let item {
                 TargetSignInSheet(target: item.descriptor) { descriptor, result in
-                    signInOutcome = PermissionCheckOutcomeSheet(
-                        targetLabel: descriptor.displayName, result: result)
+                    signInOutcome = PermissionCheckOutcomeSheet(target: descriptor, result: result)
                     Task { await model.refresh() }
                 }
             }
         }
         .sheet(item: $signInOutcome) { outcome in
-            PermissionCheckSheet(targetLabel: outcome.targetLabel, result: outcome.result)
+            PermissionCheckSheet(target: outcome.target, result: outcome.result)
         }
         .alert(
             "Couldn't remove this location", isPresented: .constant(removalFailure != nil),
@@ -78,17 +77,13 @@ struct TargetDetailScreen: View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.lg) {
                 HStack(spacing: Spacing.lg) {
-                    Image(systemName: item.descriptor.provider.symbolName)
-                        .font(.system(size: 28, weight: .medium))
-                        .foregroundStyle(.brand)
-                        .frame(width: 40)
+                    AccountAvatar(
+                        photo: item.descriptor.accountPhoto, provider: item.descriptor.provider)
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text(item.descriptor.provider.serviceName)
                             .font(.headline)
                         if let hint = item.descriptor.accountHint {
-                            Text(hint)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                            AccountHintText(hint: hint, provider: item.descriptor.provider)
                         }
                         Text(item.row.stateLine)
                             .font(.footnote)

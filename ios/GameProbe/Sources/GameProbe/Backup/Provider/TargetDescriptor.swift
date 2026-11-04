@@ -13,6 +13,26 @@ public enum BackupProviderKind: String, Codable, CaseIterable, Equatable, Sendab
     case sftp = "sftp"
 }
 
+/// The signed-in account of an OAuth service.
+public struct BackupAccount: Equatable, Sendable {
+    public var name: String?
+    public var email: String?
+    public var photo: URL?
+
+    public init(name: String?, email: String?, photo: URL?) {
+        self.name = name
+        self.email = email
+        self.photo = photo
+    }
+
+    init?(jsonName name: Any?, email: Any?, photo: Any?) {
+        let name = (name as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let email = (email as? String).flatMap { $0.isEmpty ? nil : $0 }
+        guard name != nil || email != nil else { return nil }
+        self.init(name: name, email: email, photo: (photo as? String).flatMap(URL.init(string:)))
+    }
+}
+
 /// The non-secret description of one backup target, per SPEC 8.8.
 ///
 /// No token, key, or password may ever enter this type. Secrets live
@@ -33,6 +53,10 @@ public struct TargetDescriptor: Codable, Equatable, Sendable, Identifiable {
     /// The account or the host this target opens. It stays on this
     /// device and never rides the sync document.
     public var accountHint: String?
+    /// The account owner's name and photo, as the service reports
+    /// them. They stay on this device, like the account hint.
+    public var accountName: String?
+    public var accountPhoto: URL?
     /// The fixed root of 8.7. The user never chooses a folder, and
     /// section 9 states the root per provider.
     public var root: String
@@ -49,6 +73,8 @@ public struct TargetDescriptor: Codable, Equatable, Sendable, Identifiable {
         provider: BackupProviderKind,
         label: String,
         accountHint: String? = nil,
+        accountName: String? = nil,
+        accountPhoto: URL? = nil,
         root: String,
         sizeThresholdBytes: Int64? = nil,
         capBytes: Int64? = nil,
@@ -58,6 +84,8 @@ public struct TargetDescriptor: Codable, Equatable, Sendable, Identifiable {
         self.provider = provider
         self.label = label
         self.accountHint = accountHint
+        self.accountName = accountName
+        self.accountPhoto = accountPhoto
         self.root = root
         self.sizeThresholdBytes = sizeThresholdBytes
         self.capBytes = capBytes
@@ -69,6 +97,8 @@ public struct TargetDescriptor: Codable, Equatable, Sendable, Identifiable {
     public func forSyncDocument() -> TargetDescriptor {
         var copy = self
         copy.accountHint = nil
+        copy.accountName = nil
+        copy.accountPhoto = nil
         return copy
     }
 
@@ -78,7 +108,15 @@ public struct TargetDescriptor: Codable, Equatable, Sendable, Identifiable {
     public func withSyncedFields(from incoming: TargetDescriptor) -> TargetDescriptor {
         var copy = incoming
         copy.accountHint = accountHint
+        copy.accountName = accountName
+        copy.accountPhoto = accountPhoto
         return copy
+    }
+
+    public mutating func take(_ account: BackupAccount) {
+        accountHint = account.email ?? account.name ?? accountHint
+        accountName = account.name
+        accountPhoto = account.photo
     }
 
     /// Whether this descriptor arrived without its account hint,

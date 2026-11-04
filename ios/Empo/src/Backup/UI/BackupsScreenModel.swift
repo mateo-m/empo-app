@@ -198,7 +198,7 @@ final class BackupsScreenModel {
         let outcome = await BackupTargetAdd.signInAgain(item.descriptor)
         await refresh()
         guard case .checked(let descriptor, let result) = outcome else { return nil }
-        return PermissionCheckOutcomeSheet(targetLabel: descriptor.displayName, result: result)
+        return PermissionCheckOutcomeSheet(target: descriptor, result: result)
     }
 
     func setPaused(_ isPaused: Bool, targetId: String) async {
@@ -245,7 +245,7 @@ final class BackupsScreenModel {
             try BackupTargets.update { $0.removeAll { $0.id == targetId } }
         } catch {
             await refresh()
-            return "Empo could not remove this target: \(error.localizedDescription)"
+            return "Empo could not remove this location: \(error.localizedDescription)"
         }
         await refresh()
         return nil
@@ -338,7 +338,7 @@ final class BackupsScreenModel {
     ) async -> RestoreOutcome {
         guard let descriptor = targets.first(where: { $0.id == row.targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
-        else { return .failed("this target is not configured on this device") }
+        else { return .failed("this location is not set up on this device") }
         return await RestoreCoordinator.shared.restore(
             row, into: GameIdentities.match(row.identity), provider: provider,
             descriptor: descriptor, scope: scope, replacesTheTree: replacesTheTree)

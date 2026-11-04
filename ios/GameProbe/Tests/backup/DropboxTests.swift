@@ -54,7 +54,7 @@ final class DropboxTests: XCTestCase {
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
-        XCTAssertEqual(Dropbox.error(status: 500), .offline)
+        XCTAssertEqual(Dropbox.error(status: 500), .serverError(status: 500))
     }
 
     func testAnUnknownReasonReachesTheUserWordForWord() {
@@ -294,6 +294,13 @@ final class DropboxTests: XCTestCase {
         XCTAssertEqual(Dropbox.headerSafe(#"{"path":"/Empo/né"}"#), #"{"path":"/Empo/n\u00e9"}"#)
     }
 
+    func testACharacterAboveTheBasicPlaneTakesTwoEscapes() throws {
+        let safe = Dropbox.headerSafe(#"{"path":"/🎮 Game"}"#)
+        XCTAssertEqual(safe, #"{"path":"/\ud83c\udfae Game"}"#)
+        let read = try JSONSerialization.jsonObject(with: Data(safe.utf8)) as? [String: String]
+        XCTAssertEqual(read?["path"], "/🎮 Game")
+    }
+
     // MARK: - The upload session that outlives the process, per 9.2
 
     func testUsableSessionResumesFromItsOffset() {
@@ -391,6 +398,32 @@ final class DropboxTests: XCTestCase {
                 DropboxEntry(tag: "file", path: "/" + $0, sizeBytes: 1, serverModified: nil)
             },
             cursor: cursor, hasMore: hasMore)
+    }
+
+    // MARK: - users/get_current_account
+
+    func testTheAccountAnswerGivesTheNameTheEmailAndThePhoto() {
+        let body = Data(
+            #"{"account_id":"dbid:1","name":{"given_name":"Player","display_name":"Player One"},"email":"player@example.com","email_verified":true,"profile_photo_url":"https://dl-web.dropbox.com/account_photo/get/dbid:1"}"#
+                .utf8)
+        XCTAssertEqual(
+            Dropbox.account(fromBody: body),
+            BackupAccount(
+                name: "Player One", email: "player@example.com",
+                photo: URL(string: "https://dl-web.dropbox.com/account_photo/get/dbid:1")))
+    }
+
+    func testAnAccountWithNoPhotoStillAnswersItsNameAndEmail() {
+        let body = Data(
+            #"{"name":{"display_name":"Player One"},"email":"player@example.com"}"#.utf8)
+        XCTAssertEqual(
+            Dropbox.account(fromBody: body),
+            BackupAccount(name: "Player One", email: "player@example.com", photo: nil))
+    }
+
+    func testAnAnswerWithNoAccountIsNil() {
+        XCTAssertNil(Dropbox.account(fromBody: Data("{}".utf8)))
+        XCTAssertNil(Dropbox.account(fromBody: Data("not json".utf8)))
     }
 }
 

@@ -13,6 +13,8 @@ final class TargetDescriptorTests: XCTestCase {
         provider: .dropbox,
         label: "My Dropbox",
         accountHint: "player@example.com",
+        accountName: "Player One",
+        accountPhoto: URL(string: "https://photos.example.com/player.jpg"),
         root: "/Apps/Empo/",
         sizeThresholdBytes: 512 * 1024 * 1024,
         capBytes: 20 * 1024 * 1024 * 1024,
@@ -48,7 +50,7 @@ final class TargetDescriptorTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
     }
 
-    func testADescriptorCarriesTheEightNonSecretFieldsAndNothingElse() throws {
+    func testADescriptorCarriesTheTenNonSecretFieldsAndNothingElse() throws {
         let data = try TargetDescriptorFile(targets: [descriptor]).jsonData()
         let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -57,7 +59,7 @@ final class TargetDescriptorTests: XCTestCase {
         XCTAssertEqual(
             Set(targets[0].keys),
             [
-                "id", "provider", "label", "accountHint", "root",
+                "id", "provider", "label", "accountHint", "accountName", "accountPhoto", "root",
                 "sizeThresholdBytes", "capBytes", "isPaused",
             ])
     }
@@ -75,6 +77,8 @@ final class TargetDescriptorTests: XCTestCase {
         let shared = descriptor.forSyncDocument()
 
         XCTAssertNil(shared.accountHint)
+        XCTAssertNil(shared.accountName)
+        XCTAssertNil(shared.accountPhoto)
         XCTAssertEqual(shared.label, descriptor.label)
         XCTAssertEqual(shared.root, descriptor.root)
         XCTAssertEqual(shared.capBytes, descriptor.capBytes)
@@ -89,8 +93,36 @@ final class TargetDescriptorTests: XCTestCase {
         let kept = descriptor.withSyncedFields(from: incoming)
 
         XCTAssertEqual(kept.accountHint, descriptor.accountHint)
+        XCTAssertEqual(kept.accountName, descriptor.accountName)
+        XCTAssertEqual(kept.accountPhoto, descriptor.accountPhoto)
         XCTAssertEqual(kept.label, "the other name")
         XCTAssertTrue(kept.isPaused)
+    }
+
+    func testATargetsFileFromBeforeTheAccountFieldsStillReads() throws {
+        let old = Data(
+            #"{"id":"t","provider":"dropbox","label":"Dropbox","accountHint":"this account","root":"","isPaused":false}"#
+                .utf8)
+        let read = try JSONDecoder().decode(TargetDescriptor.self, from: old)
+
+        XCTAssertEqual(read.accountHint, "this account")
+        XCTAssertNil(read.accountName)
+        XCTAssertNil(read.accountPhoto)
+    }
+
+    func testTheSignedInAccountNamesTheTargetByItsEmail() {
+        var target = TargetDescriptor(
+            id: "t", provider: .googleDrive, label: "Google Drive",
+            accountHint: "this account", root: "")
+        target.take(BackupAccount(name: "Player One", email: nil, photo: nil))
+        XCTAssertEqual(target.accountHint, "Player One")
+        target.take(
+            BackupAccount(
+                name: "Player One", email: "p@example.com",
+                photo: URL(string: "https://example.com/p.jpg")))
+        XCTAssertEqual(target.accountHint, "p@example.com")
+        XCTAssertEqual(target.accountName, "Player One")
+        XCTAssertEqual(target.accountPhoto, URL(string: "https://example.com/p.jpg"))
     }
 
     func testADescriptorWithoutAnAccountHintIsAPlaceholder() {

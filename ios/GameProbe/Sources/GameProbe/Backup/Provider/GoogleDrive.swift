@@ -110,9 +110,9 @@ public enum GoogleDrive {
         return components?.url
     }
 
-    public static func aboutURL() -> URL? {
+    public static func aboutURL(fields: String = "storageQuota") -> URL? {
         var components = URLComponents(string: aboutEndpoint)
-        components?.queryItems = [URLQueryItem(name: "fields", value: "storageQuota")]
+        components?.queryItems = [URLQueryItem(name: "fields", value: fields)]
         return components?.url
     }
 
@@ -430,8 +430,7 @@ public enum GoogleDrive {
         case Status.notFound, Status.gone:
             return .notFound
         case Status.serverError..<600:
-            // Drive is up but unwell. 8.4 retries on the next pass.
-            return .offline
+            return .serverError(status: status)
         default:
             return .rejected(message: message(from: failure, status: status))
         }
@@ -604,6 +603,14 @@ extension GoogleDrive {
         guard let storage = root["storageQuota"] as? [String: Any] else { return nil }
         guard let used = int64(storage["usage"]) else { return nil }
         return QuotaReading(usedBytes: used, limitBytes: int64(storage["limit"]))
+    }
+
+    public static func account(fromBody body: Data) -> BackupAccount? {
+        guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+            let user = root["user"] as? [String: Any]
+        else { return nil }
+        return BackupAccount(
+            jsonName: user["displayName"], email: user["emailAddress"], photo: user["photoLink"])
     }
 
     /// Drive sends a byte count as a string. An older field may send

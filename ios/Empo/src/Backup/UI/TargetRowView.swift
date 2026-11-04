@@ -13,6 +13,16 @@ extension BackupProviderKind {
         case .sftp: return "lock.shield"
         }
     }
+
+    /// The service's own logo, for the services that have one.
+    var markName: String? {
+        switch self {
+        case .iCloudDrive: return "ICloudMark"
+        case .dropbox: return "DropboxMark"
+        case .googleDrive: return "GoogleDriveMark"
+        case .s3, .webdav, .sftp: return nil
+        }
+    }
 }
 
 /// One row of the location list, per SPEC 13.5.
@@ -22,7 +32,7 @@ extension BackupProviderKind {
 struct TargetRowView: View {
 
     let row: TargetRow
-    let provider: BackupProviderKind
+    let target: TargetDescriptor
 
     private var hint: String? {
         guard let hint = row.accountHint, hint != row.title else { return nil }
@@ -39,17 +49,11 @@ struct TargetRowView: View {
 
     var body: some View {
         HStack(spacing: Spacing.lg) {
-            Image(systemName: provider.symbolName)
-                .font(.title3)
-                .foregroundStyle(.brand)
-                .frame(width: IconSize.row + Spacing.md)
+            AccountAvatar(photo: target.accountPhoto, provider: target.provider, size: 36)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(row.title)
                 if let hint {
-                    Text(hint)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    AccountHintText(hint: hint, provider: target.provider)
                 }
                 Text(row.stateLine)
                     .font(.footnote)
