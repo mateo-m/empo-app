@@ -46,6 +46,7 @@ final class S3Gate {
             return nil
         }
         let target = S3Target(
+            targetId: descriptor.id,
             connection: connection,
             singleUploadLimit: singleUploadLimit,
             partBase: partBase)
@@ -59,6 +60,7 @@ final class S3Gate {
     func connect(_ connection: S3Connection, targetId: String) throws -> S3Target {
         try S3ConnectionStore.write(connection, targetId: targetId)
         let target = S3Target(
+            targetId: targetId,
             connection: connection,
             singleUploadLimit: singleUploadLimit,
             partBase: partBase)

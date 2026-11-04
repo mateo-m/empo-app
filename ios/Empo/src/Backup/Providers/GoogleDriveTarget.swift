@@ -269,7 +269,8 @@ actor GoogleDriveTarget: BackupProvider {
         let scratch = UploadStaging.scratchDirectory("google-drive")
         defer { try? FileManager.default.removeItem(at: scratch) }
 
-        let store = GoogleDriveUploadSessionStore.shared
+        let store = googleDriveUploadSessions
+        let targetId = tokens.targetId
         let existing = try await identifier(forPath: path)
         var sessionURI: String
         var offset: Int64 = 0
@@ -278,7 +279,7 @@ actor GoogleDriveTarget: BackupProvider {
         // A chunked upload needs the app to run code between chunks,
         // and iOS ends a suspended app whenever it wants. Carry on
         // from the cursor the last process wrote, per 9.3.
-        let saved = await store.session(forPath: path, fileSize: size)
+        let saved = await store.record(targetId: targetId, path: path, fileSize: size)
         // The cursor on disk may be one chunk behind what Drive took,
         // so the probe of 9.3 decides where to carry on. A probe that
         // answers nil means Drive dropped the session.
@@ -292,7 +293,7 @@ actor GoogleDriveTarget: BackupProvider {
             BackupLog.line(
                 "GoogleDriveTarget", "the upload carries on from \(offset) of \(size) bytes")
         } else {
-            if saved != nil { await store.forget(path: path) }
+            if saved != nil { await store.forget(targetId: targetId, path: path) }
             sessionURI = try await startSession(path: path, size: size, fileId: existing)
         }
 
@@ -322,7 +323,7 @@ actor GoogleDriveTarget: BackupProvider {
                     GoogleDriveUploadSession(
                         sessionURI: sessionURI, offset: offset, fileSize: size,
                         startedAt: startedAt),
-                    forPath: path)
+                    targetId: targetId, path: path)
                 left = GoogleDrive.chunks(ofFileSize: size, from: offset)
                 continue
             }
@@ -330,7 +331,7 @@ actor GoogleDriveTarget: BackupProvider {
             // byte with it. Drop the cursor and open a new session.
             guard GoogleDrive.isSessionGone(status: answer.status) else { throw mapped(answer) }
 
-            await store.forget(path: path)
+            await store.forget(targetId: targetId, path: path)
             sessionURI = try await startSession(path: path, size: size, fileId: existing)
             startedAt = Date()
             left = GoogleDrive.chunks(ofFileSize: size, from: 0)
@@ -338,7 +339,7 @@ actor GoogleDriveTarget: BackupProvider {
 
         // The last chunk is the commit, so the cursor names nothing
         // now.
-        await store.forget(path: path)
+        await store.forget(targetId: targetId, path: path)
         guard let finished else {
             throw BackupProviderError.rejected(message: "Google Drive committed no file")
         }

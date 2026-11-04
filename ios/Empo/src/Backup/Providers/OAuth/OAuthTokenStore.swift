@@ -19,7 +19,7 @@ actor OAuthTokenStore {
         let clientId: String
     }
 
-    private let targetId: String
+    let targetId: String
     private let service: Service
     private var tokens: OAuthTokens
     /// The refresh in flight, so callers share one.

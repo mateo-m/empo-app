@@ -24,6 +24,7 @@ actor S3Target: BackupProvider {
 
     nonisolated let capabilities = S3.capabilities
 
+    private let targetId: String
     private let connection: S3Connection
     private let gate = TransferGate()
 
@@ -45,10 +46,12 @@ actor S3Target: BackupProvider {
     private let partBase: Int64
 
     init(
+        targetId: String,
         connection: S3Connection,
         singleUploadLimit: Int64 = S3.singleUploadLimitBytes,
         partBase: Int64 = S3.defaultPartBytes
     ) {
+        self.targetId = targetId
         self.connection = connection
         self.singleUploadLimit = singleUploadLimit
         self.partBase = partBase
@@ -259,7 +262,7 @@ actor S3Target: BackupProvider {
                 }
                 throttleAttempt = 1
                 record = record.adding(S3.CompletedPart(number: part.number, eTag: eTag))
-                await S3MultipartStore.shared.remember(record)
+                await s3MultipartUploads.remember(record, targetId: targetId, path: record.key)
                 left.removeFirst()
                 continue
             }
@@ -270,7 +273,7 @@ actor S3Target: BackupProvider {
             // cannot make the run loop.
             if S3.isUploadGone(status: answer.status, failure: failure), !startedAgain {
                 startedAgain = true
-                await S3MultipartStore.shared.forget(key: key)
+                await s3MultipartUploads.forget(targetId: targetId, path: key)
                 BackupLog.line("S3Target", "the bucket dropped the upload, so it starts again")
                 record = try await startUpload(key: key, size: size, parts: parts)
                 left = S3.parts(ofFileSize: size, partSize: record.partSize)
@@ -289,19 +292,22 @@ actor S3Target: BackupProvider {
     private func openUpload(
         key: String, size: Int64, parts: [S3.Part]
     ) async throws(BackupProviderError) -> S3MultipartUpload {
-        guard let saved = await S3MultipartStore.shared.upload(forKey: key, fileSize: size) else {
+        guard
+            let saved = await s3MultipartUploads.record(
+                targetId: targetId, path: key, fileSize: size)
+        else {
             return try await startUpload(key: key, size: size, parts: parts)
         }
         // The record on disk may be one part behind what the service
         // took, and the service is the truth.
         guard let found = try await listParts(uploadId: saved.uploadId, key: key) else {
-            await S3MultipartStore.shared.forget(key: key)
+            await s3MultipartUploads.forget(targetId: targetId, path: key)
             return try await startUpload(key: key, size: size, parts: parts)
         }
         BackupLog.line(
             "S3Target", "the upload carries on with \(found.count) parts of \(parts.count)")
         let record = saved.matching(found)
-        await S3MultipartStore.shared.remember(record)
+        await s3MultipartUploads.remember(record, targetId: targetId, path: record.key)
         return record
     }
 
@@ -325,7 +331,7 @@ actor S3Target: BackupProvider {
             fileSize: size,
             partSize: parts.first?.length ?? S3.partSize(forFileOfSize: size, base: partBase),
             startedAt: Date())
-        await S3MultipartStore.shared.remember(record)
+        await s3MultipartUploads.remember(record, targetId: targetId, path: record.key)
         return record
     }
 
@@ -388,7 +394,7 @@ actor S3Target: BackupProvider {
             throw error
         }
         throttleAttempt = 1
-        await S3MultipartStore.shared.forget(key: record.key)
+        await s3MultipartUploads.forget(targetId: targetId, path: record.key)
     }
 
     /// Aborts the upload where the failure is permanent, per 9.4.
@@ -397,7 +403,7 @@ actor S3Target: BackupProvider {
     ) async throws(BackupProviderError) {
         guard S3.abortsMultipart(after: error) else { return }
         await abort(uploadId: uploadId, key: key)
-        await S3MultipartStore.shared.forget(key: key)
+        await s3MultipartUploads.forget(targetId: targetId, path: key)
     }
 
     /// One `AbortMultipartUpload`. It reports nothing, because the

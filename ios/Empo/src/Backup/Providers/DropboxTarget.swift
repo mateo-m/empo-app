@@ -170,7 +170,8 @@ actor DropboxTarget: BackupProvider {
         let scratch = UploadStaging.scratchDirectory("dropbox")
         defer { try? FileManager.default.removeItem(at: scratch) }
 
-        let store = DropboxUploadSessionStore.shared
+        let store = dropboxUploadSessions
+        let targetId = tokens.targetId
         var left = chunks
         var sessionId: String?
         var offset: Int64 = 0
@@ -179,7 +180,7 @@ actor DropboxTarget: BackupProvider {
         // A chunked upload needs the app to run code between chunks,
         // and iOS ends a suspended app whenever it wants. Carry on
         // from the cursor the last process wrote, per 9.2.
-        if let saved = await store.session(forPath: path, fileSize: size) {
+        if let saved = await store.record(targetId: targetId, path: path, fileSize: size) {
             sessionId = saved.sessionId
             offset = saved.offset
             startedAt = saved.startedAt
@@ -222,7 +223,7 @@ actor DropboxTarget: BackupProvider {
                         DropboxUploadSession(
                             sessionId: sessionId, offset: offset,
                             fileSize: size, startedAt: startedAt),
-                        forPath: path)
+                        targetId: targetId, path: path)
                 }
                 continue
             }
@@ -232,7 +233,7 @@ actor DropboxTarget: BackupProvider {
             if DropboxUploadSession.isDead(
                 errorSummary: Dropbox.errorSummary(inBody: answer.body))
             {
-                await store.forget(path: path)
+                await store.forget(targetId: targetId, path: path)
                 sessionId = nil
                 offset = 0
                 startedAt = Date()
@@ -251,12 +252,12 @@ actor DropboxTarget: BackupProvider {
         }
 
         guard let sessionId else {
-            await store.forget(path: path)
+            await store.forget(targetId: targetId, path: path)
             throw BackupProviderError.rejected(message: "Dropbox opened no upload session")
         }
         try await finish(sessionId: sessionId, offset: offset, path: path, scratch: scratch)
         // The commit landed, so the cursor names nothing now.
-        await store.forget(path: path)
+        await store.forget(targetId: targetId, path: path)
     }
 
     private func finish(
