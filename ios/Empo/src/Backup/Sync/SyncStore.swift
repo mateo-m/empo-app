@@ -4,7 +4,7 @@ import GameProbe
 /// The two sync files beside the backup root, per SPEC 10.3.
 ///
 /// `sync.json` holds the actor identity and the group. The actor id
-/// is minted once and written at once, because a second mint would
+/// changes only with a new document, because a second id would
 /// split this device's own history in the document. The Keychain
 /// holds a second copy that does not move to a new phone, so a file
 /// that a backup restored there gets a fresh id.
@@ -24,6 +24,16 @@ enum SyncStore {
             try? state.write(applicationSupport: BackupRoot.layout.applicationSupport)
         }
         return state
+    }
+
+    /// Other devices hold the changes of the old id, numbered from 1.
+    /// A new document that writes as that id numbers from 1 again,
+    /// and Automerge refuses every copy that holds both.
+    static func newActorId() -> String {
+        let actorId = UUID().uuidString
+        try? BackupKeychain.setSyncActorId(actorId)
+        try? update { $0.actorId = actorId }
+        return actorId
     }
 
     /// Changes the state on the file and not on a copy.

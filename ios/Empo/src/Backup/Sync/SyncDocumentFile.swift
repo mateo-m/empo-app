@@ -23,19 +23,13 @@ final class AutomergeDocumentStore: SyncDocumentStore {
         try? FileManager.default.removeItem(at: url)
     }
 
-    private let readTheActorId: @MainActor () -> String
     private var document = Document()
 
-    init(actorId: @escaping @MainActor () -> String = { SyncStore.state().actorId }) {
-        readTheActorId = actorId
-    }
-
     func load() {
-        let actorId = readTheActorId()
         guard let bytes = try? Data(contentsOf: Self.url),
-            let opened = try? SyncDocument.open(bytes, actorId: actorId)
+            let opened = try? SyncDocument.open(bytes, actorId: SyncStore.state().actorId)
         else {
-            document = SyncDocument.make(actorId: actorId)
+            document = SyncDocument.make(actorId: SyncStore.newActorId())
             return
         }
         document = opened

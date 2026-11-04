@@ -42,4 +42,19 @@ final class SyncDocumentConflictTests: XCTestCase {
         try SyncDocument.resolveControls(of: merged, profileId: "p1", keys: ["a"])
         XCTAssertTrue(try SyncDocument.losingControls(of: merged, profileId: "p1").isEmpty)
     }
+
+    func testADeviceThatLostItsDocumentMergesOnlyWithANewActor() throws {
+        let actorId = UUID().uuidString
+        let lost = SyncDocument.make(actorId: actorId)
+        try SyncDocument.write(layout("before"), to: lost)
+        let other = try SyncDocument.open(lost.save(), actorId: UUID().uuidString)
+
+        let sameActor = SyncDocument.make(actorId: actorId)
+        try SyncDocument.write(layout("after"), to: sameActor)
+        XCTAssertThrowsError(try other.merge(other: sameActor))
+
+        let newActor = SyncDocument.make(actorId: UUID().uuidString)
+        try SyncDocument.write(layout("after"), to: newActor)
+        XCTAssertNoThrow(try other.merge(other: newActor))
+    }
 }
