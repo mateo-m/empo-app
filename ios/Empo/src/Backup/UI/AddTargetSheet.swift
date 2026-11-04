@@ -51,8 +51,11 @@ struct AddTargetSheet: View {
                 if isWorking { ProgressView() }
             }
             .navigationDestination(item: $typing) { service in
-                TargetFormScreen(service: service) { values in
+                TargetFormScreen(service: service, failure: failure) { values in
                     Task { await finish(await add(service, values: values)) }
+                }
+                .overlay {
+                    if isWorking { ProgressView() }
                 }
             }
         }
@@ -63,6 +66,7 @@ struct AddTargetSheet: View {
     }
 
     private func start(_ service: BackupProviderKind) {
+        failure = nil
         switch service {
         case .s3, .webdav, .sftp:
             typing = service
