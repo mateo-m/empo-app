@@ -309,8 +309,6 @@ public actor RestoreEngine {
         return Set(names.filter { !$0.hasPrefix(Self.scratchPrefix) })
     }
 
-    /// Clears the blobs a finished restore no longer needs. A
-    /// stopped restore keeps them.
     /// Empties `restore/` once a restore finishes. One restore runs
     /// at a time, so every staged blob there is this one's, or one
     /// an earlier stopped run left behind and this run did not need.

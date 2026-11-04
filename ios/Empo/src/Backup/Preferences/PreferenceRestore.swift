@@ -11,9 +11,10 @@ import GameProbe
 enum PreferenceRestore {
 
     /// Where a restore of the preferences stream puts the export
-    /// before Empo applies it.
+    /// before Empo applies it. A finished restore empties `restore/`
+    /// before Empo applies the file, so the file sits outside it.
     static var restoredFile: URL {
-        BackupRoot.layout.restore.appendingPathComponent(
+        BackupRoot.layout.root.appendingPathComponent(
             PreferencesMemberPath.userDefaultsExportName)
     }
 
