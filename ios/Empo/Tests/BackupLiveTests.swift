@@ -65,7 +65,7 @@ final class BackupLiveTests: XCTestCase {
                 "username": "tester", "password": "secret",
             ])
         }
-        if case .failed("Empo could not reach this address. Check it and try again.") = outcome {
+        if case .failed(BackupProviderError.offline.line(for: .webdav)) = outcome {
             throw XCTSkip("no TLS server listens on 127.0.0.1:9445")
         }
         guard case .checked(_, let result) = outcome else {
