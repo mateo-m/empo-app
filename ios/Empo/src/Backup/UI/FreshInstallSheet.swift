@@ -189,6 +189,7 @@ struct FreshInstallSheet: View {
                                     Image(systemName: "checkmark")
                                 }
                             }
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }

@@ -146,6 +146,7 @@ struct VersionMarkerSheetView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Spacing.lg)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }

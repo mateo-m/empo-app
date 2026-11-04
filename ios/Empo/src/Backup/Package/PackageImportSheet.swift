@@ -102,6 +102,8 @@ struct PackageImportSheet: View {
                                             .font(.footnote)
                                             .foregroundStyle(.secondary)
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)
                             }

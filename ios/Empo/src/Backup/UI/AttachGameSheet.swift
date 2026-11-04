@@ -46,6 +46,7 @@ struct AttachGameSheet: View {
                             .foregroundStyle(.primary)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(Spacing.lg)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
