@@ -79,6 +79,10 @@ public struct RestoreResult: Equatable, Sendable {
     public var droppedFromReplacedTree = 0
     /// What the replaced tree still holds.
     public var replacedTreeKeptBytes: Int64 = 0
+
+    public init(partialPathCount: Int = 0) {
+        self.partialPathCount = partialPathCount
+    }
 }
 
 /// How a restore ended.

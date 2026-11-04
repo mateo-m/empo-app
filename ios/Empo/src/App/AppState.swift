@@ -86,8 +86,14 @@ class AppState {
         else { return }
         // The hard stop of 7.6 ends a restore in flight before the
         // launch moves saves, makes folders, or reads the settings.
+        // The hold starts before the task, because a restore that
+        // waits on its manifest can resume first.
+        RestoreCoordinator.shared.gameLaunchBegins()
         launchTask = Task { @MainActor [weak self] in
             await RestoreCoordinator.shared.stopForGameLaunch()
+            // `launch` sets the session game, which holds restores
+            // off from then on.
+            defer { RestoreCoordinator.shared.gameLaunchEnds() }
             guard let self else { return }
             launchTask = nil
             guard phase == nil, PauseManager.shared.pausedGame == nil else { return }

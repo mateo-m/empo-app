@@ -155,6 +155,11 @@ final class RestoreCoordinator {
         replacesTheTree: Bool
     ) async -> RestoreOutcome {
         guard running == nil else { return .failed("a restore is already running") }
+        // The manifest read above awaits, and a game can launch
+        // meanwhile.
+        guard !gameLaunches, !BackupDeviceConditions.isSessionLive else {
+            return .stopped(.gameLaunched, RestoreResult())
+        }
 
         let destination = Self.destination(for: container, manifest: manifest)
         let request = RestoreRequest(
@@ -225,6 +230,10 @@ final class RestoreCoordinator {
     private static let unreadableLine = "this backup could not be read"
     private static let settingsUnchangedLine = "Your settings did not change. Try again."
 
+    /// From the tap on a game until the session counts as live, no
+    /// restore may start.
+    private var gameLaunches = false
+
     /// The hard stop of 7.6. A game launched, so the restore stops at
     /// once and leaves its record and its staged blobs. It returns
     /// when the restore wrote its last file.
@@ -233,6 +242,14 @@ final class RestoreCoordinator {
         running.cancel()
         _ = await running.value
         log("a game launched, so the restore stopped")
+    }
+
+    func gameLaunchBegins() {
+        gameLaunches = true
+    }
+
+    func gameLaunchEnds() {
+        gameLaunches = false
     }
 
     // MARK: - The resume question, per 11.9
