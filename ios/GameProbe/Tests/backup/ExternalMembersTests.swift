@@ -57,7 +57,17 @@ final class ExternalMembersTests: XCTestCase {
         let url = ExternalMembers.url(
             ofRecordedPath: "Data/kikiyama/yumenikki", documentsRoot: elsewhere)
 
-        XCTAssertEqual(url.path, "\(elsewhere.path)/Data/kikiyama/yumenikki")
+        XCTAssertEqual(url?.path, "\(elsewhere.path)/Data/kikiyama/yumenikki")
+    }
+
+    func testARecordedPathOutsideTheDataFolderNamesNoDirectory() {
+        for path in [
+            "../Games/Other Quest", "Data/../Games/Other Quest", "Games/Other Quest",
+            "/var/mobile/Data/x", "Data", "Data//x", "Data/./x", "Data/x\\..\\y",
+        ] {
+            XCTAssertNil(
+                ExternalMembers.url(ofRecordedPath: path, documentsRoot: documents), path)
+        }
     }
 
     // MARK: - One directory, two games, per 4.5

@@ -28,10 +28,23 @@ public enum ExternalMembers {
         return String(path.dropFirst(base.count + 1))
     }
 
-    /// The directory a recorded path names on this device.
-    public static func url(ofRecordedPath path: String, documentsRoot: URL) -> URL {
-        guard !path.hasPrefix("/") else { return URL(fileURLWithPath: path, isDirectory: true) }
+    /// `Documents/Data/`, the parent of every shared data directory.
+    public static let sharedRootName = "Data"
+
+    /// The directory a recorded path names on this device, or `nil`
+    /// for a path outside `Data/`. A restore reads the path from the
+    /// storage service, and a `..` step or another root would write
+    /// into another game's files.
+    public static func url(ofRecordedPath path: String, documentsRoot: URL) -> URL? {
+        guard staysInSharedData(path) else { return nil }
         return documentsRoot.appendingPathComponent(path, isDirectory: true)
+    }
+
+    public static func staysInSharedData(_ path: String) -> Bool {
+        guard (try? PackageValidation.checkThePath(path)) != nil else { return false }
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        return parts.count > 1 && parts[0] == sharedRootName
+            && !parts.contains { $0.isEmpty || $0 == "." }
     }
 
     // MARK: - A path that moved

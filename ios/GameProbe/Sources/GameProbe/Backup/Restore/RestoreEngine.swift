@@ -75,7 +75,9 @@ public actor RestoreEngine {
         // The manifest comes from the storage service. A path that
         // leaves its root, or names the root itself, would write
         // outside the game.
-        guard manifest.entries.allSatisfy({ Self.staysUnderItsRoot($0.path) }) else {
+        guard manifest.entries.allSatisfy({ Self.staysUnderItsRoot($0.path) }),
+            manifest.sharedDataDirectory.map(ExternalMembers.staysInSharedData) ?? true
+        else {
             return .failed(Self.unreadableLine)
         }
 

@@ -372,8 +372,8 @@ final class RestoreCoordinator {
         }
         return MemberSource(
             container: container?.url,
-            sharedData: manifest.sharedDataDirectory.map {
-                DataDirectory.documentsRootURL.appendingPathComponent($0)
+            sharedData: manifest.sharedDataDirectory.flatMap {
+                ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
             },
             rescuedBuckets: buckets,
             profiles: LayoutProfilesManager.profilesRootURL,
