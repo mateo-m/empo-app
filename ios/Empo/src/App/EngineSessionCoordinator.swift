@@ -138,6 +138,8 @@ final class EngineSessionCoordinator {
         case .gameProcess: GameProcessHost.end()
         case .app: EmpoCoreKillSession()
         }
+        // `handleEngineTerminated` does not run after a kill.
+        GameSaveWatch.shared.endSession()
     }
 
     /// True when `killSession` can end the open game, so that another
