@@ -117,7 +117,7 @@ final class RestoreCoordinator {
             let manifest = try? await scan.manifest(
                 at: paths.manifestPath(stream: Self.stream(of: row), snapshotId: row.snapshotId))
         else {
-            return .failed(Self.unreadableLine)
+            return .failed(RestoreNotices.unreadableLine)
         }
         return await run(
             row, into: container, provider: provider, targetId: descriptor.id,
@@ -136,7 +136,7 @@ final class RestoreCoordinator {
         replacesTheTree: Bool = false
     ) async -> RestoreOutcome {
         guard let manifest = package.manifest.stream(Self.stream(of: row).key)?.manifest else {
-            return .failed(Self.unreadableLine)
+            return .failed(RestoreNotices.unreadableLine)
         }
         return await run(
             row, into: container, provider: package,
@@ -154,7 +154,9 @@ final class RestoreCoordinator {
         scope: RestoreScope,
         replacesTheTree: Bool
     ) async -> RestoreOutcome {
-        guard running == nil else { return .failed("a restore is already running") }
+        guard running == nil else {
+            return .failed("Another restore is running. Wait for it to finish, then try again.")
+        }
         // The manifest read above awaits, and a game can launch
         // meanwhile.
         guard !gameLaunches, !BackupDeviceConditions.isSessionLive else {
@@ -182,7 +184,8 @@ final class RestoreCoordinator {
         do {
             store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
         } catch {
-            return .failed("this device could not open its local state")
+            return .failed(
+                "Empo couldn't open its records on this device. Close Empo, open it again, then try again.")
         }
 
         runningGameKey = container.map { BackupKeys.gameKey(containerFolderName: $0.folderName) }
@@ -202,6 +205,10 @@ final class RestoreCoordinator {
         var outcome = await task.value
         running = nil
         runningGameKey = nil
+        if cancelledByTheUser, case .stopped(.gameLaunched, let result) = outcome {
+            outcome = .stopped(.cancelled, result)
+        }
+        cancelledByTheUser = false
         if let container, let aliasesBefore {
             var aliases = IdentityAliases.load(from: container.empoStateURL)
             if aliases.merge(aliasesBefore, forFolderName: container.folderName) {
@@ -228,8 +235,8 @@ final class RestoreCoordinator {
         BackupStream(key: row.identity.gameKey)
     }
 
-    private static let unreadableLine = "this backup could not be read"
-    private static let settingsUnchangedLine = "Your settings did not change. Try again."
+    private static let settingsUnchangedLine =
+        "Empo restored the backup, but your settings didn't change. Try again."
 
     /// From the tap on a game until the session counts as live, no
     /// restore may start.
@@ -239,10 +246,25 @@ final class RestoreCoordinator {
     /// once and leaves its record and its staged blobs. It returns
     /// when the restore wrote its last file.
     func stopForGameLaunch() async {
+        await stop()
+        log("a game launched, so the restore stopped")
+    }
+
+    /// The Cancel of the restore screens. The engine reads any cancel
+    /// as a game launch, so the coordinator renames the reason.
+    func cancel() async {
+        guard running != nil else { return }
+        cancelledByTheUser = true
+        await stop()
+        log("the user stopped the restore")
+    }
+
+    private var cancelledByTheUser = false
+
+    private func stop() async {
         guard let running else { return }
         running.cancel()
         _ = await running.value
-        log("a game launched, so the restore stopped")
     }
 
     func gameLaunchBegins() {
@@ -283,13 +305,13 @@ final class RestoreCoordinator {
         guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
             let provider = await BackupTargets.provider(for: descriptor),
             let snapshotId = record.snapshotId
-        else { return .failed("this location is not set up on this device") }
+        else { return .failed("This location isn't set up on this device any more.") }
 
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         guard let namespaces = try? await scan.namespaces(),
             let row = namespaces.flatMap({ $0.gameRows + $0.preferencesRows })
                 .first(where: { $0.snapshotId == snapshotId })
-        else { return .failed("this backup could not be read") }
+        else { return .failed(RestoreNotices.unreadableLine) }
 
         let container = record.gameKey.flatMap { key in
             GameContainer.discover().first {
@@ -318,7 +340,7 @@ final class RestoreCoordinator {
             let snapshotId = record.snapshotId,
             let row = PackageSource.rows(of: source.manifest, packageId: packageId)
                 .first(where: { $0.snapshotId == snapshotId })
-        else { return .failed("this backup package is no longer on this device") }
+        else { return .failed("The backup file isn't on this device any more.") }
 
         return await restore(
             row, into: GameIdentities.match(row.identity), package: source,

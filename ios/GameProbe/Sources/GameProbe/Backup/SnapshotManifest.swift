@@ -184,6 +184,9 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
     public var containerFolderName: String
     /// The identity alias, when the game has one.
     public var identityAlias: String?
+    /// The title the library showed, so a device without the game
+    /// can name it. Manifests from before this field carry none.
+    public var title: String?
     public var versionMarker: VersionMarker
     /// The shared data directory the game resolved to, per 4.5.
     public var sharedDataDirectory: String?
@@ -196,6 +199,7 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
         mode: BackupMode,
         containerFolderName: String,
         identityAlias: String? = nil,
+        title: String? = nil,
         versionMarker: VersionMarker = VersionMarker(),
         sharedDataDirectory: String? = nil,
         rescuedSavesBuckets: [String] = [],
@@ -205,6 +209,7 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
         self.mode = mode
         self.containerFolderName = containerFolderName
         self.identityAlias = identityAlias
+        self.title = title
         self.versionMarker = versionMarker
         self.sharedDataDirectory = sharedDataDirectory
         self.rescuedSavesBuckets = rescuedSavesBuckets

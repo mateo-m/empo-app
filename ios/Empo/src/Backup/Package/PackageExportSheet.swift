@@ -100,7 +100,7 @@ final class PackageExportModel {
         } catch PackageBuildFailure.cancelled {
             phase = .done
         } catch {
-            phase = .failed("Empo could not build this package.")
+            phase = .failed("Empo couldn't make this package. Try again.")
         }
     }
 

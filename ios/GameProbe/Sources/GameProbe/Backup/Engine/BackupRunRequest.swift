@@ -4,6 +4,8 @@ import Foundation
 public struct BackupRunGame: Sendable {
 
     public var identity: GameIdentity
+    /// The title the library shows, which the manifest records.
+    public var title: String?
     /// What the resolver of 3 reads to enumerate the backup set.
     public var set: GameBackupSetRequest
     /// The marker of 4.4, which the manifest header records.
@@ -20,6 +22,7 @@ public struct BackupRunGame: Sendable {
 
     public init(
         identity: GameIdentity,
+        title: String? = nil,
         set: GameBackupSetRequest,
         versionMarker: SnapshotManifest.VersionMarker = SnapshotManifest.VersionMarker(),
         lastPlayedAt: Date? = nil,
@@ -27,6 +30,7 @@ public struct BackupRunGame: Sendable {
         isOneOffFullSnapshot: Bool = false
     ) {
         self.identity = identity
+        self.title = title
         self.set = set
         self.versionMarker = versionMarker
         self.lastPlayedAt = lastPlayedAt

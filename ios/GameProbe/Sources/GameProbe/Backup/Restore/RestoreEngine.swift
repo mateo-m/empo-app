@@ -66,7 +66,7 @@ public actor RestoreEngine {
             guard let data = try await fetch(path),
                 let read = try? SnapshotManifest.decode(compressed: data)
             else {
-                return .failed(Self.unreadableLine)
+                return .failed(RestoreNotices.unreadableLine)
             }
             manifest = read
         } catch {
@@ -78,7 +78,7 @@ public actor RestoreEngine {
         guard manifest.entries.allSatisfy({ Self.staysUnderItsRoot($0.path) }),
             manifest.sharedDataDirectory.map(ExternalMembers.staysInSharedData) ?? true
         else {
-            return .failed(Self.unreadableLine)
+            return .failed(RestoreNotices.unreadableLine)
         }
 
         let plan = RestorePlanner.plan(
@@ -126,7 +126,7 @@ public actor RestoreEngine {
                 replaced = try moveTheTreeAside(tree)
                 result.replacedTreeName = replaced?.lastPathComponent
             } catch {
-                return .failed("the game files could not be moved aside")
+                return .failed("Empo couldn't move the current game files aside. Nothing changed.")
             }
         }
 
@@ -354,8 +354,6 @@ public actor RestoreEngine {
         }
     }
 
-    private static let unreadableLine = "this backup could not be read"
-
     private static func staysUnderItsRoot(_ path: String) -> Bool {
         guard (try? PackageValidation.checkThePath(path)) != nil else { return false }
         return !path.split(separator: "/", omittingEmptySubsequences: false)
@@ -365,7 +363,7 @@ public actor RestoreEngine {
     private static func line(of error: Error) -> String {
         guard let providerError = error as? BackupProviderError,
             case .rejected(let message) = providerError
-        else { return unreadableLine }
+        else { return RestoreNotices.unreadableLine }
         return message
     }
 }

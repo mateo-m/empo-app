@@ -94,6 +94,15 @@ final class SnapshotManifestTests: XCTestCase {
         XCTAssertEqual(try SnapshotManifest.decode(json: manifest.jsonData()), manifest)
     }
 
+    func testAManifestKeepsTheGameTitle() throws {
+        let manifest = SnapshotManifest(
+            mode: .slim, containerFolderName: containerName, title: "Pokémon Emerald")
+        XCTAssertEqual(
+            try SnapshotManifest.decode(json: manifest.jsonData()).title, "Pokémon Emerald")
+        XCTAssertNil(
+            try SnapshotManifest.decode(json: BackupFixtures.data("manifest-v1.json")).title)
+    }
+
     func testTheGameKeyComesFromTheExactContainerName() throws {
         let manifest = try SnapshotManifest.decode(
             json: BackupFixtures.data("manifest-v1.json"))

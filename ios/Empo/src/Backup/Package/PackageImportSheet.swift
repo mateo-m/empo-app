@@ -43,7 +43,7 @@ final class PackageImportModel {
     func restore(
         _ row: SnapshotRow, scope: RestoreScope, replacesTheTree: Bool
     ) async -> RestoreOutcome {
-        guard let source else { return .failed("this package could not be read") }
+        guard let source else { return .failed("Empo couldn't read this package. Try again.") }
         let outcome = await RestoreCoordinator.shared.restore(
             row, into: GameIdentities.match(row.identity), package: source,
             scope: scope, replacesTheTree: replacesTheTree)

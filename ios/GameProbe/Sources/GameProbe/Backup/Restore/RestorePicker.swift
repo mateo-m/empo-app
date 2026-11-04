@@ -30,6 +30,8 @@ public struct SnapshotRow: Equatable, Sendable {
     /// 11.10 compares against this.
     public var versionMarker: SnapshotManifest.VersionMarker
     public var identity: SnapshotIdentity
+    /// The game title the manifest carries.
+    public var title: String?
     /// The format version the manifest carried, per 5.16.
     public var formatVersion: Int
 
@@ -46,7 +48,8 @@ public struct SnapshotRow: Equatable, Sendable {
         versionMarkerDiffers: Bool,
         identity: SnapshotIdentity,
         formatVersion: Int = FormatDescriptor.currentVersion,
-        versionMarker: SnapshotManifest.VersionMarker = SnapshotManifest.VersionMarker()
+        versionMarker: SnapshotManifest.VersionMarker = SnapshotManifest.VersionMarker(),
+        title: String? = nil
     ) {
         self.targetId = targetId
         self.targetLabel = targetLabel
@@ -59,6 +62,7 @@ public struct SnapshotRow: Equatable, Sendable {
         self.hasPartialPaths = hasPartialPaths
         self.versionMarkerDiffers = versionMarkerDiffers
         self.identity = identity
+        self.title = title
         self.formatVersion = formatVersion
         self.versionMarker = versionMarker
     }
@@ -89,7 +93,8 @@ public struct SnapshotRow: Equatable, Sendable {
             versionMarkerDiffers: localVersionMarker.map { $0 != manifest.versionMarker } ?? false,
             identity: SnapshotIdentity(manifest: manifest),
             formatVersion: manifest.formatVersion,
-            versionMarker: manifest.versionMarker)
+            versionMarker: manifest.versionMarker,
+            title: manifest.title)
     }
 
     /// What a reader may do with the namespace this row is in, per
@@ -154,7 +159,7 @@ public enum RestoreAvailability: Equatable, Sendable {
 public enum RestorePicker {
 
     /// The trailing section's heading, per 11.11.
-    public static let otherSnapshotsHeading = "Other snapshots"
+    public static let otherSnapshotsHeading = "Games not on this device"
 
     /// Whether the manual door is open, per 11.3.
     public static func availability(

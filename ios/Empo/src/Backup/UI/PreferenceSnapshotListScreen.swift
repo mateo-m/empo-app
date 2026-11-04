@@ -41,7 +41,9 @@ struct PreferenceSnapshotListScreen: View {
                     .disabled(isRunning)
                 }
             } footer: {
-                Text("These are your app settings, your controller binds, and your layout profiles.")
+                Text(
+                    "These hold your app settings, your controller buttons, and your on-screen control layouts."
+                )
             }
             undoSection
         }
@@ -50,7 +52,7 @@ struct PreferenceSnapshotListScreen: View {
         .alert(item: $chosen) { row in
             Alert(
                 title: Text("Use these settings?"),
-                message: PreferenceRestore.confirmation.map(Text.init),
+                message: Text(PreferenceRestore.confirmation),
                 primaryButton: .default(Text("Use them")) { run(row) },
                 secondaryButton: .cancel())
         }
@@ -60,7 +62,7 @@ struct PreferenceSnapshotListScreen: View {
     private var undoSection: some View {
         if PreferenceRestore.hasUndo() {
             Section {
-                Button("Undo the last settings change") {
+                Button(GameProbe.PreferenceRestore.undoLabel) {
                     line = PreferenceRestore.undo() ? "Your earlier settings are back." : nil
                 }
             } footer: {
@@ -74,17 +76,11 @@ struct PreferenceSnapshotListScreen: View {
         Task {
             let outcome = await restore(row)
             isRunning = false
-            line = Self.line(of: outcome)
-        }
-    }
-
-    private static func line(of outcome: RestoreOutcome) -> String {
-        switch outcome {
-        case .finished: return "These settings are back."
-        case .notEnoughSpace(let shortfall):
-            return "This device needs \(BackupText.bytes(shortfall.missingBytes)) more free space."
-        case .stopped: return "The restore stopped."
-        case .failed(let message): return message
+            if case .finished = outcome {
+                line = "Your settings from this backup are back."
+            } else {
+                line = RestoreNotices.line(of: outcome)
+            }
         }
     }
 }

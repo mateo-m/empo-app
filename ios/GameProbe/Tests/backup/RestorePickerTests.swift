@@ -111,7 +111,7 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertEqual(sections[0].game?.folderName, "Quest")
         XCTAssertNil(sections.last?.game)
         XCTAssertEqual(sections.last?.rows.first?.identity.containerFolderName, "Nothing Installed")
-        XCTAssertEqual(RestorePicker.otherSnapshotsHeading, "Other snapshots")
+        XCTAssertEqual(RestorePicker.otherSnapshotsHeading, "Games not on this device")
     }
 
     func testATargetWithNothingOnItHasNoSections() {

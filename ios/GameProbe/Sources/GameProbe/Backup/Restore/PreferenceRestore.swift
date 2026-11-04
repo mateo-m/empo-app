@@ -121,7 +121,7 @@ public enum PreferenceRestore {
     }
 
     /// The one undo affordance of 11.13.
-    public static let undoLabel = "Undo this settings restore"
+    public static let undoLabel = "Undo the last settings restore"
 
     /// The line the confirmation carries.
     public static let confirmationLine =

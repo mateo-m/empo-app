@@ -131,6 +131,17 @@ final class RestorePlanTests: XCTestCase {
             .skipAndMarkPartial)
     }
 
+    func testTheFreshInstallRowShowsTheGameTitle() {
+        var titled = row(snapshotId: snapshotId(0), device: "iPhone", folderName: "Quest 2")
+        titled.title = "Quest II"
+        let untitled = row(snapshotId: snapshotId(0), device: "iPhone", folderName: "Quest")
+
+        let plan = FreshInstallMerge.plan(
+            gameRows: [titled, untitled], preferencesRow: nil, joinedSyncGroup: false)
+
+        XCTAssertEqual(plan.games.map(\.title), ["Quest", "Quest II"])
+    }
+
     /// Row 10: a joined device follows 10.9, so the fresh-install
     /// screen shows no preferences row of its own.
     func testAJoinedDeviceDropsThePreferencesRow() {

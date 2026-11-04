@@ -30,6 +30,7 @@ struct RestoreSnapshotSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scope: RestoreScope = .savesAndSettings
     @State private var outcome: RestoreOutcome?
+    @State private var isRestoring = false
     @State private var showsTheMarkerSheet = false
     @State private var showsTheAttachSheet = false
     /// The game the attach of 11.11 named, so the question of 11.10
@@ -37,33 +38,18 @@ struct RestoreSnapshotSheet: View {
     @State private var attachedGame: GameContainer?
 
     var body: some View {
-        StandardSheet(
-            title: "Restore this backup?",
-            barAction: SheetBarAction("Cancel") { dismiss() }
-        ) {
-            SheetBodyText(
-                "\(BackupText.date(row.createdAt)) at \(BackupText.time(row.createdAt)), "
-                    + BackupText.bytes(row.bytesToDownload))
-            Picker("What to restore", selection: $scope) {
-                Text("Saves and settings").tag(RestoreScope.savesAndSettings)
-                Text("The whole game").tag(RestoreScope.wholeGame)
-            }
-            .pickerStyle(.segmented)
-            if let line = availability.line {
-                SheetFootnote(line)
-            }
-            if let outcome {
-                SheetFootnote(Self.line(of: outcome))
-            }
-            SheetPrimaryButton(attaches ? AttachAction.actionLabel : "Restore") {
-                if attaches {
-                    showsTheAttachSheet = true
-                } else {
-                    press()
+        Group {
+            if case .finished = outcome, let outcome {
+                StandardSheet(title: "Restored", emblem: "checkmark.circle") {
+                    SheetBodyText(RestoreNotices.line(of: outcome))
+                } footer: {
+                    SheetPrimaryButton("Done") { dismiss() }
                 }
+            } else {
+                question
             }
-            .disabled(!availability.isAvailable)
         }
+        .interactiveDismissDisabled(isRestoring)
         .sheet(isPresented: $showsTheAttachSheet) {
             AttachGameSheet(snapshot: row.identity) { game in
                 attachedGame = game
@@ -75,6 +61,54 @@ struct RestoreSnapshotSheet: View {
                 run(scope: action.scope, replacesTheTree: action.replacesTheTree)
             }
         }
+    }
+
+    private var question: some View {
+        StandardSheet(
+            title: "Restore this backup?",
+            barAction: isRestoring
+                ? SheetBarAction("Stop") { Task { await RestoreCoordinator.shared.cancel() } }
+                : SheetBarAction("Cancel") { dismiss() }
+        ) {
+            SheetBodyText(
+                "\(BackupText.date(row.createdAt)) at \(BackupText.time(row.createdAt)), "
+                    + BackupText.bytes(row.bytesToDownload))
+            Picker("What to restore", selection: $scope) {
+                Text("Saves and settings").tag(RestoreScope.savesAndSettings)
+                    .accessibilityLabel("Restore the saves and settings")
+                Text("The whole game").tag(RestoreScope.wholeGame)
+                    .accessibilityLabel("Restore the whole game")
+            }
+            .pickerStyle(.segmented)
+            .disabled(isRestoring)
+            if let line = availability.line, !isRestoring {
+                SheetFootnote(line)
+            }
+            if let outcome {
+                Label(RestoreNotices.line(of: outcome), systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            SheetPrimaryButton(buttonTitle) {
+                if attaches {
+                    showsTheAttachSheet = true
+                } else {
+                    press()
+                }
+            }
+            .disabled(!availability.isAvailable || isRestoring)
+            if isRestoring {
+                ProgressView()
+                    .accessibilityLabel("Restoring")
+            }
+        }
+    }
+
+    private var buttonTitle: String {
+        if isRestoring { return "Restoring…" }
+        if attaches { return AttachAction.actionLabel }
+        return outcome == nil ? "Restore" : "Try again"
     }
 
     private var markerDiffers: Bool {
@@ -93,20 +127,12 @@ struct RestoreSnapshotSheet: View {
     }
 
     private func run(scope: RestoreScope, replacesTheTree: Bool) {
+        guard !isRestoring else { return }
+        isRestoring = true
+        outcome = nil
         Task {
             outcome = await restore(row, scope, replacesTheTree)
-            if case .finished = outcome { dismiss() }
-        }
-    }
-
-    private static func line(of outcome: RestoreOutcome) -> String {
-        switch outcome {
-        case .finished(let result):
-            return RestoreNotices.partialPathsLine(count: result.partialPathCount) ?? "Restored."
-        case .notEnoughSpace(let shortfall):
-            return "This device needs \(BackupText.bytes(shortfall.missingBytes)) more free space."
-        case .stopped: return "The restore stopped."
-        case .failed(let message): return message
+            isRestoring = false
         }
     }
 }
@@ -162,8 +188,29 @@ struct GameRestoreScreen: View {
     let model: BackupSheetModel
 
     @State private var rows: [SnapshotRow]?
+    @State private var failed = false
 
     var body: some View {
+        Group {
+            if failed {
+                BackupsUnreadableView { Task { await load() } }
+            } else {
+                list
+            }
+        }
+        .task { await load() }
+    }
+
+    private func load() async {
+        failed = false
+        do {
+            rows = try await model.snapshots()
+        } catch {
+            failed = true
+        }
+    }
+
+    private var list: some View {
         ReadFirst(value: rows) { rows in
             SnapshotListScreen(
                 gameName: model.gameName,
@@ -173,6 +220,5 @@ struct GameRestoreScreen: View {
                     await model.restore(row, scope: scope, replacesTheTree: replacesTheTree)
                 })
         }
-        .task { rows = await model.snapshots() }
     }
 }

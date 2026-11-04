@@ -10,6 +10,11 @@ public struct FreshInstallGameRow: Equatable, Sendable {
 
     /// The container folder name the newest snapshot carries.
     public var name: String
+    /// What the row shows: the title the newest snapshot carries, or
+    /// the folder name for a snapshot from before titles.
+    public var title: String {
+        snapshots.first?.title ?? name
+    }
     /// Every snapshot found for this game, newest first.
     public var snapshots: [SnapshotRow]
     public var selectedSnapshotId: String
@@ -186,7 +191,7 @@ public enum FreshInstallMerge {
                     selectedSnapshotId: newest.snapshotId,
                     isSelected: newest.mode == .full)
             }
-            .sorted { $0.name < $1.name }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 }
 

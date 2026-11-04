@@ -20,8 +20,9 @@ enum PreferenceRestore {
 
     /// What the confirmation says. On a joined device the change
     /// reaches every device of the group, per 10.9.
-    static var confirmation: String? {
-        SyncStore.state().hasJoined ? PreferenceRollback.confirmation : nil
+    static var confirmation: String {
+        let line = GameProbe.PreferenceRestore.confirmationLine
+        return SyncStore.state().hasJoined ? line + " " + PreferenceRollback.confirmation : line
     }
 
     /// Applies the file a restore just wrote.

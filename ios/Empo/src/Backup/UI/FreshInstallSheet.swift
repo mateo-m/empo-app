@@ -17,6 +17,7 @@ final class FreshInstallModel {
     private(set) var finishedCount = 0
     private(set) var failures: [String] = []
     private(set) var isDone = false
+    private(set) var isStopped = false
 
     private let adoptableNamespaceIds: [String]
 
@@ -70,27 +71,28 @@ final class FreshInstallModel {
         }
 
         for row in plan.selectedGames {
+            guard !isStopped else { break }
             guard let snapshot = row.selected else { continue }
-            restoring = row.name
+            restoring = row.title
             guard
                 let container = RestoreCoordinator.makeTheContainer(
                     folderName: snapshot.identity.containerFolderName)
             else {
-                failures.append(row.name)
+                failures.append(row.title)
                 continue
             }
             await restore(
-                snapshot, into: container, scope: .wholeGame, name: row.name,
+                snapshot, into: container, scope: .wholeGame, name: row.title,
                 provider: provider)
         }
 
-        if let preferences = plan.preferences, preferences.isSelected {
+        if !isStopped, let preferences = plan.preferences, preferences.isSelected {
             restoring = BackupGameNames.preferencesName
             await restore(
                 preferences.snapshot, into: nil, scope: .preferences,
                 name: BackupGameNames.preferencesName, provider: provider)
         }
-        if let rescued = plan.rescuedSaves, rescued.isSelected {
+        if !isStopped, let rescued = plan.rescuedSaves, rescued.isSelected {
             restoring = Self.rescuedSavesName
             await restore(
                 rescued.snapshot, into: nil, scope: .rescuedSaves,
@@ -103,6 +105,11 @@ final class FreshInstallModel {
 
     static let rescuedSavesName = "Rescued Saves"
 
+    func stop() async {
+        isStopped = true
+        await RestoreCoordinator.shared.cancel()
+    }
+
     private func restore(
         _ row: SnapshotRow,
         into container: GameContainer?,
@@ -114,7 +121,7 @@ final class FreshInstallModel {
             row, into: container, provider: provider, descriptor: descriptor, scope: scope)
         if case .finished = outcome {
             finishedCount += 1
-        } else {
+        } else if !isStopped {
             failures.append(name)
         }
     }
@@ -148,7 +155,12 @@ struct FreshInstallSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(model.isDone ? "Done" : "Cancel") { dismiss() }
+                    if model.isDone || !runs {
+                        Button(model.isDone ? "Done" : "Cancel") { dismiss() }
+                    } else {
+                        Button("Stop") { Task { await model.stop() } }
+                            .disabled(model.isStopped)
+                    }
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -196,7 +208,7 @@ struct FreshInstallSheet: View {
                 } label: {
                     Toggle(isOn: selection(of: row)) {
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(row.name)
+                            Text(row.title)
                             Text(Self.line(of: row))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -260,12 +272,21 @@ struct FreshInstallSheet: View {
                     Text("Restoring \(restoring)…")
                 }
             } else if model.isDone {
-                Text("Restored \(model.finishedCount) items.")
+                Label(
+                    model.finishedCount == 1 ? "Restored 1 item." : "Restored \(model.finishedCount) items.",
+                    systemImage: "checkmark.circle.fill")
             }
-            if !model.failures.isEmpty {
-                Text("These did not restore: \(model.failures.joined(separator: ", ")).")
+            if model.isStopped {
+                Text("You stopped the restore. What it already restored stays.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+            if !model.failures.isEmpty {
+                Text(
+                    "These didn't restore: \(model.failures.joined(separator: ", ")). You can restore them later from Backups."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
         }
     }

@@ -124,6 +124,7 @@ public struct PackagePlan: Sendable {
                     mode: planned.mode,
                     containerFolderName: planned.containerFolderName,
                     identityAlias: planned.identityAlias,
+                    title: planned.gameName,
                     versionMarker: planned.versionMarker,
                     sharedDataDirectory: planned.sharedDataDirectory,
                     rescuedSavesBuckets: planned.rescuedSavesBuckets)
