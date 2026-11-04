@@ -96,9 +96,12 @@ public enum SyncGroupCopy {
     }
 
     /// The join is the consent step, so this line says what changes.
+    public static let failedLine =
+        "Your settings didn't sync the last time Empo tried. Empo tries again when it opens."
+
     public static let joinBody =
-        "Empo copies your settings, your controller binds, and your layout profiles between "
-        + "these devices. It copies no save data."
+        "Empo keeps your app settings, your controller buttons, and your on-screen control "
+        + "layouts the same on these devices. It doesn't copy your saves."
 
     private static func list(_ names: [String]) -> String {
         guard names.count > 1 else { return names.first ?? "" }

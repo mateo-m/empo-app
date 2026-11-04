@@ -1,5 +1,6 @@
 import Foundation
 import GameProbe
+import Observation
 import UIKit
 
 /// When the replication pass of SPEC 10.5 runs, per 10.11.
@@ -8,7 +9,10 @@ import UIKit
 /// the wait a local change takes, and the one pass that follows
 /// another.
 @MainActor
+@Observable
 final class SyncPass {
+
+    private(set) var lastPassFailed = false
 
     static let shared = SyncPass()
 
@@ -124,9 +128,10 @@ final class SyncPass {
         case .runAgain:
             state = .running(newsArrived: true)
         case .failed(let reason):
+            lastPassFailed = true
             log(reason)
         case .done, .nothingToDo, .noLocalNews:
-            break
+            lastPassFailed = false
         }
     }
 

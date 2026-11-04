@@ -289,16 +289,14 @@ struct BackupsScreen: View {
                 } label: {
                     HStack(spacing: Spacing.lg) {
                         TargetRowView(row: item.row, target: item.descriptor)
-                        if let action = item.row.action, action != .makeSpace {
+                        if let action = item.row.action {
                             Button(action.label) { Task { await press(action, on: item) } }
                                 .buttonStyle(.bordered)
                                 .buttonBorderShape(.capsule)
-                                .controlSize(.small)
                                 .font(.subheadline.weight(.medium))
                         }
                     }
                 }
-                .disabled(item.row.isDisabled)
             }
             Button {
                 showsAddSheet = true
@@ -320,8 +318,8 @@ struct BackupsScreen: View {
             } else {
                 addedTarget = await model.signInAgain(item)
             }
-        case .makeSpace:
-            break
+        case .tryAgain:
+            model.backUpNow()
         }
     }
 
@@ -401,7 +399,13 @@ struct BackupsScreen: View {
             }
             .disabled(looksForAGroup)
         } footer: {
-            Text(SyncGroupCopy.stableLine)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                if SyncPass.shared.lastPassFailed {
+                    Label(SyncGroupCopy.failedLine, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.warning)
+                }
+                Text(SyncGroupCopy.stableLine)
+            }
         }
     }
 

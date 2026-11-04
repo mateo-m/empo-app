@@ -12,6 +12,7 @@ struct SyncJoinSheet: View {
     let join: (DiscoveredSyncGroup) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @State private var picked: DiscoveredSyncGroup.ID?
 
     var body: some View {
         switch ask {
@@ -43,24 +44,41 @@ struct SyncJoinSheet: View {
                 Section {
                     ForEach(groups) { group in
                         Button {
-                            join(group)
-                            dismiss()
+                            picked = group.id
                         } label: {
-                            VStack(alignment: .leading, spacing: Spacing.xs) {
-                                Text(group.deviceNames.joined(separator: ", "))
-                                if let at = group.lastChangeAt {
-                                    Text("Last change \(BackupText.ago(at))")
-                                        .font(.footnote)
-                                        .foregroundStyle(.secondary)
+                            HStack {
+                                VStack(alignment: .leading, spacing: Spacing.xs) {
+                                    Text(group.deviceNames.joined(separator: ", "))
+                                    if let at = group.lastChangeAt {
+                                        Text("Last change \(BackupText.ago(at))")
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                if picked == group.id {
+                                    Image(systemName: "checkmark").foregroundStyle(.brand)
                                 }
                             }
+                            .contentShape(Rectangle())
                         }
+                        .tint(.primary)
+                        .accessibilityAddTraits(picked == group.id ? .isSelected : [])
                     }
                 } footer: {
                     Text(SyncGroupCopy.joinBody)
                 }
             }
             .navigationTitle("Sync settings with")
+            .safeAreaInset(edge: .bottom) {
+                SheetPrimaryButton("Sync settings") {
+                    guard let group = groups.first(where: { $0.id == picked }) else { return }
+                    join(group)
+                    dismiss()
+                }
+                .disabled(picked == nil)
+                .padding(Spacing.lg)
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
