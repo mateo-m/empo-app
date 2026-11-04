@@ -32,7 +32,7 @@ final class BackupsScreenTests: XCTestCase {
                 descriptor: target(), failure: .blockedByPermissions(reason: "no write right")),
             TargetRowFacts(descriptor: target(), failure: .rejected(message: "too big")),
             TargetRowFacts(descriptor: target(), failure: .full(reason: "no room")),
-            TargetRowFacts(descriptor: target(), failure: .unreachable, failedAt: failedAt),
+            TargetRowFacts(descriptor: target(), failure: .unreachable(), failedAt: failedAt),
             TargetRowFacts(descriptor: target()),
         ]
     }
@@ -80,9 +80,20 @@ final class BackupsScreenTests: XCTestCase {
         let row = TargetRowRules.row(
             TargetRowFacts(
                 descriptor: target(label: "Homelab", accountHint: "homelab.lan"),
-                failure: .unreachable, failedAt: failedAt, failedAtText: "14:03"))
+                failure: .unreachable(), failedAt: failedAt, failedAtText: "14:03"))
         XCTAssertEqual(row.stateLine, "Couldn't connect at 14:03")
         XCTAssertNil(row.action)
+    }
+
+    func testAServerThatAnsweredDoesNotReadAsNoConnection() {
+        let lines = [UnreachableCause.serverError, .busy].map { cause in
+            TargetRowRules.row(
+                TargetRowFacts(
+                    descriptor: target(), failure: .unreachable(cause), failedAt: failedAt,
+                    failedAtText: "14:03")
+            ).stateLine
+        }
+        XCTAssertEqual(lines, ["Server error at 14:03", "Server busy at 14:03"])
     }
 
     func testAForegroundOnlyTargetCarriesThePermanentLine() {
@@ -290,7 +301,9 @@ final class BackupsScreenTests: XCTestCase {
             TargetFailure.of(.blocked(reason: "no write right")),
             .blockedByPermissions(reason: "no write right"))
         XCTAssertEqual(TargetFailure.of(.full(reason: "no room")), .full(reason: "no room"))
-        XCTAssertEqual(TargetFailure.of(.offline), .unreachable)
+        XCTAssertEqual(TargetFailure.of(.offline), .unreachable(.noAnswer))
+        XCTAssertEqual(TargetFailure.of(.serverError(status: 500)), .unreachable(.serverError))
+        XCTAssertEqual(TargetFailure.of(.throttled(retryAfter: 30)), .unreachable(.busy))
         XCTAssertEqual(
             TargetFailure.of(.rejected(message: "refused")), .rejected(message: "refused"))
         XCTAssertNil(TargetFailure.of(.readOnlyFormat(.unreadableFormat)))

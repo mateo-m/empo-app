@@ -585,10 +585,19 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(status?.failedAt, now)
     }
 
+    func testTheStoreKeepsWhyATargetWasUnreachable() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        for cause in [UnreachableCause.noAnswer, .serverError, .busy] {
+            try store.recordTargetFailure(targetId: "t1", failure: .unreachable(cause), at: now)
+            XCTAssertEqual(try store.targetStatus(targetId: "t1")?.failure, .unreachable(cause))
+        }
+    }
+
     func testARunThatReachesTheTargetClearsTheFailure() throws {
         let store = try BackupStateStore(url: nil)
         defer { store.close() }
-        try store.recordTargetFailure(targetId: "t1", failure: .unreachable, at: now)
+        try store.recordTargetFailure(targetId: "t1", failure: .unreachable(), at: now)
         try store.recordTargetFailure(targetId: "t1", failure: nil, at: now)
         let status = try store.targetStatus(targetId: "t1")
         XCTAssertNil(status?.failure)

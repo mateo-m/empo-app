@@ -355,6 +355,30 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(blobPaths(target).count, 5)
     }
 
+    func testAServerThatIsDownStopsTheRunBeforeATransferWaitsForIt() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        await target.addFault(FakeTargetFault(operation: .list, error: .offline))
+        let latch = TransferLatch()
+        await target.setLatch(latch)
+        let engine = try makeEngine(target)
+        let request = request(games: [game(gameName)])
+
+        let running = Task { [engine] in await engine.run(request) }
+        let timeout = Task {
+            try await Task.sleep(for: .seconds(10))
+            await latch.open()
+            return true
+        }
+        let result = await running.value
+        timeout.cancel()
+
+        let waited = (try? await timeout.value) ?? false
+        XCTAssertFalse(waited, "a transfer waited for the server")
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.stop, .offline)
+    }
+
     // MARK: - 4. A crash between the last blob and the manifest
 
     func testACrashBeforeTheManifestKeepsTheBlobsForTheNextRun() async throws {

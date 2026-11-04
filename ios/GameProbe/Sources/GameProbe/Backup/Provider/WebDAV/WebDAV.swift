@@ -399,9 +399,7 @@ public enum WebDAV {
         case Status.insufficientStorage:
             return .outOfSpace
         case Status.serverError..<600:
-            // The server is up but unwell. 8.4 retries on the next
-            // pass.
-            return .offline
+            return .serverError(status: status)
         default:
             return .rejected(message: message(fromBody: body, status: status))
         }

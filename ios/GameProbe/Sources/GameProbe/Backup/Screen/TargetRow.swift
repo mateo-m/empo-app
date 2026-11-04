@@ -48,7 +48,7 @@ public enum TargetRowState: Equatable, Sendable {
     case blockedByPermissions(reason: String)
     case rejected(message: String)
     case full(reason: String)
-    case unreachable(at: Date)
+    case unreachable(at: Date, cause: UnreachableCause = .noAnswer)
     case current
 
     /// 1 wins over 9.
@@ -188,8 +188,8 @@ public enum TargetRowRules {
             return .rejected(message: message)
         case .full(let reason):
             return .full(reason: reason)
-        case .unreachable:
-            return .unreachable(at: facts.failedAt ?? Date(timeIntervalSince1970: 0))
+        case .unreachable(let cause):
+            return .unreachable(at: facts.failedAt ?? Date(timeIntervalSince1970: 0), cause: cause)
         case nil:
             return .current
         }
@@ -220,8 +220,12 @@ public enum TargetRowRules {
             return reason
         case .rejected(let message):
             return message
-        case .unreachable:
+        case .unreachable(_, .noAnswer):
             return "Couldn't connect at \(time)"
+        case .unreachable(_, .serverError):
+            return "Server error at \(time)"
+        case .unreachable(_, .busy):
+            return "Server busy at \(time)"
         case .current:
             guard let lastSuccessText else { return "No backup yet" }
             return "Last backup \(lastSuccessText)"

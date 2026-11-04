@@ -463,9 +463,7 @@ public enum S3 {
         case Status.insufficientStorage:
             return .outOfSpace
         case Status.serverError..<600:
-            // The service is up but unwell. 8.4 retries on the next
-            // pass.
-            return .offline
+            return .serverError(status: status)
         default:
             return .rejected(message: message(from: failure, status: status))
         }

@@ -349,7 +349,7 @@ public actor RestoreEngine {
         switch error {
         case .outOfSpace:
             return .outOfSpace
-        case .authExpired, .throttled, .offline, .permissionDenied, .notFound, .rejected:
+        case .authExpired, .throttled, .offline, .serverError, .permissionDenied, .notFound, .rejected:
             return .targetFailed
         }
     }

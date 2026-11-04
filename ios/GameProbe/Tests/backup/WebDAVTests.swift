@@ -289,7 +289,7 @@ final class WebDAVTests: XCTestCase {
     }
 
     func testAServerThatIsUpButUnwellRetriesOnTheNextPass() {
-        XCTAssertEqual(WebDAV.error(status: 500), .offline)
+        XCTAssertEqual(WebDAV.error(status: 500), .serverError(status: 500))
         XCTAssertEqual(WebDAV.error(status: 500).effect, .retryOnNextPass)
     }
 

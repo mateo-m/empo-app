@@ -110,8 +110,9 @@ final class S3Tests: XCTestCase {
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
-        XCTAssertEqual(S3.error(status: 500), .offline)
-        XCTAssertEqual(S3.error(status: 502), .offline)
+        XCTAssertEqual(S3.error(status: 500), .serverError(status: 500))
+        XCTAssertEqual(S3.error(status: 502), .serverError(status: 502))
+        XCTAssertEqual(S3.error(status: 500).effect, .retryOnNextPass)
     }
 
     func testAnUnknownCodeReachesTheUserWordForWord() {
@@ -425,6 +426,22 @@ final class S3Tests: XCTestCase {
         XCTAssertNil(TransportSecurity.certificateError(urlErrorCode: -1009, description: "offline"))
         XCTAssertFalse(TransportSecurity.isCertificateFailure(urlErrorCode: -1009))
         XCTAssertTrue(TransportSecurity.isCertificateFailure(urlErrorCode: -1200))
+    }
+
+    func testAHostThatDoesNotResolveIsOffline() {
+        // -1003 is a host name that does not exist, as a typo in the
+        // address gives. -1006 is a DNS server that does not answer.
+        for code in [-1003, -1006, -1009, -1001, -1004] {
+            XCTAssertEqual(
+                TransportSecurity.transportError(urlErrorCode: code, description: "no answer"),
+                .offline, "code \(code)")
+        }
+        XCTAssertEqual(
+            TransportSecurity.transportError(urlErrorCode: -1202, description: "Untrusted."),
+            .rejected(message: "Untrusted. " + TransportSecurity.systemTrustMessage))
+        XCTAssertEqual(
+            TransportSecurity.transportError(urlErrorCode: -1011, description: "Bad answer."),
+            .rejected(message: "Bad answer."))
     }
 
     // MARK: - 8. The capability flags of 8.3 and the table of 9.7

@@ -5,12 +5,20 @@ import Foundation
 ///
 /// The row outlives the run that produced it, so the state store
 /// keeps the last one, per 6.2.
+/// Why a target was unreachable. The raw value is the `detail`
+/// column, and rows from before the causes read as `noAnswer`.
+public enum UnreachableCause: String, Equatable, Sendable {
+    case noAnswer = ""
+    case serverError = "server-error"
+    case busy = "busy"
+}
+
 public enum TargetFailure: Equatable, Sendable {
     case needsSignIn
     case blockedByPermissions(reason: String)
     case rejected(message: String)
     case full(reason: String)
-    case unreachable
+    case unreachable(UnreachableCause = .noAnswer)
 
     /// The failure a run stop leaves on the target, or `nil` where
     /// the stop says nothing about the target itself.
@@ -24,8 +32,12 @@ public enum TargetFailure: Equatable, Sendable {
             return .full(reason: reason)
         case .quotaShortfall(let shortfall):
             return .full(reason: QuotaCheck.blockedLine(shortfall))
-        case .offline, .throttled:
-            return .unreachable
+        case .offline:
+            return .unreachable(.noAnswer)
+        case .serverError:
+            return .unreachable(.serverError)
+        case .throttled:
+            return .unreachable(.busy)
         case .rejected(let message):
             return .rejected(message: message)
         case .writerConflict, .readOnlyFormat, .gameStarted, .paused:
@@ -55,7 +67,9 @@ extension TargetFailure {
             return reason
         case .rejected(let message):
             return message
-        case .needsSignIn, .unreachable:
+        case .unreachable(let cause):
+            return cause.rawValue
+        case .needsSignIn:
             return ""
         }
     }
@@ -66,7 +80,7 @@ extension TargetFailure {
         case "blocked": self = .blockedByPermissions(reason: detail)
         case "rejected": self = .rejected(message: detail)
         case "full": self = .full(reason: detail)
-        case "unreachable": self = .unreachable
+        case "unreachable": self = .unreachable(UnreachableCause(rawValue: detail) ?? .noAnswer)
         default: return nil
         }
     }

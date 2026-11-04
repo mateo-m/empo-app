@@ -34,6 +34,8 @@ public enum ProgressPill {
         switch stop {
         case .offline:
             return "couldn't connect to \(targetLabel)"
+        case .serverError:
+            return "\(targetLabel) had a server error"
         case .throttled:
             return "\(targetLabel) asked Empo to wait"
         case .readOnlyFormat(.newerFormatVersion):

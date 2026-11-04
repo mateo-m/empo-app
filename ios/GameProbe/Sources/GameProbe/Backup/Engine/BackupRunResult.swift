@@ -64,6 +64,8 @@ public enum BackupRunStop: Error, Equatable, Sendable {
     case quotaShortfall(QuotaCheck.Shortfall)
     /// The device has no route to the target. Transient, per 7.11.
     case offline
+    /// The service answered with a 5xx. Transient, per 7.11.
+    case serverError(status: Int)
     /// The service asked Empo to wait. Transient, per 7.11, so it
     /// notifies nothing and waits for the next run.
     case throttled(retryAfter: TimeInterval)

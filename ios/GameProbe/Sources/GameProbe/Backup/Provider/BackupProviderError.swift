@@ -54,6 +54,9 @@ public enum BackupProviderError: Error, Equatable, Sendable {
     case throttled(retryAfter: TimeInterval)
     /// The device has no route to the target.
     case offline
+    /// The service answered with a 5xx. It may be full, broken, or
+    /// down for upkeep, and the answer does not say which.
+    case serverError(status: Int)
     /// The credentials work, but the scope or the folder rights do
     /// not cover the operation.
     case permissionDenied
@@ -72,7 +75,7 @@ public enum BackupProviderError: Error, Equatable, Sendable {
             return .runPruneLadder
         case .throttled(let retryAfter):
             return .waitAndKeepRun(seconds: retryAfter)
-        case .offline:
+        case .offline, .serverError:
             return .retryOnNextPass
         case .permissionDenied:
             return .blocked

@@ -42,7 +42,7 @@ public enum BackupNotificationRule {
             return .signInDead
         case .full, .quotaShortfall:
             return .targetBlocked
-        case .writerConflict, .readOnlyFormat, .offline, .throttled, .rejected, .gameStarted,
+        case .writerConflict, .readOnlyFormat, .offline, .serverError, .throttled, .rejected, .gameStarted,
             .paused:
             // The writer split is not a failure, per 7.11. Backups
             // keep flowing into the new namespace, so it never

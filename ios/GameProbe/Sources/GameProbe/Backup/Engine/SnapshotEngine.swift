@@ -224,15 +224,17 @@ public actor SnapshotEngine {
         case .readOnlyFormat:
             return "this backup space needs a newer Empo"
         case .needsSignIn:
-            return "sign in to this target again"
+            return "sign in to this location again"
         case .blocked(let reason), .full(let reason):
             return reason
         case .quotaShortfall(let shortfall):
             return QuotaCheck.blockedLine(shortfall)
         case .offline:
-            return "no route to this target"
+            return "no route to this location"
+        case .serverError(let status):
+            return "this location answered with server error \(status)"
         case .throttled(let retryAfter):
-            return "this target asked Empo to wait \(Int(retryAfter)) seconds"
+            return "this location asked Empo to wait \(Int(retryAfter)) seconds"
         case .rejected(let message):
             return message
         case .gameStarted:
@@ -247,6 +249,14 @@ public actor SnapshotEngine {
     /// Reads `format.json` and `writer.json`, once per run and
     /// before the first blob upload, per 5.12 and 5.16.
     private func openNamespace(_ context: RunContext) async throws {
+        // The app sends `get` and `put` through a background session,
+        // which waits for days on a server that refuses the connection.
+        // `list` fails at once, so it stops the run while the user looks.
+        do {
+            _ = try await provider.list(prefix: context.paths.formatFile)
+        } catch {
+            if error != .notFound { throw mapped(error) }
+        }
         let formatData = try await fetch(context.paths.formatFile)
         if let formatData {
             let access = FormatDescriptor.targetAccess(formatJSON: formatData)
@@ -715,17 +725,19 @@ public actor SnapshotEngine {
             return BackupRunStop.needsSignIn
         case .permissionDenied:
             return BackupRunStop.blocked(
-                reason: "this target refused the request. Sign in again with full access.")
+                reason: "this location refused the request. Sign in again with full access.")
         case .rejected(let message):
             return BackupRunStop.rejected(message: message)
         case .offline:
             return BackupRunStop.offline
+        case .serverError(let status):
+            return BackupRunStop.serverError(status: status)
         case .throttled(let retryAfter):
             return BackupRunStop.throttled(retryAfter: retryAfter)
         case .outOfSpace:
             return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:
-            return BackupRunStop.rejected(message: "the target lost an object Empo wrote")
+            return BackupRunStop.rejected(message: "the location lost a file Empo wrote")
         }
     }
 

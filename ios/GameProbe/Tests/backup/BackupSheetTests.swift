@@ -347,7 +347,7 @@ final class BackupSheetTests: XCTestCase {
         XCTAssertEqual(
             StaleCause.of(.blockedByPermissions(reason: "no delete right")), .refusedTheRequest)
         XCTAssertEqual(StaleCause.of(.full(reason: "the drive is full")), .targetBlocked)
-        XCTAssertNil(StaleCause.of(.unreachable))
+        XCTAssertNil(StaleCause.of(.unreachable()))
         XCTAssertNil(StaleCause.of(.rejected(message: "bad request")))
         XCTAssertNil(StaleCause.of(nil))
     }
@@ -356,7 +356,7 @@ final class BackupSheetTests: XCTestCase {
         let unreachable = GameTargetState(
             targetId: "a",
             displayName: "homelab",
-            cause: StaleCause.of(.unreachable),
+            cause: StaleCause.of(.unreachable()),
             lastSuccessAt: now.addingTimeInterval(-9 * 86_400),
             lastPlayedAt: now)
         let status = GameBackupStatusRules.status(
