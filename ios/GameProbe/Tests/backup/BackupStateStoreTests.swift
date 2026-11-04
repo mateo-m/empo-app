@@ -297,10 +297,20 @@ final class BackupStateStoreTests: XCTestCase {
 
         try store.markDirty(gameKey: "abc", reason: "mode change", at: now)
         try store.markDirty(gameKey: "def", reason: "runtime watch", at: now)
-        try store.clearDirty(gameKey: "abc")
+        try store.clearDirty(gameKey: "abc", markedUpTo: now)
 
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["def"])
         XCTAssertEqual(try store.dirtyGames().first?.reason, "runtime watch")
+    }
+
+    func testADirtyMarkAfterTheScanStays() throws {
+        let store = try makeStore()
+        defer { store.close() }
+
+        try store.markDirty(gameKey: "abc", reason: "play session", at: now)
+        try store.clearDirty(gameKey: "abc", markedUpTo: now.addingTimeInterval(-1))
+
+        XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
 
     func testAPendingDeletionWaitsForTheNextRun() throws {

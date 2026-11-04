@@ -87,8 +87,12 @@ extension BackupStateStore {
         }
     }
 
-    public func clearDirty(gameKey: String) throws {
-        try database.run("DELETE FROM dirty_game WHERE gameKey = ?", [.text(gameKey)])
+    /// A mark after `date` came from a play the run did not read, so
+    /// it stays for the next pass.
+    public func clearDirty(gameKey: String, markedUpTo date: Date) throws {
+        try database.run(
+            "DELETE FROM dirty_game WHERE gameKey = ? AND markedAt <= ?",
+            [.text(gameKey), .real(date.timeIntervalSince1970)])
     }
 
     // MARK: - The scheduler's own state, per SPEC 7.10 and 7.11

@@ -331,6 +331,7 @@ public actor SnapshotEngine {
         // tiny, and it holds the controller maps and layout pins a
         // user would miss at once.
         if let preferences = context.request.preferences {
+            let scannedAt = now
             inputs.append(
                 input(
                     stream: .preferences,
@@ -340,7 +341,8 @@ public actor SnapshotEngine {
                     kind: .preferences,
                     isOneOff: false,
                     isGame: false,
-                    targetId: targetId))
+                    targetId: targetId,
+                    scannedAt: scannedAt))
         }
         inputs += try order(context.request.games, targetId: targetId)
 
@@ -361,6 +363,7 @@ public actor SnapshotEngine {
     }
 
     private func input(of game: BackupRunGame, targetId: String) -> StreamInput {
+        let scannedAt = now
         var setRequest = game.set
         if game.isOneOffFullSnapshot { setRequest.mode = .full }
         let set = BackupSetResolver.resolve(setRequest, fm: fm)
@@ -378,7 +381,8 @@ public actor SnapshotEngine {
             kind: PrunePlan.kind(hasLocalContainer: game.hasLocalContainer),
             isOneOff: game.isOneOffFullSnapshot,
             isGame: true,
-            targetId: targetId)
+            targetId: targetId,
+            scannedAt: scannedAt)
     }
 
     private func input(
@@ -389,7 +393,8 @@ public actor SnapshotEngine {
         kind: StreamKind,
         isOneOff: Bool,
         isGame: Bool,
-        targetId: String
+        targetId: String,
+        scannedAt: Date
     ) -> StreamInput {
         let previous = (try? store.lastUploadedManifest(targetId: targetId, gameKey: stream.key))?
             .manifest
@@ -401,7 +406,8 @@ public actor SnapshotEngine {
             isOneOff: isOneOff,
             isGame: isGame,
             previous: previous,
-            plan: SnapshotDiff.plan(members: set.members, previous: previous))
+            plan: SnapshotDiff.plan(members: set.members, previous: previous),
+            scannedAt: scannedAt)
     }
 
     /// The games in the order of 7.8. One game at a time, never in
@@ -564,7 +570,9 @@ public actor SnapshotEngine {
 
     /// A snapshot that carries a partial path resets the clock only
     /// when no partial path is a save member, per 7.2.
-    func markSuccess(targetId: String, gameKey: String, manifest: SnapshotManifest) {
+    func markSuccess(
+        targetId: String, gameKey: String, manifest: SnapshotManifest, scannedAt: Date
+    ) {
         var clock =
             (try? store.staleness(targetId: targetId, gameKey: gameKey))
             ?? StalenessClock(targetId: targetId, gameKey: gameKey)
@@ -572,7 +580,7 @@ public actor SnapshotEngine {
 
         let savePartials = PartialPathClock.savePartials(in: manifest.entries)
         if savePartials.isEmpty {
-            clock.lastSuccessAt = now
+            clock.lastSuccessAt = scannedAt
             clock.partialSince = nil
         } else if clock.partialSince == nil {
             clock.partialSince = now

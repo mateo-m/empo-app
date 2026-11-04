@@ -1077,6 +1077,47 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(try store.runHistory().first?.outcome, .cancelled)
     }
 
+    func testAPlayThatEndsDuringTheUploadIsNotCountedAsBackedUp() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: stateURL) }
+        let clock = self.clock!
+        let engine = SnapshotEngine(
+            provider: target,
+            store: try BackupStateStore(url: stateURL),
+            localRoot: localRoot,
+            clock: FakeBackupClock(),
+            now: { clock.now })
+        // The fourth transfer is the first member's blob.
+        let latch = TransferLatch(holdFrom: 4)
+        await target.setLatch(latch)
+        let scannedAt = clock.now
+
+        let runRequest = request(games: [game(gameName)])
+        let running = Task { await engine.run(runRequest) }
+        let arrived = await latch.waitForArrivals(4)
+        XCTAssertTrue(arrived)
+        clock.advance(60)
+        let player = try BackupStateStore(url: stateURL)
+        try player.markDirty(gameKey: key(gameName), reason: "play session", at: clock.now)
+        player.close()
+        await latch.open()
+        let result = await running.value
+
+        guard case .wroteSnapshot? = result.stream(key(gameName))?.outcome else {
+            return XCTFail("the run wrote no snapshot")
+        }
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        let staleness = try store.staleness(targetId: targetId, gameKey: key(gameName))
+        let lastSuccessAt = try XCTUnwrap(staleness?.lastSuccessAt)
+        XCTAssertEqual(
+            lastSuccessAt.timeIntervalSince1970, scannedAt.timeIntervalSince1970, accuracy: 0.001)
+        XCTAssertEqual(try store.dirtyGames().map(\.gameKey), [key(gameName)])
+    }
+
     func testProgressAdvancesOnAConfirmedBlobAndNotOnAStartedUpload() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

@@ -12,6 +12,9 @@ extension SnapshotEngine {
         let isGame: Bool
         let previous: SnapshotManifest?
         let plan: SnapshotDiff.Plan
+        /// When the plan read the files. A play that ends after this
+        /// date is not in the snapshot.
+        let scannedAt: Date
     }
 
     /// What one stream carries from its plan to its manifest.
@@ -33,6 +36,7 @@ extension SnapshotEngine {
         let snapshotId: String
         /// The sum the plan of 13.2 froze. No later work changes it.
         let plannedBytes: Int64
+        let scannedAt: Date
 
         var result: StreamResult
         var entries: [SnapshotManifest.Entry]
@@ -56,6 +60,7 @@ extension SnapshotEngine {
             route: StagingRoute,
             staging: URL,
             snapshotId: String,
+            scannedAt: Date,
             confirmed: [String: BlobCompression]
         ) {
             self.stream = stream
@@ -68,6 +73,7 @@ extension SnapshotEngine {
             self.route = route
             self.staging = staging
             self.snapshotId = snapshotId
+            self.scannedAt = scannedAt
             self.plannedBytes = plan.changedBytes
             self.result = StreamResult(streamKey: stream.key, outcome: .blobsOnly)
             self.entries = plan.reused
@@ -151,6 +157,7 @@ extension SnapshotEngine {
             staging: BackupRootLayout(root: localRoot).staging
                 .appendingPathComponent(stream.key, isDirectory: true),
             snapshotId: BackupKeys.makeSnapshotId(date: now),
+            scannedAt: input.scannedAt,
             confirmed: confirmed)
     }
 
@@ -286,8 +293,11 @@ extension SnapshotEngine {
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: run.key),
             "the end of the checkpoint of \(run.key)")
-        save(try store.clearDirty(gameKey: run.key), "the end of the dirty mark of \(run.key)")
-        markSuccess(targetId: targetId, gameKey: run.key, manifest: manifest)
+        save(
+            try store.clearDirty(gameKey: run.key, markedUpTo: run.scannedAt),
+            "the end of the dirty mark of \(run.key)")
+        markSuccess(
+            targetId: targetId, gameKey: run.key, manifest: manifest, scannedAt: run.scannedAt)
 
         run.result.outcome = .wroteSnapshot(snapshotId: run.snapshotId)
         // Step 4 of 5.8, inline at the end of the stream that just
