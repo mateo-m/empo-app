@@ -548,7 +548,7 @@ final class SnapshotEngineTests: XCTestCase {
         }
         XCTAssertEqual(found.deviceId, "device-b")
         XCTAssertEqual(found.deviceName, "iPad")
-        XCTAssertEqual(result.detail, WriterClaimCheck.splitLine)
+        XCTAssertEqual(result.detail, BackupNotificationRule.writerSplitLine)
         let committed = await target.committedPaths
         XCTAssertTrue(committed.isEmpty)
         XCTAssertEqual(target.objectPaths(), [paths.writerFile])

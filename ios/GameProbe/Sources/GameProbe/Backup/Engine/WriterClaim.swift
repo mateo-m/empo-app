@@ -142,10 +142,4 @@ public enum WriterClaimCheck {
         }
         return .proceed
     }
-
-    /// The line the Backups screen shows after a split, per 7.11.
-    /// The split is not a failure and it never notifies.
-    public static let splitLine =
-        "another device was using this backup location. "
-        + "New snapshots go to a new space, and both keep their history."
 }

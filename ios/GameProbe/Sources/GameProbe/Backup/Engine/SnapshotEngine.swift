@@ -115,7 +115,7 @@ public actor SnapshotEngine {
         // failure.
         recordRun(
             request, startedAt: startedAt, finishedAt: nil, outcome: .failed,
-            uploadedBytes: 0, gameCount: 0, detail: "the run did not finish")
+            uploadedBytes: 0, gameCount: 0, detail: BackupHistoryState.unfinishedLine)
 
         let context = RunContext(
             request: request,
@@ -135,7 +135,7 @@ public actor SnapshotEngine {
             return finish(
                 context, startedAt: startedAt,
                 stop: Task.isCancelled
-                    ? .paused : .rejected(message: "the run could not read a local file"))
+                    ? .paused : .rejected(message: "Empo couldn't read a save file on this device."))
         }
         return finish(context, startedAt: startedAt, stop: nil)
     }
@@ -220,27 +220,27 @@ public actor SnapshotEngine {
     static func detail(of stop: BackupRunStop) -> String {
         switch stop {
         case .writerConflict:
-            return WriterClaimCheck.splitLine
+            return BackupNotificationRule.writerSplitLine
         case .readOnlyFormat:
-            return "this backup space needs a newer Empo"
+            return "This backup needs a newer version of Empo."
         case .needsSignIn:
-            return "sign in to this location again"
+            return "Sign in to this location again."
         case .blocked(let reason), .full(let reason):
             return reason
         case .quotaShortfall(let shortfall):
             return QuotaCheck.blockedLine(shortfall)
         case .offline:
-            return "no route to this location"
-        case .serverError(let status):
-            return "this location answered with server error \(status)"
+            return "Empo couldn't connect to this location."
+        case .serverError:
+            return "This location had a server error."
         case .throttled(let retryAfter):
-            return "this location asked Empo to wait \(Int(retryAfter)) seconds"
+            return "This location asked Empo to wait \(Int(retryAfter)) seconds."
         case .rejected(let message):
             return message
         case .gameStarted:
-            return "a game started, the rest waits for the session end"
+            return "A game started. Empo backs up the rest when you stop playing."
         case .paused:
-            return "paused by you or by iOS"
+            return "You or iOS paused the backup."
         }
     }
 
@@ -395,6 +395,7 @@ public actor SnapshotEngine {
                 mode: set.mode,
                 containerFolderName: game.identity.folderName,
                 identityAlias: game.identity.aliases.last,
+                title: game.title,
                 versionMarker: game.versionMarker,
                 sharedDataDirectory: set.sharedDataDirectory,
                 rescuedSavesBuckets: set.rescuedSavesBuckets),
@@ -725,7 +726,7 @@ public actor SnapshotEngine {
             return BackupRunStop.needsSignIn
         case .permissionDenied:
             return BackupRunStop.blocked(
-                reason: "this location refused the request. Sign in again with full access.")
+                reason: "Empo can't write here any more. Sign in again and allow all the access Empo asks for.")
         case .rejected(let message):
             return BackupRunStop.rejected(message: message)
         case .offline:
@@ -737,7 +738,8 @@ public actor SnapshotEngine {
         case .outOfSpace:
             return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:
-            return BackupRunStop.rejected(message: "the location lost a file Empo wrote")
+            return BackupRunStop.rejected(
+                message: "A backup file is missing from this location. Back up again to replace it.")
         }
     }
 

@@ -29,6 +29,7 @@ final class BackupPass: BackupRunning {
         }
 
         let (games, names) = await gamesInScope(scope)
+        BackupGameNames.remember(names)
         BackupRunMonitor.shared.runStarts(
             names: names, progress: progress, targetCount: targets.count)
         var rows: [BackupPassTarget] = []
@@ -68,7 +69,7 @@ final class BackupPass: BackupRunning {
             guard let result else {
                 didFinish = false
                 if BackupRunMonitor.shared.stopLine == nil {
-                    BackupRunMonitor.shared.stopLine = "\(descriptor.displayName) did not finish"
+                    BackupRunMonitor.shared.stopLine = "\(descriptor.displayName) didn't finish."
                 }
                 continue
             }
@@ -216,10 +217,12 @@ final class BackupPass: BackupRunning {
                 continue
             }
             let metadata = GameMetadata.load(from: container)
-            names[key] = BackupGameNames.name(of: container, in: metadata)
+            let name = BackupGameNames.name(of: container, in: metadata)
+            names[key] = name
             games.append(
                 BackupRunGame(
                     identity: GameIdentities.identity(for: container),
+                    title: name,
                     set: await GameBackupSets.request(for: container, mode: mode),
                     versionMarker: GameIdentities.versionMarker(for: container),
                     lastPlayedAt: metadata.lastPlayed))
@@ -251,7 +254,7 @@ final class BackupPass: BackupRunning {
         }
         guard let cause = BackupFailFastCause.allCases.first(where: causes.contains) else {
             return result.stop.flatMap { ProgressPill.stopReason(of: $0, targetLabel: label) }
-                ?? "\(label) did not finish"
+                ?? "\(label) didn't finish."
         }
         return cause.staleCause.line(targetLabel: label, deviceName: device)
     }

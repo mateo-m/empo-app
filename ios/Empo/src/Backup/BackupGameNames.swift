@@ -1,3 +1,4 @@
+import Foundation
 import GameProbe
 
 /// The name a game carries on the backup screens.
@@ -13,10 +14,30 @@ struct BackupGameNames {
 
     private let containers: [GameContainer]
     private let identities: [GameIdentity]
+    private let remembered: [String: String]
 
     init() {
         containers = GameContainer.discover()
         identities = containers.map(GameIdentities.identity(for:))
+        remembered = Self.readRemembered()
+    }
+
+    /// Keeps the names of the games a run backs up, so a location
+    /// still names a game after it leaves the library.
+    static func remember(_ names: [String: String]) {
+        guard !names.isEmpty else { return }
+        let merged = readRemembered().merging(names) { _, new in new }
+        guard merged != readRemembered(), let data = try? JSONEncoder().encode(merged) else { return }
+        try? data.write(to: rememberedURL, options: .atomic)
+    }
+
+    private static var rememberedURL: URL {
+        BackupRoot.layout.applicationSupport.appendingPathComponent("backup-game-names.json")
+    }
+
+    private static func readRemembered() -> [String: String] {
+        guard let data = try? Data(contentsOf: rememberedURL) else { return [:] }
+        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
     }
 
     /// The name of the game a snapshot came from.
@@ -46,13 +67,13 @@ struct BackupGameNames {
             let container = containers.first(where: {
                 BackupKeys.gameKey(containerFolderName: $0.folderName) == key
             })
-        else { return "this game" }
+        else { return remembered[key] ?? "this game" }
         return Self.name(of: container)
     }
 
     /// The name of every installed game, by game key.
     func namesByGameKey() -> [String: String] {
-        var names: [String: String] = [:]
+        var names = remembered
         for container in containers {
             names[BackupKeys.gameKey(containerFolderName: container.folderName)] =
                 Self.name(of: container)

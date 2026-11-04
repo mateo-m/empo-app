@@ -89,7 +89,7 @@ struct ResumeQuestionAsk: Identifiable {
         self.record = record
         gameName = BackupGameNames().name(ofGameKey: record.gameKey)
         targetLabel =
-            BackupTargets.load().first { $0.id == record.targetId }?.label ?? "the target"
+            BackupTargets.load().first { $0.id == record.targetId }?.displayName ?? "this location"
     }
 
     /// Applies one answer by its place in `labels`.

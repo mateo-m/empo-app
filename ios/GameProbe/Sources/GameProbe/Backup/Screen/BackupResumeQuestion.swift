@@ -35,7 +35,7 @@ public enum BackupResumeQuestion {
     /// `leftText` carries the remaining bytes in the words the caller
     /// formatted, such as "2.8 GB".
     public static func detail(gameName: String, targetLabel: String, leftText: String) -> String {
-        "\(gameName) did not finish backing up to \(targetLabel). About \(leftText) left."
+        "\(gameName) didn't finish backing up to \(targetLabel). About \(leftText) left."
     }
 
     public static let stopTitle = "Stop the backup?"

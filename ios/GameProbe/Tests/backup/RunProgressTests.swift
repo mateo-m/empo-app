@@ -195,7 +195,7 @@ final class RunProgressTests: XCTestCase {
         XCTAssertEqual(
             BackupResumeQuestion.detail(
                 gameName: "Rejuvenation", targetLabel: "Dropbox", leftText: "2.8 GB"),
-            "Rejuvenation did not finish backing up to Dropbox. About 2.8 GB left.")
+            "Rejuvenation didn't finish backing up to Dropbox. About 2.8 GB left.")
         XCTAssertEqual(BackupResumeQuestion.stopTitle, "Stop the backup?")
         XCTAssertEqual(
             BackupResumeQuestion.stopDetail(gameName: "Rejuvenation", targetLabel: "Dropbox"),
@@ -283,13 +283,13 @@ final class RunProgressTests: XCTestCase {
 
     func testThePillNamesAStopThatNoStaleCauseNames() {
         XCTAssertEqual(
-            ProgressPill.stopReason(of: .offline, targetLabel: "NAS"), "couldn't connect to NAS")
+            ProgressPill.stopReason(of: .offline, targetLabel: "NAS"), "Empo couldn't connect to NAS.")
         XCTAssertEqual(
             ProgressPill.stopReason(of: .throttled(retryAfter: 30), targetLabel: "NAS"),
-            "NAS asked Empo to wait")
+            "NAS asked Empo to wait.")
         XCTAssertEqual(
             ProgressPill.stopReason(of: .readOnlyFormat(.newerFormatVersion(9)), targetLabel: "NAS"),
-            "NAS needs a newer version of Empo")
+            "NAS needs a newer version of Empo.")
         XCTAssertNil(
             ProgressPill.stopReason(of: .readOnlyFormat(.unreadableFormat), targetLabel: "NAS"))
         XCTAssertNil(ProgressPill.stopReason(of: .needsSignIn, targetLabel: "NAS"))
@@ -299,7 +299,7 @@ final class RunProgressTests: XCTestCase {
         XCTAssertEqual(ProgressPill.line(.checking(gameName: nil)), "Checking for changes…")
         XCTAssertEqual(
             ProgressPill.line(.checking(gameName: "Rejuvenation")),
-            "Checking Rejuvenation for changes")
+            "Checking Rejuvenation for changes…")
         XCTAssertEqual(
             ProgressPill.line(.uploading(gameName: "Rejuvenation"), leftText: "2.4 GB"),
             "Backing up Rejuvenation, about 2.4 GB left")
@@ -307,8 +307,8 @@ final class RunProgressTests: XCTestCase {
             ProgressPill.line(.paused(reason: "a game is running")),
             "Paused, a game is running")
         XCTAssertEqual(
-            ProgressPill.line(.stopped(reason: "Dropbox is full")),
-            "Backup stopped, Dropbox is full")
+            ProgressPill.line(.stopped(reason: "Dropbox is full.")),
+            "Backup stopped. Dropbox is full.")
         XCTAssertEqual(ProgressPill.line(.complete), "Backup complete")
     }
 
@@ -319,7 +319,17 @@ final class RunProgressTests: XCTestCase {
             cause: .needsSignIn, action: .signInAgain, targetId: "a", gameCount: 3)
         XCTAssertEqual(
             banner.line(targetLabel: "Dropbox"),
-            "3 games have had no backup for 3 weeks, Dropbox needs you to sign in again.")
+            "3 games have had no backup for 3 weeks. Dropbox needs you to sign in again.")
+        let habit = LibraryStaleBanner(
+            cause: .runsInterrupted, action: .backUpNow, targetId: nil, gameCount: 1)
+        XCTAssertEqual(
+            habit.line(),
+            "1 game has had no backup for 3 weeks. The last three backups stopped when Empo closed.")
+        let unnamed = LibraryStaleBanner(
+            cause: .needsSignIn, action: .signInAgain, targetId: nil, gameCount: 2)
+        XCTAssertEqual(
+            unnamed.line(),
+            "2 games have had no backup for 3 weeks. A backup location needs you to sign in again.")
         XCTAssertEqual(banner.action.label, "Sign in again")
     }
 }

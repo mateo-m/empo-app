@@ -12,6 +12,7 @@ struct BackupStatusCard: View {
     let status: BackupsScreenStatus
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .title) private var symbolSide: CGFloat = 32
 
     private var monitor: BackupRunMonitor { BackupRunMonitor.shared }
 
@@ -54,7 +55,7 @@ struct BackupStatusCard: View {
                     .id(mark)
                     .transition(swap)
             }
-            .frame(width: 32, height: 32)
+            .frame(width: symbolSide, height: symbolSide)
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 // The texts swap on the mark, not on their content,
                 // so the run line can tick every second without a
@@ -97,7 +98,7 @@ struct BackupStatusCard: View {
         switch mark {
         case .running:
             SpinnerRing(
-                progress: monitor.fraction ?? 0, size: 26, lineWidth: 3,
+                progress: monitor.fraction ?? 0, size: symbolSide * 0.8, lineWidth: 3,
                 tint: AnyShapeStyle(Color.brand), trackOpacity: 0.2)
         case .pausedRun, .paused:
             Image(systemName: "pause.circle.fill")

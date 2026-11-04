@@ -20,14 +20,22 @@ struct BackupHistoryScreen: View {
                 .listRowBackground(Color.clear)
             }
             ForEach(model.history, id: \.id) { run in
+                let state = BackupHistoryState.of(run, passStartedAt: passStartedAt)
                 HStack(alignment: .top, spacing: Spacing.lg) {
-                    Image(systemName: Self.symbol(of: run))
-                        .font(.title3)
-                        .foregroundStyle(Self.color(of: run))
-                        .frame(width: IconSize.row + Spacing.md)
+                    Group {
+                        if state == .backingUp {
+                            ProgressView()
+                        } else {
+                            Image(systemName: Self.symbol(of: state))
+                                .font(.title3)
+                                .foregroundStyle(Self.color(of: state))
+                        }
+                    }
+                    .frame(width: IconSize.row + Spacing.md)
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         HStack(alignment: .firstTextBaseline) {
-                            Text(Self.title(of: run))
+                            Text(state.title)
                             Spacer()
                             if let finishedAt = run.finishedAt {
                                 Text(BackupText.ago(finishedAt))
@@ -38,7 +46,7 @@ struct BackupHistoryScreen: View {
                         Text(Self.line(of: run, target: label(of: run)))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        if let detail = run.detail {
+                        if state != .backingUp, let detail = run.detail {
                             Text(detail.prefix(1).uppercased() + detail.dropFirst())
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -46,23 +54,24 @@ struct BackupHistoryScreen: View {
                     }
                 }
                 .padding(.vertical, Spacing.xxs)
+                .accessibilityElement(children: .combine)
             }
         }
         .navigationTitle("Backup history")
         .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private static func title(of run: BackupRunRecord) -> String {
-        switch run.outcome {
-        case .success: return "Backed up"
-        case .partial: return "Partly backed up"
-        case .failed: return "Didn't finish"
-        case .cancelled: return "Stopped"
+        .onChange(of: BackupRunMonitor.shared.isRunning) { _, running in
+            if !running { Task { await model.refresh() } }
         }
     }
 
-    private static func symbol(of run: BackupRunRecord) -> String {
-        switch run.outcome {
+    private var passStartedAt: Date? {
+        let monitor = BackupRunMonitor.shared
+        return monitor.isRunning ? monitor.startedAt : nil
+    }
+
+    private static func symbol(of state: BackupHistoryState) -> String {
+        switch state {
+        case .backingUp: return ""
         case .success: return "checkmark.circle.fill"
         case .partial: return "exclamationmark.circle.fill"
         case .failed: return "xmark.circle.fill"
@@ -70,8 +79,9 @@ struct BackupHistoryScreen: View {
         }
     }
 
-    private static func color(of run: BackupRunRecord) -> Color {
-        switch run.outcome {
+    private static func color(of state: BackupHistoryState) -> Color {
+        switch state {
+        case .backingUp: return .secondary
         case .success: return .success
         case .partial: return .warning
         case .failed: return .destructive

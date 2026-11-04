@@ -15,7 +15,6 @@ struct TargetDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showsEveryGame = false
     @State private var showsRemoveSheet = false
-    @State private var removalFailure: String?
     @State private var signInOutcome: PermissionCheckOutcomeSheet?
     @State private var signsInThroughTheForm = false
     @State private var gameNames: [String: String] = [:]
@@ -28,25 +27,23 @@ struct TargetDetailScreen: View {
         List {
             if let item {
                 headerSection(item)
-                gamesSection(item)
-                pauseSection(item)
-                limitsSection(item)
-                cleanupSection(item)
-                devicesSection
+                if !item.row.isDisabled {
+                    gamesSection(item)
+                    pauseSection(item)
+                    limitsSection(item)
+                    cleanupSection(item)
+                    devicesSection
+                }
                 removeSection
             }
         }
         .navigationTitle(item?.descriptor.displayName ?? "")
         .navigationBarTitleDisplayMode(.inline)
         .task { gameNames = BackupGameNames().namesByGameKey() }
-        .sheet(isPresented: $showsRemoveSheet) {
+        .sheet(isPresented: $showsRemoveSheet, onDismiss: leaveIfRemoved) {
             if let item {
                 RemoveTargetSheet(item: item) { deletesBackups in
-                    Task {
-                        removalFailure = await model.remove(
-                            targetId: targetId, deleteBackups: deletesBackups)
-                        if removalFailure == nil { dismiss() }
-                    }
+                    await model.remove(targetId: targetId, deleteBackups: deletesBackups)
                 }
             }
         }
@@ -61,14 +58,10 @@ struct TargetDetailScreen: View {
         .sheet(item: $signInOutcome) { outcome in
             PermissionCheckSheet(target: outcome.target, result: outcome.result)
         }
-        .alert(
-            "Couldn't remove this location", isPresented: .constant(removalFailure != nil),
-            presenting: removalFailure
-        ) { _ in
-            Button("OK") { removalFailure = nil }
-        } message: { line in
-            Text(line)
-        }
+    }
+
+    private func leaveIfRemoved() {
+        if model.items?.contains(where: { $0.id == targetId }) == false { dismiss() }
     }
 
     // MARK: - The header, per 13.5 and 13.6
@@ -80,14 +73,19 @@ struct TargetDetailScreen: View {
                     AccountAvatar(
                         photo: item.descriptor.accountPhoto, provider: item.descriptor.provider)
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text(item.descriptor.provider.serviceName)
+                        Text(item.descriptor.displayName)
                             .font(.headline)
+                        if item.descriptor.displayName != item.descriptor.provider.serviceName {
+                            Text(item.descriptor.provider.serviceName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                         if let hint = item.descriptor.accountHint {
                             AccountHintText(hint: hint, provider: item.descriptor.provider)
                         }
                         Text(item.row.stateLine)
                             .font(.footnote)
-                            .foregroundStyle(item.row.state == .current ? Color.secondary : Color.brand)
+                            .foregroundStyle(item.row.state.isProblem ? Color.red : Color.secondary)
                     }
                 }
                 usage(item)
@@ -105,8 +103,8 @@ struct TargetDetailScreen: View {
                     }
                 case .resume:
                     Button("Resume backups") { Task { await model.setPaused(false, targetId: targetId) } }
-                case .makeSpace:
-                    EmptyView()
+                case .tryAgain:
+                    Button("Try again") { model.backUpNow() }
                 }
             }
         }
@@ -141,7 +139,7 @@ struct TargetDetailScreen: View {
                 let shown = showsEveryGame ? item.games : Array(item.games.prefix(5))
                 ForEach(shown, id: \.gameKey) { game in
                     HStack {
-                        Text(gameNames[game.gameKey] ?? game.gameKey)
+                        Text(gameNames[game.gameKey] ?? "A removed game")
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer()
@@ -212,22 +210,14 @@ struct TargetDetailScreen: View {
     // MARK: - Pending deletions and the sweep, per 13.8
 
     @ViewBuilder private func cleanupSection(_ item: BackupTargetItem) -> some View {
-        let overdue = SweepSchedule.isOverdue(lastSweepAt: item.lastSweep, now: Date())
-        let needsAction = overdue || !item.capabilities.reportsObjectAge
-        if item.pendingDeletions > 0 || needsAction {
+        if item.pendingDeletions > 0 {
             Section {
-                if item.pendingDeletions > 0 {
-                    let count =
-                        item.pendingDeletions == 1 ? "1 old backup" : "\(item.pendingDeletions) old backups"
-                    Text("\(count) waiting to be deleted")
-                }
-                if needsAction {
-                    Button("Delete old backups now") {
-                        BackupScheduler.shared.pressBackUpNow(.library)
-                    }
-                }
+                let count =
+                    item.pendingDeletions == 1 ? "1 old backup" : "\(item.pendingDeletions) old backups"
+                Text("\(count) waiting to be deleted")
+                Button("Back up and delete them now") { model.backUpNow() }
             } footer: {
-                Text("Empo deletes backups over the Keep old backups limit at the next backup.")
+                Text("Empo deletes old backups during the next backup.")
             }
         }
     }
