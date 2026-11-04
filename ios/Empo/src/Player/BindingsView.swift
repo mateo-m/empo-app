@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -5,7 +8,7 @@ import SwiftUI
 /// have fixed rows. Keyboard keys arrive by being pressed.
 struct BindingsView: View {
     let container: GameContainer?
-    let gameTitle: String
+    let gameTitle: String?
     let manifest: BindingMap?
     var input: SessionInput
     let actions: PlayerActionRegistry
@@ -28,7 +31,7 @@ struct BindingsView: View {
 
     @State private var scope: BindingsCatalog.Scope = .thisGame
     @State private var step: Step?
-    @State private var highlighted: String?
+    @State private var highlight = PressedRowHighlight()
     @State private var showResetConfirm = false
     @State private var refreshToken = UUID()
 
@@ -38,17 +41,18 @@ struct BindingsView: View {
             includingOptional: input.controller.exposedOptionalElements)
     }
 
-    private var keyRows: [BindingsCatalog.Row] {
+    private var saved: BindingsCatalog.SavedBindings {
         _ = refreshToken
-        return BindingsCatalog.keyRows(scope: scope, container: container)
+        return BindingsCatalog.SavedBindings(scope: scope, container: container, manifest: manifest)
     }
 
     var body: some View {
+        let saved = self.saved
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Scope", selection: $scope) {
+                Picker("Applies to", selection: $scope) {
                     ForEach(BindingsCatalog.Scope.allCases, id: \.self) { option in
-                        Text(option.rawValue).tag(option)
+                        Text(option.title).tag(option)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -60,32 +64,27 @@ struct BindingsView: View {
                         ForEach(sections) { section in
                             Section(section.title) {
                                 ForEach(section.elements) { row in
-                                    bindingRow(row).id(row.id)
+                                    bindingRow(row, saved: saved).id(row.id)
                                 }
                             }
                         }
 
                         if input.keyboard.hasHadKeyboardThisSession {
-                            keyboardSection
+                            keyboardSection(saved)
                         }
 
-                        if BindingsCatalog.hasOverrides(scope: scope, container: container) {
+                        if saved.hasOverrides {
                             Section {
                                 Button("Reset to defaults", role: .destructive) {
                                     showResetConfirm = true
                                 }
                             } footer: {
-                                Text(resetFooter)
+                                Text(BindingsCatalog.resetFooter(scope: scope))
                             }
                         }
                     }
                     .listStyle(.insetGrouped)
-                    .onChange(of: highlighted) { _, row in
-                        guard let row else { return }
-                        withAnimation(Motion.snappy) {
-                            proxy.scrollTo(row, anchor: .center)
-                        }
-                    }
+                    .scrollsToPressedRow(highlight, with: proxy)
                 }
             }
             .navigationTitle("Controller buttons")
@@ -95,15 +94,9 @@ struct BindingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .alert(resetTitle, isPresented: $showResetConfirm) {
-                Button("Reset", role: .destructive) {
-                    BindingsCatalog.resetOverrides(scope: scope, container: container)
-                    refreshToken = UUID()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(resetMessage)
-            }
+            .resetBindingsAlert(
+                isPresented: $showResetConfirm, scope: scope, container: container, gameTitle: gameTitle
+            )
             .sheet(item: $step) { step in
                 switch step {
                 case .capturingKey:
@@ -111,12 +104,7 @@ struct BindingsView: View {
                 case .choosingTarget(let row):
                     BindingTargetPicker(
                         source: row.source,
-                        current: BindingsCatalog.resolvedTarget(
-                            source: row.source,
-                            scope: scope,
-                            container: container,
-                            manifest: manifest
-                        ),
+                        current: saved.target(for: row.source),
                         scope: scope,
                         actions: actions
                     ) { target in
@@ -136,8 +124,9 @@ struct BindingsView: View {
                 // takes them away, so none has to give them back.
                 input.suppressInjection = true
                 input.controller.elementActivityHandler = { element in
-                    highlight(element)
+                    highlight.flash(element)
                 }
+                input.controller.connectionHandler = { refreshToken = UUID() }
                 input.keyboard.keyActivityHandler = { code in
                     if case .capturingKey = step {
                         let source = BindingSource.key(code)
@@ -145,13 +134,14 @@ struct BindingsView: View {
                             BindingsCatalog.Row(
                                 source: source, label: BindingsCatalog.label(for: source)))
                     } else {
-                        highlight(code)
+                        highlight.flash(code)
                     }
                 }
             }
             .onDisappear {
                 input.suppressInjection = false
                 input.controller.elementActivityHandler = nil
+                input.controller.connectionHandler = nil
                 input.keyboard.keyActivityHandler = nil
             }
             .onReceive(NotificationCenter.default.publisher(for: .bindingsDidChange)) { _ in
@@ -161,11 +151,10 @@ struct BindingsView: View {
         .tint(.brand)
     }
 
-    @ViewBuilder
-    private var keyboardSection: some View {
+    private func keyboardSection(_ saved: BindingsCatalog.SavedBindings) -> some View {
         Section {
-            ForEach(keyRows) { row in
-                bindingRow(row).id(row.id)
+            ForEach(saved.keyRows) { row in
+                bindingRow(row, saved: saved).id(row.id)
             }
             Button {
                 step = .capturingKey
@@ -177,62 +166,18 @@ struct BindingsView: View {
         } footer: {
             Text(
                 """
-                Some controllers send keys instead of buttons. Map \
-                those keys here to reuse your button bindings.
+                Some controllers send keyboard keys instead of buttons. Add \
+                those keys here so they do what your buttons do.
                 """
             )
         }
     }
 
-    private func highlight(_ row: String) {
-        highlighted = row
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(600))
-            if highlighted == row {
-                highlighted = nil
-            }
-        }
-    }
-
-    private var resetTitle: String {
-        scope == .thisGame ? "Reset buttons for this game?" : "Reset buttons for all games?"
-    }
-
-    private var resetFooter: String {
-        switch scope {
-        case .thisGame:
-            return "Clears the buttons you changed for this game."
-        case .allGames:
-            return "Clears the buttons you changed for all games. Buttons you changed for one game stay."
-        }
-    }
-
-    private var resetMessage: String {
-        switch scope {
-        case .thisGame:
-            return "The buttons you changed for \(gameTitle) go back to their defaults. You can't undo this."
-        case .allGames:
-            return
-                "The buttons you changed for all games go back to their defaults. Buttons you changed for one game stay. You can't undo this."
-        }
-    }
-
     @ViewBuilder
-    private func bindingRow(_ row: BindingsCatalog.Row) -> some View {
-        let target = BindingsCatalog.resolvedTarget(
-            source: row.source,
-            scope: scope,
-            container: container,
-            manifest: manifest
-        )
-        let provenance = BindingsCatalog.provenance(
-            source: row.source,
-            scope: scope,
-            container: container,
-            manifest: manifest
-        )
+    private func bindingRow(_ row: BindingsCatalog.Row, saved: BindingsCatalog.SavedBindings) -> some View {
+        let target = saved.target(for: row.source)
+        let provenance = saved.provenance(for: row.source)
         let bindingLabel = BindingsCatalog.displayName(for: target)
-        let isHighlighted = highlighted == row.id
 
         Button {
             step = .choosingTarget(row)
@@ -244,12 +189,8 @@ struct BindingsView: View {
                     Text(bindingLabel)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    if provenance == .gameDefault {
-                        Text("Game default")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    } else if provenance == .empoDefault {
-                        Text("Empo default")
+                    if let label = provenance?.label {
+                        Text(label)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -262,31 +203,12 @@ struct BindingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .listRowBackground(
-            isHighlighted ? Color.brand.opacity(0.15) : nil
-        )
+        .listRowBackground(highlight.background(for: row.id))
         .contextMenu {
-            removeOverrideButton(row, provenance: provenance)
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, container: container)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            removeOverrideButton(row, provenance: provenance)
-        }
-    }
-
-    @ViewBuilder
-    private func removeOverrideButton(
-        _ row: BindingsCatalog.Row,
-        provenance: BindingsCatalog.Provenance?
-    ) -> some View {
-        if provenance == .userOverride {
-            Button("Reset to default", role: .destructive) {
-                BindingsCatalog.removeOverride(
-                    source: row.source,
-                    scope: scope,
-                    container: container
-                )
-                refreshToken = UUID()
-            }
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, container: container)
         }
     }
 }

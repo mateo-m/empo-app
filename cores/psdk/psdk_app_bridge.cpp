@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // The launcher interface for the PSDK core.
 //
 // A launcher opens one core and calls it through the gamecore_* names
@@ -13,15 +16,19 @@
 #include "GameCore.h"
 #include "psdk_core.h"
 
+#include <CoreFoundation/CoreFoundation.h>
+#include <TargetConditionals.h>
+
 #include <algorithm>
 #include <atomic>
+#include <cctype>
+#include <climits>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
 #include <fcntl.h>
-#include <libgen.h>
 #include <mutex>
 #include <pthread.h>
 #include <stdlib.h>
@@ -30,7 +37,13 @@
 #include <unistd.h>
 #include <vector>
 
+#if TARGET_OS_OSX
+#define GL_SILENCE_DEPRECATION
+#import <AppKit/AppKit.h>
+#include <OpenGL/gl.h>
+#else
 #include <GLES2/gl2.h>
+#endif
 
 static const char *waitForGamePath(void);
 
@@ -136,26 +149,102 @@ std::atomic<char **> gArgv{nullptr};
 constexpr size_t kGameStackBytes = 16 * 1024 * 1024;
 
 // The core reads its own files from its own bundle, so a launcher embeds
-// the framework and ships no PSDK file of its own. dladdr on a
-// function in this image names the framework binary, and its folder is
-// the bundle. mkxp-z finds its assets the same way
-// (filesystemImplIOS.mm mkxpOwnBundle).
-std::string ownBundlePath() {
+// the framework and ships no PSDK file of its own. dladdr on a function in
+// this image names the framework binary. mkxp-z finds its assets the same
+// way (filesystemImplIOS.mm mkxpOwnBundle). CFBundle knows where the
+// resources are: at the top on iOS, in Versions/A/Resources on macOS.
+std::string supportPath() {
     Dl_info info;
-    if (dladdr(reinterpret_cast<const void *>(&ownBundlePath), &info) == 0 || !info.dli_fname) {
+    if (dladdr(reinterpret_cast<const void *>(&supportPath), &info) == 0 || !info.dli_fname) {
         return {};
     }
-    std::string path(info.dli_fname);
-    std::string copy(path);
-    return dirname(&copy[0]);
+    const std::string binary(info.dli_fname);
+    const size_t end = binary.rfind(".framework/");
+    if (end == std::string::npos) {
+        return {};
+    }
+    const std::string framework = binary.substr(0, end + strlen(".framework"));
+    CFURLRef frameworkURL = CFURLCreateFromFileSystemRepresentation(
+        nullptr, reinterpret_cast<const UInt8 *>(framework.data()), framework.size(), true);
+    CFBundleRef bundle = CFBundleCreate(nullptr, frameworkURL);
+    CFRelease(frameworkURL);
+    if (!bundle) {
+        return {};
+    }
+    CFURLRef supportURL = CFBundleCopyResourceURL(bundle, CFSTR("PsdkSupport"), nullptr, nullptr);
+    CFRelease(bundle);
+    if (!supportURL) {
+        return {};
+    }
+    char path[PATH_MAX];
+    const bool found =
+        CFURLGetFileSystemRepresentation(supportURL, true, reinterpret_cast<UInt8 *>(path), sizeof(path));
+    CFRelease(supportURL);
+    return found ? path : std::string();
+}
+
+// Gives the game $userAgent = "<name>" and $<name> = true. psdk_run
+// takes Ruby code only as a file. Each byte of the name is a \x escape,
+// so no name can end the string early. The file deletes itself when
+// Ruby loads it, because a killed game never gets back here.
+std::string writeLauncherIdentityPrelude() {
+    std::string identity;
+    {
+        std::lock_guard<std::mutex> guard(gLock);
+        identity = gLauncherIdentity;
+    }
+    if (identity.empty()) {
+        return {};
+    }
+
+    std::string ruby = "File.delete(__FILE__) rescue nil\n$userAgent = \"";
+    char escaped[5];
+    for (unsigned char byte : identity) {
+        snprintf(escaped, sizeof(escaped), "\\x%02x", byte);
+        ruby += escaped;
+    }
+    ruby += "\".force_encoding(Encoding::UTF_8)\n";
+
+    bool validIdentifier = isalpha(static_cast<unsigned char>(identity[0])) || identity[0] == '_';
+    for (size_t i = 1; validIdentifier && i < identity.size(); ++i) {
+        validIdentifier = isalnum(static_cast<unsigned char>(identity[i])) || identity[i] == '_';
+    }
+    if (validIdentifier) {
+        ruby += "$" + identity + " = true\n";
+    }
+
+    char tempDir[PATH_MAX];
+    if (confstr(_CS_DARWIN_USER_TEMP_DIR, tempDir, sizeof(tempDir)) == 0) {
+        fprintf(stderr, "[psdk-bridge] no temp folder for the launcher identity\n");
+        return {};
+    }
+    const std::string path = std::string(tempDir) + "psdk-launcher-identity-" + std::to_string(getpid()) + ".rb";
+    FILE *file = fopen(path.c_str(), "w");
+    if (!file) {
+        fprintf(stderr, "[psdk-bridge] cannot write %s\n", path.c_str());
+        return {};
+    }
+    const bool written = fwrite(ruby.data(), 1, ruby.size(), file) == ruby.size();
+    if (fclose(file) != 0 || !written) {
+        fprintf(stderr, "[psdk-bridge] cannot write %s\n", path.c_str());
+        unlink(path.c_str());
+        return {};
+    }
+    return path;
 }
 
 void *runGame(void *) {
-    const std::string bundle = ownBundlePath();
-    const std::string support = bundle + "/PsdkSupport";
+    const std::string support = supportPath();
+    if (support.empty()) {
+        fprintf(stderr, "[psdk-bridge] PsdkSupport is not in the core's bundle\n");
+    }
     const char *path = waitForGamePath();
+    // The launcher sets the identity before the game path, so it is
+    // here by now.
+    const std::string prelude = writeLauncherIdentityPrelude();
 
-    int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(), nullptr);
+    int result = psdk_run(gArgc.load(), gArgv.load(), path, support.c_str(),
+                          prelude.empty() ? nullptr : prelude.c_str());
     fprintf(stderr, "[psdk-bridge] psdk_run returned %d\n", result);
 
     gExitedCleanly.store(result == PSDK_OK);
@@ -410,7 +499,22 @@ void onFrame(void *) {
     // PSDK's FPSBalancer counts frames from the microsecond part of the
     // clock. So after a pause of any length, the game catches up less
     // than one second of updates.
+#if TARGET_OS_OSX
+    // The game runs on the main thread here, so the pause keeps the
+    // app's events moving: the menu, the quit sheet and the resume.
+    lock.unlock();
+    while (gPausedFlag.load()) {
+        NSEvent *event = [NSApp nextEventMatchingMask:NSEventMaskAny
+                                            untilDate:[NSDate distantFuture]
+                                               inMode:NSDefaultRunLoopMode
+                                              dequeue:YES];
+        if (event && event.type != NSEventTypeApplicationDefined) {
+            [NSApp sendEvent:event];
+        }
+    }
+#else
     gResumeSignal.wait(lock, [] { return !gPausedFlag.load(); });
+#endif
     psdk_resume_audio();
 }
 
@@ -418,18 +522,26 @@ void onFrame(void *) {
 
 // MARK: - Starting the game
 
-// Starts the game on its own thread and returns at once.
+// On iOS, starts the game on its own thread and returns at once. SFML
+// marshals every UIKit call to the main thread with dispatch_sync, so
+// the main thread has to stay in its run loop and answer them.
 //
-// MkxpCore holds the calling thread here until the game ends. This core
-// cannot: SFML marshals every UIKit call to the main thread with
-// dispatch_sync, so the main thread has to stay in its run loop and
-// answer them. A launcher reads gamecore_isEngineTerminated or takes the
-// terminated callback either way.
+// On macOS, holds the main thread until the game ends, as MkxpCore does.
+// SFML makes its window and reads its events only on the main thread
+// there (SFWindowController.mm).
+//
+// A launcher reads gamecore_isEngineTerminated or takes the terminated
+// callback either way.
 int gamecore_run_app(int argc, char **argv) {
     gArgc.store(argc);
     gArgv.store(argv);
     psdk_set_frame_callback(onFrame, nullptr);
     psdk_set_resolution_callback(onGameResolution, nullptr);
+
+#if TARGET_OS_OSX
+    runGame(nullptr);
+    return 0;
+#else
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -443,6 +555,7 @@ int gamecore_run_app(int argc, char **argv) {
     }
     pthread_detach(thread);
     return 0;
+#endif
 }
 
 void gamecore_setGamePath(const char *path) {
@@ -574,6 +687,19 @@ void gamecore_requestResume(void) {
         gPausedFlag.store(false);
     }
     gResumeSignal.notify_one();
+#if TARGET_OS_OSX
+    // Wakes the paused loop in onFrame, which waits for an event.
+    [NSApp postEvent:[NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                                        location:NSZeroPoint
+                                   modifierFlags:0
+                                       timestamp:0
+                                    windowNumber:0
+                                         context:nil
+                                         subtype:0
+                                           data1:0
+                                           data2:0]
+             atStart:NO];
+#endif
     {
         std::lock_guard<std::mutex> lock(gSnapshotLock);
         gSnapshotRGBA.clear();

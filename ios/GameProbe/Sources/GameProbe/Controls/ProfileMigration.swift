@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// FNV-1a 64 for migration dedupe lookups. Not cryptographic. The
@@ -127,9 +130,13 @@ public struct MigrationRecord: Equatable, Sendable {
     }
 
     public var games: [String: Entry]
+    /// Profiles that two games came to use. One game can later leave
+    /// the profile, so the count of games can't tell this.
+    public var sharedProfiles: Set<String>
 
-    public init(games: [String: Entry] = [:]) {
+    public init(games: [String: Entry] = [:], sharedProfiles: Set<String> = []) {
         self.games = games
+        self.sharedProfiles = sharedProfiles
     }
 
     public static let fileName = ".migration.json"
@@ -155,7 +162,12 @@ public struct MigrationRecord: Equatable, Sendable {
             guard let hash = raw["hash"] as? String else { continue }
             games[id] = Entry(hash: hash, profile: raw["profile"] as? String)
         }
-        return MigrationRecord(games: games)
+        // Versions without the list named every shared profile
+        // "Shared layout", "Shared layout 2", and so on, in English.
+        let shared =
+            (object["shared"] as? [String]).map(Set.init)
+            ?? Set(games.values.compactMap(\.profile).filter { $0.hasPrefix("Shared layout") })
+        return MigrationRecord(games: games, sharedProfiles: shared)
     }
 
     public func serialize() -> Data {
@@ -167,7 +179,9 @@ public struct MigrationRecord: Equatable, Sendable {
             }
             rawGames[id] = raw
         }
-        let object: [String: Any] = ["version": 1, "games": rawGames]
+        let object: [String: Any] = [
+            "version": 1, "games": rawGames, "shared": sharedProfiles.sorted(),
+        ]
         return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
             ?? Data()
     }
@@ -279,7 +293,7 @@ public enum ProfileMigration {
                 continue
             }
             let renameToShared =
-                migrationProfiles.contains(profile) && !profile.hasPrefix("Shared layout")
+                migrationProfiles.contains(profile) && !context.record.sharedProfiles.contains(profile)
             return .pinToExisting(profile: profile, renameToShared: renameToShared, hash: hash)
         }
 

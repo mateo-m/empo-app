@@ -9,7 +9,7 @@ body = """{% if version %}
 {% for group, commits in commits | group_by(attribute="group") %}
 ### {{ group | striptags | trim }}
 
-{% for commit in commits %}- {{ commit.message | upper_first }} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/mateo-m/empo-app/commit/{{ commit.id }}))
+{% for commit in commits %}- {{ commit.message | upper_first }} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/{% if commit.extra.repo %}{{ commit.extra.repo }}{% else %}mateo-m/empo-app{% endif %}/commit/{{ commit.id }}))
 {% endfor %}
 {% endfor %}"""
 trim = true

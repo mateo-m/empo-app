@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import FileProvider
 import UniformTypeIdentifiers
 
@@ -104,7 +107,7 @@ final class FileProviderExtension: NSFileProviderExtension {
     ) {
         perform(completionHandler) {
             let url = try self.existingURL(of: itemIdentifier)
-            let destination = url.deletingLastPathComponent().appendingPathComponent(itemName)
+            let destination = try self.child(named: itemName, of: url.deletingLastPathComponent())
             return try self.move(url, to: destination)
         }
     }
@@ -152,8 +155,9 @@ final class FileProviderExtension: NSFileProviderExtension {
                 try parentItemIdentifier.map {
                     try self.newURL(named: url.lastPathComponent, in: $0)
                 }
-                ?? FileProviderItem.originalFolder(ofDeleted: url, root: self.root)
-                .appendingPathComponent(url.lastPathComponent)
+                ?? self.child(
+                    named: url.lastPathComponent,
+                    of: FileProviderItem.originalFolder(ofDeleted: url, root: self.root))
             guard !FileManager.default.fileExists(atPath: destination.path) else {
                 throw NSFileProviderError(.filenameCollision)
             }
@@ -223,9 +227,21 @@ final class FileProviderExtension: NSFileProviderExtension {
         guard let folder = urlForItem(withPersistentIdentifier: parent) else {
             throw NSFileProviderError(.noSuchItem)
         }
-        let url = folder.appendingPathComponent(name)
+        let url = try child(named: name, of: folder)
         guard !FileManager.default.fileExists(atPath: url.path) else {
             throw NSFileProviderError(.filenameCollision)
+        }
+        return url
+    }
+
+    private func child(named name: String, of folder: URL) throws -> URL {
+        guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else {
+            throw CocoaError(.fileWriteInvalidFileName)
+        }
+        // A folder can be a link to a folder outside the root.
+        let url = folder.appendingPathComponent(name)
+        guard FileProviderItem.relativePath(of: url, root: root) != nil else {
+            throw CocoaError(.fileWriteNoPermission)
         }
         return url
     }
@@ -290,7 +306,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
         childItemCount =
             isFolder
             ? (try? FileManager.default.contentsOfDirectory(atPath: url.path)).map {
-                NSNumber(value: $0.count)
+                NSNumber(value: $0.count { !$0.hasPrefix(".") })
             } : nil
         creationDate = values?.creationDate
         contentModificationDate = values?.contentModificationDate
@@ -310,10 +326,14 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
             return nil
         }
         defer { free(rootPath) }
-        var volume = statfs()
-        guard statfs(rootPath, &volume) == 0 else { return nil }
+        var info = stat()
+        guard stat(rootPath, &info) == 0 else { return nil }
+        // fsgetpath reads only val[0] of the fsid, and st_dev is that
+        // value (xnu mount_lookupby_volfsid). statfs gives the same id,
+        // but Apple counts it as a disk space API.
+        var volume = fsid_t(val: (info.st_dev, 0))
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
-        guard fsgetpath(&buffer, buffer.count, &volume.f_fsid, fileID) > 0 else { return nil }
+        guard fsgetpath(&buffer, buffer.count, &volume, fileID) > 0 else { return nil }
         // fsgetpath gives the real path, with /private, which
         // resolvingSymlinksInPath removes from `root`.
         guard
@@ -345,7 +365,7 @@ final class FileProviderItem: NSObject, NSFileProviderItem {
 
     /// The path of `url` relative to `root`: empty for `root`, and nil
     /// when `url` is not inside it.
-    private static func relativePath(of url: URL, root: URL) -> String? {
+    static func relativePath(of url: URL, root: URL) -> String? {
         // The item itself can be a link, which is its own item.
         let path = url.deletingLastPathComponent().resolvingSymlinksInPath()
             .appendingPathComponent(url.lastPathComponent).path
@@ -410,7 +430,9 @@ final class FileProviderEnumerator: NSObject, NSFileProviderEnumerator {
         let urls =
             folder.map(list)
             ?? list(root.appendingPathComponent(FileProviderItem.trashFolderName)).flatMap(list)
+        // An item that goes away during the list gets the root's identifier.
         return urls.map { FileProviderItem(url: $0, root: root) }
+            .filter { $0.itemIdentifier != .rootContainer }
     }
 
     /// The identifiers that the system got for this container, kept in

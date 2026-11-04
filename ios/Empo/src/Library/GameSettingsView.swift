@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct GameSettingsView: View {
@@ -7,25 +10,22 @@ struct GameSettingsView: View {
     /// settings do not reach a paused game, so the sheet then shows a
     /// "restart required" hint after an edit.
     @Environment(\.pauseManager) private var pauseManager
+    @Environment(\.appState) private var appState
 
     @State private var model: GameSettingsModel
-    @State private var showResetConfirm = false
 
     init(game: GameEntry) {
         self.game = game
         _model = State(initialValue: GameSettingsModel(game: game))
     }
 
-    /// The hint names the settings that wait for a relaunch, such as
-    /// "Restart this game to apply: Smooth scaling and Render scale."
     private var restartHint: Hint? {
-        guard pauseManager.pausedGame?.id == game.id else { return nil }
-        let changed = model.restartRequiredChanges
-        guard !changed.isEmpty else { return nil }
-        let list = changed.formatted(.list(type: .and, width: .standard))
+        guard pauseManager.pausedGame?.id == game.id, let launched = appState.launchedSettings,
+            let excerpt = model.restartHint(since: launched)
+        else { return nil }
         return Hint(
             id: "gameSettings.restartRequired",
-            excerpt: "Restart this game to apply: \(list).",
+            excerpt: excerpt,
             description: nil,
             dismissal: .none,
             icon: "arrow.clockwise.circle.fill"
@@ -38,15 +38,7 @@ struct GameSettingsView: View {
                 model.core?.settingsPage(model)
                 backupSection
 
-                if model.hasAnyCustomizations {
-                    Section {
-                        Button("Reset to defaults", role: .destructive) {
-                            showResetConfirm = true
-                        }
-                    } footer: {
-                        Text("Clears every change you made and uses the game's original values.")
-                    }
-                }
+                ResetSettingsSection(model: model, gameTitle: game.title)
             }
             // Pin the restart-required pill above the form via a
             // top safe-area inset. The inset gives the pill a
@@ -87,12 +79,6 @@ struct GameSettingsView: View {
             }
             .animation(.smooth(duration: 0.25), value: restartHint != nil)
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Reset all settings?", isPresented: $showResetConfirm) {
-                Button("Reset", role: .destructive) { withAnimation { model.resetToDefaults() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This clears every change you made to \"\(game.title)\". You can't undo this.")
-            }
             .sheetToolbar {
                 VStack(spacing: 1) {
                     Text(game.title)

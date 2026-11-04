@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 #import "AppMemory.h"
 
 #import <Foundation/Foundation.h>
@@ -19,6 +22,7 @@
 // Raw pages: the mmap calls of the cores.
 
 static char gFrameworks[PATH_MAX];
+static char *gBlockStart, *gBlockEnd;
 static void *(*realMmap)(void *, size_t, int, int, int, off_t);
 static int (*realMunmap)(void *, size_t);
 
@@ -60,7 +64,15 @@ static Chunk *newChunk(size_t count) {
     Chunk *chunk = calloc(1, sizeof(Chunk) + pages / 8);
     Chunk **chunks = chunk == NULL ? NULL : realloc(gChunks, (gChunkCount + 1) * sizeof *gChunks);
     if (chunks != NULL) gChunks = chunks;
-    if (chunks == NULL || (chunk->start = EmpoHeapPages(pages * PAGE)) == NULL) {
+    if (chunks != NULL) chunk->start = EmpoHeapPages(pages * PAGE);
+    // When the block is full, mimalloc takes memory of this process.
+    // blockMunmap finds a chunk only inside the block.
+    if (chunks != NULL && chunk->start != NULL &&
+        (chunk->start < gBlockStart || chunk->start >= gBlockEnd || (size_t)(gBlockEnd - chunk->start) < pages * PAGE)) {
+        EmpoHeapFree(chunk->start);
+        chunk->start = NULL;
+    }
+    if (chunk == NULL || chunk->start == NULL) {
         free(chunk);
         return NULL;
     }
@@ -84,8 +96,7 @@ static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_
     if (first < 0 && (chunk = newChunk(count)) != NULL) first = (long)(chunk->pages - count);
     if (first < 0) {
         os_unfair_lock_unlock(&gChunksLock);
-        errno = ENOMEM;
-        return MAP_FAILED;
+        return realMmap(addr, len, prot, flags, fd, offset);
     }
     for (size_t page = (size_t)first; page < (size_t)first + count; page++) chunk->used[page / 64] |= 1ull << (page % 64);
     chunk->free -= count;
@@ -98,38 +109,46 @@ static void *blockMmap(void *addr, size_t len, int prot, int flags, int fd, off_
 }
 
 static int blockMunmap(void *addr, size_t len) {
-    os_unfair_lock_lock(&gChunksLock);
-    size_t i = 0;
-    while (i < gChunkCount && ((char *)addr < gChunks[i]->start ||
-                               (char *)addr >= gChunks[i]->start + gChunks[i]->pages * PAGE)) {
-        i++;
-    }
-    if (i == gChunkCount) {
-        os_unfair_lock_unlock(&gChunksLock);
-        return realMunmap(addr, len);
-    }
-    if ((uintptr_t)addr % PAGE != 0 || len == 0 || len > PTRDIFF_MAX) {
-        os_unfair_lock_unlock(&gChunksLock);
+    uintptr_t start = (uintptr_t)addr, blockStart = (uintptr_t)gBlockStart, blockEnd = (uintptr_t)gBlockEnd;
+    if (start >= blockEnd || (start < blockStart && len <= blockStart - start)) return realMunmap(addr, len);
+    if (start % PAGE != 0 || len == 0 || len > PTRDIFF_MAX || len > UINTPTR_MAX - start - PAGE) {
         errno = EINVAL;
         return -1;
     }
-    Chunk *chunk = gChunks[i];
-    size_t first = (size_t)((char *)addr - chunk->start) / PAGE;
-    size_t end = MIN(first + (len + PAGE - 1) / PAGE, chunk->pages);
-    // The caller can have made a guard page with mprotect.
-    mprotect(chunk->start + first * PAGE, (end - first) * PAGE, PROT_READ | PROT_WRITE);
-    for (size_t page = first; page < end; page++) {
-        if (!pageUsed(chunk, page)) continue;
-        chunk->used[page / 64] &= ~(1ull << (page % 64));
-        chunk->free++;
-    }
-    if (chunk->free == chunk->pages) {
-        gChunks[i] = gChunks[--gChunkCount];
-        EmpoHeapFree(chunk->start);
-        free(chunk);
+    uintptr_t end = (start + len + PAGE - 1) / PAGE * PAGE;
+    bool released = false;
+    os_unfair_lock_lock(&gChunksLock);
+    // Backwards, so that the chunk that a removal moves to `i` was seen.
+    for (size_t i = gChunkCount; i-- > 0;) {
+        Chunk *chunk = gChunks[i];
+        uintptr_t chunkStart = (uintptr_t)chunk->start, chunkEnd = chunkStart + chunk->pages * PAGE;
+        if (end <= chunkStart || start >= chunkEnd) continue;
+        released = true;
+        size_t first = (MAX(start, chunkStart) - chunkStart) / PAGE, last = (MIN(end, chunkEnd) - chunkStart) / PAGE;
+        // The caller can have made a guard page with mprotect.
+        mprotect(chunk->start + first * PAGE, (last - first) * PAGE, PROT_READ | PROT_WRITE);
+        for (size_t page = first; page < last; page++) {
+            if (!pageUsed(chunk, page)) continue;
+            chunk->used[page / 64] &= ~(1ull << (page % 64));
+            chunk->free++;
+        }
+        if (chunk->free == chunk->pages) {
+            gChunks[i] = gChunks[--gChunkCount];
+            EmpoHeapFree(chunk->start);
+            free(chunk);
+        }
     }
     os_unfair_lock_unlock(&gChunksLock);
-    return 0;
+    // The rest of the block is mimalloc's. A real munmap there would take
+    // its pages away.
+    if (!released) {
+        errno = EINVAL;
+        return -1;
+    }
+    int result = 0;
+    if (start < blockStart) result |= realMunmap(addr, blockStart - start);
+    if (end > blockEnd) result |= realMunmap(gBlockEnd, end - blockEnd);
+    return result == 0 ? 0 : -1;
 }
 
 static void imageAdded(const struct mach_header *header, intptr_t slide) {
@@ -182,34 +201,44 @@ static id blockTexture(id device, SEL selector, MTLTextureDescriptor *descriptor
     return texture ?: realNewTexture(device, selector, descriptor);
 }
 
-void EmpoUseAppMemory(xpc_object_t memory) {
+NSString *EmpoUseAppMemory(xpc_object_t memory) {
     mach_port_t entry = xpc_dictionary_copy_mach_send(memory, EmpoGameProcessMemoryEntry);
     uint64_t size = xpc_dictionary_get_uint64(memory, EmpoGameProcessMemorySize);
-    if (entry == MACH_PORT_NULL || size == 0) return;
+    if (entry == MACH_PORT_NULL || size == 0) return @"the app sent no memory";
     vm_address_t start = 0;
     kern_return_t mapped = vm_map(mach_task_self(), &start, size, 0, VM_FLAGS_ANYWHERE, entry, 0, FALSE,
                                   VM_PROT_READ | VM_PROT_WRITE, VM_PROT_READ | VM_PROT_WRITE, VM_INHERIT_NONE);
     mach_port_deallocate(mach_task_self(), entry);
     if (mapped != KERN_SUCCESS) {
-        NSLog(@"[game-process] cannot map the app's memory: %s", mach_error_string(mapped));
-        return;
+        return [NSString stringWithFormat:@"cannot map the app's memory: %s", mach_error_string(mapped)];
     }
     if (!EmpoUseHeap((void *)start, size)) {
-        NSLog(@"[game-process] mimalloc refused the app's memory");
-        return;
+        vm_deallocate(mach_task_self(), start, size);
+        return @"the game process could not use the app's memory";
     }
+    gBlockStart = (char *)start;
+    gBlockEnd = gBlockStart + size;
 
     // The extension sits in Empo.app/Extensions, and the cores in
     // Empo.app/Frameworks.
     NSURL *frameworks = [NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent.URLByDeletingLastPathComponent
         URLByAppendingPathComponent:@"Frameworks/"];
-    realpath(frameworks.fileSystemRepresentation, gFrameworks);
-    strlcat(gFrameworks, "/", sizeof gFrameworks);
-    realMmap = mmap;
-    realMunmap = munmap;
-    _dyld_register_func_for_add_image(imageAdded);
+    // With no prefix, the hooks would go into every system library.
+    if (realpath(frameworks.fileSystemRepresentation, gFrameworks) != NULL) {
+        strlcat(gFrameworks, "/", sizeof gFrameworks);
+        realMmap = mmap;
+        realMunmap = munmap;
+        _dyld_register_func_for_add_image(imageAdded);
+    } else {
+        NSLog(@"[game-process] cannot find the cores' folder: %s", strerror(errno));
+    }
 
     id<MTLDevice> device = MTLCreateSystemDefaultDevice();
     Method method = class_getInstanceMethod(object_getClass(device), @selector(newTextureWithDescriptor:));
-    if (method != NULL) realNewTexture = (NewTexture)method_setImplementation(method, (IMP)blockTexture);
+    // Another thread can make a texture as soon as the new method is in.
+    if (method != NULL) {
+        realNewTexture = (NewTexture)method_getImplementation(method);
+        method_setImplementation(method, (IMP)blockTexture);
+    }
+    return nil;
 }

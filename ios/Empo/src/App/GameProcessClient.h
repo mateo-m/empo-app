@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // The app side of the game process.
 //
 // GameProcessClient.m implements a gameprocess_* function for every
@@ -29,6 +32,10 @@ NS_ASSUME_NONNULL_BEGIN
 // Gets a line for the session log each time the game process does
 // something the app did not ask for. Runs on any thread.
 + (void)setEventHandler:(void (^)(NSString *text))handler;
+
+// Gets the hardware keys that the game process sends on. Runs on the
+// main thread.
++ (void)setKeyHandler:(nullable void (^)(NSInteger keyCode, BOOL pressed))handler;
 
 // The memory footprint of the game process in bytes, from its last
 // status. 0 when no status came yet.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 import UIKit
 
@@ -106,20 +109,109 @@ enum ControlsZone {
         }
     }
 
-    /// Always anchor the toolbar to the top-right of the device
-    /// viewport. In portrait it used to tuck below the game rect,
-    /// which left the keyboard-toggle button covered by the keyboard
-    /// whenever it was up. Placing it at the top keeps it reachable
-    /// in every orientation + layout mode.
-    static func toolbarOrigin(
-        safeArea: EdgeInsets, geoSize: CGSize, btnSize: CGFloat, gap: CGFloat, count: CGFloat
+    struct ToolbarPlacement {
+        let center: CGPoint
+        let isVertical: Bool
+        let length: CGFloat
+        let thickness: CGFloat
+
+        var frame: CGRect {
+            let size =
+                isVertical
+                ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
+            return CGRect(
+                x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width,
+                height: size.height)
+        }
+    }
+
+    /// A toolbar column in a sensor strip gives the strip to the
+    /// controls. Only `toolbarKeepout` stays closed to them.
+    static func controlsSafeArea(_ safeArea: EdgeInsets, toolbar: ToolbarPlacement) -> EdgeInsets {
+        guard toolbar.isVertical else { return safeArea }
+        return EdgeInsets(top: safeArea.top, leading: 0, bottom: safeArea.bottom, trailing: 0)
+    }
+
+    /// The toolbar column, from the top of the screen to the column's
+    /// bottom and out to the screen edge. `.null` without a column.
+    static func toolbarKeepout(_ toolbar: ToolbarPlacement, geoSize: CGSize) -> CGRect {
+        guard toolbar.isVertical else { return .null }
+        let column = toolbar.frame.insetBy(dx: -toolbarEdgePad, dy: -toolbarEdgePad)
+        let minX = column.midX > geoSize.width / 2 ? column.minX : 0
+        let maxX = column.midX > geoSize.width / 2 ? geoSize.width : column.maxX
+        return CGRect(x: minX, y: 0, width: maxX - minX, height: column.maxY)
+    }
+
+    /// The keep-out touches the top and the side edge of the screen,
+    /// so a control leaves it either away from that side or down
+    /// below the column, whichever legal move is shorter. Without a
+    /// legal move, the control stays on the column, not off-screen.
+    static func pushedOutOfKeepout(
+        _ point: CGPoint, controlHalf: CGFloat, keepout: CGRect,
+        geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
     ) -> CGPoint {
-        let totalW = count * btnSize + (count - 1) * gap
-        let rightInset = max(safeArea.trailing, minLandscapeInset)
+        let blocked = keepout.insetBy(dx: -(controlHalf + innerPadding), dy: -(controlHalf + innerPadding))
+        guard !keepout.isNull, blocked.contains(point) else { return point }
+        let pad = padding + innerPadding
+        let minX = safeArea.leading + pad + controlHalf
+        let maxX = geoSize.width - safeArea.trailing - pad - controlHalf
+        let minY = max(safeArea.top, controlsMinY) + pad + controlHalf
+        let maxY = geoSize.height - safeArea.bottom - pad - controlHalf
+        let exits = [
+            CGPoint(x: keepout.minX > 0 ? blocked.minX : blocked.maxX, y: point.y),
+            CGPoint(x: point.x, y: blocked.maxY),
+        ].filter { $0.x >= minX && $0.x <= maxX && $0.y >= minY && $0.y <= maxY }
+        return exits.min { hypot($0.x - point.x, $0.y - point.y) < hypot($1.x - point.x, $1.y - point.y) }
+            ?? point
+    }
+
+    /// Anchor the toolbar to the top-right of the device viewport. In
+    /// portrait it used to tuck below the game rect, which left the
+    /// keyboard-toggle button covered by the keyboard whenever it was
+    /// up. Placing it at the top keeps it reachable in every
+    /// orientation + layout mode. A sensor strip takes the toolbar as
+    /// a column, in the highest gap of the strip that the system does
+    /// not draw over.
+    static func toolbarPlacement(
+        safeArea: EdgeInsets, geoSize: CGSize, occluded: [CGRect], btnSize: CGFloat, gap: CGFloat,
+        count: CGFloat
+    ) -> ToolbarPlacement {
+        let length = count * btnSize + (count - 1) * gap
         let topInset = max(safeArea.top, minLandscapeInset)
-        let x = geoSize.width - rightInset - toolbarEdgePad - totalW / 2
+        if let edge = safeArea.sensorStripEdge(minWidth: btnSize + 2 * toolbarEdgePad) {
+            let strip =
+                edge == .trailing
+                ? CGRect(
+                    x: geoSize.width - safeArea.trailing, y: 0, width: safeArea.trailing,
+                    height: geoSize.height)
+                : CGRect(x: 0, y: 0, width: safeArea.leading, height: geoSize.height)
+            let y = stripColumnCenterY(
+                strip: strip, occluded: occluded, top: safeArea.top,
+                bottom: geoSize.height - safeArea.bottom, length: length)
+            let x = sensorStripColumnX(strip: strip, occluded: occluded)
+            return ToolbarPlacement(
+                center: CGPoint(x: x, y: y), isVertical: true, length: length, thickness: btnSize)
+        }
+        let rightInset = max(safeArea.trailing, minLandscapeInset)
+        let x = geoSize.width - rightInset - toolbarEdgePad - length / 2
         let y = topInset + toolbarEdgePad + btnSize / 2
-        return CGPoint(x: x, y: y)
+        return ToolbarPlacement(
+            center: CGPoint(x: x, y: y), isVertical: false, length: length, thickness: btnSize)
+    }
+
+    /// Without a gap that fits, the column centers in the strip.
+    private static func stripColumnCenterY(
+        strip: CGRect, occluded: [CGRect], top: CGFloat, bottom: CGFloat, length: CGFloat
+    ) -> CGFloat {
+        var gapTop = top
+        let blocks = occluded.filter { $0.intersects(strip) }.sorted { $0.minY < $1.minY }
+        for block in blocks + [CGRect(x: strip.minX, y: bottom, width: strip.width, height: 0)] {
+            if block.minY - gapTop >= length + 2 * toolbarEdgePad {
+                return gapTop + toolbarEdgePad + length / 2
+            }
+            gapTop = max(gapTop, block.maxY)
+        }
+        return (top + bottom) / 2
     }
 
     /// Align a control onto the edit grid by its TOP-LEFT EDGE, not
@@ -142,7 +234,7 @@ enum ControlsZone {
 
     static func absolutePosition(
         for relativeCenter: CGPoint, in size: CGSize, controlSize: CGSize, safeArea: EdgeInsets,
-        controlsMinY: CGFloat
+        controlsMinY: CGFloat, keepout: CGRect
     ) -> CGPoint {
         let pad = padding + innerPadding
         let hw = controlSize.width * 0.5
@@ -155,12 +247,15 @@ enum ControlsZone {
         let cy = max(minY, min(relativeCenter.y * size.height, maxY))
         let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: size)
         let radii = cornerRadii(safeArea: safeArea)
-        return clampToRoundedCorners(
-            CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), zone: zone, radii: radii)
+        let pushed = pushedOutOfKeepout(
+            CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), keepout: keepout,
+            geoSize: size, safeArea: safeArea, controlsMinY: controlsMinY)
+        return clampToRoundedCorners(pushed, controlHalf: max(hw, hh), zone: zone, radii: radii)
     }
 
     static func clampToSafeArea(
-        _ point: CGPoint, controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat
+        _ point: CGPoint, controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
+        keepout: CGRect
     ) -> CGPoint {
         let pad = padding + innerPadding
         let hw = controlSize * 0.5
@@ -169,7 +264,10 @@ enum ControlsZone {
         let y = max(minY, min(point.y, geoSize.height - safeArea.bottom - pad - hw))
         let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let radii = cornerRadii(safeArea: safeArea)
-        return clampToRoundedCorners(CGPoint(x: x, y: y), controlHalf: hw, zone: zone, radii: radii)
+        let pushed = pushedOutOfKeepout(
+            CGPoint(x: x, y: y), controlHalf: hw, keepout: keepout,
+            geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
+        return clampToRoundedCorners(pushed, controlHalf: hw, zone: zone, radii: radii)
     }
 
     static func clampToRoundedCorners(

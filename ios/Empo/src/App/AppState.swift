@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import Observation
@@ -18,6 +21,7 @@ class AppState {
 
     var phase: GamePhase?
     var selectedGame: GameEntry?
+    private(set) var launchedSettings: LaunchedSettings?
     var errorMessage: String?
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
     /// The core blocks its game thread until the user dismisses
@@ -45,7 +49,7 @@ class AppState {
     var pendingCrashRecovery: Bool { session.pendingCrashRecovery }
 
     func checkForUpdatesIfStale() async {
-        guard UpdateChecker.isSideloadOrDevBuild else { return }
+        guard UpdateChecker.isSideloadBuild else { return }
         updateStatus = .checking
         let result = await UpdateChecker.checkIfStale()
         withAnimation(Motion.standard) {
@@ -54,7 +58,7 @@ class AppState {
     }
 
     func checkForUpdatesNow() async {
-        guard UpdateChecker.isSideloadOrDevBuild else { return }
+        guard UpdateChecker.isSideloadBuild else { return }
         updateStatus = .checking
         let result = await UpdateChecker.checkNow()
         withAnimation(Motion.standard) {
@@ -79,45 +83,31 @@ class AppState {
         }
 
         guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil else { return }
-        guard let container = game.container,
-            let core = GameCores.core(forGameAt: container.gameURL), core.isInThisBuild
-        else { return }
-        SaveMigration.migrateLegacySavesIfNeeded(for: container)
+        let start: GameStart
+        do {
+            start = try GameStart(game: game)
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
         // The hard stop of 7.6. A restore in flight stops at once,
         // and it keeps its record and its staged blobs.
         RestoreCoordinator.shared.stopForGameLaunch()
         selectedGame = game
+        launchedSettings = start.launchedSettings
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
-        ControlsLayout.shared.switchGame(id: game.id, container: container, title: game.title)
+        ControlsLayout.shared.switchGame(id: game.id, container: start.container, title: game.title)
         PauseManager.shared.reset()
         phase = .loading
-
-        // Everything related to this game lives inside
-        // `<container>/`. `Game/` holds the imported files (engine
-        // cwd target). `EmpoState/` holds Empo-managed config
-        // (mkxp.json, patches.json, game_settings.json,
-        // .session-active, etc.). `Logs/` and `Metadata/` complete
-        // the per-game tree.
-        try? container.ensureSubdirs()
-        // The engine compares this path against getcwd output, so
-        // it must receive the symlink-resolved spelling (see
-        // `engineSpelling` for the /var vs /private/var trap).
-        let userDataDir = DataDirectory.resolveAndPrepare(for: container, core: core)
-            .map(DataDirectory.engineSpelling(of:))
-        let stateDir = container.empoStateURL
-
-        ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDir)
-
-        let settings = GameSettings.load(from: stateDir)
 
         session.configureEngine(
             GameSession.LaunchInput(
                 game: game,
-                container: container,
-                userDataDir: userDataDir,
-                core: core,
-                settings: settings,
+                container: start.container,
+                userDataDir: start.userDataDirectory,
+                core: start.core,
+                settings: start.settings,
                 debugLogsEnabled: AppSettings.shared.debugLogs
             )
         )
@@ -182,6 +172,7 @@ class AppState {
     }
 
     @ObservationIgnored private var quitOnPause = false
+    @ObservationIgnored private var quitTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
 
     /// Pauses the game, so the library comes back the same way, and
@@ -196,6 +187,16 @@ class AppState {
         guard canQuitGame else { return }
         quitOnPause = true
         requestPause()
+        // A Ruby game pauses only between two frames, so a game that
+        // runs a long script does not pause. Ending it then could cut a
+        // save that it is writing, so the quit stops, and a later pause
+        // only pauses.
+        quitTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self, !Task.isCancelled, quitOnPause else { return }
+            session.note("The game did not pause in time, and the quit stopped.")
+            quitOnPause = false
+        }
     }
 
     private var activeSessionGame: GameEntry? {
@@ -240,21 +241,28 @@ class AppState {
     /// transition.
     func handlePause(snapshot: UIImage?) {
         guard phase == .playing else { return }
-        if EngineState.shared.isBackgroundPause { return }
+        // A quit can meet a background pause: the app went to the
+        // background before the game paused for the quit.
         if quitOnPause {
             session.note("The player quit the game.")
-            session.killSession(of: selectedGame)
-            clearEndedGame()
+            let game = selectedGame
+            // The phase changes first, in the same transaction. A change
+            // made before an animated phase change makes SwiftUI draw
+            // inside the phase's willSet, with `.playing`, and the screen
+            // can keep the game controls after the quit.
             withAnimation(Motion.snappy) {
                 phase = nil
+                session.killSession(of: game)
+                clearEndedGame()
             }
             return
         }
+        if EngineState.shared.isBackgroundPause { return }
         let pm = PauseManager.shared
-        pm.pauseSnapshot = snapshot
-        pm.pausedGame = selectedGame
         withAnimation(Motion.snappy) {
             phase = nil
+            pm.pauseSnapshot = snapshot
+            pm.pausedGame = selectedGame
         }
     }
 
@@ -365,9 +373,12 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // game goes away below, so read it first.
         let played = activeSessionGame
         quitOnPause = false
+        quitTask?.cancel()
+        quitTask = nil
         resumeTask?.cancel()
         resumeTask = nil
         selectedGame = nil
+        launchedSettings = nil
         // Unbind the controls layout. Library-screen UI that reads
         // it then sees a neutral default, and mutations (they should
         // not occur, but still) do not write to the last-played

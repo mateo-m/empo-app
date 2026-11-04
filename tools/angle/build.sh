@@ -1,18 +1,25 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Builds the ANGLE prebuilt that tools/fetch-angle.sh downloads, from
 # source, with the patches in this folder.
 #
 # Usage:
 #   tools/angle/build.sh [work-dir] [out-dir]
 #
-# out-dir gets iphoneos/{include,lib} and iphonesimulator/{include,lib},
-# the layout of ios/Dependencies/ANGLE.
+# out-dir gets iphoneos/{include,lib}, iphonesimulator/{include,lib} and
+# macosx/{include,lib}, the layout of ios/Dependencies/ANGLE.
 set -eu
 
 ANGLE_COMMIT=d81d29e166b6af1181f06e56c916c06676dd6ad1
+DEPOT_TOOLS_COMMIT=a03dfbf7f2d1cefa2795d81d59ca4f16c8616a8f
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-${TMPDIR:-/tmp}/empo-angle}"
 DEST="${2:-$HERE/../../ios/Dependencies/ANGLE}"
+mkdir -p "$WORK" "$DEST"
+WORK="$(cd "$WORK" && pwd)"
+DEST="$(cd "$DEST" && pwd)"
 SRC="$WORK/angle"
 
 [ -d "$SRC/.git" ] || git init -q "$SRC"
@@ -21,10 +28,13 @@ git -C "$SRC" cat-file -e "$ANGLE_COMMIT^{commit}" 2>/dev/null ||
 git -C "$SRC" reset -q --hard "$ANGLE_COMMIT"
 for p in "$HERE"/*.patch; do git -C "$SRC" apply "$p"; done
 
-[ -d "$WORK/depot_tools" ] ||
-    git clone -q --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$WORK/depot_tools"
+TOOLS="$WORK/depot_tools"
+[ -d "$TOOLS/.git" ] || git init -q "$TOOLS"
+git -C "$TOOLS" cat-file -e "$DEPOT_TOOLS_COMMIT^{commit}" 2>/dev/null ||
+    git -C "$TOOLS" fetch -q --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$DEPOT_TOOLS_COMMIT"
+git -C "$TOOLS" reset -q --hard "$DEPOT_TOOLS_COMMIT"
 
-export PATH="$WORK/depot_tools:$PATH" DEPOT_TOOLS_UPDATE=0
+export PATH="$TOOLS:$PATH" DEPOT_TOOLS_UPDATE=0
 cd "$SRC"
 if [ ! -f .gclient ]; then
     python3 scripts/bootstrap.py
@@ -43,9 +53,9 @@ ln -sf "$XCODE_CLANG/bin/clang" "$XCODE_CLANG/bin/clang++" "$TOOLCHAIN/bin/"
 ln -sf "$SRC/third_party/llvm-build/Release+Asserts/bin/llvm-ar" "$TOOLCHAIN/bin/llvm-ar"
 CLANG_VERSION="$(find "$XCODE_CLANG/lib/clang" -mindepth 1 -maxdepth 1 -exec basename {} \; | grep -E '^[0-9]+$' | sort -n | tail -1)"
 
-ARGS="target_os=\"ios\" target_cpu=\"arm64\" ios_deployment_target=\"16.0\"
+ARGS="target_cpu=\"arm64\"
 is_debug=false is_component_build=false symbol_level=1
-use_custom_libcxx=false ios_enable_code_signing=false
+use_custom_libcxx=false
 clang_base_path=\"$TOOLCHAIN\" clang_version=\"$CLANG_VERSION\"
 clang_use_chrome_plugins=false treat_warnings_as_errors=false
 angle_enable_metal=true angle_enable_vulkan=false angle_enable_gl=false
@@ -53,12 +63,15 @@ angle_enable_null=false angle_enable_wgpu=false angle_enable_swiftshader=false
 angle_has_frame_capture=false angle_build_tests=false build_angle_deqp_tests=false"
 
 GN="$SRC/buildtools/mac/gn"
-for pair in iphoneos:ios-arm64: iphonesimulator:sim-arm64:simulator; do
-    sdk="${pair%%:*}"
-    rest="${pair#*:}"
-    out="$SRC/out/${rest%%:*}"
-    env="${rest#*:}"
-    "$GN" gen "$out" --args="$ARGS target_environment=\"${env:-device}\""
+IOS_ARGS="target_os=\"ios\" ios_deployment_target=\"16.0\" ios_enable_code_signing=false"
+for sdk in iphoneos iphonesimulator macosx; do
+    case "$sdk" in
+        iphoneos) out=ios-arm64 sdk_args="$IOS_ARGS target_environment=\"device\"" ;;
+        iphonesimulator) out=sim-arm64 sdk_args="$IOS_ARGS target_environment=\"simulator\"" ;;
+        macosx) out=mac-arm64 sdk_args="target_os=\"mac\" mac_deployment_target=\"26.0\"" ;;
+    esac
+    out="$SRC/out/$out"
+    "$GN" gen "$out" --args="$ARGS $sdk_args"
     third_party/ninja/ninja -C "$out" libEGL_static libGLESv2_static
 
     # gn makes thin archives of the libraries alone. The app links three

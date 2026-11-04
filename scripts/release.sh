@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -18,8 +21,8 @@ usage() {
     echo "  1. verifies empo-deps pins"
     echo "  2. bumps version, generates the changelog, commits, tags"
     echo "  3. pushes and exits. The Release workflow builds, audits,"
-    echo "     and publishes the IPA. It syncs the AltStore manifest"
-    echo "     straight to main and announces on Discord."
+    echo "     and publishes the IPA and the Mac disk image. It syncs the"
+    echo "     AltStore manifest straight to main and announces on Discord."
     echo ""
     echo "You can cut the same release without this script at all:"
     echo "GitHub > Actions > Release > Run workflow (mode=cut)."
@@ -71,15 +74,22 @@ repo_slug() {
 # bypass).
 run_ci_sync() {
     local version="$1"
-    local ipa_name="Empo-${version}-unsigned.ipa"
+    # Releases before 0.10.1 named the file Empo-<version>-unsigned.ipa.
+    local ipa_name="Empo-ios.ipa"
+    local legacy_ipa_name="Empo-${version}-unsigned.ipa"
     local i
 
     echo "==> waiting for the Release workflow to publish $ipa_name"
-    local ipa_size=""
+    local ipa_size="" asset=""
     for i in $(seq 1 120); do
-        ipa_size=$(gh release view "v$version" --json assets \
-            --jq ".assets[] | select(.name == \"$ipa_name\") | .size" 2>/dev/null || true)
-        [[ -n "$ipa_size" ]] && break
+        asset=$(gh release view "v$version" --json assets \
+            --jq "[.assets[] | select(.name == \"$ipa_name\" or .name == \"$legacy_ipa_name\")][0] | select(.) | .name + \" \" + (.size | tostring)" \
+            2>/dev/null || true)
+        if [[ -n "$asset" ]]; then
+            ipa_name="${asset% *}"
+            ipa_size="${asset##* }"
+            break
+        fi
         local run_status
         run_status=$(gh run list --workflow=release.yml --branch "v$version" --limit 1 \
             --json status,conclusion --jq '.[0] | .status + ":" + (.conclusion // "")' 2>/dev/null || true)
@@ -100,7 +110,7 @@ run_ci_sync() {
     echo "==> syncing altstore source"
     local slug notes build release_date
     slug=$(repo_slug)
-    notes=$("$REPO_ROOT/scripts/whats-new-notes.sh" "$version" "$CHANGELOG_PATH")
+    notes=$("$REPO_ROOT/scripts/altstore-notes.sh" "$version" "$CHANGELOG_PATH")
     build=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' "$PROJECT_YML" | head -n 1)
     release_date=$(date -u +%Y-%m-%d)
     bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
@@ -235,27 +245,19 @@ cd "$REPO_ROOT"
 # `--unreleased --tag` covers everything since the previous tag
 # under the version we're about to ship. After prepending the entry to
 # CHANGELOG.md, re-read that section back out so the GitHub release
-# uses the exact committed text. AltStore gets the What's new items
-# from scripts/whats-new-notes.sh.
+# uses the exact committed text. AltStore gets the same section as
+# plain text from scripts/altstore-notes.sh.
 echo "==> generating release notes"
 # git-cliff reads the PR labels from the GitHub API. Without a token,
 # GitHub allows 60 requests an hour.
 if [[ -z "${GITHUB_TOKEN:-}" ]] && GH_AUTH_TOKEN=$(gh auth token 2>/dev/null); then
     export GITHUB_TOKEN="$GH_AUTH_TOKEN"
 fi
-FULL_CHANGELOG_ENTRY=$(git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased --tag "v$VERSION")
-
-if [[ -f "$CHANGELOG_PATH" ]]; then
-    git-cliff --config "$REPO_ROOT/cliff.toml" --unreleased --tag "v$VERSION" --prepend "$CHANGELOG_PATH"
-else
-    printf '%s\n' "$FULL_CHANGELOG_ENTRY" >"$CHANGELOG_PATH"
-fi
-
-perl -0pi -e 's/\n{3,}/\n\n/g' "$CHANGELOG_PATH"
+"$REPO_ROOT/scripts/changelog.sh" "$VERSION"
 
 CHANGELOG=$("$REPO_ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH")
 
-RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> Unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing." "$CHANGELOG")
+RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> iPhone and iPad: unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing.\n>\n> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it." "$CHANGELOG")
 
 # 8. Commit + tag (signed). Tag the release metadata first so the IPA
 # build below runs from a clean tree and bakes the release commit hash
@@ -292,7 +294,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     echo "==> building unsigned ipa"
     BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
-    rm -rf "$BUILD_DIR"
+    DERIVED_DATA="$PROJECT_DIR/build/DerivedData"
+    # Xcode does not write Extensions/Empo.appexpt again when the old
+    # build data says the step is done, also when the file is gone.
+    rm -rf "$BUILD_DIR" "$DERIVED_DATA"
     # A -target build cannot find the module map of the json5cpp package
     # target on Xcode 27, so build the scheme, as release.yml does.
     xcodebuild \
@@ -300,8 +305,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         -scheme Empo \
         -destination 'generic/platform=iOS' \
         -configuration Release \
+        -derivedDataPath "$DERIVED_DATA" \
         CODE_SIGNING_ALLOWED=NO \
         CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+        -xcconfig "$PROJECT_DIR/Sideload.xcconfig" \
         ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
         build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
 
@@ -311,6 +318,10 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
         exit 1
     fi
 
+    # SideStore and AltStore give an extension in Extensions/ no new
+    # bundle ID, and iOS then refuses to install the whole app.
+    rm -rf "$APP_PATH/Extensions"
+
     echo "==> ad-hoc signing with entitlements"
     "$REPO_ROOT/scripts/sign-app.sh" "$APP_PATH"
 
@@ -319,12 +330,17 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
 
     mkdir -p "$IPA_DIR/Payload"
     cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
-    IPA_NAME="Empo-${VERSION}-unsigned.ipa"
+    IPA_NAME="Empo-ios.ipa"
+    # zip adds to an existing archive, so start from an empty one.
+    rm -f "$IPA_DIR/$IPA_NAME"
     (cd "$IPA_DIR" && zip -qr "$IPA_NAME" Payload)
     rm -rf "$IPA_DIR/Payload"
     IPA_PATH="$IPA_DIR/$IPA_NAME"
     IPA_SIZE=$(stat -f%z "$IPA_PATH")
     echo "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
+
+    DMG_PATH=$("$REPO_ROOT/scripts/package-mac.sh" "$VERSION" | tail -n 1)
+    echo "    mac: $DMG_PATH"
 
     # 10. Update AltStore source from the locally-built artifact so the
     # manifest lands through the same signed release flow as every other
@@ -347,7 +363,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     IPA_DOWNLOAD_URL="https://github.com/$REPO_SLUG/releases/download/v$VERSION/$IPA_NAME"
     RELEASE_DATE=$(date -u +%Y-%m-%d)
 
-    NOTES=$("$REPO_ROOT/scripts/whats-new-notes.sh" "$VERSION" "$CHANGELOG_PATH")
+    NOTES=$("$REPO_ROOT/scripts/altstore-notes.sh" "$VERSION" "$CHANGELOG_PATH")
     bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
         --version "$VERSION" \
         --build "$BUILD" \
@@ -376,7 +392,7 @@ if [[ "$LOCAL_BUILD" == "1" ]]; then
     gh release create "v$VERSION" \
         --title "v$VERSION" \
         --notes "$RELEASE_NOTES" \
-        "$IPA_PATH"
+        "$IPA_PATH" "$DMG_PATH"
     echo "==> done - v$VERSION released (local build)"
 else
     echo "==> done - v$VERSION handed off to CI, which finishes the release"

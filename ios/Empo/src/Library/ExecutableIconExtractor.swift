@@ -1,5 +1,13 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// Extracts the embedded icon from a Windows PE executable
 /// (`Game.exe` and friends) and returns it as a `UIImage`. Used as

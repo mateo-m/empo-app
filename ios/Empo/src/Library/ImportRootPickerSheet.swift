@@ -1,5 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
-import UIKit
 
 /// Root picker for sources that contain more than one game,
 /// presented as up to two steps:
@@ -51,12 +53,10 @@ struct ImportRootPickerSheet: View {
         self.onCancel = onCancel
         self.onConfirm = onConfirm
 
-        let updateChoices = prompt.choices.filter { prompt.updatingChoiceIDs.contains($0.id) }
-        let freshChoices = prompt.choices.filter { !prompt.updatingChoiceIDs.contains($0.id) }
-        self.freshChoices = freshChoices
-        self.updateChoices = updateChoices
-        _step = State(initialValue: freshChoices.isEmpty ? .update : .add)
-        _selectedUpdateIDs = State(initialValue: Set(updateChoices.map(\.id)))
+        freshChoices = prompt.freshChoices
+        updateChoices = prompt.updateChoices
+        _step = State(initialValue: prompt.freshChoices.isEmpty ? .update : .add)
+        _selectedUpdateIDs = State(initialValue: Set(prompt.updateChoices.map(\.id)))
     }
 
     private var stepChoices: [GameImportValidator.ImportRootChoice] {
@@ -71,30 +71,26 @@ struct ImportRootPickerSheet: View {
         selectedFreshIDs.count + selectedUpdateIDs.count
     }
 
-    private var navigationTitle: String {
+    private var navigationTitle: LocalizedStringResource {
         step == .add ? "Add games" : "Already in your library"
     }
 
-    private var bannerText: String {
-        step == .add
-            ? "This import includes more than one game"
-            : "Importing replaces the installed games"
+    private var bannerText: LocalizedStringResource {
+        ImportRootPrompt.title(showingUpdates: step == .update)
     }
 
     private var bannerSystemImage: String {
         step == .add ? "square.stack.3d.up.fill" : "arrow.triangle.2.circlepath"
     }
 
-    private var explainerText: String {
+    private var explainerText: LocalizedStringResource {
         switch step {
         case .add where updateChoices.isEmpty:
             return "Choose the games you want to add to your library."
         case .add:
-            return "Choose the new games to add. "
-                + "Next, review the ones you already have."
+            return "Choose the new games to add. Next, review the ones you already have."
         case .update:
-            return "Choose which games to update. "
-                + "The others stay as they are, and saves are always kept."
+            return "Choose which games to update. The others stay as they are, and saves are always kept."
         }
     }
 
@@ -144,7 +140,9 @@ struct ImportRootPickerSheet: View {
                         }
                         .disabled(confirmedSelectionCount == 0)
                     } else {
-                        Button("Next") {
+                        Button(
+                            LocalizedStringResource("Next", comment: "Moves to the next step of the import")
+                        ) {
                             withAnimation(Motion.gentle) { step = .update }
                         }
                     }
@@ -223,7 +221,7 @@ struct ImportRootPickerSheet: View {
 /// Brand-tinted banner atop import sheets. Shared by the root
 /// picker and the update picker.
 struct ImportRootHintBanner: View {
-    let text: String
+    let text: LocalizedStringResource
     var systemImage: String = "square.stack.3d.up.fill"
 
     var body: some View {
@@ -284,72 +282,5 @@ private struct ImportRootChoiceRow: View {
         .padding(.horizontal, Spacing._2xl)
         .padding(.vertical, Spacing.md)
         .contentShape(Rectangle())
-    }
-}
-
-/// Square artwork thumbnail for import sheet rows. Shared by the
-/// root picker and the update picker.
-struct ImportRootChoiceArtworkView: View {
-    let artwork: ImportRootChoiceArtwork?
-
-    var body: some View {
-        ZStack {
-            placeholderBackground
-            renderedArtwork
-        }
-        .frame(width: AppSize.listArtwork, height: AppSize.listArtwork)
-        .clipShape(.rect(cornerRadius: Radius.sm))
-    }
-
-    @ViewBuilder
-    private var renderedArtwork: some View {
-        if let data = artwork?.imageData {
-            if let image = UIImage(data: data) {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                placeholderIcon
-            }
-        } else if let data = artwork?.iconData {
-            if let image = UIImage(data: data) {
-                GeometryReader { geo in
-                    let side = min(geo.size.width, geo.size.height)
-                    Image(uiImage: image)
-                        .resizable()
-                        .interpolation(.high)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: side * 0.75, height: side * 0.75)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else {
-                placeholderIcon
-            }
-        } else {
-            placeholderIcon
-        }
-    }
-
-    private var placeholderIcon: some View {
-        Image(.empoMark)
-            .resizable()
-            .scaledToFit()
-            .frame(width: 16, height: 16)
-            .foregroundStyle(.quaternary)
-    }
-
-    private var placeholderBackground: some View {
-        ZStack {
-            Color(.secondarySystemBackground)
-            LinearGradient(
-                stops: [
-                    .init(color: .white.opacity(0.10), location: 0),
-                    .init(color: .clear, location: 0.5),
-                    .init(color: .black.opacity(0.05), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
     }
 }

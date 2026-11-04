@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 
@@ -28,10 +31,7 @@ enum UserControlsFile {
     static func logFindings(_ findings: [ControlsManifestLoader.Finding], container: GameContainer) {
         guard !findings.isEmpty else { return }
         for finding in findings {
-            let severity = finding.severity == .error ? "error" : "warning"
-            let line =
-                "\(logPrefix) [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
-            container.appendLogLine(line, fileName: logFileName)
+            container.appendLogLine(finding.logLine(prefix: logPrefix), fileName: logFileName)
         }
     }
 

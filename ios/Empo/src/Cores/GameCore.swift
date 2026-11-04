@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import SwiftUI
 
@@ -60,6 +63,7 @@ protocol GameCore {
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning?
 
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)?
+    @MainActor func launchedSettings(for container: GameContainer) -> (any CoreLaunchedSettings)?
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults
     /// The folder under `Documents/Data/` that the app gives the game for
     /// its saves, as path components. Two games with the same folder
@@ -70,6 +74,8 @@ protocol GameCore {
 
     /// Rows for the Runtime section of Game Info. Empty hides the section.
     func infoRows(for container: GameContainer) async -> [InfoRow]
+    /// The tool and its edition for one game, such as "RPG Maker VX Ace".
+    func madeWith(at root: URL) -> String
 }
 
 extension GameCore {
@@ -95,12 +101,17 @@ extension GameCore {
     func launch(_ container: GameContainer) {}
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? { nil }
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)? { nil }
+    @MainActor func launchedSettings(for container: GameContainer) -> (any CoreLaunchedSettings)? { nil }
     func displayDefaults(for container: GameContainer) -> GameDisplayDefaults { GameDisplayDefaults() }
     func sharedDataFolder(for container: GameContainer) -> [String]? { nil }
     func infoRows(for container: GameContainer) async -> [InfoRow] { [] }
+    func madeWith(at root: URL) -> String { madeWith }
 
     var notInThisBuildMessage: String {
-        "This build of Empo has no \(displayName), so it can't run this game."
+        String(
+            localized: "This build of Empo has no \(displayName), so it can't run this game.",
+            comment: "The placeholder is a game core name, such as PSDK core for Ruby 3.0."
+        )
     }
 
     /// `EngineSessionCoordinator.openCore` opens this path, so a core is
@@ -142,14 +153,21 @@ enum GameCores {
     /// Maker XP, VX and VX Ace games".
     static var gameProcessGamesName: String {
         var names: [String] = []
-        for core in gameProcessCores where !names.contains("\(core.gamesName) games") {
-            names.append("\(core.gamesName) games")
+        for core in gameProcessCores {
+            let name = String(
+                localized: "\(core.gamesName) games",
+                comment: "The placeholder is the name of a game engine, for example RPG Maker XP.")
+            if !names.contains(name) { names.append(name) }
         }
         return ListFormatter.localizedString(byJoining: names)
     }
 
     static func core(forGameAt url: URL, fileManager: FileManager = .default) -> (any GameCore)? {
         all.first { $0.isGameRoot(url, fileManager: fileManager) }
+    }
+
+    static func supportsCheats(in container: GameContainer?) -> Bool {
+        container.flatMap { core(forGameAt: $0.gameURL) }?.supportsCheats ?? false
     }
 
     /// The first picture in `Graphics/Titles`, where RGSS and PSDK games

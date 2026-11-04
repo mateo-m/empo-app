@@ -1,4 +1,8 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
+import GameProbe
 import UIKit
 
 /// Bridge seam: registers mkxp callbacks, owns session-scoped services,
@@ -34,24 +38,13 @@ final class EngineSessionCoordinator {
     private(set) var openedCore: (any GameCore)?
     /// Where the game of `openedCore` runs.
     private(set) var runner: GameRunner = .app
-    /// Per-scancode press start times. Light taps release before the
-    /// RGSS thread observes a pressed-edge. We defer KEYUP until the
-    /// key has been down for at least one frame (~16ms @ 60fps, with
-    /// headroom). Same idea as `injectKeyTap(holdMilliseconds:)`.
-    private var keyPressStartedAt: [Int32: ContinuousClock.Instant] = [:]
-    private var pendingKeyReleases: [Int32: Task<Void, Never>] = [:]
-    private static let minimumKeyHold: Duration = .milliseconds(50)
-    /// Who currently holds each game key. Touch buttons, controller
-    /// elements and keyboard keys all press the same small set of
-    /// keys, so the engine may only see a release once the LAST
-    /// holder lets go.
-    private var keyHolders: [Int32: Set<KeyHolder>] = [:]
+    let heldKeys = HeldKeys<KeyHolder>(send: { gamecore_injectKeyEvent($0, $1 ? 1 : 0) })
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
 
-    static let crashMessage =
-        "The game crashed last time. Your saves are safe. "
-        + "Open it again to keep playing."
+    static var crashMessage: String {
+        String(localized: "The game crashed last time. Your saves are safe. Open it again to keep playing.")
+    }
 
     private init() {
         sessionLogger.onPlayTimeFlushed = { gameID in
@@ -140,7 +133,7 @@ final class EngineSessionCoordinator {
         if let container = game?.container {
             crashTracker.removeMarker(for: container)
         }
-        clearPendingKeyHolds()
+        heldKeys.clear()
         switch runner {
         case .gameProcess: GameProcessHost.end()
         case .app: EmpoCoreKillSession()
@@ -235,93 +228,26 @@ final class EngineSessionCoordinator {
 
     // MARK: - Held keys
 
-    /// The engine sees a press when the first holder arrives. Holding
-    /// twice with the same holder changes nothing.
     func holdKey(scancode: Int32, by holder: KeyHolder) {
-        var holders = keyHolders[scancode] ?? []
-        let wasEmpty = holders.isEmpty
-        holders.insert(holder)
-        keyHolders[scancode] = holders
-        if wasEmpty {
-            injectKey(scancode: scancode, pressed: true)
-        }
+        heldKeys.hold(scancode, by: holder)
     }
 
-    /// The engine sees a release when the last holder lets go.
     func releaseKey(scancode: Int32, by holder: KeyHolder) {
-        guard var holders = keyHolders[scancode], holders.remove(holder) != nil else { return }
-        if holders.isEmpty {
-            keyHolders.removeValue(forKey: scancode)
-            injectKey(scancode: scancode, pressed: false)
-        } else {
-            keyHolders[scancode] = holders
-        }
+        heldKeys.release(scancode, by: holder)
     }
 
-    /// Drops every key one source holds. Input paths call this when
-    /// they lose the release edges: a controller unplugged, a remap
-    /// screen opening, a session ending.
+    /// Input paths call this when they lose the release edges: a
+    /// controller unplugged, a remap screen opening, a session ending.
     func releaseKeys(from source: KeyHolder.Source) {
-        for (scancode, holders) in keyHolders {
-            for holder in holders where holder.source == source {
-                releaseKey(scancode: scancode, by: holder)
-            }
-        }
+        heldKeys.release { $0.source == source }
     }
 
     func injectKey(scancode: Int32, pressed: Bool) {
-        if pressed {
-            pendingKeyReleases.removeValue(forKey: scancode)?.cancel()
-            keyPressStartedAt[scancode] = .now
-            gamecore_injectKeyEvent(scancode, 1)
-            return
-        }
-
-        pendingKeyReleases.removeValue(forKey: scancode)?.cancel()
-
-        guard let started = keyPressStartedAt[scancode] else {
-            gamecore_injectKeyEvent(scancode, 0)
-            return
-        }
-
-        let held = ContinuousClock.now - started
-        if held >= Self.minimumKeyHold {
-            keyPressStartedAt.removeValue(forKey: scancode)
-            gamecore_injectKeyEvent(scancode, 0)
-            return
-        }
-
-        let remaining = Self.minimumKeyHold - held
-        pendingKeyReleases[scancode] = Task { @MainActor in
-            try? await Task.sleep(for: remaining)
-            guard !Task.isCancelled else { return }
-            self.keyPressStartedAt.removeValue(forKey: scancode)
-            self.pendingKeyReleases.removeValue(forKey: scancode)
-            gamecore_injectKeyEvent(scancode, 0)
-        }
+        heldKeys.inject(scancode, pressed: pressed)
     }
 
     func injectKeyTap(scancode: Int32, holdMilliseconds: Int = 50) {
-        injectKey(scancode: scancode, pressed: true)
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(holdMilliseconds))
-            injectKey(scancode: scancode, pressed: false)
-        }
-    }
-
-    private func clearPendingKeyHolds() {
-        for task in pendingKeyReleases.values {
-            task.cancel()
-        }
-        pendingKeyReleases.removeAll()
-        for scancode in keyPressStartedAt.keys {
-            gamecore_injectKeyEvent(scancode, 0)
-        }
-        keyPressStartedAt.removeAll()
-        // A holder left behind would make the next session's first
-        // press look like a second one, and the engine would never
-        // see it.
-        keyHolders.removeAll()
+        heldKeys.tap(scancode, holdMilliseconds: holdMilliseconds)
     }
 
     private func registerBridgeCallbacks() {

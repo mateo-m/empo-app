@@ -1,12 +1,10 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
-/// Features in testing. Shown only in a build with a core in
-/// `GameCores.gameProcessCores`, because the one feature here is the
-/// game process for those cores.
 struct ExperimentalSection: View {
     @Environment(\.appSettings) private var settings
-
-    private let isAvailable = AppSettings.gameProcessIsAvailable
 
     var body: some View {
         Section {
@@ -14,20 +12,20 @@ struct ExperimentalSection: View {
                 SettingsToggle(
                     title: "Quit and switch games",
                     isOn: Binding(
-                        get: { isAvailable && settings.rubyGameRunner == .gameProcess },
+                        get: { settings.rubyGameRunner == .gameProcess },
                         set: { settings.rubyGameRunner = $0 ? .gameProcess : .app }
                     ),
                     description:
                         "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.gameProcessGamesName)."
                 )
-                .disabled(!isAvailable)
-                if !isAvailable {
+                if settings.rubyGameRunner == .gameProcess, DataDirectory.unmovedItem != nil {
                     Label(
-                        "Not available. The tool that installed \(AppInfo.name) doesn't allow the shared storage this feature needs.",
-                        systemImage: "info.circle"
+                        "Couldn't move your games and saves, so this setting isn't on yet. Your files didn't change. \(AppInfo.name) tries again each time you open it.",
+                        systemImage: "exclamationmark.triangle"
                     )
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.warning)
+                    .transition(.opacity)
                 } else if settings.rubyGameRunner != AppSettings.rubyGameRunnerThisLaunch {
                     Label(
                         "Close \(AppInfo.name) from the app switcher and open it again to apply this change.",
@@ -47,7 +45,7 @@ struct ExperimentalSection: View {
             Text("Experimental")
         } footer: {
             Text(
-                "These features are still in testing. If a game stops or doesn't start, share its report from the game's Info and attach it to a GitHub issue."
+                "These features are still in testing. If a game stops or doesn't start, turn on Debug logs and play it again. Then share its report from the game's Info and attach it to a GitHub issue."
             )
         }
     }

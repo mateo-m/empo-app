@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import XCTest
 
 /// Plays each game of EMPO_GP_GAMES (titles joined by "|") in turn. It
 /// taps and types in each game, pauses it, then starts the next with
-/// "Close and Play", or quits it when the same game comes next. It
+/// "Close and play", or quits it when the same game comes next. It
 /// quits the last one from the More sheet, then
 /// plays the first one again and quits it.
 final class GameProcessUITests: XCTestCase {
@@ -25,7 +28,7 @@ final class GameProcessUITests: XCTestCase {
         if let ruby = env["EMPO_TEMP_RUBY"] { app.launchEnvironment["EMPO_TEMP_RUBY"] = ruby }
         XCUIDevice.shared.orientation = .portrait
         app.launch()
-        let understand = app.buttons["I understand"]
+        let understand = app.buttons["Continue"]
         if understand.waitForExistence(timeout: 8) { understand.tap() }
         sleep(3)
 
@@ -339,7 +342,7 @@ final class GameProcessUITests: XCTestCase {
             "-whatsNewSeenVersion", "999", "-rubyGameRunner", env["EMPO_GP_RUNNER"] ?? "gameProcess",
         ]
         app.launch()
-        let understand = app.buttons["I understand"]
+        let understand = app.buttons["Continue"]
         if understand.waitForExistence(timeout: 8) { understand.tap() }
         sleep(3)
         start(app, game: env["EMPO_FP_TITLE"] ?? fpGame)
@@ -365,7 +368,7 @@ final class GameProcessUITests: XCTestCase {
                 continue
             }
             let play = alert.buttons.matching(
-                NSPredicate(format: "label IN %@", ["Close and Play", "Play anyway"])
+                NSPredicate(format: "label IN %@", ["Close and play", "Play anyway"])
             ).firstMatch
             XCTAssertTrue(play.exists, "\(game): unknown alert \(alert.label)")
             play.tap()

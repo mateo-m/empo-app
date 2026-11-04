@@ -1,12 +1,13 @@
 These terms cover the Empo app and this documentation site.
 
-Last update: 7 September 2026.
+Last update: 19 October 2026.
 
 ## The licence
 
 Empo is free. You may install it, use it, and stop using it at any time. The
 source code carries its own licence in the repository, and that licence governs
-the code.
+the code. The name "Empo", the Empo logo, and the Empo icon are not part of
+that licence. TRADEMARKS.md in the repository tells which uses are permitted.
 
 ## What you supply
 
@@ -34,5 +35,6 @@ after a change means you accept the new terms.
 
 ## Contact
 
-Open an issue at [github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues),
-or ask on the [Discord server](https://discord.gg/m3YnpXMxrB).
+Send an email to [empo@mateo.sh](mailto:empo@mateo.sh), open an issue at
+[github.com/mateo-m/empo-app](https://github.com/mateo-m/empo-app/issues), or ask on the
+[Discord server](https://discord.gg/m3YnpXMxrB).

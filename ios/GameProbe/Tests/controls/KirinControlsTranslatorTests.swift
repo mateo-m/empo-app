@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import XCTest
 
 @testable import GameProbe
@@ -93,6 +96,28 @@ final class KirinControlsTranslatorTests: XCTestCase {
         assertGeometry(layout: touch.portrait!, isLandscape: false)
         assertGeometry(layout: touch.landscape!, isLandscape: true)
         assertArrangementEquality(portrait: touch.portrait!, landscape: touch.landscape!)
+    }
+
+    /// The open iPhone Duo is 951x669 on its side: more height than
+    /// the grid needs.
+    func testTallLandscapeKeepsGridAtBottom() throws {
+        var tall = metrics
+        tall.landscapeWidth = 951
+        tall.landscapeHeight = 669
+        let data = Self.referenceExampleJSON.data(using: .utf8)!
+        let landscape = try XCTUnwrap(
+            KirinControlsTranslator.translate(data: data, metrics: tall).manifest?.touch?.landscape)
+
+        let lowestButton = try XCTUnwrap(
+            landscape.buttons?.map { ($0.y * 669) + ($0.size ?? 0) / 2 }.max())
+        let dpad = try XCTUnwrap(landscape.dpad)
+        let dpadBottom = dpad.y * 669 + (dpad.size ?? 0) / 2
+        let floor = 669 - tall.landscapeBottomInset - KirinControlsTranslator.edgeMargin
+        XCTAssertEqual(max(lowestButton, dpadBottom), floor, accuracy: 1)
+
+        let highestButton = try XCTUnwrap(
+            landscape.buttons?.map { ($0.y * 669) - ($0.size ?? 0) / 2 }.min())
+        XCTAssertGreaterThan(highestButton, tall.landscapeTopInset + KirinControlsTranslator.edgeMargin)
     }
 
     // MARK: - Round-trip

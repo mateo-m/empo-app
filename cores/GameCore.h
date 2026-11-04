@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // GameCore.h - the interface a launcher calls a game core through.
 //
 // Every core implements each function here under this exact name, in
@@ -269,6 +272,9 @@ void gamecore_clearHostViewportRegion(void);
 // The UIWindow* the game draws in, or NULL before the core creates it.
 // Owned by the core. Do not retain. For embedding host controls in the
 // same window stack as the game view on iOS.
+//
+// On macOS it is the NSView* the game draws in. The launcher puts it in
+// a window of its own after gamecore_run_app.
 void *gamecore_getGameWindow(void);
 
 // Per-game settings (UI -> Engine). The launcher sets them before the

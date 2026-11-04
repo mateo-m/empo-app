@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 #import "GameProcessClient.h"
 
 #import <os/lock.h>
@@ -29,6 +32,9 @@ static void (^gExited)(void);
 // What the process said last.
 static NSDictionary<NSString *, id> *gStatus;
 static BOOL gStatusAsked;
+// Counts the setter calls. A status asked before a setter call is older
+// than the value that the setter wrote.
+static NSUInteger gStatusChanges;
 static BOOL gTextInputActive;
 static BOOL gPaused;
 static BOOL gTerminated;
@@ -56,13 +62,18 @@ static void *gResumedUserdata;
 static gamecore_FrameRenderedCallback gFrameCallback;
 static void *gFrameUserdata;
 
+// Not gLock: noteEvent runs with gLock held, and the lock is not recursive.
+static os_unfair_lock gHandlerLock = OS_UNFAIR_LOCK_INIT;
 static void (^gEventHandler)(NSString *);
+static void (^gKeyHandler)(NSInteger, BOOL);
 
 // Logs what happened to the game process, and gives it to the app for
 // the session log.
 static void noteEvent(NSString *text) {
     NSLog(@"[game-process] %@", text);
+    os_unfair_lock_lock(&gHandlerLock);
     void (^handler)(NSString *) = gEventHandler;
+    os_unfair_lock_unlock(&gHandlerLock);
     if (handler != nil) {
         handler(text);
     }
@@ -94,10 +105,13 @@ static void askForStatus(void) {
     }
     gStatusAsked = YES;
     void *token = (__bridge void *)gConnection;
+    NSUInteger changes = gStatusChanges;
     [proxyOf(gConnection) fetchStatus:^(NSDictionary<NSString *, id> *status) {
         os_unfair_lock_lock(&gLock);
         if ((__bridge void *)gConnection == token) {
-            gStatus = status;
+            if (gStatusChanges == changes) {
+                gStatus = status;
+            }
             gStatusAsked = NO;
         }
         os_unfair_lock_unlock(&gLock);
@@ -118,6 +132,7 @@ static void setStatusValue(NSString *key, id value) {
     NSMutableDictionary<NSString *, id> *status = [gStatus mutableCopy];
     status[key] = value;
     gStatus = status;
+    gStatusChanges++;
 }
 
 // The session lost its process without an end: the game stopped.
@@ -280,6 +295,20 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     }
 }
 
+- (void)keyChanged:(NSInteger)keyCode pressed:(BOOL)pressed {
+    if (!fromSession(self.connection, ^{})) {
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        os_unfair_lock_lock(&gHandlerLock);
+        void (^handler)(NSInteger, BOOL) = gKeyHandler;
+        os_unfair_lock_unlock(&gHandlerLock);
+        if (handler != nil) {
+            handler(keyCode, pressed);
+        }
+    });
+}
+
 @end
 
 @implementation EmpoGameProcessClient
@@ -328,10 +357,22 @@ static xpc_object_t lentMemory(void) {
     gSnapshotWidth = 0;
     gSnapshotHeight = 0;
     os_unfair_lock_unlock(&gLock);
-    xpc_object_t memory = lentMemory();
     send(^(id<EmpoGameProcess> process) {
+        // The process connects after the last one is gone. Until then,
+        // iOS counts the last one's memory in the app's use.
+        xpc_object_t memory = lentMemory();
+        // A game can run without the block, but iOS then stops it at
+        // the game process limit. The session log says why.
         if (memory != nil) {
-            [process useMemory:memory];
+            [process useMemory:memory
+                         reply:^(NSString *error) {
+                             if (error != nil) {
+                                 noteEvent([NSString
+                                     stringWithFormat:@"The game process has no memory block: %@", error]);
+                             }
+                         }];
+        } else if (os_proc_available_memory() > 0) {
+            noteEvent(@"The app could not make a memory block for the game process.");
         }
         // A late reply can come after a new session began, so it ends
         // only the connection that sent it.
@@ -415,7 +456,17 @@ static xpc_object_t lentMemory(void) {
 }
 
 + (void)setEventHandler:(void (^)(NSString *))handler {
-    gEventHandler = [handler copy];
+    void (^copy)(NSString *) = [handler copy];
+    os_unfair_lock_lock(&gHandlerLock);
+    gEventHandler = copy;
+    os_unfair_lock_unlock(&gHandlerLock);
+}
+
++ (void)setKeyHandler:(void (^)(NSInteger, BOOL))handler {
+    void (^copy)(NSInteger, BOOL) = [handler copy];
+    os_unfair_lock_lock(&gHandlerLock);
+    gKeyHandler = copy;
+    os_unfair_lock_unlock(&gHandlerLock);
 }
 
 + (uint64_t)memoryFootprint {

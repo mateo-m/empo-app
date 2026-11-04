@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import Observation
@@ -276,14 +279,14 @@ class ControlsLayout {
         activeManifest?.touch != nil
     }
 
-    var resetConfirmationTitle: String {
+    var resetConfirmationTitle: LocalizedStringResource {
         if case .pinnedProfile(let name) = provenance {
             return "Stop using \(name)?"
         }
-        return hasManifestTouchSection ? "Reset to game default" : "Reset to Empo default"
+        return hasManifestTouchSection ? "Reset to game default?" : "Reset to Empo default?"
     }
 
-    var resetConfirmationActionTitle: String {
+    var resetConfirmationActionTitle: LocalizedStringResource {
         if case .pinnedProfile = provenance {
             return "Stop using"
         }
@@ -293,11 +296,11 @@ class ControlsLayout {
     /// A method, not a property: building the message resolves the
     /// post-reset screen chain (two file reads). Call it when the
     /// confirm alert shows, not per render.
-    func resetConfirmationMessage() -> String {
+    func resetConfirmationMessage() -> LocalizedStringResource {
         if case .pinnedProfile(let name) = provenance {
-            let base = "This game stops using the profile \(name). The profile keeps its layout."
             return screenChangesOnReset()
-                ? base + " The screen returns to automatic placement." : base
+                ? "This game stops using the profile \(name). The profile keeps its layout. The screen returns to automatic placement."
+                : "This game stops using the profile \(name). The profile keeps its layout."
         }
         return screenChangesOnReset()
             ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
@@ -327,9 +330,6 @@ class ControlsLayout {
             readScreen: { store.readScreen($0) })
         return (isPortrait ? postReset.portrait : postReset.landscape).placement == nil
     }
-
-    private static let controlsManifestLogFile = "controls.json.log"
-    private static let separationLogFile = "controls.json.log"
 
     /// Dedupes display-time separation log lines per layout + geometry signature.
     private var separationLogSignature: String?
@@ -1176,6 +1176,11 @@ class ControlsLayout {
     /// underneath the header. Never persisted.
     var editChromeFrames: [CGRect] = []
 
+    /// The play toolbar's column in a sensor strip, in window space:
+    /// `ControlsZone.toolbarKeepout`. Controls never render or drop
+    /// there. Pushed by PlayerView. Never persisted.
+    var toolbarKeepout: CGRect = .null
+
     /// The canvas geometry an edit surface last rendered with, so
     /// the ADD flow can run a fresh control through the same
     /// clamp + collision + chrome-wall solve a drag gets. Pushed by
@@ -1254,7 +1259,7 @@ class ControlsLayout {
             let absolute = ControlsZone.absolutePosition(
                 for: relativeCenter, in: geoSize,
                 controlSize: CGSize(width: size, height: size),
-                safeArea: safeArea, controlsMinY: controlsMinY)
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout)
             obstacles.append(
                 EditDragSolver.Circle(
                     x: Double(absolute.x), y: Double(absolute.y),
@@ -1273,7 +1278,7 @@ class ControlsLayout {
     }
 
     private var chromeWalls: [EditDragSolver.Rect] {
-        editChromeFrames.map {
+        (editChromeFrames + [toolbarKeepout].filter { !$0.isNull }).map {
             EditDragSolver.Rect(
                 x: Double($0.minX), y: Double($0.minY),
                 width: Double($0.width), height: Double($0.height))
@@ -1351,7 +1356,7 @@ class ControlsLayout {
             let clamped = ControlsZone.absolutePosition(
                 for: circle.center, in: geoSize,
                 controlSize: CGSize(width: circle.size, height: circle.size),
-                safeArea: safeArea, controlsMinY: controlsMinY
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
             )
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
         }
@@ -1368,7 +1373,7 @@ class ControlsLayout {
         let dpadClamped = ControlsZone.absolutePosition(
             for: dpadRelativeCenter, in: geoSize,
             controlSize: CGSize(width: dpadSize, height: dpadSize),
-            safeArea: safeArea, controlsMinY: controlsMinY
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
         )
 
         // Separation must stay inside the clamp BAND, not the full
@@ -1394,11 +1399,23 @@ class ControlsLayout {
             )
         ]
 
+        let keepout = toolbarKeepout.insetBy(
+            dx: -ControlsZone.innerPadding, dy: -ControlsZone.innerPadding)
+        let walls =
+            keepout.isNull
+            ? []
+            : [
+                EditDragSolver.Rect(
+                    x: Double(keepout.minX) - bandMinX, y: Double(keepout.minY) - bandMinY,
+                    width: Double(keepout.width), height: Double(keepout.height))
+            ]
+
         let result = ButtonSeparation.separate(
             bandInputs,
             width: bandWidth,
             height: bandHeight,
-            obstacles: obstacles
+            obstacles: obstacles,
+            walls: walls
         )
 
         if result.movedCount > 0 {
@@ -1408,7 +1425,7 @@ class ControlsLayout {
                 separationLogSignature = signature
                 container.appendLogLine(
                     "controls: separated \(result.movedCount) overlapping buttons",
-                    fileName: Self.separationLogFile
+                    fileName: UserControlsFile.logFileName
                 )
             }
         }
@@ -1576,7 +1593,7 @@ class ControlsLayout {
         let store = LayoutProfilesManager.store
         let loaded = store.loadPin(forGameFolder: container.url)
         if let note = loaded.note {
-            container.appendLogLine(note, fileName: Self.controlsManifestLogFile)
+            container.appendLogLine(note, fileName: UserControlsFile.logFileName)
         }
 
         var pinnedRead: LayoutProfileStore.ProfileRead?
@@ -1747,9 +1764,13 @@ class ControlsLayout {
         case .pinToExisting(let profile, let renameToShared, let hash):
             var target = profile
             if renameToShared {
-                let shared = store.uniqueName(base: "Shared layout")
+                let shared = store.uniqueName(
+                    base: String(
+                        localized: "Shared layout",
+                        comment: "Name of a layout profile that Empo makes when several games share edits."))
                 if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
                     target = shared
+                    record.sharedProfiles.insert(shared)
                     for (gameID, entry) in record.games where entry.profile == profile {
                         record.games[gameID]?.profile = shared
                     }
@@ -2081,11 +2102,11 @@ class ControlsLayout {
             portraitTop = Double(safeArea.top) + portraitWidth * 0.75 + ControlsZone.toolbarGap
         }
 
-        // Landscape lateral insets = the notch / home-indicator depth,
-        // which the render clamp reserves on both edges. When currently
-        // landscape, the live safe area has the exact values. In
-        // portrait the notch depth appears as safeArea.top, so use it
-        // as the estimate for both landscape edges.
+        // Side insets for the sideways layout: the notch depth, which
+        // the render clamp keeps clear on both edges. A sideways window
+        // has the exact values. In an upright window the notch is
+        // usually at the top, but the closed iPhone Duo puts its camera
+        // and status bar on the right edge (top 0, trailing 84).
         let isLandscapeNow = bounds.width > bounds.height
         let landscapeLeading: Double
         let landscapeTrailing: Double
@@ -2093,8 +2114,9 @@ class ControlsLayout {
             landscapeLeading = Double(safeArea.leading)
             landscapeTrailing = Double(safeArea.trailing)
         } else {
-            landscapeLeading = Double(safeArea.top)
-            landscapeTrailing = Double(safeArea.top)
+            let notchDepth = Double(max(safeArea.top, safeArea.leading, safeArea.trailing))
+            landscapeLeading = notchDepth
+            landscapeTrailing = notchDepth
         }
 
         return TouchZoneMetrics(
@@ -2125,73 +2147,17 @@ class ControlsLayout {
             return
         }
 
-        let result = outcome.result
-        activeManifestSource = result.location
+        activeManifestSource = outcome.result.location
         let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
-
-        if let note = outcome.note {
-            logsContainer.appendLogLine(
-                Self.logLine(for: note),
-                fileName: Self.controlsManifestLogFile
-            )
-            if note != .rootSkippedBecauseEmpoExists
-                && note != .kirinSkippedBecauseManifestExists
-                && note != .joiplaySkippedBecauseOtherSourceExists
-            {
-                return
-            }
+        for line in outcome.logLines {
+            logsContainer.appendLogLine(line, fileName: UserControlsFile.logFileName)
         }
-
-        if result.ignoredNewerVersion {
-            logsContainer.appendLogLine(
-                "controls.json: Ignored manifest with version > 1",
-                fileName: Self.controlsManifestLogFile
-            )
-            return
-        }
-
-        let logPrefix: String =
-            switch result.location {
-            case .kirin: "kirin-touch-controls.json:"
-            case .joiplay: "gamepad.json:"
-            default: "controls.json:"
-            }
-        for finding in result.findings {
-            let severity = finding.severity == .error ? "error" : "warning"
-            let line =
-                "\(logPrefix) [\(finding.code)] (\(severity)) \(finding.path): \(finding.message)"
-            logsContainer.appendLogLine(line, fileName: Self.controlsManifestLogFile)
-        }
-
-        if let manifest = result.manifest {
+        if let manifest = outcome.result.manifest {
             activeManifest = manifest
             return
         }
 
-        manifestRejectionErrorCount = result.findings.filter { $0.severity == .error }.count
-    }
-
-    private static func logLine(for note: ControlsManifestLoader.LoadOutcome.Note) -> String {
-        switch note {
-        case .rootSkippedBecauseEmpoExists:
-            return
-                "controls.json: Skipped controls.json at game root, using empo/controls.json"
-        case .rootUnclaimedNoVersion:
-            return
-                "controls.json: Ignored controls.json at game root (no version key, so not an Empo manifest)"
-        case .rootUnclaimedNotObject:
-            return
-                "controls.json: Ignored controls.json at game root (not a JSON object, so not an Empo manifest)"
-        case .rootUnclaimedOversized:
-            return
-                "controls.json: Ignored controls.json at game root (larger than 128 KiB, so not an Empo manifest)"
-        case .kirinSkippedBecauseManifestExists:
-            return
-                "kirin-touch-controls.json: Skipped (an Empo controls manifest takes precedence)"
-        case .joiplaySkippedBecauseOtherSourceExists:
-            return
-                "gamepad.json: Skipped (a controls manifest or Kirin layout takes precedence)"
-        }
+        manifestRejectionErrorCount = outcome.result.findings.filter { $0.severity == .error }.count
     }
 
     private func applyResolvedLayout() {

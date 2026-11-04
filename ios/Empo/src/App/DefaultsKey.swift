@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 
@@ -26,8 +29,12 @@ enum DefaultsKey {
     static let caBundleLastRefresh = PreferenceKeys.caBundleLastRefresh.name
     /// `GameRunner.rawValue`. String.
     static let rubyGameRunner = PreferenceKeys.rubyGameRunner.name
+    /// The app group of the data folder, from the Files add-on. String.
+    static let dataAppGroup = PreferenceKeys.dataAppGroup.name
     /// The `GameReport` of the last session that started. JSON `Data`.
     static let lastGameReport = PreferenceKeys.lastGameReport.name
+    /// On the Mac, quit closes the open games with no question. Bool.
+    static let quitClosesGamesWithoutAsking = PreferenceKeys.quitClosesGamesWithoutAsking.name
 
     /// Controls edit mode: drags land on a fixed grid. Bool.
     static let controlsEditSnapToGrid = PreferenceKeys.controlsEditSnapToGrid.name

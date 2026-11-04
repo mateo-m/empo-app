@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// `.frame` must be directly on the Image (not a parent wrapper)
@@ -179,7 +182,11 @@ struct GameArtworkView: View {
     @ViewBuilder
     private var placeholderBackground: some View {
         ZStack {
+            #if os(iOS)
             Color(.secondarySystemBackground)
+            #else
+            Color(nsColor: .tertiarySystemFill)
+            #endif
             LinearGradient(
                 stops: [
                     .init(color: .white.opacity(0.10), location: 0),

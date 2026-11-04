@@ -1,11 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct Chip: View {
-    private let label: String?
+    private let label: LocalizedStringResource?
     private let systemImage: String?
     private let tint: Color
 
-    init(_ label: String, systemImage: String, tint: Color = .chipScrim) {
+    init(_ label: LocalizedStringResource, systemImage: String, tint: Color = .chipScrim) {
         self.label = label
         self.systemImage = systemImage
         self.tint = tint
@@ -17,7 +20,7 @@ struct Chip: View {
         self.tint = tint
     }
 
-    init(_ label: String, tint: Color = .chipScrim) {
+    init(_ label: LocalizedStringResource, tint: Color = .chipScrim) {
         self.label = label
         self.systemImage = nil
         self.tint = tint

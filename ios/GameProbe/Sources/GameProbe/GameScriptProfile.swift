@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// Combined analysis of a game's script sources and runtime
@@ -34,9 +37,12 @@ public enum GameScriptProfile {
         /// a shift, not a heredoc that hides the rest of the scripts
         /// from the Ruby 1.9 check.
         case shiftNotHeredoc = "shift-not-heredoc"
+        /// The scan also reads the Pokemon Essentials plugin code in
+        /// `Data/PluginScripts.rxdata`.
+        case pluginScripts = "plugin-scripts"
     }
 
-    public static let currentSchema: Schema = .shiftNotHeredoc
+    public static let currentSchema: Schema = .pluginScripts
 
     public struct Result {
         public let rubyVersion: Int
@@ -84,7 +90,7 @@ public enum GameScriptProfile {
         return files(
             in: "", named: ["Game.ini"] + scripts,
             extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
-            + files(in: "Data", named: scripts, extensions: ["fpk"])
+            + files(in: "Data", named: scripts + ["PluginScripts.rxdata"], extensions: ["fpk"])
             + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
     }
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import UIKit
 
 /// Adopts the UIScene lifecycle that the iOS 27 SDK requires.

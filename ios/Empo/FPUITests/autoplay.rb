@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Plays a game from the inside, for the game-process memory tests.
 # mkxp-z runs it as a preload script, PSDK as the prelude, so it runs
 # before the game's own scripts. It must parse on Ruby 1.8.

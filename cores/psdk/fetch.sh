@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Downloads the PSDK core that cores/psdk/.version pins, from
 # the releases of mateo-m/psdk-apple-mobile, into
 # ios/Dependencies/psdk-core. That repo's CI builds the release from a
@@ -7,7 +10,7 @@
 # The folder holds include/psdk_core.h, <sdk>/libpsdk<NN>.a and
 # support/<version>. cores/psdk/build-framework-ios.sh links them
 # with psdk_app_bridge.cpp.
-set -eu
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PIN="$REPO_ROOT/cores/psdk/.version"
@@ -22,8 +25,8 @@ fi
 
 # shellcheck disable=SC1090
 . "$PIN"
-if [ -z "${PSDK_CORE_VERSION:-}" ] || [ -z "${PSDK_CORE_SHA256:-}" ]; then
-    echo "error: $PIN must set PSDK_CORE_VERSION and PSDK_CORE_SHA256" >&2
+if [ -z "${PSDK_CORE_VERSION:-}" ] || [ -z "${PSDK_CORE_SHA256:-}" ] || [ -z "${PSDK_CORE_ASSET:-}" ]; then
+    echo "error: $PIN must set PSDK_CORE_VERSION, PSDK_CORE_SHA256 and PSDK_CORE_ASSET" >&2
     exit 1
 fi
 
@@ -35,11 +38,11 @@ fi
 echo "==> fetching the PSDK core $PSDK_CORE_VERSION from $CORE_REPO"
 WORK="$(mktemp -d "$DEST.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-TAR="$WORK/psdk-ios.tar.gz"
+TAR="$WORK/$PSDK_CORE_ASSET"
 curl -fL --retry 3 -o "$TAR" \
-    "https://github.com/$CORE_REPO/releases/download/$PSDK_CORE_VERSION/psdk-ios.tar.gz"
+    "https://github.com/$CORE_REPO/releases/download/$PSDK_CORE_VERSION/$PSDK_CORE_ASSET"
 echo "$PSDK_CORE_SHA256  $TAR" | shasum -a 256 -c >/dev/null || {
-    echo "error: psdk-ios.tar.gz does not match PSDK_CORE_SHA256 in $PIN" >&2
+    echo "error: $PSDK_CORE_ASSET does not match PSDK_CORE_SHA256 in $PIN" >&2
     exit 1
 }
 

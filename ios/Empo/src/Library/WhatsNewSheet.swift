@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// To announce a release, add an entry at the top of WhatsNew.json
-/// with the next `version` and the app version that ships it. The
-/// release copies the items of that app version into the AltStore
-/// update text (scripts/whats-new-notes.sh).
+/// with the next `version` and the app version that ships it. Add its
+/// title and detail, with their translations, to
+/// Resources/WhatsNew.xcstrings: the rows look them up by their English text.
 enum WhatsNew {
     static let releases: [WhatsNewRelease] = {
         let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!
@@ -35,6 +38,7 @@ struct WhatsNewItem: Decodable {
     let symbol: String
     let title: String
     let detail: String
+    var settingsSection: SettingsSection?
 }
 
 /// Shows the news once after an update. Any dismissal marks it as
@@ -43,6 +47,7 @@ struct WhatsNewItem: Decodable {
 struct WhatsNewPresentation: ViewModifier {
     /// False while the splash is still up.
     var active: Bool = true
+    let onOpenSettings: (SettingsSection) -> Void
 
     @Environment(\.appSettings) private var settings
     /// True when another one-time notice waits at launch. The news
@@ -52,6 +57,9 @@ struct WhatsNewPresentation: ViewModifier {
     /// Read once, because the dismissal marks every item as read
     /// while the sheet still animates out.
     @State private var items: [WhatsNewItem] = []
+    /// Settings opens after the sheet is gone, because SwiftUI shows
+    /// no new sheet while another one animates out.
+    @State private var settingsToOpen: SettingsSection?
 
     private var isPresented: Binding<Bool> {
         Binding(
@@ -70,14 +78,29 @@ struct WhatsNewPresentation: ViewModifier {
                     !DataDirectory.pendingSaveRecoveries().isEmpty
                     || !GameContainerMigration.pendingDuplicateNoticeNames().isEmpty
             }
-            .sheet(isPresented: isPresented) {
-                WhatsNewSheet(items: items) { isPresented.wrappedValue = false }
-            }
+            .sheet(
+                isPresented: isPresented,
+                onDismiss: {
+                    if let settingsToOpen { onOpenSettings(settingsToOpen) }
+                    settingsToOpen = nil
+                },
+                content: {
+                    WhatsNewSheet(
+                        items: items,
+                        onOpenSettings: { section in
+                            settingsToOpen = section
+                            isPresented.wrappedValue = false
+                        },
+                        onContinue: { isPresented.wrappedValue = false }
+                    )
+                }
+            )
     }
 }
 
 struct WhatsNewSheet: View {
     let items: [WhatsNewItem]
+    let onOpenSettings: (SettingsSection) -> Void
     let onContinue: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -91,7 +114,7 @@ struct WhatsNewSheet: View {
                     // on the whole row also catches the layout pass of
                     // the opening sheet, and SwiftUI shows a moved Text
                     // as glyphs that fade across the gap.
-                    WhatsNewRow(item: item)
+                    WhatsNewRow(item: item, onOpenSettings: onOpenSettings)
                         .animation(Motion.standard.delay(0.1 + Double(index) * 0.1)) {
                             $0.opacity(entered ? 1 : 0)
                                 .offset(y: entered || reduceMotion ? 0 : 8)
@@ -99,18 +122,22 @@ struct WhatsNewSheet: View {
                 }
             }
             .padding(.vertical, Spacing.md)
+        } footer: {
+            SheetPrimaryButton("Continue", action: onContinue)
 
-            VStack(spacing: 0) {
-                SheetPrimaryButton("Continue", action: onContinue)
-
+            if UpdateChecker.isSideloadBuild {
                 Link(destination: WhatsNew.releasesURL) {
-                    Text("See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))")
-                        .font(.subheadline)
-                        .multilineTextAlignment(.center)
-                        .accessibilityLabel("See all changes on GitHub")
-                        .padding(.horizontal, Spacing.lg)
-                        .frame(minHeight: AppSize.minTapTarget)
-                        .contentShape(.rect)
+                    Text(
+                        "See all changes on GitHub\u{00A0}\(Image(systemName: "arrow.up.forward"))",
+                        comment:
+                            "Link to the release notes. The placeholder is an arrow icon. Keep it at the end."
+                    )
+                    .font(.subheadline)
+                    .multilineTextAlignment(.center)
+                    .accessibilityLabel("See all changes on GitHub")
+                    .padding(.horizontal, Spacing.lg)
+                    .frame(minHeight: AppSize.minTapTarget)
+                    .contentShape(.rect)
                 }
                 .padding(.top, Spacing.sm)
             }
@@ -121,6 +148,7 @@ struct WhatsNewSheet: View {
 
 private struct WhatsNewRow: View {
     let item: WhatsNewItem
+    let onOpenSettings: (SettingsSection) -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -141,13 +169,19 @@ private struct WhatsNewRow: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(item.title)
+                Text(Bundle.main.localizedString(forKey: item.title, value: nil, table: "WhatsNew"))
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(item.detail)
+                Text(Bundle.main.localizedString(forKey: item.detail, value: nil, table: "WhatsNew"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let section = item.settingsSection, section.isShown {
+                    Button("Turn it on in Settings") { onOpenSettings(section) }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minHeight: AppSize.minTapTarget)
+                        .contentShape(.rect)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 import UIKit
 
@@ -186,13 +189,14 @@ class AppWindow: UIWindow {
     /// In library/loading: this window must be key for SwiftUI.
     /// In player: key only while keyboard mode is active or an alert
     /// shows. A game in the app needs key for its keys, and SDL would
-    /// steal the OK tap of an alert. A game in its own process gets
-    /// none, so a hardware key does not move SwiftUI focus.
+    /// steal the OK tap of an alert. A game in its own process shows in
+    /// this window, and its scene gets the keys only while it is key.
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.errorMessage != nil { return true }
         if state.infoMessage != nil { return true }
         if state.phase != .playing { return true }
+        if EngineSessionCoordinator.shared.runner != .app { return true }
         return allowKeyWindow
     }
 
@@ -202,6 +206,15 @@ class AppWindow: UIWindow {
 
     static var currentScreenBounds: CGRect {
         instance?.windowScene?.screen.bounds ?? .zero
+    }
+
+    /// Rects that the system draws over, in root view space: on the
+    /// closed iPhone Duo, the camera and the status bar block at the
+    /// top of the sensor strip. `statusBarFrame` reports a 2-point bar
+    /// there, so this is the only source for the block's bottom edge.
+    static var occludedRects: [CGRect] {
+        guard #available(iOS 27.1, *), let view = hostView else { return [] }
+        return view.reservedRegions(kind: .occlusion).map(\.frame)
     }
 
     static var currentSafeArea: EdgeInsets {
@@ -224,8 +237,8 @@ class AppWindow: UIWindow {
     /// Gives key-window status back to the game after the overlay
     /// gives up `canBecomeKey` (e.g. loading -> playing).
     ///
-    /// A game in its own process has no window here, so the overlay
-    /// only ends editing.
+    /// A game in its own process shows in this window, so the overlay
+    /// stays key and only ends editing.
     ///
     /// Never hand key status to a keyboard window. Once the system
     /// keyboard has shown, its `UITextEffectsWindow` joins
@@ -404,4 +417,24 @@ class AppWindow: UIWindow {
             }
         }
     }
+}
+
+extension EdgeInsets {
+    /// The iPhone Duo keeps its camera and status bar in a strip on
+    /// one side edge, closed or open, and insets only that edge
+    /// (closed: trailing 84; open: trailing 84, bottom 34). An
+    /// iPhone on its side insets both side edges the same.
+    func sensorStripEdge(minWidth: CGFloat) -> HorizontalEdge? {
+        if leading == 0 && trailing >= minWidth { return .trailing }
+        if trailing == 0 && leading >= minWidth { return .leading }
+        return nil
+    }
+}
+
+/// The status icons center under the camera, not on the strip's middle
+/// (closed Duo: camera and icons at x 418, strip middle at 424). The
+/// camera is the smallest occluded rect in the strip.
+func sensorStripColumnX(strip: CGRect, occluded: [CGRect]) -> CGFloat {
+    occluded.filter { strip.contains($0) }.min { $0.width * $0.height < $1.width * $1.height }?.midX
+        ?? strip.midX
 }

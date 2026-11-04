@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -74,6 +77,10 @@ struct PlayerView: View {
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
+            let toolbarPlacement = PlayerToolbar.placement(
+                isPortrait: isPortrait, safeArea: safeArea, geoSize: geo.size)
+            let controlsSafeArea = ControlsZone.controlsSafeArea(safeArea, toolbar: toolbarPlacement)
+            let toolbarKeepout = ControlsZone.toolbarKeepout(toolbarPlacement, geoSize: geo.size)
 
             ZStack {
                 // Debug visualization of the touch-mouse zone: the
@@ -105,7 +112,8 @@ struct PlayerView: View {
                         .chromeHitRegion("editMode")
                         .allowsHitTesting(false)
 
-                    editZoneBackground(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geo.size)
+                    editZoneBackground(
+                        controlsMinY: controlsMinY, safeArea: controlsSafeArea, geoSize: geo.size)
                     if let caption = editZoneCaptionText {
                         editZoneCaption(caption, safeArea: safeArea)
                     }
@@ -136,7 +144,7 @@ struct PlayerView: View {
                         geo: geo,
                         controlsMinY: controlsMinY,
                         editMode: editMode,
-                        safeArea: safeArea,
+                        safeArea: controlsSafeArea,
                         editingButton: $editingButton,
                         editingActionButton: $editingActionButton,
                         editingDPad: $editingDPad,
@@ -169,7 +177,7 @@ struct PlayerView: View {
 
                     PlayerEditToolbar(
                         controlsMinY: controlsMinY,
-                        safeArea: safeArea,
+                        safeArea: controlsSafeArea,
                         geoSize: geo.size,
                         layout: layout,
                         showAddSheet: $showAddSheet,
@@ -303,6 +311,9 @@ struct PlayerView: View {
                 // The published picture rect carries it.
                 ScreenRegionApplier.gameRectChanged(rect)
             }
+            .onChange(of: toolbarKeepout, initial: true) { _, keepout in
+                layout.toolbarKeepout = keepout
+            }
             .onChange(of: editMode) { _, editing in
                 // Entering with the preference already on applies the
                 // same rounding the toolbar toggle would. Exiting
@@ -311,7 +322,7 @@ struct PlayerView: View {
                 guard editing, snapToGrid else { return }
                 layout.applyGridSnap(
                     geoSize: geo.size,
-                    safeArea: safeArea,
+                    safeArea: controlsSafeArea,
                     controlsMinY: controlsMinY)
             }
         }
@@ -346,7 +357,7 @@ struct PlayerView: View {
             actions.pauseMenu = { appState.togglePauseMenu() }
             actions.toggleTouchControls = { toggleHideControls() }
             actions.log = { line in
-                layout.currentContainer?.appendLogLine(line, fileName: "controls.json.log")
+                layout.currentContainer?.appendLogLine(line, fileName: UserControlsFile.logFileName)
             }
             input.actionHandler = { id, pressed in
                 actions.handle(id, pressed: pressed)
@@ -362,7 +373,7 @@ struct PlayerView: View {
             // Fires on first launch AND on resume from pause ->
             // library -> resume (engine state is process-static).
             actions.runtime.bind(container: layout.currentContainer)
-            input.applyBindings(container: layout.currentContainer)
+            applyBindings()
             input.start(overlayHidden: $controlsHidden, editMode: $editMode)
 
             // Pick up the pause snapshot and hold it until the engine
@@ -389,11 +400,11 @@ struct PlayerView: View {
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
         }
         .onChange(of: layout.currentContainer) { _, container in
-            input.applyBindings(container: container)
+            applyBindings()
             actions.runtime.bind(container: container)
         }
         .onReceive(NotificationCenter.default.publisher(for: .bindingsDidChange)) { _ in
-            input.applyBindings(container: layout.currentContainer)
+            applyBindings()
         }
         .onReceive(NotificationCenter.default.publisher(for: .gameAreaTouchBegan)) { _ in
             resetToolbarIdleTimer()
@@ -405,7 +416,7 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showMoreSheet, onDismiss: runSheetAction) {
             PlayerMoreSheet(
-                gameTitle: appState.selectedGame?.title ?? "this game",
+                gameTitle: appState.selectedGame?.title,
                 showDebugOverlay: $showDebugOverlay,
                 fastForwardActive: Binding(
                     get: { actions.runtime.fastForwardActive },
@@ -413,12 +424,12 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
-                core: EngineSessionCoordinator.shared.openedCore,
                 onControllerRemap: { showControllerRemap = true },
                 onLayoutProfile: { showLayoutProfilePicker = true },
                 onPause: { sheetAction = .pause },
                 onQuit: appState.canQuitGame ? { sheetAction = .quit } : nil,
-                onCheats: { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) }
+                onCheats: actions.isAvailable(EmpoActionCatalog.toggleCheats)
+                    ? { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) } : nil
             )
         }
         .sheet(isPresented: $showLayoutProfilePicker) {
@@ -429,7 +440,7 @@ struct PlayerView: View {
         .sheet(isPresented: $showControllerRemap) {
             BindingsView(
                 container: layout.currentContainer,
-                gameTitle: appState.selectedGame?.title ?? "this game",
+                gameTitle: appState.selectedGame?.title,
                 manifest: layout.activeManifest?.bindings,
                 input: input,
                 actions: actions
@@ -443,7 +454,7 @@ struct PlayerView: View {
             // pick that up. If they turned it off entirely, the row
             // should disappear.
             guard opened else { return }
-            actions.runtime.reconcile()
+            actions.runtime.reconcile(container: layout.currentContainer)
         }
         .tint(nil)
         .controlsEditDialogs(
@@ -642,18 +653,14 @@ struct PlayerView: View {
     }
 
     /// The first edit-mode notice worth showing, most severe first.
-    private var editZoneCaptionText: String? {
+    private var editZoneCaptionText: LocalizedStringResource? {
         if layout.manifestRejectionErrorCount > 0 {
-            let errorCount = layout.manifestRejectionErrorCount
-            let errorLabel = errorCount == 1 ? "error" : "errors"
             return
-                "This game's controls file has \(errorCount) \(errorLabel), so Empo used its own layout. Open Logs for details."
+                "This game's controls file has \(layout.manifestRejectionErrorCount) errors, so Empo used its own layout."
         }
         if layout.profileRejectionErrorCount > 0 {
-            let errorCount = layout.profileRejectionErrorCount
-            let errorLabel = errorCount == 1 ? "error" : "errors"
             return
-                "Your layout profile has \(errorCount) \(errorLabel), so Empo used its own layout. Open Logs for details."
+                "Your layout profile has \(layout.profileRejectionErrorCount) errors, so Empo used its own layout."
         }
         if layout.pinFellThrough {
             return "That layout profile is gone, so this game is using the Empo default."
@@ -662,7 +669,7 @@ struct PlayerView: View {
     }
 
     /// The bottom caption chrome every edit-mode notice shares.
-    private func editZoneCaption(_ text: String, safeArea: EdgeInsets) -> some View {
+    private func editZoneCaption(_ text: LocalizedStringResource, safeArea: EdgeInsets) -> some View {
         Text(text)
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -733,6 +740,10 @@ struct PlayerView: View {
     /// The pause and the quit remove this view. When they run while
     /// the More sheet is still on screen, SwiftUI can keep the view
     /// after the game ended, so they wait until the sheet is gone.
+    private func applyBindings() {
+        input.applyBindings(container: layout.currentContainer, manifest: layout.activeManifest?.bindings)
+    }
+
     private func runSheetAction() {
         let action = sheetAction
         sheetAction = nil

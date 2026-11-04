@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Downloads the engine that cores/mkxp/.version pins, from
 # the releases of mateo-m/mkxp-z-apple-mobile, into
 # ios/Dependencies/mkxp-core. That repo's CI builds the release from a
@@ -8,7 +11,7 @@
 # libraries of each SDK with a LINK file that lists them.
 # cores/mkxp/build-framework-ios.sh links them into
 # MkxpCore.framework.
-set -eu
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PIN="$REPO_ROOT/cores/mkxp/.version"
@@ -23,8 +26,8 @@ fi
 
 # shellcheck disable=SC1090
 . "$PIN"
-if [ -z "${MKXP_CORE_VERSION:-}" ] || [ -z "${MKXP_CORE_SHA256:-}" ]; then
-    echo "error: $PIN must set MKXP_CORE_VERSION and MKXP_CORE_SHA256" >&2
+if [ -z "${MKXP_CORE_VERSION:-}" ] || [ -z "${MKXP_CORE_SHA256:-}" ] || [ -z "${MKXP_CORE_ASSET:-}" ]; then
+    echo "error: $PIN must set MKXP_CORE_VERSION, MKXP_CORE_SHA256 and MKXP_CORE_ASSET" >&2
     exit 1
 fi
 
@@ -35,7 +38,7 @@ fi
 
 WORK="$(mktemp -d "$DEST.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-TAR="$WORK/mkxp-z-ios.tar.gz"
+TAR="$WORK/$MKXP_CORE_ASSET"
 # A local build of the engine, to test it before its release. The pin
 # must give its sha256.
 if [ -f "$DEST.tar.gz" ]; then
@@ -44,10 +47,10 @@ if [ -f "$DEST.tar.gz" ]; then
 else
     echo "==> fetching the engine $MKXP_CORE_VERSION from $CORE_REPO"
     curl -fL --retry 3 -o "$TAR" \
-        "https://github.com/$CORE_REPO/releases/download/$MKXP_CORE_VERSION/mkxp-z-ios.tar.gz"
+        "https://github.com/$CORE_REPO/releases/download/$MKXP_CORE_VERSION/$MKXP_CORE_ASSET"
 fi
 echo "$MKXP_CORE_SHA256  $TAR" | shasum -a 256 -c >/dev/null || {
-    echo "error: mkxp-z-ios.tar.gz does not match MKXP_CORE_SHA256 in $PIN" >&2
+    echo "error: $MKXP_CORE_ASSET does not match MKXP_CORE_SHA256 in $PIN" >&2
     exit 1
 }
 

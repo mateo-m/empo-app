@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import XCTest
 
 @testable import GameProbe
@@ -175,5 +178,19 @@ final class FastForwardArbiterTests: XCTestCase {
         XCTAssertTrue(outcome.active)
         XCTAssertFalse(arbiter.latched)
         XCTAssertEqual(arbiter.holdReleased(configuredMultiplier: 4, bridgeMultiplier: 4), 1)
+    }
+
+    func testReconcileDuringHoldAppliesNewSettings() {
+        var arbiter = FastForwardArbiter()
+        _ = arbiter.holdPressed(configuredMultiplier: 4, bridgeMultiplier: 1)
+
+        let slower = arbiter.reconcile(configuredMultiplier: 2, bridgeMultiplier: 4)
+        XCTAssertEqual(slower.write, 2)
+        XCTAssertTrue(slower.active)
+        XCTAssertFalse(arbiter.latched)
+
+        let off = arbiter.reconcile(configuredMultiplier: nil, bridgeMultiplier: 2)
+        XCTAssertEqual(off.write, 1)
+        XCTAssertFalse(off.active)
     }
 }

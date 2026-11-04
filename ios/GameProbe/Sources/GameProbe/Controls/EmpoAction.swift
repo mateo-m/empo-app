@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// One Empo action a control can trigger instead of a game key.
@@ -69,23 +72,23 @@ public enum EmpoActionCatalog {
         ),
         EmpoAction(
             id: pauseMenu,
-            displayName: "Pause menu",
-            blurb: "Opens the pause menu.",
+            displayName: "Pause game",
+            blurb: "Pauses the game and takes you back to your library.",
             symbolName: "pause.circle",
             kind: .instant,
             touchValid: true
         ),
         EmpoAction(
             id: toggleCheats,
-            displayName: "Cheats",
-            blurb: "Turns the cheats screen on or off.",
+            displayName: "Show cheats",
+            blurb: "Opens the cheat menu.",
             symbolName: "wand.and.stars",
-            kind: .toggle,
+            kind: .instant,
             touchValid: true
         ),
         EmpoAction(
             id: toggleTouchControls,
-            displayName: "Show/hide touch controls",
+            displayName: "Show or hide controls",
             blurb: "Shows or hides the on-screen controls.",
             symbolName: "hand.tap",
             kind: .instant,

@@ -1,0 +1,204 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSBluetoothAlwaysUsageDescription" : {
+      "comment" : "System prompt that asks for Bluetooth access.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo nutzt Bluetooth, damit du mit einem kabellosen Controller spielen kannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Empo uses Bluetooth so you can play with a wireless game controller."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo usa Bluetooth para que puedas jugar con un mando inalámbrico."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo utilise le Bluetooth pour que tu puisses jouer avec une manette sans fil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo usa il Bluetooth per farti giocare con un controller wireless."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ワイヤレスのゲームコントローラで遊べるように、EmpoはBluetoothを使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "무선 게임 컨트롤러로 플레이할 수 있도록 Empo가 Bluetooth를 사용해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo usa o Bluetooth para você jogar com um controle sem fio."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo использует Bluetooth, чтобы вы могли играть с беспроводным геймпадом."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 使用蓝牙，让你可以用无线游戏手柄来玩。"
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription" : {
+      "comment" : "System prompt that asks for camera access.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mach ein Foto, um es als eigenes Spielbild oder Banner zu nutzen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Take a photo to use as custom game artwork or banner."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Haz una foto para usarla como portada o banner del juego."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prends une photo pour l’utiliser comme illustration ou bannière de jeu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scatta una foto da usare come copertina o banner del gioco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写真を撮って、ゲームのアートワークやバナーに使えます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "사진을 찍어 게임 아트워크나 배너로 사용할 수 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tire uma foto para usar como capa ou banner do jogo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сделайте фото, чтобы использовать его как обложку или баннер игры."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拍一张照片，用作自定义游戏封面或横幅。"
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "comment" : "System prompt that asks for local network access.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo findet Spieler in deinem Netzwerk, damit du lokale Mehrspielerspiele spielen kannst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Empo finds nearby players on your network so you can play local multiplayer games."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo busca jugadores cercanos en tu red para que puedas jugar partidas multijugador locales."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo trouve les joueurs à proximité sur ton réseau pour que tu puisses jouer en multijoueur local."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo trova i giocatori vicini sulla tua rete, così puoi giocare in multiplayer locale."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ローカルマルチプレイで遊べるように、Empoはネットワーク上の近くのプレイヤーを探します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "로컬 멀티플레이를 할 수 있도록 Empo가 네트워크에서 근처 플레이어를 찾아요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo encontra jogadores por perto na sua rede para você jogar multiplayer local."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo ищет игроков поблизости в вашей сети, чтобы вы могли играть в локальный мультиплеер."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 会在你的网络中查找附近的玩家，让你可以玩本地多人游戏。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.1"
+}

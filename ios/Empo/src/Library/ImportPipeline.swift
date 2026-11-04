@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import Observation
@@ -69,6 +72,32 @@ struct ImportReplacePrompt: Identifiable {
     let titles: [String]
 
     var id: UUID { requestID }
+
+    var title: String {
+        #if os(macOS)
+        if titles.count > 1 { return String(localized: "These games are already in your library.") }
+        return String(localized: "This game is already in your library.")
+        #else
+        if titles.count > 1 { return String(localized: "These games are already in your library") }
+        return String(localized: "This game is already in your library")
+        #endif
+    }
+
+    var message: String {
+        if titles.count == 1, let name = titles.first {
+            return String(
+                localized:
+                    "\"\(name)\" is already in your library. Importing replaces its files with the new ones. Your saves and settings stay. You can't undo this.",
+                comment: "The placeholder is the game's name."
+            )
+        }
+        let names = titles.map { "\"\($0)\"" }.formatted(.list(type: .and))
+        return String(
+            localized:
+                "\(names) are already in your library. Importing replaces their files with the new ones. Your saves and settings stay. You can't undo this.",
+            comment: "The placeholder is a list of game names."
+        )
+    }
 }
 
 struct ImportPipelineAlert: Identifiable {
@@ -82,14 +111,22 @@ struct ImportPipelineAlert: Identifiable {
 
     var title: String {
         failures.count == 1
-            ? "Couldn't import \(quoted(failures[0].name))"
-            : "Some games didn't import"
+            ? String(
+                localized: "Couldn't import \"\(failures[0].name)\"",
+                comment: "Alert title. The placeholder is the game's name.")
+            : String(localized: "Some games didn't import", comment: "Alert title")
     }
 
     var message: String {
         failures.count == 1
             ? failures[0].reason
-            : failures.map { "\(quoted($0.name)): \($0.reason)" }.joined(separator: "\n\n")
+            : failures.map {
+                String(
+                    localized: "\"\($0.name)\": \($0.reason)",
+                    comment:
+                        "One line in a list of failed imports. First placeholder: the game's name. Second: why it failed."
+                )
+            }.joined(separator: "\n\n")
     }
 }
 
@@ -166,6 +203,7 @@ final class ImportPipeline {
         )
     }
 
+    #if os(iOS)
     var importButtonPhase: ImportButton.Phase {
         if activePrompt != nil {
             return .multipleGames
@@ -174,6 +212,25 @@ final class ImportPipeline {
             return .validating
         }
         return .idle
+    }
+
+    private var openGameNames: [String] {
+        [PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id].compactMap { $0 }
+    }
+    #else
+    private var openGameNames: [String] { GameLauncher.shared.playingGameIDs }
+    #endif
+
+    private var refusedOpenGameMessage: String {
+        #if os(iOS)
+        guard EngineSessionCoordinator.shared.canEndGame else {
+            return String(
+                localized:
+                    "This game is still running. Close Empo from the app switcher, reopen it, then import again."
+            )
+        }
+        #endif
+        return String(localized: "This game is open. Quit it, then import again.")
     }
 
     func configure(library: GameLibrary) {
@@ -432,7 +489,7 @@ final class ImportPipeline {
         let context = ImportNameResolution.Context(
             installedFolderNames: installed.map(\.folderName),
             inFlightNames: inFlightNames,
-            openGameName: PauseManager.shared.pausedGame?.id ?? AppState.shared.selectedGame?.id
+            openGameNames: openGameNames
         )
 
         var reservedBatchKeys = Set<String>()
@@ -470,8 +527,10 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: "This game is already being imported. "
-                        + "Wait for the current import to finish, then try again."
+                    message: String(
+                        localized:
+                            "This game is already being imported. Wait for the current import to finish, then try again."
+                    )
                 )
 
             case .refusedDuplicateInBatch:
@@ -480,8 +539,10 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: "Two games in this import share the same title. "
-                        + "Import them one at a time, or rename one folder first."
+                    message: String(
+                        localized:
+                            "Two games in this import share the same title. Import them one at a time, or rename one folder first."
+                    )
                 )
 
             case .refusedOpenGame:
@@ -490,9 +551,7 @@ final class ImportPipeline {
                     selection.displayName)
                 presentError(
                     name: selection.displayName,
-                    message: EngineSessionCoordinator.shared.canEndGame
-                        ? "This game is open. Quit it, then import again."
-                        : "This game is currently open. Close it from the app switcher and import again."
+                    message: refusedOpenGameMessage
                 )
             }
         }
@@ -550,7 +609,7 @@ final class ImportPipeline {
             preparedSource.cleanup()
             presentError(
                 name: archiveName,
-                message: "Empo isn't ready to import yet. Reopen Empo, then try again."
+                message: String(localized: "Empo isn't ready to import yet. Reopen Empo, then try again.")
             )
             return
         }
@@ -579,9 +638,11 @@ final class ImportPipeline {
             preparedSource.cleanup()
 
             let succeeded = batchSelections.count - failures.count
+            #if os(iOS)
             if succeeded > 0 {
                 Haptics.impact()
             }
+            #endif
             for (selection, error) in failures where !(error is GameLibrary.ImportCancelled) {
                 self.presentError(
                     name: selection.displayName,
@@ -678,11 +739,16 @@ private enum ImportPipelineService {
                 }
             }
 
+            #if os(iOS)
             do {
                 try fm.moveItem(at: url, to: archiveCopyURL)
             } catch {
                 try fm.copyItem(at: url, to: archiveCopyURL)
             }
+            #else
+            // The Mac open panel and a drop give the user's own file, not a copy.
+            try fm.copyItem(at: url, to: archiveCopyURL)
+            #endif
             copied = true
 
             return ImportPreparedSource(
@@ -703,10 +769,6 @@ private enum ImportPipelineService {
             return try GameImportValidator.importRootChoices(for: url)
         }
     }
-}
-
-private func quoted(_ value: String) -> String {
-    "\"\(value)\""
 }
 
 extension NSLock {
@@ -757,7 +819,13 @@ extension GameLibrary {
         var errorDescription: String? {
             switch self {
             case .outOfSpace:
-                return "Not enough space to import. Free up space on your device and try again."
+                #if os(macOS)
+                return String(
+                    localized: "Not enough space to import. Free up space on this Mac and try again.")
+                #else
+                return String(
+                    localized: "Not enough space to import. Free up space on your device and try again.")
+                #endif
             }
         }
     }
@@ -927,8 +995,10 @@ extension GameLibrary {
                         onRescueFailure()
                     } else {
                         onError?(
-                            "Empo couldn't move this game's saves, so it kept the game. "
-                                + "Free up space, then delete again.")
+                            String(
+                                localized:
+                                    "Empo couldn't move this game's saves, so it kept the game. Free up space, then delete again."
+                            ))
                     }
                 case .failed(let message):
                     GameLibrary.shared.restoreEntryAfterFailedDelete(id: container.id)
@@ -1150,11 +1220,16 @@ extension GameLibrary {
                     let tmpDest = tmpDir.appendingPathComponent(folderName)
 
                     try ImportSignpost.interval("stage-source", id: batchID) {
+                        #if os(macOS)
+                        // The Mac imports the user's own folder, not a copy.
+                        try fm.copyItem(at: sourceURL, to: tmpDest)
+                        #else
                         do {
                             try fm.moveItem(at: sourceURL, to: tmpDest)
                         } catch {
                             try fm.copyItem(at: sourceURL, to: tmpDest)
                         }
+                        #endif
                     }
                     try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
                         try EnigmaVirtualBoxImport.unpackAll(under: tmpDest) {

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// Grouping for controller-remap key pickers (ticket 005).
@@ -16,14 +19,14 @@ public extension KeyCodeTable {
     /// Picker section title.
     static func pickerGroupTitle(_ group: KeyCodePickerGroup) -> String {
         switch group {
-        case .common: return "Common"
+        case .common: return "Common keys"
         case .letters: return "Letters"
         case .numbers: return "Numbers"
-        case .function: return "Function"
+        case .function: return "Function keys"
         case .navigation: return "Navigation"
         case .symbols: return "Symbols"
         case .numpad: return "Numpad"
-        case .modifiers: return "Modifiers"
+        case .modifiers: return "Modifier keys"
         }
     }
 

@@ -1,0 +1,17 @@
+ANGLE precompiles its Metal shaders only for a native Mac build, and that
+needs the Metal Toolchain component of Xcode. Compile them at run time,
+as on iOS.
+
+diff --git a/src/libANGLE/renderer/metal/metal_backend.gni b/src/libANGLE/renderer/metal/metal_backend.gni
+index d3a8a1d..9dae864 100644
+--- a/src/libANGLE/renderer/metal/metal_backend.gni
++++ b/src/libANGLE/renderer/metal/metal_backend.gni
+@@ -93,7 +93,7 @@ metal_backend_sources = [
+ # Building internal shaders for iOS is not supported. The Chromium Mac SDK does not have all the required files.
+ # This is also an issue when cross-compiling for mac.
+ metal_internal_shader_compilation_supported =
+-    angle_has_build && !is_ios && target_os == host_os
++    false
+ 
+ metal_internal_shaders_header =
+     "$root_gen_dir/angle/mtl_internal_shaders_metallib.h"

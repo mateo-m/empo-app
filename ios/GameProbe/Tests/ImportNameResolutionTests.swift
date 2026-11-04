@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import XCTest
 
@@ -8,12 +11,12 @@ final class ImportNameResolutionTests: XCTestCase {
     private func context(
         installed: [String] = [],
         inFlight: [String] = [],
-        open: String? = nil
+        open: [String] = []
     ) -> ImportNameResolution.Context {
         ImportNameResolution.Context(
             installedFolderNames: installed,
             inFlightNames: inFlight,
-            openGameName: open
+            openGameNames: open
         )
     }
 
@@ -60,7 +63,7 @@ final class ImportNameResolutionTests: XCTestCase {
         var batch = Set<String>()
         let first = ImportNameResolution.resolve(
             title: "Testing",
-            context: context(installed: ["Testing"], open: "Testing"),
+            context: context(installed: ["Testing"], open: ["Testing"]),
             reservedBatchKeys: &batch)
         XCTAssertEqual(first, .refusedOpenGame)
         XCTAssertTrue(batch.isEmpty)
@@ -69,7 +72,7 @@ final class ImportNameResolutionTests: XCTestCase {
         // silently downgraded to a fresh install.
         let second = ImportNameResolution.resolve(
             title: "Testing",
-            context: context(installed: ["Testing"], open: "Testing"),
+            context: context(installed: ["Testing"], open: ["Testing"]),
             reservedBatchKeys: &batch)
         XCTAssertEqual(second, .refusedOpenGame)
     }
@@ -102,7 +105,7 @@ final class ImportNameResolutionTests: XCTestCase {
 
     func testDistinctTitlesDoNotInterfere() {
         var batch = Set<String>()
-        let ctx = context(installed: ["Testing"], open: "Testing")
+        let ctx = context(installed: ["Testing"], open: ["Testing"])
         XCTAssertEqual(
             ImportNameResolution.resolve(
                 title: "Another Game", context: ctx, reservedBatchKeys: &batch),
@@ -116,7 +119,7 @@ final class ImportNameResolutionTests: XCTestCase {
         var batch = Set<String>()
         let outcome = ImportNameResolution.resolve(
             title: "Testing",
-            context: context(installed: ["Testing"], open: "TESTING"),
+            context: context(installed: ["Testing"], open: ["TESTING"]),
             reservedBatchKeys: &batch)
         XCTAssertEqual(outcome, .refusedOpenGame)
     }
@@ -128,7 +131,7 @@ final class ImportNameResolutionTests: XCTestCase {
         var batch = Set<String>()
         let outcome = ImportNameResolution.resolve(
             title: "Testing",
-            context: context(installed: [], open: "Testing"),
+            context: context(installed: [], open: ["Testing"]),
             reservedBatchKeys: &batch)
         XCTAssertEqual(outcome, .refusedOpenGame)
         XCTAssertTrue(batch.isEmpty)
@@ -176,8 +179,23 @@ final class ImportNameResolutionTests: XCTestCase {
         var batch = Set<String>()
         let outcome = ImportNameResolution.resolve(
             title: "Testing",
-            context: context(installed: ["Testing", "Other"], open: "Other"),
+            context: context(installed: ["Testing", "Other"], open: ["Other"]),
             reservedBatchKeys: &batch)
         XCTAssertEqual(outcome, .update(installedFolderName: "Testing"))
+    }
+
+    func testEveryOpenGameBlocksItsOwnImport() {
+        // The Mac app runs several games at once.
+        var batch = Set<String>()
+        let ctx = context(installed: ["Testing", "Other", "Third"], open: ["Testing", "Other"])
+        XCTAssertEqual(
+            ImportNameResolution.resolve(title: "Testing", context: ctx, reservedBatchKeys: &batch),
+            .refusedOpenGame)
+        XCTAssertEqual(
+            ImportNameResolution.resolve(title: "other", context: ctx, reservedBatchKeys: &batch),
+            .refusedOpenGame)
+        XCTAssertEqual(
+            ImportNameResolution.resolve(title: "Third", context: ctx, reservedBatchKeys: &batch),
+            .update(installedFolderName: "Third"))
     }
 }

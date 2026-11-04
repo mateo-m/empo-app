@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -23,7 +26,9 @@ struct MkxpSettingsPage: View {
                     )
                 }
             }
+            #if os(iOS)
             LayoutSettingsSection(model: model)
+            #endif
             Section {
                 MkxpEngineRow(state: state, field: .frameSkip) {
                     SettingsToggle(
@@ -61,14 +66,13 @@ struct MkxpSettingsPage: View {
                         Text(scale.label).tag(scale)
                     }
                 }
+                #if os(iOS)
                 .pickerStyle(.navigationLink)
+                #endif
 
-                Text(
-                    state.effectiveRenderScale.description
-                        + " The game's size and layout stay the same, only sharper."
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                Text(state.effectiveRenderScale.description)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
         }
@@ -80,9 +84,12 @@ struct MkxpSettingsPage: View {
                 HStack {
                     Text("Font scale")
                     Spacer()
-                    Text(String(format: "%.1fx", state.effectiveFontScale))
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+                    Text(
+                        verbatim:
+                            "\(state.effectiveFontScale.formatted(.number.precision(.fractionLength(1))))x"
+                    )
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
                 }
                 Slider(
                     value: Binding(

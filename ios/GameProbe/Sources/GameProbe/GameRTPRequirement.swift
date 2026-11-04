@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// RTP (Run-Time Package) dependency declared in a game's `Game.ini`.
@@ -35,8 +38,8 @@ public struct GameRTPRequirement: Sendable, Equatable {
     }
 
     /// Human-readable engine names for alert copy.
-    public var friendlySummary: String {
-        packages.map(Self.friendlyPackageName).joined(separator: ", ")
+    public var friendlyNames: [String] {
+        packages.map(Self.friendlyPackageName)
     }
 
     private static func friendlyPackageName(_ package: String) -> String {

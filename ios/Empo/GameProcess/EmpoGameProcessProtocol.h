@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // The messages between Empo and its game process.
 //
 // Empo runs each game in a new GameProcess extension process, so that
@@ -15,8 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol EmpoGameProcess
 
 // A block of the app's memory, with the keys EmpoGameProcessMemory*
-// below. The app sends it before openCore.
-- (void)useMemory:(xpc_object_t)memory;
+// below. The app sends it before openCore. The reply is nil when the
+// process uses the block, or the reason it does not.
+- (void)useMemory:(xpc_object_t)memory reply:(void (^)(NSString *_Nullable error))reply;
 
 // Opens the core `framework` from the app's Frameworks folder. The
 // reply is nil on success, or the reason.
@@ -70,6 +74,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)pausedWithSnapshot:(nullable NSData *)rgba width:(int)width height:(int)height;
 - (void)resumed;
 - (void)frameRendered;
+// iOS sends the hardware keys to the process that the player touched
+// last. After a tap on the game, that is the game process, and it sends
+// each key on with this message.
+- (void)keyChanged:(NSInteger)keyCode pressed:(BOOL)pressed;
 
 @end
 

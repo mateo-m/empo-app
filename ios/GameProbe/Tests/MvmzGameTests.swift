@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import XCTest
 
@@ -27,6 +30,15 @@ final class MvmzGameTests: XCTestCase {
         try write("data/System.json", #"{"gameTitle":" Stella's First RPG ","locale":"en_US"}"#)
         XCTAssertTrue(MvmzGame.isGameRoot(root))
         XCTAssertEqual(MvmzGame.title(at: root), "Stella's First RPG")
+    }
+
+    func testAGameWithTheMZCoreScriptIsMZ() throws {
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("js"), withIntermediateDirectories: true)
+        try write("js/rpg_core.js", "")
+        XCTAssertFalse(MvmzGame.isMZ(at: root))
+        try write("js/rmmz_core.js", "")
+        XCTAssertTrue(MvmzGame.isMZ(at: root))
     }
 
     func testTheTitlePictureIsTheOneSystemJsonNames() throws {

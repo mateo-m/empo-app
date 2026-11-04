@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
+import GameProbe
 import SwiftUI
 
 /// Bottom sheet of secondary in-game actions reachable from the
@@ -14,26 +18,22 @@ import SwiftUI
 struct PlayerMoreSheet: View {
     /// Display title of the running game. The pause row interpolates
     /// it ("Pause <title>") so the user sees exactly what they act
-    /// on. Falls back to "this game" if `selectedGame` is nil at
-    /// present time.
-    let gameTitle: String
+    /// on. Nil if `selectedGame` is nil at present time.
+    let gameTitle: String?
     @Binding var showDebugOverlay: Bool
     @Binding var fastForwardActive: Bool
     /// Multiplier the user configured in Game Settings. nil means
     /// fast-forward is off for this game, so the row stays hidden.
     let fastForwardMultiplier: Int?
     let showControllerRemap: Bool
-    /// The core running the game. Rows the core cannot answer stay
-    /// hidden. Nil before a core opens, which the sheet never sees,
-    /// because the toolbar that opens it only exists during a session.
-    let core: (any GameCore)?
     let onControllerRemap: () -> Void
     let onLayoutProfile: () -> Void
     let onPause: () -> Void
     /// Nil hides the Quit row, for a game that can't end without
     /// closing Empo.
     let onQuit: (() -> Void)?
-    let onCheats: () -> Void
+    /// Nil hides the Show cheats row, for a game that has no cheats.
+    let onCheats: (() -> Void)?
 
     @Environment(\.appSettings) private var settings
     @Environment(\.dismiss) private var dismiss
@@ -42,7 +42,19 @@ struct PlayerMoreSheet: View {
     @State private var confirmQuit = false
 
     private var fastForwardEnabled: Bool {
-        (fastForwardMultiplier ?? 0) >= 2
+        FastForwardArbiter.usableMultiplier(fastForwardMultiplier) != nil
+    }
+
+    private var pauseLabel: LocalizedStringResource {
+        if let gameTitle { "Pause \(gameTitle)" } else { "Pause game" }
+    }
+
+    private var quitLabel: LocalizedStringResource {
+        if let gameTitle { "Quit \(gameTitle)" } else { "Quit game" }
+    }
+
+    private var quitQuestion: LocalizedStringResource {
+        if let gameTitle { "Quit \"\(gameTitle)\"?" } else { "Quit this game?" }
     }
 
     var body: some View {
@@ -55,7 +67,7 @@ struct PlayerMoreSheet: View {
                     InterleavedRows(
                         separator: { rowSeparator },
                         content: {
-                            if core?.supportsCheats == true {
+                            if let onCheats {
                                 MenuRow(icon: "wand.and.stars", label: "Show cheats") {
                                     onCheats()
                                     dismiss()
@@ -107,13 +119,13 @@ struct PlayerMoreSheet: View {
                         content: {
                             MenuRow(
                                 icon: "pause.fill",
-                                label: "Pause \(gameTitle)"
+                                label: pauseLabel
                             ) {
                                 onPause()
                                 dismiss()
                             }
                             if onQuit != nil {
-                                MenuRow(icon: "xmark", label: "Quit \(gameTitle)", role: .destructive) {
+                                MenuRow(icon: "xmark", label: quitLabel, role: .destructive) {
                                     confirmQuit = true
                                 }
                             }
@@ -121,7 +133,7 @@ struct PlayerMoreSheet: View {
                     )
                 }
                 .clipShape(.rect(cornerRadius: Radius.md))
-                .alert("Quit \"\(gameTitle)\"?", isPresented: $confirmQuit) {
+                .alert(quitQuestion, isPresented: $confirmQuit) {
                     Button("Cancel", role: .cancel) {}
                     Button("Quit", role: .destructive) {
                         onQuit?()
@@ -196,7 +208,7 @@ private struct InterleavedRows<Separator: View, Content: View>: View {
 /// styling can diverge if needed.
 private struct MenuRow: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringResource
     var role: ButtonRole?
     let action: () -> Void
 
@@ -222,7 +234,7 @@ private struct MenuRow: View {
 /// text rather than the system tint so it reads as one unit.
 private struct MenuToggleRow: View {
     let icon: String
-    let label: String
+    let label: LocalizedStringResource
     @Binding var isOn: Bool
 
     var body: some View {

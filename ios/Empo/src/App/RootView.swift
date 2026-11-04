@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 private enum SplashTiming {
@@ -180,13 +183,14 @@ struct RootView: View {
                 Text(
                     appState.canEndStuckGame
                         ? "It stopped responding and will close. Progress you haven't saved will be lost."
-                        : "The game stopped responding. Close Empo and reopen it."
+                        : "The game stopped responding. Close Empo from the app switcher, then reopen it."
                 )
             } else if appState.phase != nil {
                 Text(
                     appState.canEndStuckGame
-                        ? appState.errorMessage ?? "Something went wrong while it was running."
-                        : "\(appState.errorMessage ?? "The game stopped.")\n\nClose Empo from the app switcher, then reopen it."
+                        ? appState.errorMessage
+                            ?? String(localized: "Something went wrong while it was running.")
+                        : "\(appState.errorMessage ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
                 )
             } else {
                 Text(appState.errorMessage ?? "")
@@ -255,9 +259,9 @@ struct RootView: View {
         }
     }
 
-    private var errorAlertTitle: String {
-        guard engineHung || appState.phase != nil else { return "Last session ended early" }
-        return appState.canEndStuckGame ? "The game stopped" : "Restart Empo"
+    private var errorAlertTitle: Text {
+        guard engineHung || appState.phase != nil else { return Text("Last session ended early") }
+        return appState.canEndStuckGame ? Text("The game stopped") : Text("Restart Empo")
     }
 
     private func closeErrorAlert() {
@@ -291,7 +295,9 @@ struct RootView: View {
     private var infoAlertTitle: String {
         appState.selectedGame?.title
             ?? PauseManager.shared.pausedGame?.title
-            ?? "Game message"
+            ?? String(
+                localized: "Game message",
+                comment: "Title of an alert that shows a message from the running game.")
     }
 
     /// Unblocks the core that waits for the info alert to close.
@@ -337,7 +343,7 @@ struct RootView: View {
         }
     }
 
-    /// The disclaimer's "I understand" button calls this. It persists
+    /// The disclaimer's "Continue" button calls this. It persists
     /// the acknowledgment and runs the usual splash exit animation.
     private func acknowledgeAndDismissSplash() {
         settings.acknowledgeDisclaimer()
@@ -355,6 +361,7 @@ private struct SplashView: View {
     let onAcknowledgeDisclaimer: () -> Void
 
     @State private var entered = false
+    @State private var sideInset: CGFloat = 0
 
     /// Combined "logo should be visually absent" flag. True during the
     /// disclaimer phase OR during the full exit. It stays one variable
@@ -372,36 +379,50 @@ private struct SplashView: View {
                 .opacity(exiting ? 0 : 1)
                 .accessibilityHidden(true)
 
-            // Logo + wordmark. During the disclaimer phase these fade/
-            // blur/scale out but the splash background stays. Same
-            // treatment on the full exit.
-            VStack(spacing: Spacing.xl) {
-                Image(.empoMark)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 96, height: 96)
-                    .foregroundStyle(.white)
-                    .accessibilityHidden(true)
-                Text(AppInfo.name)
-                    .font(AppFont.wordmark)
-                    .foregroundStyle(.white)
-            }
-            .blur(radius: logoHidden ? 10 : 0)
-            .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
-            .opacity(logoHidden ? 0 : (entered ? 1 : 0))
+            // The background fills the whole screen, so the content
+            // centers on the screen too. The closed iPhone Duo insets
+            // only its sensor strip side, and the system draws only at
+            // the strip's top, above the content.
+            ZStack {
+                // Logo + wordmark. During the disclaimer phase these fade/
+                // blur/scale out but the splash background stays. Same
+                // treatment on the full exit.
+                VStack(spacing: Spacing.xl) {
+                    Image(.empoMark)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 96, height: 96)
+                        .foregroundStyle(.white)
+                        .accessibilityHidden(true)
+                    Text(AppInfo.name)
+                        .font(AppFont.wordmark)
+                        .foregroundStyle(.white)
+                }
+                .blur(radius: logoHidden ? 10 : 0)
+                .scaleEffect(logoHidden ? 0.8 : (entered ? 1 : 0.8))
+                .opacity(logoHidden ? 0 : (entered ? 1 : 0))
 
-            // The disclaimer slides into the same centered position
-            // the logo just left. It mounts only while needed, so the
-            // @State-driven entry animation fires fresh.
-            if showDisclaimer {
-                DisclaimerView(onAcknowledge: onAcknowledgeDisclaimer)
-                    // Fully fade during the final exit so the whole
-                    // splash collapses cleanly.
-                    .opacity(exiting ? 0 : 1)
-                    .scaleEffect(exiting ? 0.95 : 1)
-                    .blur(radius: exiting ? 10 : 0)
+                // The disclaimer slides into the same centered position
+                // the logo just left. It mounts only while needed, so the
+                // @State-driven entry animation fires fresh.
+                if showDisclaimer {
+                    DisclaimerView(onAcknowledge: onAcknowledgeDisclaimer)
+                        // Fully fade during the final exit so the whole
+                        // splash collapses cleanly.
+                        .opacity(exiting ? 0 : 1)
+                        .scaleEffect(exiting ? 0.95 : 1)
+                        .blur(radius: exiting ? 10 : 0)
+                }
             }
+            .padding(.horizontal, sideInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(.container, edges: .horizontal)
         }
+        .onGeometryChange(
+            for: CGFloat.self,
+            of: { min($0.safeAreaInsets.leading, $0.safeAreaInsets.trailing) },
+            action: { sideInset = $0 }
+        )
         .onAppear {
             withAnimation(Motion.gentle) {
                 entered = true
@@ -531,5 +552,14 @@ private final class ReportItemProvider: UIActivityItemProvider, @unchecked Senda
             placeholderItem: FileManager.default.temporaryDirectory.appendingPathComponent("report.txt"))
     }
 
-    override var item: Any { (try? report.write(header: header)) ?? Data() }
+    override var item: Any {
+        do {
+            return try report.write(header: header)
+        } catch {
+            // The placeholder is a file, so some share targets take only a file.
+            let text = "\(header)\nThe report file could not be written: \(error.localizedDescription)\n"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("report.txt")
+            return (try? Data(text.utf8).write(to: url)) != nil ? url : text
+        }
+    }
 }

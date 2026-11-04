@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -7,11 +10,21 @@ import SwiftUI
 @MainActor
 protocol CoreSettings: AnyObject {
     var hasCustomizations: Bool { get }
-    /// The labels of the restart-required settings the user changed
-    /// since the sheet opened.
-    var restartRequiredChanges: [String] { get }
     func save()
     func reset()
+}
+
+@MainActor
+protocol CoreLaunchedSettings {
+    /// The labels of the restart-required settings in `current` that
+    /// differ, where `current` came from the same core.
+    func restartRequiredChanges(to current: any CoreSettings) -> [String]
+}
+
+@MainActor
+struct LaunchedSettings {
+    let settings: GameSettings
+    let core: (any CoreLaunchedSettings)?
 }
 
 /// The state of the Game Settings sheet for one game.
@@ -24,12 +37,12 @@ final class GameSettingsModel {
 
     var settings: GameSettings
     let displayDefaults: GameDisplayDefaults
+    #if os(iOS)
     /// The screen placement of the layout profile for each orientation.
     /// A form body renders again on every control change, and the
     /// resolve reads two files.
     var resolvedScreen: ScreenResolution.Result?
-
-    @ObservationIgnored private let initialSettings: GameSettings
+    #endif
 
     init(game: GameEntry) {
         self.game = game
@@ -39,7 +52,6 @@ final class GameSettingsModel {
         ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: container.empoStateURL)
         let settings = GameSettings.load(from: container.empoStateURL)
         self.settings = settings
-        self.initialSettings = settings
         let core = GameCores.core(forGameAt: container.gameURL)
         self.core = core
         self.coreSettings = core?.makeSettings(for: container)
@@ -50,9 +62,19 @@ final class GameSettingsModel {
         settings.hasCustomizations || coreSettings?.hasCustomizations == true
     }
 
-    var restartRequiredChanges: [String] {
-        settings.restartRequiredFieldsChanged(from: initialSettings)
-            + (coreSettings?.restartRequiredChanges ?? [])
+    /// Such as "Restart this game to apply: Smooth scaling and Render
+    /// scale." Nil when no change waits for a restart.
+    func restartHint(since launched: LaunchedSettings) -> LocalizedStringResource? {
+        var changed = settings.restartRequiredFieldsChanged(from: launched.settings)
+        if let coreSettings, let launchedCore = launched.core {
+            changed += launchedCore.restartRequiredChanges(to: coreSettings)
+        }
+        guard !changed.isEmpty else { return nil }
+        let list = changed.formatted(.list(type: .and, width: .standard))
+        return LocalizedStringResource(
+            "Restart this game to apply: \(list).",
+            comment:
+                "The placeholder is a list of setting names, such as \"Smooth scaling and Render scale\".")
     }
 
     func save() {
@@ -65,6 +87,7 @@ final class GameSettingsModel {
         coreSettings?.reset()
     }
 
+    #if os(iOS)
     func reloadResolvedScreen() {
         let store = LayoutProfilesManager.store
         resolvedScreen = ScreenResolution.resolve(
@@ -73,6 +96,7 @@ final class GameSettingsModel {
             readScreen: { store.readScreen($0) }
         )
     }
+    #endif
 
     // MARK: - Effective values
 
@@ -85,7 +109,7 @@ final class GameSettingsModel {
     }
     /// Fast forward is on when the user set a multiplier of 2 or more.
     var fastForwardEnabled: Bool {
-        (settings.speedMultiplier ?? 0) >= 2
+        FastForwardArbiter.usableMultiplier(settings.speedMultiplier) != nil
     }
     /// The slider value. 4x while fast forward is off, so turning the
     /// toggle on lands on a useful speed.

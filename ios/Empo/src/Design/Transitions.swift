@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 struct EmptyStateView: View {
     let icon: Image
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringResource
+    let subtitle: LocalizedStringResource
     var revealed: Bool = true
     var initialDelay: TimeInterval = 0.2
     static let staggerInterval: TimeInterval = 0.1
@@ -28,6 +31,8 @@ struct EmptyStateView: View {
             Text(title)
                 .font(.title2)
                 .fontWeight(.bold)
+                .multilineTextAlignment(.center)
+                .centeredMessageWidth()
                 .opacity(titleAppeared ? 1 : 0)
                 .offset(y: titleAppeared ? 0 : 12)
             Text(subtitle)
@@ -35,6 +40,7 @@ struct EmptyStateView: View {
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+                .centeredMessageWidth()
                 .opacity(subtitleAppeared ? 1 : 0)
                 .offset(y: subtitleAppeared ? 0 : 12)
         }

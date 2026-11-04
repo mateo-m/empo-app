@@ -1,4 +1,7 @@
 #!/usr/bin/env bun
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 //
 // Generates docs/schemas/empo-controls.v1.schema.json from GameProbe source.
 // The Swift model is the single source of truth: key codes, controller

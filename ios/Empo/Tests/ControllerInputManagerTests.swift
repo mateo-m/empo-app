@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameController
 import GameProbe
 import XCTest
@@ -18,6 +21,7 @@ import os
 final class ControllerInputManagerTests: XCTestCase {
     private var manager: ControllerInputManager!
     private var actions: [(String, Bool)] = []
+    private var refusedActions: Set<String> = []
     private var pressedElements: [String] = []
     private var logLines: [String] = []
     private var pads: [GCController] = []
@@ -28,7 +32,11 @@ final class ControllerInputManagerTests: XCTestCase {
         logLines = []
         pads = []
         manager = ControllerInputManager()
-        manager.actionHandler = { [unowned self] name, pressed in actions.append((name, pressed)) }
+        refusedActions = []
+        manager.actionHandler = { [unowned self] name, pressed in
+            actions.append((name, pressed))
+            return !refusedActions.contains(name)
+        }
         manager.elementActivityHandler = { [unowned self] element in pressedElements.append(element) }
         manager.deviceLogHandler = { [unowned self] line in logLines.append(line) }
         manager.start()
@@ -192,6 +200,22 @@ final class ControllerInputManagerTests: XCTestCase {
         XCTAssertEqual(actions.count, 2)
     }
 
+    func testBecomingActiveAfterForgetPressesAStillHeldButtonAgain() async throws {
+        let pad = GCController.withExtendedGamepad()
+        let profile = try XCTUnwrap(pad.extendedGamepad)
+        manager.updateResolvedMap(["a": .action("confirm")])
+        try await connect(pad)
+
+        profile.buttonA.setValue(1)
+        try await waitUntil { self.actions.count == 1 }
+        manager.releaseAndForgetHeldInputs()
+        XCTAssertEqual(actions.map(\.1), [true, false])
+
+        NotificationCenter.default.post(name: UIApplication.didBecomeActiveNotification, object: nil)
+        try await waitUntil { self.actions.count == 3 }
+        XCTAssertEqual(actions.last?.1, true)
+    }
+
     func testSecondConnectNotificationDoesNotDuplicateEdges() async throws {
         let pad = GCController.withExtendedGamepad()
         let profile = try XCTUnwrap(pad.extendedGamepad)
@@ -302,6 +326,27 @@ final class ControllerInputManagerTests: XCTestCase {
         XCTAssertEqual(actions.count, 2, "a detached pad dispatches nothing")
     }
 
+    func testReleaseOfARefusedPressIsNotSent() async throws {
+        let pad = GCController.withExtendedGamepad()
+        let profile = try XCTUnwrap(pad.extendedGamepad)
+        refusedActions = ["$fastForward"]
+        manager.updateResolvedMap(["a": .action("$fastForward")])
+        try await connect(pad)
+
+        profile.buttonA.setValue(1)
+        try await waitUntil { self.actions.count == 1 }
+        refusedActions = []
+        profile.buttonA.setValue(0)
+        try await settle()
+        XCTAssertEqual(
+            actions.map(\.1), [true], "the release of a refused press could end the hold of another button")
+
+        profile.buttonA.setValue(1)
+        profile.buttonA.setValue(0)
+        try await waitUntil { self.actions.count == 3 }
+        XCTAssertEqual(actions.map(\.1), [true, true, false])
+    }
+
     /// A press and its release queued in the same main-queue turn
     /// must both reach the reducer.
     func testPressAndReleaseInOneTurnBothArrive() async throws {
@@ -356,7 +401,7 @@ final class ControllerInputManagerTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Same scheme as the manager's `controllerID`, so a log line
+    /// Same scheme as the reader's `controllerID`, so a log line
     /// matches its pad by identity.
     private func id(of pad: GCController) -> String {
         String(UInt(bitPattern: ObjectIdentifier(pad)))
@@ -370,24 +415,5 @@ final class ControllerInputManagerTests: XCTestCase {
         pads.append(pad)
         NotificationCenter.default.post(name: .GCControllerDidConnect, object: pad)
         try await waitUntil { self.connectLine(for: pad) != nil }
-    }
-
-    /// The framework queues element handlers on the handler queue and
-    /// the connect observers hop through a Task. Neither offers a
-    /// completion signal, so the tests poll the observable result.
-    private func waitUntil(
-        _ condition: @escaping @MainActor () -> Bool,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) async throws {
-        for _ in 0..<200 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertTrue(condition(), "condition did not hold within 2 s", file: file, line: line)
-    }
-
-    /// Enough main-queue turns for queued handlers to land.
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(100))
     }
 }

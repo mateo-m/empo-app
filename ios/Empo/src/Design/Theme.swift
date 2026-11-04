@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 // 60-30-10 rule:
@@ -15,11 +18,27 @@ extension Color {
 
     /// Warm dark amber, or warm off-white peach in light mode.
     static let surface = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.16, green: 0.13, blue: 0.10, alpha: 1.0)
-                : UIColor(red: 1.00, green: 0.97, blue: 0.93, alpha: 1.0)
-        })
+        light: (1.00, 0.97, 0.93),
+        dark: (0.16, 0.13, 0.10))
+}
+
+extension Color {
+    fileprivate init(light: (CGFloat, CGFloat, CGFloat), dark: (CGFloat, CGFloat, CGFloat)) {
+        #if os(iOS)
+        self.init(
+            uiColor: UIColor { traits in
+                let rgb = traits.userInterfaceStyle == .dark ? dark : light
+                return UIColor(red: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1.0)
+            })
+        #else
+        self.init(
+            nsColor: NSColor(name: nil) { appearance in
+                let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                let rgb = isDark ? dark : light
+                return NSColor(srgbRed: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1.0)
+            })
+        #endif
+    }
 }
 
 extension ShapeStyle where Self == Color {
@@ -32,25 +51,16 @@ extension ShapeStyle where Self == Color {
 
 extension Color {
     static let destructive = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 1.00, green: 0.38, blue: 0.35, alpha: 1.0)
-                : UIColor(red: 0.90, green: 0.24, blue: 0.20, alpha: 1.0)
-        })
+        light: (0.90, 0.24, 0.20),
+        dark: (1.00, 0.38, 0.35))
 
     static let success = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.35, green: 0.90, blue: 0.50, alpha: 1.0)
-                : UIColor(red: 0.20, green: 0.72, blue: 0.35, alpha: 1.0)
-        })
+        light: (0.20, 0.72, 0.35),
+        dark: (0.35, 0.90, 0.50))
 
     static let warning = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 1.00, green: 0.82, blue: 0.35, alpha: 1.0)
-                : UIColor(red: 0.90, green: 0.70, blue: 0.10, alpha: 1.0)
-        })
+        light: (0.90, 0.70, 0.10),
+        dark: (1.00, 0.82, 0.35))
 }
 
 //
@@ -127,6 +137,10 @@ extension View {
     /// system color scheme or the backdrop brightness.
     func darkGlass() -> some View {
         environment(\.colorScheme, .dark)
+    }
+
+    func centeredMessageWidth() -> some View {
+        containerRelativeFrame(.horizontal) { width, _ in width * 2 / 3 }
     }
 }
 

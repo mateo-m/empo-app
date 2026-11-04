@@ -1,6 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 /// `manifest.json`: identifies the game and its runtime.
 struct JgpManifest: Codable {

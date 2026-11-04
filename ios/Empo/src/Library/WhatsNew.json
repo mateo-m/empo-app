@@ -1,5 +1,27 @@
 [
   {
+    "version": 4,
+    "appVersion": "0.8.1",
+    "items": [
+      {
+        "symbol": "iphone",
+        "title": "iPhone Duo support",
+        "detail": "Empo now starts on iPhone Duo and puts the on-screen buttons in the right place."
+      }
+    ]
+  },
+  {
+    "version": 3,
+    "appVersion": "0.8.0",
+    "items": [
+      {
+        "symbol": "globe",
+        "title": "Empo speaks your language",
+        "detail": "Empo now comes in 10 languages and uses the language of your device. To pick another one, go to Settings."
+      }
+    ]
+  },
+  {
     "version": 2,
     "appVersion": "0.7.1",
     "items": [
@@ -10,7 +32,7 @@
       },
       {
         "symbol": "checkmark.circle",
-        "title": "More games start",
+        "title": "More XP games start",
         "detail": "Some RPG Maker XP games that stopped at launch, such as Vinemon, now start."
       }
     ]

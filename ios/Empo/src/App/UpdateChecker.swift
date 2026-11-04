@@ -1,20 +1,14 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 
-/// Update checker for sideloaded / IPA installs.
+/// Update checker for the sideloaded iOS app and the Mac disk image.
 ///
 /// Hits GitHub's Releases API to compare the running build's
 /// `CFBundleShortVersionString` against the latest tagged release on
-/// the project's repo. It stays hidden on App Store / TestFlight
-/// builds because the platform handles updates there.
-///
-/// **Install-source detection.** Apple stamps a receipt file on App
-/// Store and TestFlight installs at `Bundle.main.appStoreReceiptURL`.
-/// Sideloaded IPAs (AltStore, Sideloadly, SideStore, ESign, Feather)
-/// do not get one because no purchase occurred. We treat the
-/// receipt's presence as the App Store / TestFlight signal and absence
-/// as "sideloaded or local Xcode build". Local debug builds also have
-/// no receipt. They get the banner too, which is fine for dogfooding.
+/// the project's repo.
 ///
 /// **Throttle.** A successful check writes a timestamp to
 /// UserDefaults. Later launches within `recheckInterval` reuse the
@@ -41,23 +35,14 @@ enum UpdateChecker {
         case failed(message: String)
     }
 
-    /// True when this build is sideloaded or a dev install (no
-    /// App Store or TestFlight receipt). The update banner is
-    /// hidden when this is false: the App Store handles those
-    /// installs natively.
-    static var isSideloadOrDevBuild: Bool {
-        guard let receiptURL = Bundle.main.appStoreReceiptURL else {
-            // No receipt URL at all: definitely not App Store /
-            // TestFlight. Common for non-paid-team builds and for
-            // some sideload tools that strip the URL entirely.
-            return true
-        }
-        // The receipt URL is set, but the file does not exist (Apple
-        // issues the file only on App Store / TestFlight). On
-        // sideload and Xcode debug installs, the URL exists in the
-        // bundle layout, but the actual receipt is absent.
-        return !FileManager.default.fileExists(atPath: receiptURL.path)
-    }
+    /// The App Store build must not point to the IPA downloads on
+    /// GitHub (App Review Guideline 3.2.2). The release workflow and
+    /// scripts/release.sh build the sideload IPA with `SIDELOAD`.
+    #if SIDELOAD
+    static let isSideloadBuild = true
+    #else
+    static let isSideloadBuild = false
+    #endif
 
     /// GitHub repo coordinates for the API and release URLs. They
     /// stay hardcoded because the project has a single canonical
@@ -90,10 +75,6 @@ enum UpdateChecker {
     /// refresh.
     static func checkIfStale() async -> Status {
         await withMinimumCheckingDuration {
-            // Hide entirely on App Store / TestFlight.
-            guard isSideloadOrDevBuild else {
-                return .upToDate(currentVersion: AppInfo.version)
-            }
             if let cached = cachedStatus() {
                 return cached
             }
@@ -105,9 +86,6 @@ enum UpdateChecker {
     /// Settings and the retry controls in the update UI use it.
     static func checkNow() async -> Status {
         await withMinimumCheckingDuration {
-            guard isSideloadOrDevBuild else {
-                return .upToDate(currentVersion: AppInfo.version)
-            }
             return await fetchLatestRelease()
         }
     }
@@ -118,7 +96,7 @@ enum UpdateChecker {
                 string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest"
             )
         else {
-            return .failed(message: "Could not check for updates. Try again later.")
+            return .failed(message: String(localized: "Could not check for updates. Try again later."))
         }
         var request = URLRequest(url: url)
         // GitHub recommends an explicit Accept header in their
@@ -129,7 +107,7 @@ enum UpdateChecker {
             forHTTPHeaderField: "Accept"
         )
         request.setValue(
-            "Empo/\(AppInfo.version) (iOS update-check)",
+            "Empo/\(AppInfo.version) (update-check)",
             forHTTPHeaderField: "User-Agent"
         )
         request.timeoutInterval = 10
@@ -137,10 +115,14 @@ enum UpdateChecker {
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                return .failed(message: "Could not reach GitHub. Check your connection and try again.")
+                return .failed(
+                    message: String(localized: "Could not reach GitHub. Check your connection and try again.")
+                )
             }
             guard http.statusCode == 200 else {
-                return .failed(message: "Could not find the latest release on GitHub. Try again later.")
+                return .failed(
+                    message: String(
+                        localized: "Could not find the latest release on GitHub. Try again later."))
             }
             guard
                 let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -148,7 +130,8 @@ enum UpdateChecker {
                 let htmlURLString = json["html_url"] as? String,
                 let htmlURL = URL(string: htmlURLString)
             else {
-                return .failed(message: "GitHub sent something Empo could not read. Try again later.")
+                return .failed(
+                    message: String(localized: "GitHub sent something Empo could not read. Try again later."))
             }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             persist(latestVersion: latest)

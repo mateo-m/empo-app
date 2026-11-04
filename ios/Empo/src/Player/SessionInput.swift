@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -19,7 +22,7 @@ final class SessionInput {
     }
 
     /// Dispatches action targets from either path: (action id, pressed).
-    var actionHandler: ((String, Bool) -> Void)? {
+    var actionHandler: ((String, Bool) -> Bool)? {
         didSet {
             controller.actionHandler = actionHandler
             keyboard.actionHandler = actionHandler
@@ -66,9 +69,9 @@ final class SessionInput {
     }
 
     /// Rebuilds both runtime maps from one merge of the layers.
-    func applyBindings(container: GameContainer?) {
+    func applyBindings(container: GameContainer?, manifest: BindingMap?) {
         let runtime = BindingResolver.resolveRuntime(
-            layers: BindingLayers.overrideLayers(for: container))
+            layers: BindingLayers.overrideLayers(for: container, manifest: manifest))
         controller.updateResolvedMap(runtime.elements)
         keyboard.updateResolvedMap(runtime.keys)
     }

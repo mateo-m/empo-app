@@ -1,5 +1,133 @@
 # Changelog
 
+## 0.10.4 - 2026-11-03
+
+### Features
+
+- Read controllers through SDL and set up unknown ones in settings (#228) ([`4570493`](https://github.com/mateo-m/empo-app/commit/4570493337778aae4c0fc0093498ecc6e2a9f734))
+
+## 0.10.3 - 2026-11-02
+
+### Features
+
+- Give PSDK games $userAgent and $empo (#225) ([`793820f`](https://github.com/mateo-m/empo-app/commit/793820fc08a0b3a3754450a65d52f7db76608222))
+- Map controller buttons in the Mac app (#227) ([`9a24783`](https://github.com/mateo-m/empo-app/commit/9a247830671f8c27730675643b41096fa8492785))
+
+## 0.10.2 - 2026-11-01
+
+### Bug Fixes
+
+- Let Empo Player open game cores so games start again (#223) ([`a6c1bab`](https://github.com/mateo-m/empo-app/commit/a6c1bab0d3a971e34df984863e47319e731e8c48))
+
+## 0.10.1 - 2026-11-01
+
+### Chores
+
+- Update mimalloc to v3.6.1 (#222) ([`099d3ce`](https://github.com/mateo-m/empo-app/commit/099d3ce5e65b64c78ad035ab7a5b664a948a5e0d))
+
+## 0.10.0 - 2026-11-01
+
+### Bug Fixes
+
+- Prepare for App Store review (#217) ([`18c3b0b`](https://github.com/mateo-m/empo-app/commit/18c3b0bbab59cd65453b328b142141ac16dca8d9))
+- Build ruby 3.1 without getattrlist and fgetattrlist (mateo-m/mkxp-z-apple-mobile#64) ([`6aabcc0`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6aabcc09b574f60fe6c4332bbadcc3a0de4c892c))
+- Build ruby without getattrlist and fgetattrlist (mateo-m/psdk-apple-mobile#4) ([`c0e14e6`](https://github.com/mateo-m/psdk-apple-mobile/commit/c0e14e64691123d3993f284f3f9872924fc79189))
+
+### Features
+
+- MacOS support (#218) ([`18dc25e`](https://github.com/mateo-m/empo-app/commit/18dc25e63ce27a4e94d6c921042bc4a9c757b2ce))
+- Build the engine for the Mac (mateo-m/mkxp-z-apple-mobile#65) ([`5728f4e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/5728f4ec10c9617de5a5aeef1b80ae60f367f196))
+- Build and release the core for macOS (mateo-m/mvmz-apple-mobile#2) ([`529a804`](https://github.com/mateo-m/mvmz-apple-mobile/commit/529a804f400bd4518cd45a94dbe5a8d9788dfb70))
+- Build the core for the Mac and ship it in the release (mateo-m/psdk-apple-mobile#5) ([`9ffb79a`](https://github.com/mateo-m/psdk-apple-mobile/commit/9ffb79ac2d373cef24fce1675b48949a81737451))
+
+## 0.9.1 - 2026-10-31
+
+### Release
+
+- Leave quit and switch games out of the release so SideStore and AltStore can install it (#216) ([`117e0e0`](https://github.com/mateo-m/empo-app/commit/117e0e025149521a8961439a3083894368b732f7))
+
+## 0.9.0 - 2026-10-31
+
+### Bug Fixes
+
+- Adopt the UIScene life cycle in the test host for the iOS 27 SDK (#210) ([`22ca557`](https://github.com/mateo-m/empo-app/commit/22ca55742d760223d5630b6f2c88df6412b41dde))
+- Keep the sheet title and footer in place while the content scrolls (#211) ([`03d8364`](https://github.com/mateo-m/empo-app/commit/03d8364b5adf0ba9166f551f3d0de8f34523fef4))
+- Put the iPhone Duo strip buttons under the Wi-Fi icon (#212) ([`4d63247`](https://github.com/mateo-m/empo-app/commit/4d632473839d4ec35d71ceee84b3ba19a105a72b))
+- The language menu crash at the start of Pokémon GS Vitro (mateo-m/mkxp-z-apple-mobile#63) ([`4a324d5`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4a324d584d84b75526b28b24188e77602f6bb734))
+
+### Features
+
+- Put the toolbar buttons in the iPhone Duo side strip (#209) ([`4f56ca3`](https://github.com/mateo-m/empo-app/commit/4f56ca36b19062786288e8e88dd2d97a0249f5b9))
+- Run each Ruby game in its own process behind an experimental setting (#173) ([`1af1076`](https://github.com/mateo-m/empo-app/commit/1af107693e23eac6b747455a5f65a181ed4f244e))
+- Announce quit and switch games in What's new, with a button to the setting (#214) ([`8827c80`](https://github.com/mateo-m/empo-app/commit/8827c802e7953a5ae0faa0d6d8134c20aa7a3728))
+
+## 0.8.1 - 2026-10-24
+
+### Bug Fixes
+
+- Stop the launch freeze and the wrong button margins on iPhone Duo (#207) ([`4e6f4a1`](https://github.com/mateo-m/empo-app/commit/4e6f4a1db2b117ee533a1cba3e8bf9996a607770))
+
+### Features
+
+- Announce iPhone Duo support in What's new (#208) ([`10fc6b8`](https://github.com/mateo-m/empo-app/commit/10fc6b8a838030c60cb67041ca9f439fd4f7def0))
+
+## 0.8.0 - 2026-10-21
+
+### Features
+
+- Translate Empo into 9 languages, with a language picker in settings (#205) ([`6487f62`](https://github.com/mateo-m/empo-app/commit/6487f6223d5361b56026e707fe947ad6c1f4dc53))
+- Announce the new languages in What's new (#206) ([`5b5dedd`](https://github.com/mateo-m/empo-app/commit/5b5dedd0abc5e6137f9b255e53840eff1e2f24b6))
+
+### Release
+
+- Give AltStore the release notes as plain text (#204) ([`f351fd8`](https://github.com/mateo-m/empo-app/commit/f351fd895c89dbefac1dca324ba43005a5344056))
+
+## 0.7.4 - 2026-10-20
+
+### Bug Fixes
+
+- List every bundled library under open-source licenses ([`7df1916`](https://github.com/mateo-m/empo-app/commit/7df1916ad2856acad140d613a05ba59f31f6c243))
+- White flashes after the Primal Kyogre fight in Pokémon Re:Union (mateo-m/mkxp-z-apple-mobile#61) ([`68efcd3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/68efcd36c2e8fc53386bbcfdd0b65ad0f9149729))
+- Load the m4a sounds of mv games on the simulator (mateo-m/mvmz-apple-mobile#1) ([`c7917c8`](https://github.com/mateo-m/mvmz-apple-mobile/commit/c7917c89adfbb18fd2833fac09b7cd5be7691ad9))
+
+### Chores
+
+- Move to GPLv3 with additional terms for credit and origin ([`9ef0454`](https://github.com/mateo-m/empo-app/commit/9ef0454a91f37d41602f47c72a722768cd1603ce))
+- Add license headers to source files ([`820f2af`](https://github.com/mateo-m/empo-app/commit/820f2af8009f059cde9fe15afaf614faba9623f0))
+- Use mkxp engine v7, PSDK core v2, and MV/MZ core v2 ([`26d157f`](https://github.com/mateo-m/empo-app/commit/26d157f29df805a711cd648564359b2daf071e54))
+- Sign the app as Mateo, not Grid ([`2e9116f`](https://github.com/mateo-m/empo-app/commit/2e9116f81c4b78f7d33f6f2862eaa2119c4706c6))
+
+### Features
+
+- Read the engine license notices from each bundled core ([`bc475e8`](https://github.com/mateo-m/empo-app/commit/bc475e84ce5c0d5c8566a32e212c5b0248a98b2f))
+- Ship licenses.json with the notices of each bundled library ([`6d6c5ba`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6d6c5baa5d63f5502e2551768d9693ff571ab055))
+- Ship licenses.json with the notices of each bundled library ([`64f0e22`](https://github.com/mateo-m/mvmz-apple-mobile/commit/64f0e22c65521ae0ac6c6945e2d4fca46096debb))
+- Fade single map tiles for project renaissance (mateo-m/psdk-apple-mobile#2) ([`2555223`](https://github.com/mateo-m/psdk-apple-mobile/commit/25552239c682446ff1b28e353f76cddd1b1b74f3))
+- Ship licenses.json with the notices of each bundled library ([`bd422fc`](https://github.com/mateo-m/psdk-apple-mobile/commit/bd422fc89872b1de88292abff8669e544a76a8c2))
+
+## 0.7.3 - 2026-10-16
+
+### Bug Fixes
+
+- Fast-forward in Pokémon Re:Union and Rejuvenation (mateo-m/mkxp-z-apple-mobile#58) ([`7399328`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/73993288c71c109338f44f9a8d1ff09df2d697b3))
+- Games that sometimes started on a black screen, such as A Day and a Night (mateo-m/mkxp-z-apple-mobile#52) ([`0efdcba`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0efdcba7459c9d2019c7fdce8da7628fdd2d71b9))
+- Downloads and "Regalo Misterioso" in Essentials BES games, such as Pokémon GS Vitro (mateo-m/mkxp-z-apple-mobile#50) ([`980dfae`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/980dfaea30e29b5fe6c625d6d27fa05b7fcf1889))
+
+## 0.7.2 - 2026-10-08
+
+### Bug Fixes
+
+- Capital letters in Insurgence and the plugin scan for Tectonic (#193) ([`974d829`](https://github.com/mateo-m/empo-app/commit/974d829862aef8ecc9638f42c8d54313191ad936))
+- Keep centered titles and messages within 2/3 of the screen width (#194) ([`54b9995`](https://github.com/mateo-m/empo-app/commit/54b9995671138b582d8b968371a89a937e764abc))
+
+### Chores
+
+- Use engine v5 (#197) ([`9f3d090`](https://github.com/mateo-m/empo-app/commit/9f3d09096890d04863c3ac67e2cbcb7ab22bc35e))
+
+### Features
+
+- Show the game's engine and core in game info (#196) ([`cd00d1e`](https://github.com/mateo-m/empo-app/commit/cd00d1ee1bb86543f7931a98597f531ace1e680f))
+
 ## 0.7.1 - 2026-10-06
 
 ### Highlights

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 // Test host for the mkxp-z core.
 //
 // The host owns UIApplicationMain and its own delegate. It does not
@@ -123,6 +126,11 @@ static void openCore(void) {
 }
 
 @interface MkxpTestHostDelegate : UIResponder <UIApplicationDelegate>
+@end
+
+// The iOS 27 SDK refuses to launch an app without the UIScene life
+// cycle, so the window comes from the scene that Info.plist names.
+@interface MkxpTestHostSceneDelegate : UIResponder <UIWindowSceneDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @end
 
@@ -154,15 +162,23 @@ static void openCore(void) {
                        });
     }
 
-    self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
+    return YES;
+}
+
+@end
+
+@implementation MkxpTestHostSceneDelegate
+
+- (void)scene:(UIScene *)scene
+    willConnectToSession:(UISceneSession *)session
+                 options:(UISceneConnectionOptions *)connectionOptions {
+    self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.window.rootViewController = [[UIViewController alloc] init];
     self.window.backgroundColor = UIColor.blackColor;
     [self.window makeKeyAndVisible];
 
     const char *loadAt = getenv("MKXP_LOAD_AT");
     [self performSelector:@selector(openCoreAndRun) withObject:nil afterDelay:loadAt ? atof(loadAt) : 2.0];
-
-    return YES;
 }
 
 // A run loop timer, not dispatch_after. gamecore_run_app never returns,

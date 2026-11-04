@@ -24,7 +24,7 @@ terms of the MIT license. A copy of the license can be found in the file
 // OS memory configuration
 typedef struct mi_os_mem_config_s {
   size_t  page_size;              // default to 4KiB
-  size_t  large_page_size;        // 0 if not supported, usually 2MiB 
+  size_t  large_page_size;        // 0 if not supported, usually 2MiB
   size_t  alloc_granularity;      // smallest allocation size (usually 4KiB, on Windows 64KiB)
   size_t  physical_memory_in_kib; // physical memory size in KiB
   size_t  virtual_address_bits;   // usually 48 or 56 bits on 64-bit systems. (used to determine secure randomization)
@@ -70,8 +70,14 @@ int _mi_prim_reset(void* addr, size_t size);
 // Returns error code or 0 on success. On most platforms this is a no-op.
 int _mi_prim_reuse(void* addr, size_t size);
 
-// Protect memory. Returns error code or 0 on success.
-int _mi_prim_protect(void* addr, size_t size, bool protect);
+// Set (or reset) a guard range. Returns error code or 0 on success.
+// `is_committed` is the accounted commit state of the range which is never changed by the guard:
+// - if `is_committed`, the range stays committed but becomes inaccessible (and its physical memory may be released);
+//   a reset makes the range accessible again.
+// - otherwise, the range may be reserved, decommitted, or still partly committed. After a set the range is
+//   inaccessible until it is explicitly committed (`_mi_prim_commit`), and a reset is a no-op.
+// The caller must ensure the accounted commit state does not change between a set and reset.
+int _mi_prim_guard(void* addr, size_t size, bool set, bool is_committed);
 
 // Allocate huge (1GiB) pages possibly associated with a NUMA node.
 // `is_zero` is set to true if the memory was zero initialized (as on most OS's)
@@ -132,5 +138,23 @@ bool _mi_prim_thread_is_in_threadpool(void);
 // Yield to other threads. Should be similar to `sleep(0)`.
 // Is called only in rare situations and does not have to be lightning fast.
 void _mi_prim_thread_yield(void);
+
+// Return `true` if the process is forcefully shutdown (with potentially killed threads that might still hold a lock)
+// If this returns true, mimalloc skips graceful shutdown (as locks might still be held by threads that are killed).
+// See also issue #1377
+bool _mi_prim_process_is_killed(void);
+
+
+// The following are predefined by default
+
+// Is the mimalloc-redirect running (Windows only)
+bool _mi_is_redirected(void);
+
+// Called to initialize the allocator
+bool _mi_allocator_init(const char** message);
+
+// Called to clean up the allocator
+void _mi_allocator_done(void);
+
 
 #endif  // MI_PRIM_H

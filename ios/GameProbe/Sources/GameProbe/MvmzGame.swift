@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// Tells whether the RPG Maker MV and MZ core can run a folder.
@@ -10,6 +13,11 @@ public enum MvmzGame {
     public static func isGameRoot(_ url: URL, fileManager: FileManager = .default) -> Bool {
         fileManager.fileExists(atPath: url.appendingPathComponent("index.html").path)
             && fileManager.fileExists(atPath: url.appendingPathComponent("data/System.json").path)
+    }
+
+    /// MZ ships `rmmz_core.js`, and MV ships `rpg_core.js`.
+    public static func isMZ(at url: URL, fileManager: FileManager = .default) -> Bool {
+        fileManager.fileExists(atPath: url.appendingPathComponent("js/rmmz_core.js").path)
     }
 
     /// The title the game shows in its window, from `data/System.json`.

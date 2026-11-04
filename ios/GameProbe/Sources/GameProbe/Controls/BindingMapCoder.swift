@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 extension ControlsTarget {
@@ -105,4 +108,17 @@ public enum BindingMapCoder {
     public static let sourceOrder: [BindingSource] =
         ControllerElement.allElements.map { .element($0) }
         + KeyCodeTable.allCodes.map { .key($0) }
+}
+
+/// The JSON form of `BindingMapCoder.encode`, for `Codable` messages.
+extension BindingMap: Codable {
+    public init(from decoder: Decoder) throws {
+        let object = try decoder.singleValueContainer().decode([String: String?].self)
+        self = BindingMapCoder.decode(object.mapValues { $0.map { $0 as Any } ?? NSNull() })
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(BindingMapCoder.encode(self).mapValues { $0 as? String })
+    }
 }

@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Verify ios dependency pins resolve to published releases: ANGLE in
 # empo-deps, the mkxp-z core in mkxp-z-apple-mobile, the PSDK core in
 # psdk-apple-mobile, the MV/MZ core in mvmz-apple-mobile.
@@ -10,7 +13,7 @@
 # REQUIRE_PUBLISHED=1 fails when a pin is still "unpublished". Use it
 # in release.sh and on version tags.
 
-set -e
+set -euo pipefail
 
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
@@ -34,7 +37,7 @@ require_gh() {
 release_exists() {
     repo=$1
     tag=$2
-    gh release view "$tag" --repo "$repo" >/dev/null 2>&1
+    "$REPO_ROOT/scripts/gh-retry.sh" release view "$tag" --repo "$repo" >/dev/null 2>&1
 }
 
 asset_sha256() {
@@ -44,7 +47,7 @@ asset_sha256() {
     # GitHub's release API gives a sha256 digest for an asset. An asset
     # without one is downloaded and hashed. The gh 2.45 of Ubuntu 24.04
     # leaves the digest out of `gh release view --json`.
-    digest=$(gh api "repos/$repo/releases/tags/$tag" \
+    digest=$("$REPO_ROOT/scripts/gh-retry.sh" api "repos/$repo/releases/tags/$tag" \
         --jq ".assets[] | select(.name == \"$asset\") | .digest") || return 1
     case "$digest" in
         sha256:*)
@@ -53,7 +56,8 @@ asset_sha256() {
             ;;
     esac
     tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/empo-deps-pin.XXXXXX")
-    if ! gh release download "$tag" --repo "$repo" --pattern "$asset" --dir "$tmpdir" >/dev/null 2>&1; then
+    if ! "$REPO_ROOT/scripts/gh-retry.sh" release download "$tag" --repo "$repo" --pattern "$asset" \
+        --dir "$tmpdir" --clobber >/dev/null 2>&1; then
         rm -rf "$tmpdir"
         return 1
     fi
@@ -70,7 +74,7 @@ verify_pin_file() {
     version_file=$2
     version_var=$3
     sha_var=$4
-    asset_name=$5
+    asset_var=$5
     repo=$6
 
     [ -f "$version_file" ] || die "$label: missing $version_file"
@@ -80,8 +84,10 @@ verify_pin_file() {
 
     eval "version=\${$version_var:-}"
     eval "expected_sha=\${$sha_var:-}"
+    eval "asset_name=\${$asset_var:-}"
 
     [ -n "$version" ] || die "$label: $version_var unset in $version_file"
+    [ -n "$asset_name" ] || die "$label: $asset_var unset in $version_file"
 
     if [ "$version" = "unpublished" ]; then
         if [ "${REQUIRE_PUBLISHED:-0}" = "1" ]; then
@@ -108,9 +114,9 @@ verify_pin_file() {
     printf 'verify-empo-deps-pins: %s OK (%s)\n' "$label" "$version"
 }
 
-verify_pin_file "ANGLE" "$ANGLE_VERSION_FILE" ANGLE_VERSION ANGLE_SHA256 "angle-ios-prebuilt.tar.gz" "$DEPS_REPO"
-verify_pin_file "mkxp-z core" "$MKXP_VERSION_FILE" MKXP_CORE_VERSION MKXP_CORE_SHA256 "mkxp-z-ios.tar.gz" mateo-m/mkxp-z-apple-mobile
-verify_pin_file "PSDK core" "$PSDK_VERSION_FILE" PSDK_CORE_VERSION PSDK_CORE_SHA256 "psdk-ios.tar.gz" mateo-m/psdk-apple-mobile
-verify_pin_file "MV/MZ core" "$MVMZ_VERSION_FILE" MVMZ_CORE_VERSION MVMZ_CORE_SHA256 "mvmz-ios.tar.gz" mateo-m/mvmz-apple-mobile
+verify_pin_file "ANGLE" "$ANGLE_VERSION_FILE" ANGLE_VERSION ANGLE_SHA256 ANGLE_ASSET "$DEPS_REPO"
+verify_pin_file "mkxp-z core" "$MKXP_VERSION_FILE" MKXP_CORE_VERSION MKXP_CORE_SHA256 MKXP_CORE_ASSET mateo-m/mkxp-z-apple-mobile
+verify_pin_file "PSDK core" "$PSDK_VERSION_FILE" PSDK_CORE_VERSION PSDK_CORE_SHA256 PSDK_CORE_ASSET mateo-m/psdk-apple-mobile
+verify_pin_file "MV/MZ core" "$MVMZ_VERSION_FILE" MVMZ_CORE_VERSION MVMZ_CORE_SHA256 MVMZ_CORE_ASSET mateo-m/mvmz-apple-mobile
 
 printf 'verify-empo-deps-pins: all checks passed\n'

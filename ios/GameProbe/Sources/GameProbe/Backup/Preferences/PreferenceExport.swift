@@ -55,6 +55,10 @@ public enum PreferenceKeys {
     /// stays on the device that made it.
     public static let rubyGameRunner = PreferenceEntry("rubyGameRunner", .deviceLocal)
     public static let lastGameReport = PreferenceEntry("lastGameReport", .neverStored)
+    /// It names an app group of this install's Files add-on.
+    public static let dataAppGroup = PreferenceEntry("dataAppGroup", .deviceLocal)
+    public static let quitClosesGamesWithoutAsking = PreferenceEntry(
+        "quitClosesGamesWithoutAsking", .deviceLocal)
 
     // MARK: - Library
 
@@ -118,7 +122,7 @@ public enum PreferenceKeys {
     public static let all: [PreferenceEntry] = [
         theme, interfaceHaptics, controllerHaptics, controlsEditSnapToGrid, debugMode, debugLogs,
         maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
-        rubyGameRunner, lastGameReport,
+        rubyGameRunner, lastGameReport, dataAppGroup, quitClosesGamesWithoutAsking,
         libraryDisplayMode, librarySortOption, showContinuePlaying, titlePosition,
         cleanupInvalidGames, pendingDuplicateGameNames, pendingSaveRecoveries, controllerMapGlobal,
         layoutProfilesGameNoticeShown, layoutProfilesDefault, viewportBoundsR, viewportBoundsG,

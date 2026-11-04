@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import ExtensionFoundation
 import ExtensionKit
 import UIKit
@@ -34,12 +37,15 @@ enum GameProcessHost {
             // quits.
             await previousExit?.value
             guard current == session else { return }
-            guard let identity = await identity() else {
+            let identity = await identity()
+            // A newer session can start while the monitor loads. A lost
+            // process then ends that session, not this one.
+            guard current == session else { return }
+            guard let identity else {
                 EngineSessionCoordinator.shared.note("The GameProcess extension is not in the app.")
                 EmpoGameProcessClient.processLost()
                 return
             }
-            guard current == session else { return }
             show(identity)
         }
     }
@@ -52,6 +58,13 @@ enum GameProcessHost {
 
     static func end() {
         session += 1
+        // Before the controller goes: its removal can end the connection
+        // on another queue, and before `end` that counts as a lost process.
+        let exited = AsyncStream<Void> { continuation in
+            EmpoGameProcessClient.end {
+                continuation.finish()
+            }
+        }
         let ending = controller
         controller = nil
         if let ending {
@@ -59,12 +72,11 @@ enum GameProcessHost {
             ending.view.removeFromSuperview()
             ending.removeFromParent()
         }
-        let exited = AsyncStream<Void> { continuation in
-            EmpoGameProcessClient.end {
-                continuation.finish()
-            }
-        }
+        // A session that ends before its process connects ends at once,
+        // while the process before it can still be exiting.
+        let previousExit = lastExit
         lastExit = Task {
+            await previousExit?.value
             for await _ in exited {}
         }
     }

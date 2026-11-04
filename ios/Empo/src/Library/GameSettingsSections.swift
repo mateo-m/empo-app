@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import GameProbe
 import SwiftUI
 
@@ -27,15 +30,14 @@ struct GameplaySettingsSection: View {
                             }
                         }
                     ),
-                    description:
-                        "Add a Fast forward button to the in-game menu. While it is on, the game runs at the speed below."
+                    description: fastForwardDescription
                 )
 
                 if model.fastForwardEnabled {
                     HStack {
                         Text("Speed")
                         Spacer()
-                        Text("\(model.effectiveSpeedMultiplier)x")
+                        Text("\(model.effectiveSpeedMultiplier)×", comment: "Fast forward speed, such as 4×")
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
@@ -55,6 +57,14 @@ struct GameplaySettingsSection: View {
         } footer: {
             Text("How you play the game.")
         }
+    }
+
+    private var fastForwardDescription: LocalizedStringResource {
+        #if os(macOS)
+        "Add Fast Forward to the Game menu while you play. When it's on, the game runs at the speed below."
+        #else
+        "Show a Fast forward switch in the More menu while you play. When the switch is on, the game runs at the speed below."
+        #endif
     }
 }
 
@@ -132,6 +142,7 @@ extension DisplaySettingsSection where Extra == EmptyView {
     }
 }
 
+#if os(iOS)
 /// One section for the layout profile, which sets the controls and
 /// where the game sits on screen.
 struct LayoutSettingsSection: View {
@@ -160,7 +171,11 @@ struct LayoutSettingsSection: View {
             )
             .onAppear { model.reloadResolvedScreen() }
         } header: {
-            Text("Layout")
+            Text(
+                "Screen layout",
+                comment:
+                    "Game settings section with the layout profile: the on-screen controls and where the game sits."
+            )
         } footer: {
             if model.resolvedScreen?.portrait.placement != nil
                 || model.resolvedScreen?.landscape.placement != nil
@@ -176,13 +191,17 @@ struct LayoutSettingsSection: View {
 
     private var currentPinLabel: String {
         switch LayoutProfilesManager.store.loadPin(forGameFolder: model.container.url).pin {
-        case .followChain: return "Automatic"
+        case .followChain:
+            return String(
+                localized: "Automatic", comment: "Layout profile choice that picks a layout on its own.")
         case .profile(let name): return name
-        case .gameLayout: return "Game layout"
-        case .defaultProfile: return "Default profile"
+        case .gameLayout: return String(localized: "Game layout")
+        case .defaultProfile: return String(localized: "Default profile")
         }
     }
 }
+
+#endif
 
 struct TouchMouseToggle: View {
     let model: GameSettingsModel
@@ -224,5 +243,50 @@ struct SettingRow<Content: View>: View {
                 }
             }
         }
+    }
+}
+
+struct ResetSettingsSection: View {
+    let model: GameSettingsModel
+    let gameTitle: String
+    @State private var showsConfirmation = false
+
+    var body: some View {
+        content
+            .alert("Reset all settings?", isPresented: $showsConfirmation) {
+                #if os(macOS)
+                Button("Reset") { model.resetToDefaults() }
+                #else
+                Button("Reset", role: .destructive) { withAnimation { model.resetToDefaults() } }
+                #endif
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This clears every change you made to \"\(gameTitle)\". You can't undo this.")
+            }
+    }
+
+    @ViewBuilder private var content: some View {
+        #if os(macOS)
+        Section {
+            LabeledContent {
+                Button("Reset to Defaults…") { showsConfirmation = true }
+                    .disabled(!model.hasAnyCustomizations)
+            } label: {
+                footer.foregroundStyle(.secondary)
+            }
+        }
+        #else
+        if model.hasAnyCustomizations {
+            Section {
+                Button("Reset to defaults", role: .destructive) { showsConfirmation = true }
+            } footer: {
+                footer
+            }
+        }
+        #endif
+    }
+
+    private var footer: Text {
+        Text("Clears every change you made and uses the game's original values.")
     }
 }

@@ -1,16 +1,24 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import Observation
 import SwiftUI
+
+#if os(iOS)
 import UIKit
+#else
+import AppKit
+#endif
 
 enum LibraryDisplayMode: String, CaseIterable {
     case grid
     case list
 
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
-        case .grid: "Grid"
-        case .list: "List"
+        case .grid: LocalizedStringResource("Grid", comment: "Library layout option: games as cards.")
+        case .list: LocalizedStringResource("List", comment: "Library layout option: games as rows.")
         }
     }
 }
@@ -27,7 +35,21 @@ enum LibrarySortOption: String, CaseIterable {
     case largestSize
     case smallestSize
 
-    var label: String {
+    var label: LocalizedStringResource {
+        #if os(macOS)
+        switch self {
+        case .titleAZ: "Title A to Z"
+        case .titleZA: "Title Z to A"
+        case .recentlyAdded: "Recently Added"
+        case .leastRecentlyAdded: "Added Longest Ago"
+        case .recentlyPlayed: "Recently Played"
+        case .leastRecentlyPlayed: "Played Longest Ago"
+        case .mostPlayed: "Most Played"
+        case .leastPlayed: "Least Played"
+        case .largestSize: "Largest First"
+        case .smallestSize: "Smallest First"
+        }
+        #else
         switch self {
         case .titleAZ: "Title A to Z"
         case .titleZA: "Title Z to A"
@@ -40,6 +62,7 @@ enum LibrarySortOption: String, CaseIterable {
         case .largestSize: "Largest first"
         case .smallestSize: "Smallest first"
         }
+        #endif
     }
 
     var icon: String {
@@ -56,29 +79,37 @@ enum LibrarySortOption: String, CaseIterable {
     /// order in the UI. Each group's options also render in the
     /// listed order.
     static let groups: [LibrarySortGroup] = [
-        LibrarySortGroup(title: "Title", options: [.titleAZ, .titleZA]),
         LibrarySortGroup(
-            title: "Date",
+            title: LocalizedStringResource(
+                "Title", comment: "Library sort sheet: section for sorting by game title."),
+            options: [.titleAZ, .titleZA]),
+        LibrarySortGroup(
+            title: LocalizedStringResource(
+                "Date", comment: "Library sort sheet: section for sorting by when a game was added or played."
+            ),
             options: [
                 .recentlyAdded, .leastRecentlyAdded,
                 .recentlyPlayed, .leastRecentlyPlayed,
             ]),
-        LibrarySortGroup(title: "Playtime", options: [.mostPlayed, .leastPlayed]),
-        LibrarySortGroup(title: "Size", options: [.largestSize, .smallestSize]),
+        LibrarySortGroup(title: "Play time", options: [.mostPlayed, .leastPlayed]),
+        LibrarySortGroup(
+            title: LocalizedStringResource(
+                "Size", comment: "Library sort sheet: section for sorting by game size on disk."),
+            options: [.largestSize, .smallestSize]),
     ]
 }
 
 struct LibrarySortGroup: Identifiable {
-    let title: String
+    let title: LocalizedStringResource
     let options: [LibrarySortOption]
-    var id: String { title }
+    var id: LibrarySortOption? { options.first }
 }
 
 enum TitlePosition: String, CaseIterable {
     case inside
     case under
 
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
         case .inside: "Inside card"
         case .under: "Under card"
@@ -91,14 +122,17 @@ enum AppTheme: String, CaseIterable {
     case light
     case auto
 
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
-        case .dark: "Dark"
-        case .light: "Light"
-        case .auto: "System"
+        case .dark: LocalizedStringResource("Dark", comment: "Theme option.")
+        case .light: LocalizedStringResource("Light", comment: "Theme option.")
+        case .auto:
+            LocalizedStringResource(
+                "System", comment: "Option that follows the device setting, for the theme or the language.")
         }
     }
 
+    #if os(iOS)
     var userInterfaceStyle: UIUserInterfaceStyle {
         switch self {
         case .dark: .dark
@@ -106,6 +140,7 @@ enum AppTheme: String, CaseIterable {
         case .auto: .unspecified
         }
     }
+    #endif
 }
 
 /// Where a game runs: in the app, or in a game process of its own
@@ -195,6 +230,15 @@ class AppSettings {
         }
     }
 
+    #if os(macOS)
+    var quitClosesGamesWithoutAsking: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                quitClosesGamesWithoutAsking, forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        }
+    }
+    #endif
+
     /// Where the games of `GameCores.gameProcessCores` run from the next
     /// launch. Experimental, and off
     /// (`.app`) by default.
@@ -204,16 +248,20 @@ class AppSettings {
 
     /// `rubyGameRunner` until Empo closes. A game in the app stays
     /// for the life of the process, so a change applies at the next
-    /// launch only. `DataDirectory` reads it before the main actor runs.
+    /// launch only.
     nonisolated static let rubyGameRunnerThisLaunch: GameRunner = {
         let raw = UserDefaults.standard.string(forKey: DefaultsKey.rubyGameRunner) ?? ""
-        return gameProcessIsAvailable ? GameRunner(rawValue: raw) ?? .app : .app
+        return gameProcessIsAvailable && DataDirectory.isInAppGroup ? GameRunner(rawValue: raw) ?? .app : .app
     }()
 
     /// The game process needs a core that cannot kill its session, and
-    /// the app group folder for the games and the saves.
+    /// an app group for the games and the saves. A sideload tool can
+    /// remove the extensions to save App IDs.
     nonisolated static var gameProcessIsAvailable: Bool {
-        !GameCores.gameProcessCores.isEmpty && DataDirectory.appGroupURL != nil
+        !GameCores.gameProcessCores.isEmpty
+            && DataDirectory.appGroupURL != nil
+            && FileManager.default.fileExists(
+                atPath: Bundle.main.bundleURL.appendingPathComponent("Extensions/GameProcess.appex").path)
     }
 
     // MARK: - Splash disclaimer acknowledgment
@@ -235,7 +283,9 @@ class AppSettings {
 
     func acknowledgeDisclaimer() {
         disclaimerAcknowledgedVersion = Self.currentDisclaimerVersion
+        #if os(iOS)
         acknowledgeWhatsNew()
+        #endif
     }
 
     // MARK: - What's new
@@ -246,6 +296,7 @@ class AppSettings {
         }
     }
 
+    #if os(iOS)
     var needsWhatsNew: Bool {
         whatsNewSeenVersion < WhatsNew.version
     }
@@ -253,6 +304,7 @@ class AppSettings {
     func acknowledgeWhatsNew() {
         whatsNewSeenVersion = WhatsNew.version
     }
+    #endif
 
     private init() {
         let ud = UserDefaults.standard
@@ -280,7 +332,9 @@ class AppSettings {
             GameRunner(rawValue: ud.string(forKey: DefaultsKey.rubyGameRunner) ?? "") ?? .app
         self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
         self.whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
-
+        #if os(macOS)
+        self.quitClosesGamesWithoutAsking = ud.bool(forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        #endif
     }
 
     private static let defaultViewportBoundsColor = Color(
@@ -299,7 +353,11 @@ class AppSettings {
     }
 
     private func resolvedRGBA() -> (r: CGFloat, g: CGFloat, b: CGFloat, a: CGFloat) {
+        #if os(iOS)
         let resolved = UIColor(viewportBoundsColor)
+        #else
+        let resolved = NSColor(viewportBoundsColor).usingColorSpace(.sRGB) ?? .orange
+        #endif
         var r: CGFloat = 0
         var g: CGFloat = 0
         var b: CGFloat = 0
@@ -324,9 +382,11 @@ class AppSettings {
     /// `EngineSessionCoordinator.openCore` calls this once the core is
     /// in.
     func pushToCore() {
+        #if os(iOS)
         guard EmpoCoreIsOpen() != 0 else { return }
         gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
         gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        #endif
     }
 }

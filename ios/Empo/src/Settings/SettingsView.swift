@@ -1,4 +1,17 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
+
+enum SettingsSection: String, Decodable {
+    case experimental
+
+    var isShown: Bool {
+        switch self {
+        case .experimental: AppSettings.gameProcessIsAvailable
+        }
+    }
+}
 
 struct SettingsView: View {
     @Environment(\.appState) private var appState
@@ -6,282 +19,319 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showBuildInfo = false
     @State private var showWhatsNew = false
+    @State var scrollTarget: SettingsSection?
 
     var body: some View {
         @Bindable var settings = settings
         return NavigationStack {
-            Form {
-                settingsHeader
+            ScrollViewReader { proxy in
+                Form {
+                    settingsHeader
 
-                Section {
-                    SettingsPicker(
-                        title: "Theme",
-                        selection: $settings.theme,
-                        description: "System follows your device's appearance setting."
-                    ) {
-                        ForEach(AppTheme.allCases, id: \.self) { theme in
-                            Text(theme.label).tag(theme)
-                        }
-                    }
+                    Section {
+                        LanguagePicker()
 
-                    SettingsPicker(
-                        title: "Layout",
-                        selection: $settings.libraryDisplayMode,
-                        description: "Show games as a grid of cards or a compact list."
-                    ) {
-                        ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.label).tag(mode)
-                        }
-                    }
-
-                    // Title position only affects grid cards. The
-                    // list layout always puts the title next to the
-                    // artwork. Hide the row when it would be a no-op.
-                    if settings.libraryDisplayMode == .grid {
                         SettingsPicker(
-                            title: "Title position",
-                            selection: $settings.titlePosition,
-                            description: "Where game titles show up on your library cards."
+                            title: "Theme",
+                            selection: $settings.theme,
+                            description: "System follows your device's appearance setting."
                         ) {
-                            ForEach(TitlePosition.allCases, id: \.self) { position in
-                                Text(position.label).tag(position)
+                            ForEach(AppTheme.allCases, id: \.self) { theme in
+                                Text(theme.label).tag(theme)
                             }
+                        }
+
+                        SettingsPicker(
+                            title: "Layout",
+                            selection: $settings.libraryDisplayMode,
+                            description: "Show games as a grid of cards or a compact list."
+                        ) {
+                            ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+
+                        // Title position only affects grid cards. The
+                        // list layout always puts the title next to the
+                        // artwork. Hide the row when it would be a no-op.
+                        if settings.libraryDisplayMode == .grid {
+                            SettingsPicker(
+                                title: "Title position",
+                                selection: $settings.titlePosition,
+                                description: "Where game titles show up on your library cards."
+                            ) {
+                                ForEach(TitlePosition.allCases, id: \.self) { position in
+                                    Text(position.label).tag(position)
+                                }
+                            }
+                        }
+
+                        SettingsToggle(
+                            title: "Interface haptics",
+                            isOn: $settings.interfaceHaptics,
+                            description:
+                                "Feel a gentle tap when you press buttons and switches."
+                        )
+
+                        SettingsToggle(
+                            title: "Continue playing",
+                            isOn: $settings.showContinuePlaying,
+                            description:
+                                "Shows a card at the top of your library for your last game."
+                        )
+                    } header: {
+                        Text("Appearance")
+                    }
+
+                    Section {
+                        SettingsNavigationRow(
+                            title: "Layout profiles",
+                            description:
+                                "Create and edit saved layouts for the on-screen controls and the game screen."
+                        ) {
+                            LayoutProfilesSettingsView()
+                        }
+
+                        SettingsToggle(
+                            title: "On-screen control haptics",
+                            isOn: $settings.controllerHaptics,
+                            description:
+                                "Feel a gentle tap when you press the on-screen controls while you play."
+                        )
+                    } header: {
+                        Text("Gameplay")
+                    }
+
+                    Section {
+                        SettingsNavigationRow(
+                            title: "Backups",
+                            description:
+                                "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."
+                        ) {
+                            BackupsScreen()
                         }
                     }
 
-                    SettingsToggle(
-                        title: "Interface haptics",
-                        isOn: $settings.interfaceHaptics,
-                        description:
-                            "Feel a gentle tap when you press buttons and switches."
-                    )
-
-                    SettingsToggle(
-                        title: "Continue playing",
-                        isOn: $settings.showContinuePlaying,
-                        description:
-                            "Shows a card at the top of your library for your last game."
-                    )
-                } header: {
-                    Text("Appearance")
-                }
-
-                Section {
-                    SettingsNavigationRow(
-                        title: "Layout profiles",
-                        description:
-                            "Create and edit saved layouts for the on-screen controls and the game screen."
-                    ) {
-                        LayoutProfilesSettingsView()
-                    }
-
-                    SettingsToggle(
-                        title: "Controller haptics",
-                        isOn: $settings.controllerHaptics,
-                        description: "Vibration feedback on the on-screen game controls while you play."
-                    )
-                } header: {
-                    Text("Gameplay")
-                }
-
-                Section {
-                    SettingsNavigationRow(
-                        title: "Backups",
-                        description:
-                            "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."
-                    ) {
-                        BackupsScreen()
-                    }
-                }
-
-                Section {
-                    SettingsToggle(
-                        title: "Diagnostics overlay",
-                        isOn: $settings.diagnosticsOverlay,
-                        description:
-                            "Adds a toolbar button that shows frame rate, memory use, and details about the game engine while you play."
-                    )
-
-                    SettingsToggle(
-                        title: "Fill unused screen area",
-                        isOn: $settings.showViewportBounds,
-                        description:
-                            "Fill the screen area outside the game picture with a color you choose."
-                    )
-
-                    if settings.showViewportBounds {
-                        NavigationLink {
-                            ViewportBoundsColorPicker(color: $settings.viewportBoundsColor)
+                    Section {
+                        Button {
+                            if let url = DataDirectory.filesAppURL(for: DataDirectory.documentsRootURL.path) {
+                                UIApplication.shared.open(url)
+                            }
                         } label: {
-                            HStack {
-                                Text("Fill color")
-                                Spacer()
-                                RoundedRectangle(cornerRadius: Radius.xs)
-                                    .fill(settings.viewportBoundsColor)
-                                    .frame(width: 24, height: 24)
+                            Label {
+                                HStack {
+                                    Text("Show in Files")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "folder")
                             }
                         }
-                    }
-
-                    SettingsToggle(
-                        title: "Show touch area",
-                        isOn: $settings.showTouchZone,
-                        description:
-                            "Outlines where your taps and drags control the game's cursor."
-                    )
-
-                    SettingsToggle(
-                        title: "Delete broken imports",
-                        isOn: $settings.cleanupInvalidGames,
-                        description:
-                            "Deletes games that failed to import the next time you open \(AppInfo.name). You can't undo this."
-                    )
-
-                    SettingsToggle(
-                        title: "Debug logs",
-                        isOn: $settings.debugLogs,
-                        description:
-                            "Saves a log for each play session. Find them in Files, under \(AppInfo.name) › Games › the game's name › Logs."
-                    )
-
-                    if settings.debugLogs {
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Stepper(
-                                "Keep last \(settings.maxLogFiles) logs per game",
-                                value: $settings.maxLogFiles, in: 5...100, step: 5)
-                            Text("\(AppInfo.name) deletes older logs each time you start a game.")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                        .tint(.primary)
+                    } header: {
+                        Text("Files")
+                    } footer: {
+                        if DataDirectory.isInAppGroup {
+                            Text(
+                                "Your games, saves, and logs are in the Files app. If Files doesn't show Empo, tap Browse › ⋯ › Edit and turn on Empo."
+                            )
+                        } else {
+                            Text("Your games, saves, and logs are in the Files app.")
                         }
-                        .padding(.vertical, Spacing.xxs)
                     }
-                } header: {
-                    Text("Advanced")
-                } footer: {
-                    Text("These options are for debugging and troubleshooting.")
+
+                    Section {
+                        SettingsToggle(
+                            title: "Diagnostics overlay",
+                            isOn: $settings.diagnosticsOverlay,
+                            description:
+                                "Adds a toolbar button that shows frame rate, memory use, and details about the game engine while you play."
+                        )
+
+                        SettingsToggle(
+                            title: "Fill unused screen area",
+                            isOn: $settings.showViewportBounds,
+                            description:
+                                "Fill the screen area outside the game picture with a color you choose."
+                        )
+
+                        if settings.showViewportBounds {
+                            NavigationLink {
+                                ViewportBoundsColorPicker(color: $settings.viewportBoundsColor)
+                            } label: {
+                                HStack {
+                                    Text("Fill color")
+                                    Spacer()
+                                    RoundedRectangle(cornerRadius: Radius.xs)
+                                        .fill(settings.viewportBoundsColor)
+                                        .frame(width: 24, height: 24)
+                                }
+                            }
+                        }
+
+                        SettingsToggle(
+                            title: "Show touch area",
+                            isOn: $settings.showTouchZone,
+                            description:
+                                "Outlines where your taps and drags control the game's cursor."
+                        )
+
+                        SettingsToggle(
+                            title: "Delete broken imports",
+                            isOn: $settings.cleanupInvalidGames,
+                            description:
+                                "Deletes games that failed to import the next time you open \(AppInfo.name). You can't undo this."
+                        )
+
+                        SettingsToggle(
+                            title: "Debug logs",
+                            isOn: $settings.debugLogs,
+                            description:
+                                "Saves a log for each play session. Find them in Files, under \(AppInfo.name) › Games › the game's name › Logs."
+                        )
+
+                        if settings.debugLogs {
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Stepper(
+                                    "Keep last \(settings.maxLogFiles) logs per game",
+                                    value: $settings.maxLogFiles, in: 5...100, step: 5)
+                                Text("\(AppInfo.name) deletes older logs each time you start a game.")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, Spacing.xxs)
+                        }
+                    } header: {
+                        Text("Advanced")
+                    } footer: {
+                        Text("Use these if a game misbehaves or you want to report a bug.")
+                    }
+
+                    if SettingsSection.experimental.isShown {
+                        ExperimentalSection()
+                            .id(SettingsSection.experimental)
+                    }
+
+                    Section {
+                        Button {
+                            showWhatsNew = true
+                        } label: {
+                            Label("What's new", systemImage: "sparkles")
+                        }
+                        .tint(.primary)
+
+                        NavigationLink {
+                            GameCoresView()
+                        } label: {
+                            Label("Game cores", systemImage: "cpu")
+                        }
+
+                        NavigationLink {
+                            LicensesView()
+                        } label: {
+                            Label("Open-source licenses", systemImage: "doc.text")
+                        }
+
+                        Link(destination: EmpoLink.privacy) {
+                            Label {
+                                HStack {
+                                    Text("Privacy policy")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "hand.raised")
+                            }
+                        }
+                        .tint(.primary)
+
+                        Link(destination: EmpoLink.terms) {
+                            Label {
+                                HStack {
+                                    Text("Terms of use")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(systemName: "scale.3d")
+                            }
+                        }
+                        .tint(.primary)
+
+                        Link(destination: EmpoLink.sourceCode) {
+                            Label {
+                                HStack {
+                                    Text("Source code on GitHub")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(.gitHubMark)
+                                    .resizable()
+                                    .scaledToFit()
+                            }
+                        }
+                        .tint(.primary)
+
+                        Link(destination: EmpoLink.twitter) {
+                            Label {
+                                HStack {
+                                    Text("Find me on Twitter")
+                                    Spacer()
+                                    Image(systemName: "arrow.up.forward")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } icon: {
+                                Image(.twitterMark)
+                                    .resizable()
+                                    .scaledToFit()
+                            }
+                        }
+                        .tint(.primary)
+                    } header: {
+                        Text("About")
+                    }
+
+                    Section {
+                        // SwiftUI's Text initializer parses markdown in
+                        // string literals, so the [Mateo M.] link renders as
+                        // tappable with the .tint(.brand) the form uses.
+                        Text("Made with ☕ by [**Mateo M.**](https://github.com/mateo-m)\n© 2026 Mateo M.")
+                            .multilineTextAlignment(.center)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .listRowBackground(Color.clear)
+                    }
                 }
-
-                if !GameCores.gameProcessCores.isEmpty {
-                    ExperimentalSection()
-                }
-
-                Section {
-                    Button {
-                        showWhatsNew = true
-                    } label: {
-                        Label("What's new", systemImage: "sparkles")
-                    }
-                    .tint(.primary)
-
-                    NavigationLink {
-                        GameCoresView()
-                    } label: {
-                        Label("Game cores", systemImage: "cpu")
-                    }
-
-                    NavigationLink {
-                        LicensesView()
-                    } label: {
-                        Label("Open-source licenses", systemImage: "doc.text")
-                    }
-
-                    Link(
-                        destination: URL(string: "https://empo.mateo.sh/privacy/")
-                            ?? URL.empoHomepage
-                    ) {
-                        Label {
-                            HStack {
-                                Text("Privacy policy")
-                                Spacer()
-                                Image(systemName: "arrow.up.forward")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "hand.raised")
-                        }
-                    }
-                    .tint(.primary)
-
-                    Link(
-                        destination: URL(string: "https://empo.mateo.sh/terms/")
-                            ?? URL.empoHomepage
-                    ) {
-                        Label {
-                            HStack {
-                                Text("Terms of use")
-                                Spacer()
-                                Image(systemName: "arrow.up.forward")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(systemName: "scale.3d")
-                        }
-                    }
-                    .tint(.primary)
-
-                    Link(
-                        destination: URL(string: "https://github.com/mateo-m/empo-app")
-                            ?? URL.empoHomepage
-                    ) {
-                        Label {
-                            HStack {
-                                Text("Source code on GitHub")
-                                Spacer()
-                                Image(systemName: "arrow.up.forward")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(.gitHubMark)
-                                .resizable()
-                                .scaledToFit()
-                        }
-                    }
-                    .tint(.primary)
-
-                    Link(
-                        destination: URL(string: "https://x.com/gridplay_")
-                            ?? URL.empoHomepage
-                    ) {
-                        Label {
-                            HStack {
-                                Text("@gridplay_ on X")
-                                Spacer()
-                                Image(systemName: "arrow.up.forward")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        } icon: {
-                            Image(.twitterMark)
-                                .resizable()
-                                .scaledToFit()
-                        }
-                    }
-                    .tint(.primary)
-                } header: {
-                    Text("About")
-                }
-
-                Section {
-                    // SwiftUI's Text initializer parses markdown in
-                    // string literals, so the [Grid] link renders as
-                    // tappable with the .tint(.brand) the form uses.
-                    Text("Made with ☕ by [**Grid**](https://x.com/gridplay_)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .listRowBackground(Color.clear)
+                .onChange(of: scrollTarget, initial: true) {
+                    guard let scrollTarget else { return }
+                    withAnimation { proxy.scrollTo(scrollTarget, anchor: .center) }
+                    self.scrollTarget = nil
                 }
             }
             .sheet(isPresented: $showBuildInfo) {
                 BuildInfoSheet()
             }
             .sheet(isPresented: $showWhatsNew) {
-                WhatsNewSheet(items: WhatsNew.items(after: WhatsNew.version - 1)) {
-                    showWhatsNew = false
-                }
+                WhatsNewSheet(
+                    items: WhatsNew.items(after: WhatsNew.version - 1),
+                    onOpenSettings: { section in
+                        showWhatsNew = false
+                        scrollTarget = section
+                    },
+                    onContinue: { showWhatsNew = false }
+                )
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
@@ -298,7 +348,7 @@ struct SettingsView: View {
         Button {
             showBuildInfo = true
         } label: {
-            Text("v\(AppInfo.version)")
+            Text(verbatim: "v\(AppInfo.version)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -329,7 +379,7 @@ struct SettingsView: View {
                         await appState.checkForUpdatesNow()
                     },
                     size: .compact,
-                    showsManualRefresh: UpdateChecker.isSideloadOrDevBuild,
+                    showsManualRefresh: UpdateChecker.isSideloadBuild,
                     onManualRefresh: {
                         await appState.checkForUpdatesNow()
                     }
@@ -367,11 +417,9 @@ private enum UpdateStatusChipPhase: Hashable {
         }
     }
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
-        case .hidden:
-            return ""
-        case .checking:
+        case .checking, .hidden:
             return "Checking for updates…"
         case .upToDate:
             return "Up to date"
@@ -624,7 +672,7 @@ private struct BrandGlassModifier: ViewModifier {
 }
 
 struct UpdateStatusBadge: View {
-    let text: String
+    let text: LocalizedStringResource
     let systemImage: String?
     let tint: Color
     let background: Color
@@ -680,7 +728,7 @@ struct UpdateStatusBadge: View {
                 .contentShape(.capsule)
                 .gesture(promoDragGesture(url: actionURL, dismiss: dismissAction))
                 .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Opens the release notes. Swipe down to dismiss.")
+                .accessibilityHint("Opens the release notes.")
         } else {
             content
         }
@@ -880,17 +928,19 @@ private struct BuildInfoSheet: View {
     /// the text-selection range. Users can then long-press to copy only
     /// the canonical value (e.g. the commit hash without the
     /// "(uncommitted changes)" suffix).
-    private struct Row: Identifiable {
-        let label: String
+    private struct Row {
+        let label: LocalizedStringResource
         let value: String
-        var annotation: String?
-        var id: String { label }
+        var annotation: LocalizedStringResource?
     }
 
     private var rows: [Row] {
         var r: [Row] = []
         r.append(Row(label: "Version", value: AppInfo.version))
-        r.append(Row(label: "Build", value: AppInfo.build))
+        r.append(
+            Row(
+                label: LocalizedStringResource(
+                    "Build", comment: "Build info sheet: the app build number row."), value: AppInfo.build))
         r.append(
             Row(
                 label: "Commit",
@@ -909,7 +959,7 @@ private struct BuildInfoSheet: View {
             barAction: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {
-                ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                     if index > 0 {
                         Divider().padding(.leading, Spacing.xl)
                     }
@@ -1087,12 +1137,4 @@ private struct DevicePreview: View {
             return GameRect(width: gameW, height: gameH, offsetX: 0, offsetY: offsetY)
         }
     }
-}
-
-extension URL {
-    /// Fallback for any URL literal that fails to parse. There is no
-    /// way to guarantee a non-nil URL at compile time without a
-    /// force-unwrap, so the project homepage is the safe landing page.
-    fileprivate static let empoHomepage =
-        URL(string: "https://github.com/mateo-m/empo-app") ?? URL(fileURLWithPath: "/")
 }

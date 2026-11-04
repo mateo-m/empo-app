@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 
@@ -378,6 +381,7 @@ enum GameContainerMigration {
     /// a container rename or the migration re-runs under the new
     /// id. The pin itself lives inside the container
     /// (`EmpoState/`), so it travels with the rename on its own.
+    #if os(iOS)
     private static var profileMigrationRecordURL: URL {
         LayoutProfilesManager.profilesRootURL
             .appendingPathComponent(MigrationRecord.fileName)
@@ -406,4 +410,12 @@ enum GameContainerMigration {
         guard record.games.removeValue(forKey: id) != nil else { return }
         record.save(to: url)
     }
+    #else
+    // The Mac app has no layout profiles, so it has no record to update.
+    private static func copyProfileMigrationRecordEntry(fromID oldID: String, toID newID: String) -> Bool {
+        false
+    }
+
+    private static func removeProfileMigrationRecordEntry(forID id: String) {}
+    #endif
 }

@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Setup script for Empo development.
 # Run this once after cloning the repository if you want a one-shot
 # bootstrap for local tools + hook install.

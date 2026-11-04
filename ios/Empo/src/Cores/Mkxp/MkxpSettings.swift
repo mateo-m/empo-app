@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import GameProbe
 import SwiftUI
@@ -33,12 +36,12 @@ struct MkxpSettings: GameSettingsGroup {
 
     static func displayLabel(forKey key: String) -> String {
         switch key {
-        case "useInGameKeyboard": return "In-game keyboard"
-        case "postloadScripts": return "Postload scripts"
-        case "useModernRuby": return "Ruby compatibility mode"
-        case "rubyVersionOverride": return "Ruby version"
-        case "joiplayCompat": return "JoiPlay compatibility"
-        case "networkEnabled": return "Network access"
+        case "useInGameKeyboard": return String(localized: "In-game keyboard")
+        case "postloadScripts": return String(localized: "Fix-up scripts")
+        case "useModernRuby": return String(localized: "Ruby compatibility mode")
+        case "rubyVersionOverride": return String(localized: "Ruby version")
+        case "joiplayCompat": return String(localized: "JoiPlay compatibility")
+        case "networkEnabled": return String(localized: "Network access")
         default:
             assertionFailure("Missing displayLabel mapping for MkxpSettings.\(key)")
             return key
@@ -48,6 +51,22 @@ struct MkxpSettings: GameSettingsGroup {
     var postloadScriptsEnabled: Bool { postloadScripts ?? true }
     var joiplayCompatEnabled: Bool { joiplayCompat ?? false }
     var networkAccessEnabled: Bool { networkEnabled ?? true }
+}
+
+struct MkxpLaunchedSettings: CoreLaunchedSettings {
+    let settings: MkxpSettings
+    let engine: MkxpEngineSettings
+
+    init(container: GameContainer) {
+        settings = MkxpSettings.load(from: container.empoStateURL)
+        engine = MkxpEngineSettings.load(from: container.empoStateURL)
+    }
+
+    func restartRequiredChanges(to current: any CoreSettings) -> [String] {
+        guard let current = current as? MkxpSettingsState else { return [] }
+        return current.settings.restartRequiredFieldsChanged(from: settings)
+            + current.engine.restartRequiredFieldsChanged(from: engine)
+    }
 }
 
 @MainActor @Observable
@@ -60,17 +79,12 @@ final class MkxpSettingsState: CoreSettings {
     let isPokemonEssentials: Bool
 
     @ObservationIgnored private let container: GameContainer
-    @ObservationIgnored private let initial: MkxpSettings
-    @ObservationIgnored private let initialEngine: MkxpEngineSettings
 
     init(container: GameContainer) {
         self.container = container
         let settings = MkxpSettings.load(from: container.empoStateURL)
         self.settings = settings
-        self.initial = settings
-        let engine = MkxpEngineSettings.load(from: container.empoStateURL)
-        self.engine = engine
-        self.initialEngine = engine
+        self.engine = MkxpEngineSettings.load(from: container.empoStateURL)
         self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
         self.profile = MkxpProfile.load(for: container)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
@@ -78,11 +92,6 @@ final class MkxpSettingsState: CoreSettings {
     }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
-
-    var restartRequiredChanges: [String] {
-        settings.restartRequiredFieldsChanged(from: initial)
-            + engine.restartRequiredFieldsChanged(from: initialEngine)
-    }
 
     func save() {
         settings.save(to: container.empoStateURL)
@@ -155,7 +164,7 @@ enum RubyVersionPick: String, CaseIterable, Hashable {
 
     var displayLabel: String {
         switch self {
-        case .auto: return "Auto-detect"
+        case .auto: return String(localized: "Auto-detect")
         case .v18: return "Ruby 1.8"
         case .v19: return "Ruby 1.9"
         case .v31: return "Ruby 3.1"
@@ -187,9 +196,9 @@ enum CompatibilityPick: String, CaseIterable, Hashable {
 
     var displayLabel: String {
         switch self {
-        case .auto: return "Auto-detect"
-        case .modern: return "Modern (newer Ruby)"
-        case .legacy: return "Legacy (older Ruby)"
+        case .auto: return String(localized: "Auto-detect")
+        case .modern: return String(localized: "Modern (newer Ruby)")
+        case .legacy: return String(localized: "Legacy (older Ruby)")
         }
     }
 }
@@ -201,7 +210,7 @@ struct MkxpEngineSection: View {
     var body: some View {
         Section {
             SettingsToggle(
-                title: "Postload scripts",
+                title: "Fix-up scripts",
                 isOn: Binding(
                     get: { state.settings.postloadScriptsEnabled },
                     set: { state.settings.postloadScripts = $0 }
@@ -218,10 +227,11 @@ struct MkxpEngineSection: View {
                         set: { state.engine.pathCache = $0 }
                     ),
                     description:
-                        "Keep a lowercase index of every game file so lookups are faster. Turn it off if the game can't find its images or sounds."
+                        "Find game files faster. Turn it off if the game can't find its images or sounds."
                 )
             }
 
+            #if os(iOS)
             SettingsToggle(
                 title: "In-game keyboard",
                 isOn: Binding(
@@ -233,6 +243,7 @@ struct MkxpEngineSection: View {
             )
 
             TouchMouseToggle(model: model)
+            #endif
 
             SettingsToggle(
                 title: "JoiPlay compatibility",
@@ -251,7 +262,7 @@ struct MkxpEngineSection: View {
                     set: { state.settings.networkEnabled = $0 }
                 ),
                 description:
-                    "Let this game use the internet for updates and online features. Some games send data unencrypted. When off, the game sees no network."
+                    "Let this game use the internet for updates and online features. Some games send data without protection. When it's off, the game can't go online."
             )
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -267,7 +278,9 @@ struct MkxpEngineSection: View {
                     Text(RubyVersionPick.v19.displayLabel).tag(RubyVersionPick.v19)
                     Text(RubyVersionPick.v31.displayLabel).tag(RubyVersionPick.v31)
                 }
+                #if os(iOS)
                 .pickerStyle(.navigationLink)
+                #endif
 
                 Text(
                     "Auto-detect reads the game's scripts and picks the correct Ruby version. Change it only if the game shows a script error or runs wrongly."
@@ -282,7 +295,7 @@ struct MkxpEngineSection: View {
             if state.effectiveRubyVersion >= 30 {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
                     Picker(
-                        "Compatibility mode",
+                        "Ruby compatibility mode",
                         selection: Binding(
                             get: { CompatibilityPick.from(state.settings.useModernRuby) },
                             set: { state.settings.useModernRuby = $0.useModernRubyValue }
@@ -292,7 +305,9 @@ struct MkxpEngineSection: View {
                         Text(CompatibilityPick.modern.displayLabel).tag(CompatibilityPick.modern)
                         Text(CompatibilityPick.legacy.displayLabel).tag(CompatibilityPick.legacy)
                     }
+                    #if os(iOS)
                     .pickerStyle(.navigationLink)
+                    #endif
 
                     Text(
                         "Legacy rewrites old Ruby code so newer Ruby can run it. Switch to Legacy if a Pokemon Essentials game crashes with a \"private method\" error."
@@ -311,12 +326,16 @@ struct MkxpEngineSection: View {
 
     private var autoDetectLabel: String {
         let pick = RubyVersionPick.from(state.profile.rubyVersion)
-        guard pick != .auto else { return "Auto-detect" }
-        return "Auto-detect (\(pick.displayLabel))"
+        guard pick != .auto else { return String(localized: "Auto-detect") }
+        return String(
+            localized: "Auto-detect (\(pick.displayLabel))",
+            comment: "Picker option. The placeholder is the choice Empo detected for this game.")
     }
 
     private var autoDetectCompatLabel: String {
         let resolved: CompatibilityPick = state.profile.modernRubyScripts ? .modern : .legacy
-        return "Auto-detect (\(resolved.displayLabel))"
+        return String(
+            localized: "Auto-detect (\(resolved.displayLabel))",
+            comment: "Picker option. The placeholder is the choice Empo detected for this game.")
     }
 }

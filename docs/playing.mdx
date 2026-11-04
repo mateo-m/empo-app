@@ -84,6 +84,10 @@ Each row shows the Empo default until you override it. To put one default back, 
 left and tap **Reset to default**. To clear every override in the current scope, tap **Reset to
 defaults** at the end of the list.
 
+On a Mac, open **Settings** > **Controller** to see the connected controllers. If a controller
+shows **Not recognized**, or its buttons are mixed up, click **Set Up…** and press each button
+that Empo asks for. Click **Skip** for a button that your controller does not have.
+
 :::note
 iOS reserves some controller buttons, such as Home and Guide. A reserved button never reaches
 the game.
@@ -93,7 +97,7 @@ the game.
 
 | Entry               | What it does                                                                     |
 | ------------------- | --------------------------------------------------------------------------------- |
-| Show cheats         | Sets the `$CHEATS` flag. Games that read the flag react to it. Others do not.    |
+| Show cheats         | Opens the cheat menu.                                                            |
 | Diagnostics overlay | Shows frame timings and engine state over the game.                              |
 | Controller buttons  | Opens the controller and keyboard mapping.                                       |
 | Layout profile      | Picks the control layout for this game.                                          |
@@ -125,9 +129,17 @@ defaults** removes all of them.
 
 ## One game for each session
 
+This limit applies on an iPhone or an iPad. A Mac does not have it.
+
 After you quit an RPG Maker XP, VX, VX Ace or PSDK game, Empo cannot start a different one.
 Force-close the app from the app switcher, and open it again. RPG Maker MV and MZ games do not
 have this limit. To stop one of them, tap More, then Quit.
+
+To quit an RPG Maker XP, VX, VX Ace or PSDK game without closing Empo, turn on **Settings → Experimental → Quit and switch games**,
+and then close and open Empo once. Each game then runs in its own process, and **More → Quit** works.
+Empo also moves your games and saves to **Empo** under **Locations** in the Files app. See [Saves](/saves).
+The setting is still in testing. Empo 0.9.1 and later do not have it for now, because SideStore
+and AltStore cannot install the part that it needs.
 
 The engine keeps one Ruby interpreter for the lifetime of the process, and the interpreter
 cannot restart cleanly. [`multi-session.md`](https://github.com/mateo-m/empo-app/blob/main/ios/Empo/docs/multi-session.md) explains the constraint in full.

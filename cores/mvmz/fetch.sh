@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Downloads the MV/MZ core that cores/mvmz/.version pins, from
 # the releases of mateo-m/mvmz-apple-mobile, into
 # ios/Dependencies/mvmz-core. That repo's CI builds the release from a
@@ -6,7 +9,7 @@
 #
 # The folder holds include/mvmz_core.h and <sdk>/libmvmz.a. The MvmzCore
 # target links them with mvmz_app_bridge.m.
-set -eu
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PIN="$REPO_ROOT/cores/mvmz/.version"
@@ -21,8 +24,8 @@ fi
 
 # shellcheck disable=SC1090
 . "$PIN"
-if [ -z "${MVMZ_CORE_VERSION:-}" ] || [ -z "${MVMZ_CORE_SHA256:-}" ]; then
-    echo "error: $PIN must set MVMZ_CORE_VERSION and MVMZ_CORE_SHA256" >&2
+if [ -z "${MVMZ_CORE_VERSION:-}" ] || [ -z "${MVMZ_CORE_SHA256:-}" ] || [ -z "${MVMZ_CORE_ASSET:-}" ]; then
+    echo "error: $PIN must set MVMZ_CORE_VERSION, MVMZ_CORE_SHA256 and MVMZ_CORE_ASSET" >&2
     exit 1
 fi
 
@@ -34,11 +37,11 @@ fi
 echo "==> fetching the MV/MZ core $MVMZ_CORE_VERSION from $CORE_REPO"
 WORK="$(mktemp -d "$DEST.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
-TAR="$WORK/mvmz-ios.tar.gz"
+TAR="$WORK/$MVMZ_CORE_ASSET"
 curl -fL --retry 3 -o "$TAR" \
-    "https://github.com/$CORE_REPO/releases/download/$MVMZ_CORE_VERSION/mvmz-ios.tar.gz"
+    "https://github.com/$CORE_REPO/releases/download/$MVMZ_CORE_VERSION/$MVMZ_CORE_ASSET"
 echo "$MVMZ_CORE_SHA256  $TAR" | shasum -a 256 -c >/dev/null || {
-    echo "error: mvmz-ios.tar.gz does not match MVMZ_CORE_SHA256 in $PIN" >&2
+    echo "error: $MVMZ_CORE_ASSET does not match MVMZ_CORE_SHA256 in $PIN" >&2
     exit 1
 }
 

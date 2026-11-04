@@ -1,5 +1,10 @@
-Empo is one person's spare-time project. There is no support desk. There is a Discord server, a
-GitHub issue tracker, and a maintainer who reads both.
+Empo is one person's spare-time project. There is no support desk. There is an email address, a
+Discord server, a GitHub issue tracker, and a maintainer who reads all three.
+
+## Send an email
+
+Write to [empo@mateo.sh](mailto:empo@mateo.sh) for a question that you do not want to ask in
+public, or when you do not have a Discord or GitHub account.
 
 ## Ask on Discord
 
@@ -25,7 +30,8 @@ find the game and reproduce it.
 1. Go to **Settings → Advanced**, and turn on **Debug logs**. Empo removes the older logs at
    the start of each session.
 2. Start the game, and repeat the steps that fail.
-3. Open the Files app, go to **Browse → Locations → Empo**, and share the newest log file. Attach it
+3. Open the Files app, go to **Browse → Locations → Empo**, or to **On My iPhone → Empo** if Empo is not under
+   **Locations**, and share the newest log file. Attach it
    to the issue, or post it on Discord.
 
 ## Suggest a feature

@@ -1,4 +1,7 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Generate the list of the functions that GameCore.h declares, one
 # GAMECORE_FUNCTION or GAMECORE_VOID line each.
 #

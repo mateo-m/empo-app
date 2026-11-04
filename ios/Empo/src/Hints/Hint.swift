@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 import Observation
 
@@ -9,8 +12,8 @@ import Observation
 /// This is purely a UI hint system, persisted via UserDefaults.
 struct Hint: Identifiable {
     let id: String
-    let excerpt: String
-    let description: String?
+    let excerpt: LocalizedStringResource
+    let description: LocalizedStringResource?
     let dismissal: DismissalPolicy
     /// The SF Symbol in the leading slot of `HintBanner`. Defaults
     /// to the design-system "tip" icon (a filled lightbulb). Hints
@@ -21,8 +24,8 @@ struct Hint: Identifiable {
 
     init(
         id: String,
-        excerpt: String,
-        description: String? = nil,
+        excerpt: LocalizedStringResource,
+        description: LocalizedStringResource? = nil,
         dismissal: DismissalPolicy,
         icon: String = "lightbulb.fill"
     ) {

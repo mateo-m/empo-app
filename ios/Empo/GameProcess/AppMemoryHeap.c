@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 #include "AppMemoryHeap.h"
 
 #include <mach/mach.h>
@@ -121,11 +124,15 @@ bool EmpoUseHeap(void *start, size_t size) {
     mi_option_set(mi_option_purge_delay, -1);
     // When the block is full, mimalloc takes memory of this process.
     mi_option_set(mi_option_arena_reserve, 0);
-    mi_arena_id_t arena = 0;
-    if (!mi_manage_os_memory_ex(start, size, true, false, false, -1, false, &arena)) return false;
+    // Before mimalloc takes the block: on false, the caller frees it.
     malloc_zone_t **zones = NULL;
     unsigned count = 0;
-    malloc_get_all_zones(mach_task_self(), NULL, (vm_address_t **)&zones, &count);
+    if (malloc_get_all_zones(mach_task_self(), NULL, (vm_address_t **)&zones, &count) != KERN_SUCCESS
+        || count == 0)
+        return false;
+    mi_arena_id_t arena = 0;
+    // A new memory entry is all zeros.
+    if (!mi_manage_os_memory_ex(start, size, true, false, true, -1, false, &arena)) return false;
     gSystem = zones[0];
     // malloc() uses the first zone in the list. Moving the system zone
     // to the end makes this zone the first.

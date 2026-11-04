@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 enum VerticalAlignment: String, Codable, CaseIterable {
@@ -5,11 +8,11 @@ enum VerticalAlignment: String, Codable, CaseIterable {
     case topCenter
     case center
 
-    var label: String {
+    var label: LocalizedStringResource {
         switch self {
-        case .top: "Top"
-        case .topCenter: "Top-center"
-        case .center: "Center"
+        case .top: LocalizedStringResource("Top", comment: "Where the game sits on screen")
+        case .topCenter: LocalizedStringResource("Top-center", comment: "Where the game sits on screen")
+        case .center: LocalizedStringResource("Center", comment: "Where the game sits on screen")
         }
     }
 
@@ -216,8 +219,10 @@ struct GameSettings: GameSettingsGroup {
     @Setting<Bool?, RuntimeFlag> var touchMouse: Bool?
 
     /// `RuntimeFlag` fields that something re-pushes to the engine
-    /// while a game runs. `PlayerRuntimeState.reconcile` owns those
-    /// pushes and calls the check below to keep this list honest.
+    /// while a game runs. On iOS, `PlayerRuntimeState.reconcile(container:)`
+    /// owns those pushes and calls the check below to keep this list
+    /// honest. On the Mac, `GameLauncher.sendLiveSettings` sends
+    /// `speedMultiplier`. The Mac has no touch mouse.
     private static let runtimeAppliedFields: Set<String> = [
         "speedMultiplier",
         "touchMouse",
@@ -240,8 +245,8 @@ struct GameSettings: GameSettingsGroup {
             guard !runtimeAppliedFields.contains(key) else { continue }
             assertionFailure(
                 "GameSettings.\(key) is RuntimeFlag but nothing re-applies it "
-                    + "mid-session - add the push to PlayerRuntimeState.reconcile "
-                    + "and name the field in runtimeAppliedFields"
+                    + "mid-session - add the push to PlayerRuntimeState.reconcile(container:) "
+                    + "and GameLauncher.sendLiveSettings, and name the field in runtimeAppliedFields"
             )
         }
         #endif
@@ -249,9 +254,9 @@ struct GameSettings: GameSettingsGroup {
 
     static func displayLabel(forKey key: String) -> String {
         switch key {
-        case "verticalAlignment": return "Screen position"
-        case "smoothScaling": return "Smooth scaling"
-        case "fixedAspectRatio": return "Fixed aspect ratio"
+        case "verticalAlignment": return String(localized: "Screen position")
+        case "smoothScaling": return String(localized: "Smooth scaling")
+        case "fixedAspectRatio": return String(localized: "Fixed aspect ratio")
         default:
             assertionFailure("Missing displayLabel mapping for GameSettings.\(key)")
             return key
@@ -259,7 +264,7 @@ struct GameSettings: GameSettingsGroup {
     }
 
     /// The value the engine bridge takes for `touchMouse`. Both the
-    /// launch push and `PlayerRuntimeState.reconcile` read this, so
+    /// launch push and `PlayerRuntimeState.reconcile(container:)` read this, so
     /// the default lives in one place.
     var touchMouseEnabled: Bool {
         touchMouse ?? GameConfigDefaults.engineTouchMouse

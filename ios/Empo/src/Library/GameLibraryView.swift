@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 private struct EmptyStateHeightKey: PreferenceKey {
@@ -25,14 +28,13 @@ struct GameLibraryView: View {
     /// banner of 7.1 both open.
     @State private var showsBackups = false
     @State private var resumeAsk: ResumeQuestionAsk?
+    @State private var settingsScrollTarget: SettingsSection?
     @State private var errorMessage: String?
-    // TODO(localization): once the app has a strings catalog these
-    // copy fallbacks should move into it alongside the other
-    // user-facing text. Keep the literals here for now so the
-    // existing string-search audit still points at a single spot.
-    @State private var errorTitle: String = "Couldn't delete this game"
+    @State private var errorTitle = String(localized: "Couldn't delete this game")
     @State private var showErrorAlert = false
     @State private var showCancelValidationAlert = false
+    /// Nil when the alert stops every import.
+    @State private var importToStop: String?
     @State private var gameToDelete: GameEntry?
     @State private var showDeleteConfirm = false
     /// Games whose delete aborted because their saves could not
@@ -59,6 +61,7 @@ struct GameLibraryView: View {
     @State private var entranceDelay: TimeInterval = 0.15
     @State private var emptyStateHeight: CGFloat = 0
     @State private var showSortSheet = false
+    @State private var windowInsets = EdgeInsets()
     @State private var gameSizes: [String: Int64] = [:]
     @State private var sizesTask: Task<Void, Never>?
     @State private var importPipeline = ImportPipeline()
@@ -114,7 +117,7 @@ struct GameLibraryView: View {
     /// feedback on the Import button so the empty state doesn't
     /// bounce in and out on invalid imports.
     private var pendingValidationEntries: [GameEntry] {
-        library.pendingValidationCatalog()
+        library.games.isEmpty ? [] : library.pendingValidationCatalog()
     }
 
     /// True only once the initial scan has confirmed the library is
@@ -156,6 +159,7 @@ struct GameLibraryView: View {
         NavigationStack(path: $path) {
             navigationContent
         }
+        .onGeometryChange(for: EdgeInsets.self, of: { $0.safeAreaInsets }, action: { windowInsets = $0 })
         // Nothing of the library draws while a game plays. The
         // handoff fade in `RootView` can still be settling when the
         // loading view goes dormant, and the grid behind it would
@@ -204,14 +208,9 @@ struct GameLibraryView: View {
                 }
                 debouncedSearch = searchText
             }
-            .task(id: library.initialScanCompleted) {
-                // Size data is only consumed by the size sorts. The
-                // walk enumerates every file of every game, so don't
-                // pay for it while another sort is active. Keyed on
-                // scan completion: at launch this view appears while
-                // the initial scan is still off-main and `games` is
-                // empty, so the appear-time run walks nothing. The
-                // refire when the scan lands does the real work.
+            .onChange(of: library.readyGameIDs, initial: true) {
+                // The walk reads every file of every game, so only the
+                // size sorts pay for it.
                 if settings.librarySortOption.usesDiskSizes {
                     refreshGameSizes()
                 }
@@ -284,10 +283,16 @@ struct GameLibraryView: View {
             .modifier(
                 SaveRecoveryPresentation(games: library.games, active: splashDismissed)
             )
-            .modifier(WhatsNewPresentation(active: splashDismissed))
+            .modifier(
+                WhatsNewPresentation(active: splashDismissed) { section in
+                    settingsScrollTarget = section
+                    showSettings = true
+                }
+            )
             .modifier(
                 LibrarySheetPresentation(
                     showSettings: $showSettings,
+                    settingsScrollTarget: $settingsScrollTarget,
                     showImporter: $showImporter,
                     gameForSettings: $gameForSettings,
                     gameForInfo: $gameForInfo,
@@ -315,10 +320,10 @@ struct GameLibraryView: View {
                     pausedGame: pauseManager.pausedGame,
                     pendingGame: pendingGame,
                     canClosePausedGame: appState.canKillPausedGame,
-                    onDeleteGame: deleteSelectedGame,
+                    onDeleteGame: deleteGame,
                     onDeleteGameDiscardingSaves: deleteGameDiscardingSaves,
                     onDismissImportPipelineAlert: importPipeline.dismissAlert,
-                    onCancelValidation: importPipeline.cancelValidation,
+                    onCancelValidation: stopImport,
                     onDismissPausedGameAlert: { pendingGame = nil },
                     onReplacePausedGame: replacePausedGame,
                     onContinueDespiteWarning: continueDespiteLaunchWarning
@@ -345,6 +350,7 @@ struct GameLibraryView: View {
             .onChange(of: splashDismissed) { _, dismissed in
                 handleSplashDismissedChange(dismissed)
             }
+            .overlay { sensorStripRail }
             .overlay(alignment: .topTrailing) { importButtonOverlay }
             .overlay(alignment: .bottom) { bulkDeleteOverlay }
             .safeAreaInset(edge: .bottom, spacing: 0) { bottomPills }
@@ -486,8 +492,58 @@ struct GameLibraryView: View {
                 // surface a spinner during archive/root
                 // inspection before any progress card exists.
                 phase: importPipeline.importButtonPhase,
-                onRequestCancelValidation: { showCancelValidationAlert = true }
+                collapsedCenter: hasSensorStrip ? { railSlotCenter(1, in: $0) } : nil,
+                onRequestCancelValidation: {
+                    importToStop = nil
+                    showCancelValidationAlert = true
+                }
             )
+        }
+    }
+
+    private var hasSensorStrip: Bool {
+        windowInsets.sensorStripEdge(minWidth: AppSize.toolbarButton + 2 * Spacing.xs) != nil
+    }
+
+    private static let railSlotCount = 4
+
+    /// Center of a slot in the sensor strip column, in the space of
+    /// the overlays on `libraryScene`. That space stops at the strip,
+    /// so the strip lies just past its leading or trailing edge.
+    private func railSlotCenter(_ slot: Int, in size: CGSize) -> CGPoint {
+        let window = CGSize(
+            width: size.width + windowInsets.leading + windowInsets.trailing,
+            height: size.height + windowInsets.top + windowInsets.bottom)
+        let column = ControlsZone.toolbarPlacement(
+            safeArea: windowInsets, geoSize: window, occluded: AppWindow.occludedRects,
+            btnSize: AppSize.toolbarButton, gap: Spacing.md, count: CGFloat(Self.railSlotCount))
+        let firstSlotY = column.center.y - column.length / 2 + AppSize.toolbarButton / 2
+        return CGPoint(
+            x: column.center.x - windowInsets.leading,
+            y: firstSlotY + CGFloat(slot) * (AppSize.toolbarButton + Spacing.md) - windowInsets.top)
+    }
+
+    /// On a sensor strip (iPhone Duo), the header and search bar
+    /// buttons move into a column in the strip. Slot 1 stays empty:
+    /// the import button flies into it.
+    @ViewBuilder
+    private var sensorStripRail: some View {
+        if hasSensorStrip {
+            GeometryReader { geo in
+                Group {
+                    if !selectionMode {
+                        IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
+                            .position(railSlotCenter(0, in: geo.size))
+                    }
+                    if !library.games.isEmpty {
+                        LibrarySortButton(showSortSheet: $showSortSheet)
+                            .position(railSlotCenter(2, in: geo.size))
+                        LibraryDisplayModeButton(onToggle: toggleDisplayMode)
+                            .position(railSlotCenter(3, in: geo.size))
+                    }
+                }
+                .tint(.primary)
+            }
         }
     }
 
@@ -544,7 +600,11 @@ struct GameLibraryView: View {
                 Text(
                     selectedIDs.isEmpty
                         ? "Select games"
-                        : "\(selectedIDs.count) selected"
+                        : LocalizedStringResource(
+                            "\(selectedIDs.count) selected",
+                            comment:
+                                "Library header in selection mode. The placeholder is how many games are selected."
+                        )
                 )
                 .font(.headline)
                 Spacer()
@@ -552,7 +612,12 @@ struct GameLibraryView: View {
                     .font(.body.weight(.semibold))
                     .tint(.brand)
             } else {
-                IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
+                if !hasSensorStrip {
+                    IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
+                } else {
+                    Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                        .accessibilityHidden(true)
+                }
                 Spacer()
                 Text("Library")
                     .font(.title)
@@ -577,15 +642,18 @@ struct GameLibraryView: View {
         LibrarySearchBar(
             searchText: $searchText,
             showSortSheet: $showSortSheet,
-            onDisplayModeToggle: {
-                withAnimation(Motion.standard) {
-                    settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
-                }
-                Task { @MainActor in
-                    staggerTrigger = UUID()
-                }
-            }
+            showsActions: !hasSensorStrip,
+            onDisplayModeToggle: toggleDisplayMode
         )
+    }
+
+    private func toggleDisplayMode() {
+        withAnimation(Motion.standard) {
+            settings.libraryDisplayMode = settings.libraryDisplayMode == .grid ? .list : .grid
+        }
+        Task { @MainActor in
+            staggerTrigger = UUID()
+        }
     }
 
     private var gameContent: some View {
@@ -700,13 +768,13 @@ struct GameLibraryView: View {
             ForEach(pending, id: \.id) { pendingEntry in
                 GameListRow(
                     game: pendingEntry,
-                    onStopImport: { showCancelValidationAlert = true }
+                    onStopImport: { requestStopImport(pendingEntry.id) }
                 )
                 .gameContextMenu(
                     game: pendingEntry,
                     appState: appState,
                     onPlay: {},
-                    onCancelImport: { showCancelValidationAlert = true },
+                    onCancelImport: { requestStopImport(pendingEntry.id) },
                     gameToDelete: $gameToDelete,
                     showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,
@@ -736,14 +804,14 @@ struct GameLibraryView: View {
         ForEach(pending, id: \.id) { pendingEntry in
             GameCard(
                 game: pendingEntry,
-                onStopImport: { showCancelValidationAlert = true }
+                onStopImport: { requestStopImport(pendingEntry.id) }
             )
             .cardShadow()
             .gameContextMenu(
                 game: pendingEntry,
                 appState: appState,
                 onPlay: {},
-                onCancelImport: { showCancelValidationAlert = true },
+                onCancelImport: { requestStopImport(pendingEntry.id) },
                 gameToDelete: $gameToDelete,
                 showDeleteConfirm: $showDeleteConfirm,
                 gameForSettings: $gameForSettings,
@@ -944,21 +1012,9 @@ struct GameLibraryView: View {
         }
         switch game.status {
         case .ready: handleGameTap(game, from: .item)
-        case .invalid: invalidReason = Self.whyInvalid(game)
+        case .invalid: invalidReason = GameLibrary.whyInvalid(game)
         case .importing, .deleting: break
         }
-    }
-
-    /// A core that refuses a game gives its own reason. A new import
-    /// meets the same refusal, so the usual advice to import again
-    /// would be wrong there.
-    private static func whyInvalid(_ game: GameEntry) -> String {
-        do {
-            if let container = game.container { try GameImportValidator.validate(container.gameURL) }
-        } catch GameImportValidator.ImportError.unsupportedRuntime(let reason) {
-            return reason
-        } catch {}
-        return "Empo can't read this game's files. Delete it, then import it again."
     }
 
     /// Enter selection mode. When `gameId` is non-nil the game is
@@ -996,15 +1052,10 @@ struct GameLibraryView: View {
         let ids = selectedIDs
         let games = library.games.filter { ids.contains($0.id) }
         for game in games {
-            // Capture the title, not the model: the error closure is
-            // @Sendable and may run after the model left the library.
-            let title = game.title
-            library.deleteGame(game) { error in
-                errorTitle = "Couldn't delete \"\(title)\""
-                errorMessage = error
-                showErrorAlert = true
-            } onSaveRescueFailure: { failedGame in
-                enqueueSaveRescueFailure(failedGame)
+            library.delete(game) {
+                showDeleteFailure(title: $0, message: $1)
+            } onSaveRescueFailure: {
+                enqueueSaveRescueFailure($0)
             }
         }
         exitSelectionMode()
@@ -1032,7 +1083,11 @@ struct GameLibraryView: View {
             }
         }
         .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
-        .accessibilityLabel(selected ? "Selected" : "Not selected")
+        .accessibilityLabel(
+            selected
+                ? LocalizedStringResource("Selected", comment: "State of a game's checkbox in selection mode")
+                : LocalizedStringResource(
+                    "Not selected", comment: "State of a game's checkbox in selection mode"))
     }
 
     /// Floating bulk-delete CTA shown over the library content
@@ -1048,7 +1103,7 @@ struct GameLibraryView: View {
             showBulkDeleteConfirm = true
         } label: {
             Label(
-                "Delete \(selectedIDs.count) game\(selectedIDs.count == 1 ? "" : "s")",
+                "Delete \(selectedIDs.count) games",
                 systemImage: "trash"
             )
         }
@@ -1146,10 +1201,7 @@ struct GameLibraryView: View {
     }
 
     private func startUnlessWarned(_ game: GameEntry) {
-        if let container = game.container,
-            let warning = GameCores.core(forGameAt: container.gameURL)?
-                .launchWarning(for: container, gameTitle: game.title)
-        {
+        if let warning = library.launchWarning(for: game) {
             warnedLaunch = WarnedLaunch(game: game, warning: warning)
         } else {
             appState.selectGame(game)
@@ -1176,19 +1228,23 @@ struct GameLibraryView: View {
         push(game)
     }
 
+    private func requestStopImport(_ id: String) {
+        importToStop = id
+        showCancelValidationAlert = true
+    }
+
+    private func stopImport() {
+        if let importToStop {
+            library.cancelPendingImport(importToStop)
+        } else {
+            importPipeline.cancelValidation()
+        }
+    }
+
     private func refreshGameSizes() {
         sizesTask?.cancel()
         sizesTask = Task {
-            var sizes: [String: Int64] = [:]
-            for game in library.games {
-                guard !Task.isCancelled else { return }
-                guard let container = game.container else { continue }
-                // Whole container size (Game/ + EmpoState/ + Logs/
-                // + Metadata/). Game/ holds almost all of it.
-                sizes[game.id] = await GameMetadata.diskSize(for: container.url)
-            }
-            guard !Task.isCancelled else { return }
-            gameSizes = sizes
+            if let sizes = await GameMetadata.diskSizes(of: library.games) { gameSizes = sizes }
         }
     }
 
@@ -1223,25 +1279,24 @@ struct GameLibraryView: View {
         }
     }
 
-    private func deleteSelectedGame() {
-        guard let game = gameToDelete else { return }
-        library.deleteGame(game) { error in
-            errorTitle = "Couldn't delete \"\(game.title)\""
-            errorMessage = error
-            showErrorAlert = true
-        } onSaveRescueFailure: { failedGame in
-            enqueueSaveRescueFailure(failedGame)
+    private func deleteGame(_ game: GameEntry) {
+        library.delete(game) {
+            showDeleteFailure(title: $0, message: $1)
+        } onSaveRescueFailure: {
+            enqueueSaveRescueFailure($0)
         }
     }
 
     /// The user's explicit "Delete Anyway" after a failed save
     /// rescue: delete without rescuing again.
     private func deleteGameDiscardingSaves(_ game: GameEntry) {
-        library.deleteGame(game, skipSaveRescue: true) { error in
-            errorTitle = "Couldn't delete \"\(game.title)\""
-            errorMessage = error
-            showErrorAlert = true
-        }
+        library.delete(game, discardingSaves: true) { showDeleteFailure(title: $0, message: $1) }
+    }
+
+    private func showDeleteFailure(title: String, message: String) {
+        errorTitle = title
+        errorMessage = message
+        showErrorAlert = true
     }
 
     private func enqueueSaveRescueFailure(_ game: GameEntry) {
@@ -1296,7 +1351,7 @@ private struct BulkDeleteAlert: ViewModifier {
     let onConfirm: () -> Void
 
     func body(content: Content) -> some View {
-        content.alert("Delete \(count) game\(count == 1 ? "" : "s")?", isPresented: $isPresented) {
+        content.alert("Delete \(count) games?", isPresented: $isPresented) {
             Button("Delete", role: .destructive) {
                 onConfirm()
             }
@@ -1304,7 +1359,7 @@ private struct BulkDeleteAlert: ViewModifier {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(
-                "This deletes the selected games from your device. Empo keeps the saves it recognizes and moves them to Rescued Saves. Any saves it doesn't recognize go with their game. You can't undo this."
+                "This deletes the selected games from your device. Empo moves the saves it recognizes to Rescued Saves. Saves it doesn't recognize are deleted with their game. You can't undo this."
             )
         }
     }
@@ -1335,10 +1390,12 @@ private struct DuplicateGamesNotice: ViewModifier {
         let list = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             .map { "\u{2022} \($0)" }
             .joined(separator: "\n")
-        return "Empo keeps one copy of each game, so it moved the extra copies "
-            + "below out of your library. The most recently played copy stayed. "
-            + "The rest, saves included, are in \"Duplicate Games\" in Empo's "
-            + "folder in Files:\n\n\(list)"
+        return String(
+            localized:
+                "Empo keeps one copy of each game, so it moved the extra copies below out of your library. The most recently played copy stayed. The rest, saves included, are in \"Duplicate Games\" in Empo's folder in Files:\n\n\(list)",
+            comment:
+                "\"Duplicate Games\" is a folder name in the Files app. Keep it in English. The placeholder is a list of game folders, one per line."
+        )
     }
 
     private func acknowledge() {
@@ -1358,61 +1415,9 @@ private struct DuplicateGamesNotice: ViewModifier {
     }
 }
 
-/// Alert wrapper for the import update confirmation. Only the
-/// single-choice import path reaches it (multi-game sources confirm
-/// updates inside the root picker's "Already in Library" step).
-/// Extracted for the same type-checker-budget reason as
-/// `BulkDeleteAlert`.
-///
-/// Button actions run before SwiftUI resets the binding, and the
-/// pipeline consumes the prompt state in the action, so the
-/// trailing set-to-nil (also fired by swipe/outside dismissal)
-/// falls through to a guarded no-op after an explicit choice.
-private struct ImportReplaceAlert: ViewModifier {
-    @Binding var prompt: ImportReplacePrompt?
-    let onReplace: () -> Void
-    let onCancel: () -> Void
-
-    private var isPresented: Binding<Bool> {
-        Binding(
-            get: { prompt != nil },
-            set: { presented in
-                if !presented { prompt = nil }
-            }
-        )
-    }
-
-    private var title: String {
-        (prompt?.titles.count ?? 1) > 1
-            ? "These games are already in your library"
-            : "This game is already in your library"
-    }
-
-    private func message(for prompt: ImportReplacePrompt) -> String {
-        let names = prompt.titles.map { "\"\($0)\"" }.joined(separator: ", ")
-        let verb = prompt.titles.count == 1 ? "is" : "are"
-        let possessive = prompt.titles.count == 1 ? "its" : "their"
-        return "\(names) \(verb) already in your library. "
-            + "Importing replaces \(possessive) files with the new ones. "
-            + "Your saves and settings stay. You can't undo this."
-    }
-
-    func body(content: Content) -> some View {
-        content.alert(
-            title,
-            isPresented: isPresented,
-            presenting: prompt
-        ) { _ in
-            Button("Update game", role: .destructive, action: onReplace)
-            Button("Cancel", role: .cancel, action: onCancel)
-        } message: { prompt in
-            Text(message(for: prompt))
-        }
-    }
-}
-
 private struct LibrarySheetPresentation: ViewModifier {
     @Binding var showSettings: Bool
+    @Binding var settingsScrollTarget: SettingsSection?
     @Binding var showImporter: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
@@ -1424,9 +1429,11 @@ private struct LibrarySheetPresentation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $showSettings) {
-                SettingsView()
-            }
+            .sheet(
+                isPresented: $showSettings,
+                onDismiss: { settingsScrollTarget = nil },
+                content: { SettingsView(scrollTarget: settingsScrollTarget) }
+            )
             .sheet(isPresented: $showImporter) {
                 DocumentPickerView { urls in
                     onImportPicked(urls)
@@ -1473,7 +1480,7 @@ private struct LibraryAlertPresentation: ViewModifier {
     let pausedGame: GameEntry?
     let pendingGame: GameEntry?
     let canClosePausedGame: Bool
-    let onDeleteGame: () -> Void
+    let onDeleteGame: (GameEntry) -> Void
     let onDeleteGameDiscardingSaves: (GameEntry) -> Void
     let onDismissImportPipelineAlert: () -> Void
     let onCancelValidation: () -> Void
@@ -1493,54 +1500,17 @@ private struct LibraryAlertPresentation: ViewModifier {
             .alert(title, isPresented: $showErrorAlert) {
                 Button("Got it") {}
             } message: {
-                Text(errorMessage ?? "Empo couldn't finish this. Reopen Empo and try again.")
+                errorMessage.map { Text($0) } ?? Text("Empo couldn't finish this. Reopen Empo and try again.")
             }
-            .alert("Delete this game?", isPresented: $showDeleteConfirm) {
-                Button("Delete", role: .destructive, action: onDeleteGame)
-                    .keyboardShortcut(.defaultAction)
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                if let game = gameToDelete {
-                    if game.isImporting {
-                        // Deleting an importing card cancels the
-                        // import. For an update, the installed game
-                        // stays - promising file removal here would
-                        // be false.
-                        Text(
-                            "This stops importing \"\(game.title)\". If you were updating a game you already have, that copy stays as it is."
-                        )
-                    } else {
-                        Text(
-                            "This deletes \"\(game.title)\" from your device. Empo keeps the saves it recognizes and moves them to Rescued Saves. Any saves it doesn't recognize go with the game. You can't undo this."
-                        )
-                    }
-                }
-            }
-            .alert(
-                "Couldn't move the saves",
-                isPresented: Binding(
-                    get: { !saveRescueFailures.isEmpty },
-                    set: { presented in
-                        // Dismissal pops the queue. The binding
-                        // then reads true again while more
-                        // failures wait, so the next game's
-                        // choice presents in turn.
-                        if !presented, !saveRescueFailures.isEmpty {
-                            saveRescueFailures.removeFirst()
-                        }
-                    }
-                ),
-                presenting: saveRescueFailures.first
-            ) { game in
-                Button("Delete anyway", role: .destructive) {
-                    onDeleteGameDiscardingSaves(game)
-                }
-                Button("Keep game", role: .cancel) {}
-            } message: { game in
-                Text(
-                    "Empo couldn't move the saves for \"\(game.title)\" to Rescued Saves. Free up space and delete again, or delete now and lose those saves. You can't undo this."
+            .modifier(
+                DeleteGameAlerts(
+                    isPresented: $showDeleteConfirm,
+                    game: gameToDelete,
+                    saveRescueFailures: $saveRescueFailures,
+                    onDelete: onDeleteGame,
+                    onDeleteDiscardingSaves: onDeleteGameDiscardingSaves
                 )
-            }
+            )
             .alert(
                 "Empo can't run this game",
                 isPresented: Binding(
@@ -1551,26 +1521,11 @@ private struct LibraryAlertPresentation: ViewModifier {
             ) { _ in
                 Button("Got it") { gameWithNoCore = nil }
             } message: { game in
-                if let container = game.container,
-                    let core = AppState.missingCore(for: container)
-                {
-                    Text(
-                        "This build of Empo has no \(core.displayName), so it can't run \"\(game.title)\"."
-                    )
+                if let container = game.container, let core = AppState.missingCore(for: container) {
+                    Text(core.notInThisBuildMessage)
                 }
             }
-            .alert(
-                "This game won't open",
-                isPresented: Binding(
-                    get: { invalidReason != nil },
-                    set: { presented in if !presented { invalidReason = nil } }
-                ),
-                presenting: invalidReason
-            ) { _ in
-                Button("Got it") { invalidReason = nil }
-            } message: { reason in
-                Text(reason)
-            }
+            .modifier(InvalidGameAlert(reason: $invalidReason))
             .alert(
                 warnedLaunch?.warning.title ?? "",
                 isPresented: Binding(
@@ -1586,19 +1541,16 @@ private struct LibraryAlertPresentation: ViewModifier {
             } message: { launch in
                 Text(launch.warning.message)
             }
-            .alert("Stop import?", isPresented: $showCancelValidationAlert) {
-                Button("Keep importing", role: .cancel) {}
-                Button("Stop import", role: .destructive, action: onCancelValidation)
-            } message: {
-                Text("Empo is still checking this game. Stopping now discards it.")
-            }
+            .modifier(
+                StopValidationAlert(isPresented: $showCancelValidationAlert, onStop: onCancelValidation)
+            )
             .alert(
                 canClosePausedGame ? "Play \"\(pendingGame?.title ?? "")\"?" : "A game is paused",
                 isPresented: $showPausedGameAlert
             ) {
                 if canClosePausedGame {
                     Button("Cancel", role: .cancel, action: onDismissPausedGameAlert)
-                    Button("Close and Play", role: .destructive, action: onReplacePausedGame)
+                    Button("Close and play", role: .destructive, action: onReplacePausedGame)
                 } else {
                     // To play another game the user resumes the paused
                     // one from its card, or force-closes the app. See
@@ -1610,7 +1562,7 @@ private struct LibraryAlertPresentation: ViewModifier {
                     Text("\"\(pausedGame.title)\" will close. Progress you haven't saved will be lost.")
                 } else if let pausedGame {
                     Text(
-                        "\"\(pausedGame.title)\" is still running. Resume it from its card, or force-close the app to play a different game."
+                        "\"\(pausedGame.title)\" is still running. Resume it from its card. To play a different game, close Empo from the app switcher and reopen it."
                     )
                 }
             }

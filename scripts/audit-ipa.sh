@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 # Verify a Release iphoneos Empo.app or unsigned .ipa before publishing.
 #
 # Usage:
 #   scripts/audit-ipa.sh path/to/Empo.app
-#   scripts/audit-ipa.sh [--version X.Y.Z] path/to/Empo-unsigned.ipa
+#   scripts/audit-ipa.sh [--version X.Y.Z] path/to/Empo-ios.ipa
 #
 # --cores names the game cores the bundle must carry, and nothing else.
 # Without it the script audits the cores it finds.
@@ -35,7 +38,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -h | --help)
-            echo "usage: $0 [--version X.Y.Z] [--cores \"MkxpCore Psdk30Core\"] <Empo.app | Empo-unsigned.ipa>"
+            echo "usage: $0 [--version X.Y.Z] [--cores \"MkxpCore Psdk30Core\"] <Empo.app | Empo-ios.ipa>"
             exit 0
             ;;
         *)
@@ -192,7 +195,7 @@ BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
 [[ "$BUNDLE_ID" == "sh.mateo.empo" ]] ||
     fail "unexpected bundle id: $BUNDLE_ID (expected sh.mateo.empo for release IPA)"
 
-APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :EmpoAppGroup" "$APP/Info.plist")
+APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionFileProviderDocumentGroup" "$APP/PlugIns/FilesProvider.appex/Info.plist")
 has_app_group() {
     codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -qF "<string>$APP_GROUP</string>"
 }
@@ -206,10 +209,13 @@ for extension in "$APP"/Extensions/*.appex "$APP"/PlugIns/*.appex; do
     has_app_group "$extension" || fail "$name is not signed with the app group $APP_GROUP"
 done
 GAME_PROCESS="$APP/Extensions/GameProcess.appex"
-[[ -d "$GAME_PROCESS" ]] || fail "GameProcess.appex missing from the app bundle"
-POINT=$(/usr/libexec/PlistBuddy -c "Print :EXAppExtensionAttributes:EXExtensionPointIdentifier" "$GAME_PROCESS/Info.plist")
-[[ "$POINT" == "$BUNDLE_ID.game-process" ]] ||
-    fail "GameProcess.appex extension point $POINT != $BUNDLE_ID.game-process"
+if [[ -d "$GAME_PROCESS" ]]; then
+    POINT=$(/usr/libexec/PlistBuddy -c "Print :EXAppExtensionAttributes:EXExtensionPointIdentifier" "$GAME_PROCESS/Info.plist")
+    [[ "$POINT" == "$BUNDLE_ID.game-process" ]] ||
+        fail "GameProcess.appex extension point $POINT != $BUNDLE_ID.game-process"
+    /usr/libexec/PlistBuddy -c "Print :$BUNDLE_ID.game-process" "$APP/Extensions/Empo.appexpt" >/dev/null 2>&1 ||
+        fail "Extensions/Empo.appexpt does not define $BUNDLE_ID.game-process"
+fi
 
 if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
     fail "Info.plist version $VERSION != expected $EXPECTED_VERSION"
@@ -226,6 +232,10 @@ GIT_LINE=$(grep -m1 -E '^commit: ' < <(strings "$BIN") || true)
 [[ -n "$GIT_LINE" ]] || fail "embedded GitInfo commit not found in binary"
 [[ "$GIT_LINE" != *"(dirty)"* ]] ||
     fail "binary embeds a dirty GitInfo marker ($GIT_LINE)"
+
+# Only a build with Sideload.xcconfig has the GitHub update check.
+grep -q "api.github.com/repos" < <(strings "$BIN") ||
+    fail "binary has no update check. Build it with -xcconfig ios/Empo/Sideload.xcconfig"
 
 EMBEDDED_COMMIT=$(awk '{print $2}' <<<"$GIT_LINE")
 [[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||

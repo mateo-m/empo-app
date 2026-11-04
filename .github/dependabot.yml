@@ -1,0 +1,26 @@
+---
+# The workflows pin each action to a commit, so an update needs a pull
+# request. The "build(deps)" prefix passes the PR title check.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      js-tools:
+        patterns: ["*"]

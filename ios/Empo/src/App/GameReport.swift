@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import CoreTransferable
 import Foundation
 import UIKit
@@ -39,8 +42,7 @@ struct GameReport: Codable, Identifiable, Transferable {
     @MainActor
     static func latest(gameTitle: String, in container: GameContainer) -> GameReport? {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: container.logsURL.path)) ?? []
-        // The stamps have a fixed width, so name order is time order.
-        return names.filter(SessionLogger.isSessionLogName).max().map {
+        return SessionLogger.sessionLogsOldestFirst(names).last.map {
             GameReport(gameTitle: gameTitle, logURL: container.logsURL.appendingPathComponent($0))
         }
     }

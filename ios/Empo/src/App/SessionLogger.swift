@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 /// Per-game session logger. Logs live inside each game's
@@ -37,7 +40,13 @@ final class SessionLogger {
         container: GameContainer,
         debugLogsEnabled: Bool
     ) {
-        configureDebugLog(for: game, container: container, enabled: debugLogsEnabled)
+        openDebugLog(for: game, container: container, enabled: debugLogsEnabled)
+        beginSession(for: game, container: container)
+    }
+
+    /// Starts the play time and adds the session to session-history.log.
+    /// The debug log, if any, is the one `openDebugLog` opened.
+    func beginSession(for game: GameEntry, container: GameContainer) {
         appendSessionHistory(game: game, container: container)
         activeGame = game
         sessionStartTime = Date()
@@ -99,20 +108,26 @@ final class SessionLogger {
         onPlayTimeFlushed?(game.id)
     }
 
-    private func configureDebugLog(
+    /// Makes the session's debug log and sets `logURL`, or sets it to
+    /// nil when debug logs are off. The caller gives the path to the core.
+    func openDebugLog(
         for game: GameEntry,
         container: GameContainer,
         enabled: Bool
     ) {
         guard enabled else {
             logURL = nil
-            gamecore_setDebugLogPath(nil)
             return
         }
 
         let logsDir = container.ensureLogsDirectory()
 
-        let start = Date()
+        var start = Date()
+        while FileManager.default.fileExists(
+            atPath: logsDir.appendingPathComponent(Self.sessionLogName(for: start)).path)
+        {
+            start += 0.001
+        }
         let logPath = logsDir.appendingPathComponent(Self.sessionLogName(for: start)).path
 
         let header =
@@ -124,8 +139,6 @@ final class SessionLogger {
                 ]) + "\n"
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
         logURL = URL(fileURLWithPath: logPath)
-
-        gamecore_setDebugLogPath(logPath)
 
         let maxLogFiles = UserDefaults.standard.object(forKey: DefaultsKey.maxLogFiles) as? Int ?? 20
         Self.pruneSessionLogs(in: logsDir, keeping: maxLogFiles)
@@ -168,14 +181,19 @@ final class SessionLogger {
     }
 
     /// A session log is named after the UTC time its session started,
-    /// with dashes in place of colons.
-    private static let sessionLogStampFormatter: DateFormatter = {
+    /// with dashes in place of colons. A quit and a new start can come in
+    /// the same second, so the name has milliseconds.
+    private static let sessionLogStampFormatter = stampFormatter("yyyy-MM-dd'T'HH-mm-ss.SSS'Z'")
+    /// The names of logs from builds before the milliseconds.
+    private static let secondStampFormatter = stampFormatter("yyyy-MM-dd'T'HH-mm-ss'Z'")
+
+    private static func stampFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
-        formatter.dateFormat = "yyyy-MM-dd'T'HH-mm-ss'Z'"
+        formatter.dateFormat = format
         return formatter
-    }()
+    }
 
     private static let sessionLogSuffix = ".log"
 
@@ -183,9 +201,19 @@ final class SessionLogger {
         sessionLogStampFormatter.string(from: date) + sessionLogSuffix
     }
 
-    static func isSessionLogName(_ name: String) -> Bool {
-        name.hasSuffix(sessionLogSuffix)
-            && sessionLogStampFormatter.date(from: String(name.dropLast(sessionLogSuffix.count))) != nil
+    /// The session logs among `names`, oldest first. A name without
+    /// milliseconds sorts before a name with them from the same second,
+    /// because only older builds wrote it.
+    static func sessionLogsOldestFirst(_ names: [String]) -> [String] {
+        names.compactMap { name -> (name: String, date: Date, legacy: Bool)? in
+            guard name.hasSuffix(sessionLogSuffix) else { return nil }
+            let stamp = String(name.dropLast(sessionLogSuffix.count))
+            if let date = sessionLogStampFormatter.date(from: stamp) { return (name, date, false) }
+            if let date = secondStampFormatter.date(from: stamp) { return (name, date, true) }
+            return nil
+        }
+        .sorted { ($0.date, $0.legacy ? 0 : 1) < ($1.date, $1.legacy ? 0 : 1) }
+        .map(\.name)
     }
 
     /// The cap counts session logs only. `Logs/` also holds files that
@@ -193,8 +221,7 @@ final class SessionLogger {
     static func pruneSessionLogs(in logsDir: URL, keeping limit: Int) {
         let fm = FileManager.default
         guard let names = try? fm.contentsOfDirectory(atPath: logsDir.path) else { return }
-        // The stamps have a fixed width, so name order is time order.
-        for name in names.filter(isSessionLogName).sorted().dropLast(limit) {
+        for name in sessionLogsOldestFirst(names).dropLast(limit) {
             try? fm.removeItem(at: logsDir.appendingPathComponent(name))
         }
     }

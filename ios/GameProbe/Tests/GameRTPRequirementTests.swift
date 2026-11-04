@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import XCTest
 
 @testable import GameProbe
@@ -22,7 +25,7 @@ final class GameRTPRequirementTests: XCTestCase {
             """)
         let requirement = GameRTPRequirement.detect(at: gameDir)
         XCTAssertEqual(requirement?.packages, ["RPGVXAce"])
-        XCTAssertEqual(requirement?.friendlySummary, "RPG Maker VX Ace")
+        XCTAssertEqual(requirement?.friendlyNames, ["RPG Maker VX Ace"])
     }
 
     func testDetectsRTP1Key() throws {

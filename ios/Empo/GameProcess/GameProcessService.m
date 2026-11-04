@@ -1,13 +1,19 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 #import "GameProcessService.h"
 
+#import <GameController/GameController.h>
 #import <UIKit/UIKit.h>
 
 #include <crt_externs.h>
 #include <errno.h>
 #include <execinfo.h>
 #include <fcntl.h>
+#include <mach-o/dyld.h>
 #include <mach/mach.h>
 #include <signal.h>
+#include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -48,6 +54,20 @@ static void onMain(dispatch_block_t call) {
     });
 }
 
+// One "0x..." line, with no call that a signal handler cannot make.
+static void writeHex(uintptr_t value) {
+    char line[2 + 2 * sizeof(value) + 1];
+    size_t end = sizeof(line);
+    line[--end] = '\n';
+    do {
+        line[--end] = "0123456789abcdef"[value & 0xf];
+        value >>= 4;
+    } while (value != 0);
+    line[--end] = 'x';
+    line[--end] = '0';
+    write(STDERR_FILENO, line + end, sizeof(line) - end);
+}
+
 // Writes the signal and the stack of a crash to stderr, which is the
 // session log by then, and lets the crash go on. Ruby puts its own
 // handler on SIGSEGV and SIGBUS when it starts, and its report is
@@ -66,8 +86,15 @@ static void onCrashSignal(int signal) {
     }
     write(STDERR_FILENO, name, strlen(name));
     write(STDERR_FILENO, "\n", 1);
+    // backtrace only walks the frame pointers. backtrace_symbols_fd
+    // calls dladdr, which takes the dyld lock, and the crash can hold
+    // that lock. The image list that captureOutput writes turns these
+    // addresses into symbols.
     void *frames[128];
-    backtrace_symbols_fd(frames, backtrace(frames, 128), STDERR_FILENO);
+    int count = backtrace(frames, 128);
+    for (int i = 0; i < count; i++) {
+        writeHex((uintptr_t)frames[i]);
+    }
     struct sigaction fallback = {.sa_handler = SIG_DFL};
     sigaction(signal, &fallback, NULL);
     raise(signal);
@@ -85,6 +112,13 @@ static void captureOutput(const char *logPath) {
     dup2(log, STDERR_FILENO);
     close(log);
     setvbuf(stdout, NULL, _IOLBF, 0);
+
+    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+        const char *name = _dyld_get_image_name(i);
+        if (strstr(name, ".app/") != NULL) {
+            fprintf(stderr, "[game-process] image %p %s\n", (void *)_dyld_get_image_header(i), name);
+        }
+    }
 
     static const int crashSignals[] = {SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV, SIGTRAP};
     for (size_t i = 0; i < sizeof(crashSignals) / sizeof(crashSignals[0]); i++) {
@@ -132,11 +166,26 @@ static void onResumed(void *userdata) {
     [host() resumed];
 }
 
+// The core's SDL takes the one handler slot when it starts, and again
+// when a keyboard connects. The app maps the keys, so this takes the
+// slot back after each of those.
+static void claimKeyboard(void) {
+    GCKeyboard.coalescedKeyboard.keyboardInput.keyChangedHandler =
+        ^(GCKeyboardInput *input, GCControllerButtonInput *key, GCKeyCode keyCode, BOOL pressed) {
+          [host() keyChanged:keyCode pressed:pressed];
+        };
+}
+
 static void onFrameRendered(void *userdata) {
+    static dispatch_once_t claimed;
+    dispatch_once(&claimed, ^{
+      dispatch_async(dispatch_get_main_queue(), ^{ claimKeyboard(); });
+    });
     [host() frameRendered];
 }
 
 static BOOL gSceneActive;
+static BOOL gSceneHasSize;
 static BOOL gRunPending;
 
 // A core may hold the main thread until the game ends, so it runs from
@@ -150,6 +199,20 @@ static void runCore(void) {
       gamecore_run_app(*_NSGetArgc(), *_NSGetArgv());
     });
     CFRunLoopWakeUp(mainLoop);
+}
+
+// ExtensionKit activates the scene before the host gives it a size. The
+// engine reads the size of its window once, at start, so a core that
+// starts at 0x0 can draw nothing for the whole game.
+static void runCoreWhenReady(void) {
+    if (gRunPending && gSceneActive && gSceneHasSize) {
+        runCore();
+    }
+}
+
+void EmpoGameProcessSceneHasSize(void) {
+    gSceneHasSize = YES;
+    runCoreWhenReady();
 }
 
 @interface EmpoGameProcessService : NSObject <EmpoGameProcess>
@@ -170,14 +233,18 @@ static void runCore(void) {
                       return;
                   }
                   gSceneActive = YES;
-                  if (gRunPending) {
-                      runCore();
-                  }
+                  runCoreWhenReady();
                 }];
+    [NSNotificationCenter.defaultCenter addObserverForName:GCKeyboardDidConnectNotification
+                                                    object:nil
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *note) {
+                                                  claimKeyboard();
+                                                }];
 }
 
-- (void)useMemory:(xpc_object_t)memory {
-    EmpoUseAppMemory(memory);
+- (void)useMemory:(xpc_object_t)memory reply:(void (^)(NSString *_Nullable))reply {
+    reply(EmpoUseAppMemory(memory));
 }
 
 - (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable))reply {
@@ -214,11 +281,8 @@ static void runCore(void) {
 
 - (void)runApp {
     onMain(^{
-      if (gSceneActive) {
-          runCore();
-      } else {
-          gRunPending = YES;
-      }
+      gRunPending = YES;
+      runCoreWhenReady();
     });
 }
 

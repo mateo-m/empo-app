@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// Frame size for `IconButton`. Resolves to a side length in points.
@@ -16,7 +19,7 @@ enum IconButtonSize {
 
 struct IconButton: View {
     let systemName: String
-    let label: String
+    let label: LocalizedStringResource
     let style: Style
     let size: IconButtonSize
     let tint: Color?
@@ -27,7 +30,7 @@ struct IconButton: View {
 
     init(
         _ systemName: String,
-        label: String,
+        label: LocalizedStringResource,
         style: Style = .outline,
         size: IconButtonSize = .md,
         tint: Color? = nil,

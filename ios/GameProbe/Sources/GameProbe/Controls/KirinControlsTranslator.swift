@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import Foundation
 
 public enum KirinControlsTranslator {
@@ -208,7 +211,20 @@ public enum KirinControlsTranslator {
             buttonSize: buttonSize, rowCount: leftRowCount, available: leftKeyAvailable)
         let pitch = min(rowPitch, leftPitch)
 
-        let bandTop = topInset + edgeMargin
+        // A sideways screen keeps the grid at the bottom edge, near the
+        // thumbs. The free space goes above the grid, under the toolbar.
+        let leftBandSpan =
+            leftRowCount > 0
+            ? keyRowsSpan(rowCount: leftRowCount, buttonSize: buttonSize, pitch: pitch)
+                + cellGap + dpadSize
+            : dpadSize
+        let bandSpan = max(
+            keyRowsSpan(rowCount: maxRowCount, buttonSize: buttonSize, pitch: pitch),
+            leftBandSpan)
+        let bandTop =
+            isLandscape
+            ? max(topInset + edgeMargin, height - bottomInset - edgeMargin - bandSpan)
+            : topInset + edgeMargin
         let firstRowCenterY = bandTop + buttonSize * 0.5
         let rowCenters = (0..<maxRowCount).map { firstRowCenterY + Double($0) * pitch }
 
@@ -247,7 +263,7 @@ public enum KirinControlsTranslator {
             pitch: pitch,
             width: width,
             height: height,
-            topInset: topInset,
+            bandTop: bandTop,
             bottomInset: bottomInset,
             leadingInset: leadingInset,
             trailingInset: trailingInset,
@@ -265,7 +281,7 @@ public enum KirinControlsTranslator {
         pitch: Double,
         width: Double,
         height: Double,
-        topInset: Double,
+        bandTop: Double,
         bottomInset: Double,
         leadingInset: Double,
         trailingInset: Double,
@@ -275,7 +291,6 @@ public enum KirinControlsTranslator {
         let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
         let centerX = leftmost + pitch
 
-        let bandTop = topInset + edgeMargin
         let bandBottom = height - bottomInset - edgeMargin
 
         let centerY: Double

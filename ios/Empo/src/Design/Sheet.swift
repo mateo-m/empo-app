@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
 import SwiftUI
 
 /// The Empo bottom-sheet vocabulary. `StandardSheet` owns the
@@ -16,6 +19,7 @@ import SwiftUI
 ///     SheetBodyText("What happened and why.")
 ///     SheetCard { /* rows */ }
 ///     SheetFootnote("The fine print.")
+/// } footer: {
 ///     SheetPrimaryButton("Done") { dismiss() }
 /// }
 /// ```
@@ -25,14 +29,20 @@ import SwiftUI
 struct SheetBarAction {
     enum Symbol { case close, back }
 
-    let label: String
+    let label: LocalizedStringResource
     let symbol: Symbol
     let action: () -> Void
 
-    init(_ label: String, symbol: Symbol = .close, action: @escaping () -> Void) {
+    init(_ label: LocalizedStringResource, symbol: Symbol = .close, action: @escaping () -> Void) {
         self.label = label
         self.symbol = symbol
         self.action = action
+    }
+
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(_ label: String, symbol: Symbol = .close, action: @escaping () -> Void) {
+        self.init(LocalizedStringResource(String.LocalizationValue(label)), symbol: symbol, action: action)
     }
 }
 
@@ -61,8 +71,8 @@ enum SheetSurface {
 /// A multi-step sheet swaps the title, the icon and the content in
 /// one `withAnimation`. The detent follows the measured height with
 /// the same motion, so the sheet grows and shrinks with each step.
-struct StandardSheet<Content: View>: View {
-    let title: String
+struct StandardSheet<Content: View, Footer: View>: View {
+    let title: LocalizedStringResource
     /// SF Symbol name for the identity block. A nil value keeps the
     /// title leading at the top of the content.
     var emblem: String?
@@ -70,8 +80,23 @@ struct StandardSheet<Content: View>: View {
     /// Optional corner icon action.
     var barAction: SheetBarAction?
     @ViewBuilder var content: Content
+    /// Stays at the bottom while the content scrolls.
+    @ViewBuilder var footer: Footer
 
     @State private var sheetSize = IntrinsicSheetSize()
+    @State private var headerHeight: CGFloat = 0
+    @State private var footerHeight: CGFloat = 0
+    @State private var bodyHeight: CGFloat = 0
+    @State private var fade = ScrollEdgeFade()
+
+    private var hasFooter: Bool { Footer.self != EmptyView.self }
+
+    /// A sheet with a footer keeps its header and footer in place
+    /// while the content scrolls. Large text on a short screen can
+    /// make them too tall for that, so they then scroll too.
+    private var pinsEdges: Bool {
+        hasFooter && headerHeight + footerHeight <= bodyHeight / 2
+    }
 
     var body: some View {
         switch surface {
@@ -83,47 +108,104 @@ struct StandardSheet<Content: View>: View {
     }
 
     private var core: some View {
-        // The scroll container does two jobs: content taller than
-        // the screen scrolls instead of clipping, and a sheet
-        // pulled past its detent keeps the content pinned to the
-        // top (a bare VStack centers in the stretched space).
-        ScrollView {
-            stack
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .top)
-                // A view on its way out still takes its space until
-                // its transition ends, so the visible stack is the
-                // wrong thing to measure during a step change. The
-                // copy below has no animation, so it is already the
-                // size of the next step when the change begins.
-                .background {
-                    stack
-                        .hidden()
-                        .accessibilityHidden(true)
-                        .transaction { $0.animation = nil }
-                        .intrinsicSheetContent(size: $sheetSize)
-                }
+        VStack(spacing: 0) {
+            if pinsEdges { headerBlock }
+            scroller
+            if pinsEdges { footerBlock }
         }
-        .scrollBounceBehavior(.basedOnSize)
-        // During a detent change UIKit sizes this view to the new
-        // height at once and animates only the sheet's frame. With
-        // clipping on, the scroll view cuts the old step off in one
-        // frame. With it off, the sheet's moving edge does the cut.
-        .scrollClipDisabled()
+        .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+        } action: {
+            bodyHeight = $0
+        }
         .intrinsicSheetDetent(size: $sheetSize, chromeAllowance: 0)
         .tint(.brand)
     }
 
-    private var stack: some View {
+    /// The scroll container does two jobs: content taller than the
+    /// screen scrolls instead of clipping, and a sheet pulled past
+    /// its detent keeps the content pinned to the top (a bare VStack
+    /// centers in the stretched space).
+    @ViewBuilder private var scroller: some View {
+        let scroll = ScrollView {
+            VStack(spacing: 0) {
+                if !pinsEdges { headerBlock }
+                contentBlock
+                if !pinsEdges { footerBlock }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .top)
+            // A view on its way out still takes its space until its
+            // transition ends, so the visible stack is the wrong thing
+            // to measure during a step change. The copy below has no
+            // animation, so it is already the size of the next step
+            // when the change begins.
+            .background {
+                VStack(spacing: 0) {
+                    headerBlock
+                        .onGeometryChange(for: CGFloat.self) {
+                            $0.size.height
+                        } action: {
+                            headerHeight = $0
+                        }
+                    contentBlock
+                    footerBlock
+                        .onGeometryChange(for: CGFloat.self) {
+                            $0.size.height
+                        } action: {
+                            footerHeight = $0
+                        }
+                }
+                .hidden()
+                .accessibilityHidden(true)
+                .transaction { $0.animation = nil }
+                .intrinsicSheetContent(size: $sheetSize)
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        if hasFooter {
+            // The content fades out under the pinned header and footer
+            // only as far as it runs past them.
+            scroll
+                .onScrollGeometryChange(for: ScrollEdgeFade.self, of: ScrollEdgeFade.init) { _, new in
+                    fade = new
+                }
+                .mask { ScrollEdgeFadeMask(fade: fade).ignoresSafeArea() }
+        } else {
+            // During a detent change UIKit sizes this view to the new
+            // height at once and animates only the sheet's frame. With
+            // clipping on, the scroll view cuts the old step off in one
+            // frame. With it off, the sheet's moving edge does the cut.
+            scroll.scrollClipDisabled()
+        }
+    }
+
+    private var headerBlock: some View {
+        header
+            .padding(.horizontal, Spacing.xl)
+            .padding(.top, Spacing.xl + Spacing.md)
+            .padding(.bottom, Spacing.xl)
+    }
+
+    private var contentBlock: some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
-            header
             content
         }
-        .padding([.horizontal, .top], Spacing.xl)
-        .padding(.top, Spacing.md)
+        .padding(.horizontal, Spacing.xl)
         // The home indicator's safe area already pads the bottom. A
         // full gutter under it reads as a hole.
-        .padding(.bottom, Spacing.sm)
+        .padding(.bottom, hasFooter ? 0 : Spacing.sm)
+    }
+
+    @ViewBuilder private var footerBlock: some View {
+        if hasFooter {
+            VStack(spacing: Spacing.md) {
+                footer
+            }
+            .padding(.horizontal, Spacing.xl)
+            .padding(.top, Spacing.xl)
+            .padding(.bottom, Spacing.sm)
+        }
     }
 
     /// The title is centered. Back leads, close trails, level with
@@ -142,7 +224,7 @@ struct StandardSheet<Content: View>: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 44 + Spacing.lg)
-                    .id(title)
+                    .id(String(localized: title))
                     .transition(.sheetStep)
                 if let barAction { placed(icon: barAction) }
             }
@@ -167,7 +249,92 @@ struct StandardSheet<Content: View>: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(action.label)
+        .accessibilityLabel(Text(action.label))
+    }
+}
+
+extension StandardSheet {
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(
+        title: String,
+        emblem: String? = nil,
+        surface: SheetSurface = .grouped,
+        barAction: SheetBarAction? = nil,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(
+            title: LocalizedStringResource(String.LocalizationValue(title)), emblem: emblem,
+            surface: surface, barAction: barAction, content: content, footer: footer)
+    }
+}
+
+extension StandardSheet where Footer == EmptyView {
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(
+        title: String,
+        emblem: String? = nil,
+        surface: SheetSurface = .grouped,
+        barAction: SheetBarAction? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title: LocalizedStringResource(String.LocalizationValue(title)), emblem: emblem,
+            surface: surface, barAction: barAction, content: content)
+    }
+
+    init(
+        title: LocalizedStringResource,
+        emblem: String? = nil,
+        surface: SheetSurface = .grouped,
+        barAction: SheetBarAction? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title: title, emblem: emblem, surface: surface, barAction: barAction,
+            content: content, footer: { EmptyView() })
+    }
+}
+
+/// How far the content runs past each edge of a sheet's scroll view,
+/// from 0 at the edge to 1 at `length` points or more.
+private struct ScrollEdgeFade: Equatable {
+    static let length: CGFloat = 24
+
+    var top: CGFloat = 0
+    var bottom: CGFloat = 0
+
+    init() {}
+
+    init(_ geometry: ScrollGeometry) {
+        // `visibleRect` includes the safe area insets, and
+        // `containerSize` does not.
+        let hiddenAbove = geometry.visibleRect.minY
+        let hiddenBelow = geometry.contentSize.height - geometry.visibleRect.maxY
+        top = min(max(hiddenAbove / Self.length, 0), 1)
+        bottom = min(max(hiddenBelow / Self.length, 0), 1)
+    }
+}
+
+/// Fades the content out at an edge only as far as it runs past that
+/// edge, so the fade grows as the user scrolls.
+private struct ScrollEdgeFadeMask: View {
+    let fade: ScrollEdgeFade
+
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [.black.opacity(1 - fade.top), .black], startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: ScrollEdgeFade.length)
+            Rectangle()
+            LinearGradient(
+                colors: [.black, .black.opacity(1 - fade.bottom)], startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: ScrollEdgeFade.length)
+        }
     }
 }
 
@@ -178,7 +345,7 @@ struct StandardSheet<Content: View>: View {
 /// leading. Rendered by `StandardSheet` when `emblem:` is set.
 private struct SheetIdentityBlock: View {
     let systemName: String
-    let title: String
+    let title: LocalizedStringResource
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -199,6 +366,10 @@ private struct SheetIdentityBlock: View {
 struct SheetBodyText: View {
     let text: AttributedString
 
+    init(_ text: LocalizedStringResource) { self.text = AttributedString(localized: text) }
+
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
     init(_ text: String) { self.text = AttributedString(text) }
 
     /// `name` is the game or target the line talks about. It reads in
@@ -225,9 +396,13 @@ struct SheetBodyText: View {
 
 /// Leading-aligned fine print near the sheet's bottom.
 struct SheetFootnote: View {
-    let text: String
+    let text: LocalizedStringResource
 
-    init(_ text: String) { self.text = text }
+    init(_ text: LocalizedStringResource) { self.text = text }
+
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(_ text: String) { self.init(LocalizedStringResource(String.LocalizationValue(text))) }
 
     var body: some View {
         Text(text)
@@ -267,12 +442,18 @@ struct SheetRowSeparator: View {
 
 /// The sheet's one full-width primary action, at the bottom.
 struct SheetPrimaryButton: View {
-    let title: String
+    let title: LocalizedStringResource
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringResource, action: @escaping () -> Void) {
         self.title = title
         self.action = action
+    }
+
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(_ title: String, action: @escaping () -> Void) {
+        self.init(LocalizedStringResource(String.LocalizationValue(title)), action: action)
     }
 
     var body: some View {
@@ -286,12 +467,18 @@ struct SheetPrimaryButton: View {
 /// The step toward a destructive answer, or any second choice that
 /// needs no weight of its own. Plain text, full width, 44pt tall.
 struct SheetQuietButton: View {
-    let title: String
+    let title: LocalizedStringResource
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringResource, action: @escaping () -> Void) {
         self.title = title
         self.action = action
+    }
+
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(_ title: String, action: @escaping () -> Void) {
+        self.init(LocalizedStringResource(String.LocalizationValue(title)), action: action)
     }
 
     var body: some View {
@@ -309,12 +496,18 @@ struct SheetQuietButton: View {
 /// The one destructive answer of a confirmation step. Red, full
 /// width, and never the brand primary.
 struct SheetDestructiveButton: View {
-    let title: String
+    let title: LocalizedStringResource
     let action: () -> Void
 
-    init(_ title: String, action: @escaping () -> Void) {
+    init(_ title: LocalizedStringResource, action: @escaping () -> Void) {
         self.title = title
         self.action = action
+    }
+
+    /// For text built at runtime, which has no translation key.
+    @_disfavoredOverload
+    init(_ title: String, action: @escaping () -> Void) {
+        self.init(LocalizedStringResource(String.LocalizationValue(title)), action: action)
     }
 
     var body: some View {
