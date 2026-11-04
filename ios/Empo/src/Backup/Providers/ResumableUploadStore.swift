@@ -37,7 +37,11 @@ actor ResumableUploadStore<Record: ResumableUpload> {
         targetId: String, path: String, fileSize: Int64, now: Date = Date()
     ) -> Record? {
         guard let record = load()[Self.key(targetId, path)] else { return nil }
-        guard record.isUsable(at: now, forFileOfSize: fileSize) else {
+        // Another path, such as the sync document, can hold new bytes
+        // of the same size at the next launch, and a resume would join
+        // the two versions.
+        guard BackupKeys.endsInBlobPath(path), record.isUsable(at: now, forFileOfSize: fileSize)
+        else {
             forget(targetId: targetId, path: path)
             return nil
         }

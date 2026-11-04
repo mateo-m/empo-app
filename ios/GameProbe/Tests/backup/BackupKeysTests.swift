@@ -128,6 +128,17 @@ final class BackupKeysTests: XCTestCase {
                 atPath: BackupKeys.blobPath(hash: hash, fanOutWidth: 0)), hash)
     }
 
+    func testOnlyAPathThatEndsInABlobPathNamesItsBytes() {
+        let hash = ContentHash.hex(ofUTF8: "blob")
+        let paths = BackupNamespacePaths(root: "Empo", namespaceId: "ns-1")
+
+        XCTAssertTrue(BackupKeys.endsInBlobPath(paths.blobPath(hash: hash, fanOutWidth: 2)))
+        XCTAssertTrue(BackupKeys.endsInBlobPath("blobs/\(hash)"))
+        XCTAssertFalse(BackupKeys.endsInBlobPath("Empo/sync/document.automerge"))
+        XCTAssertFalse(BackupKeys.endsInBlobPath("Empo/ns-1/blobs/ab/.DS_Store"))
+        XCTAssertFalse(BackupKeys.endsInBlobPath("Empo/blobs/\(hash)/manifest.json"))
+    }
+
     /// The sweep deletes what `blobHash` names, so anything that is
     /// not a blob must come back `nil`.
     func testAPathThatIsNotABlobPathNamesNoHash() {

@@ -109,6 +109,14 @@ public enum BackupKeys {
         return String(name)
     }
 
+    /// Whether a full target path, with its root and namespace, ends
+    /// in a blob path. Only such a path names the bytes it holds.
+    public static func endsInBlobPath(_ path: String) -> Bool {
+        let parts = path.split(separator: "/")
+        guard let start = parts.lastIndex(of: "blobs") else { return false }
+        return blobHash(atPath: parts[start...].joined(separator: "/")) != nil
+    }
+
     // MARK: - Namespace id
 
     /// A namespace id for this install, per 5.2. Ticket 002 stores
