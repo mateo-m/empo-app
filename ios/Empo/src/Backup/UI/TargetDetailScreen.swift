@@ -140,7 +140,8 @@ struct TargetDetailScreen: View {
             Section {
                 let shown = showsEveryGame ? item.games : Array(item.games.prefix(5))
                 ForEach(shown, id: \.gameKey) { game in
-                    HStack {
+                    HStack(spacing: Spacing.md) {
+                        BackupGameArtwork(gameKey: game.gameKey)
                         Text(gameNames[game.gameKey] ?? "A removed game")
                             .lineLimit(1)
                             .truncationMode(.middle)

@@ -14,6 +14,7 @@ final class PackageImportModel {
     private(set) var rejection: String?
     private(set) var record: PackageRecord?
     private(set) var source: PackageSource?
+    private(set) var installedGameKeys: [String: String] = [:]
     private let names = BackupGameNames()
     /// True once a restore finished or stopped. A stopped one keeps
     /// the staged package for the resume question of 11.9.
@@ -29,6 +30,11 @@ final class PackageImportModel {
             let source = try PackageImport.open(record)
             self.source = source
             rows = PackageImport.rows(of: source)
+            for row in rows {
+                installedGameKeys[row.snapshotId] = GameIdentities.match(row.identity).map {
+                    BackupKeys.gameKey(containerFolderName: $0.folderName)
+                }
+            }
         } catch let rejection as PackageRejection {
             self.rejection = rejection.line
             self.record?.delete(localRoot: BackupRoot.layout.root)
@@ -91,24 +97,27 @@ struct PackageImportSheet: View {
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }
-                        Section {
-                            ForEach(model.rows, id: \.snapshotId) { row in
-                                Button {
-                                    chosen = row
-                                } label: {
-                                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                                        Text(model.name(of: row))
-                                        Text(BackupText.bytes(row.bytesToDownload))
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
+                        let games = model.rows.filter { !$0.identity.containerFolderName.isEmpty }
+                        let settings = model.rows.filter { $0.identity.containerFolderName.isEmpty }
+                        if !games.isEmpty {
+                            Section {
+                                ForEach(games, id: \.snapshotId) { row in
+                                    rowButton(row, title: model.name(of: row)) {
+                                        BackupGameArtwork(gameKey: model.installedGameKeys[row.snapshotId])
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .contentShape(Rectangle())
                                 }
-                                .buttonStyle(.plain)
+                            } header: {
+                                Text("What this package holds")
                             }
-                        } header: {
-                            Text("What this package holds")
+                        }
+                        if !settings.isEmpty {
+                            Section {
+                                ForEach(settings, id: \.snapshotId) { row in
+                                    rowButton(row, title: "Settings") { EmptyView() }
+                                }
+                            } header: {
+                                if games.isEmpty { Text("What this package holds") }
+                            }
                         }
                     }
                 }
@@ -133,5 +142,26 @@ struct PackageImportSheet: View {
                     await model.restore(row, scope: scope, replacesTheTree: replacesTheTree)
                 })
         }
+    }
+
+    private func rowButton(
+        _ row: SnapshotRow, title: String, @ViewBuilder artwork: () -> some View
+    ) -> some View {
+        Button {
+            chosen = row
+        } label: {
+            HStack(spacing: Spacing.md) {
+                artwork()
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text(title)
+                    Text(BackupText.bytes(row.bytesToDownload))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

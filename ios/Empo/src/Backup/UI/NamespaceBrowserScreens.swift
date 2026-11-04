@@ -54,11 +54,14 @@ struct NamespaceGamesScreen: View {
                                     row, scope: scope, replacesTheTree: replacesTheTree)
                             })
                     } label: {
-                        VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(section.name)
-                            Text(NamespaceListRules.backups(section.rows.count))
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                        HStack(spacing: Spacing.md) {
+                            BackupGameArtwork(gameKey: section.id)
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+                                Text(section.name)
+                                Text(NamespaceListRules.backups(section.rows.count))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 }

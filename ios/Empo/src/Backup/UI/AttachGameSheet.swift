@@ -43,11 +43,15 @@ struct AttachGameSheet: View {
                     Button {
                         chosen = game
                     } label: {
-                        Text(name(of: game))
-                            .foregroundStyle(.primary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(Spacing.lg)
-                            .contentShape(Rectangle())
+                        HStack(spacing: Spacing.md) {
+                            BackupGameArtwork(
+                                gameKey: BackupKeys.gameKey(containerFolderName: game.folderName))
+                            Text(name(of: game))
+                                .foregroundStyle(.primary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(Spacing.lg)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                 }
