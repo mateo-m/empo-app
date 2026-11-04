@@ -89,6 +89,11 @@ extension SnapshotEngine {
             // The file boundary of 7.6: a pause leaves whole files
             // behind, and the checkpoint carries the rest.
             guard !Task.isCancelled else { throw BackupRunStop.paused }
+            // A game that starts mid-stream writes the files this
+            // stream still has to read.
+            if input.isGame, await !(observer?.runMayGoOn() ?? true) {
+                throw BackupRunStop.gameStarted
+            }
             try await upload(member, at: index, of: run, in: context)
         }
         context.uploadedBytes += run.result.uploadedBytes

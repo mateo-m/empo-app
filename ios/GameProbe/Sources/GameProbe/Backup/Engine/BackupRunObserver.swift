@@ -28,7 +28,8 @@ public protocol BackupRunObserver: Sendable {
     /// there.
     func runConfirmed(streamKey: String, bytes: Int64) async
 
-    /// Asked before each game stream. `false` stops the run with
+    /// Asked before each game stream and before each of its files.
+    /// `false` stops the run with
     /// `BackupRunStop.gameStarted`, per 7.6.
     func runMayGoOn() async -> Bool
 }

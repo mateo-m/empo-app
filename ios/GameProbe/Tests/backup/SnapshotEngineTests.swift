@@ -1016,7 +1016,7 @@ final class SnapshotEngineTests: XCTestCase {
         try makeGameTree("Alpha")
         try makeGameTree("Bravo")
         let target = makeTarget()
-        let gate = RunGate(allowedStreams: 1)
+        let gate = RunGate(membersBeforeTheGame: 5)
         let engine = try makeEngine(target, observer: gate)
 
         let result = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
@@ -1026,6 +1026,20 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(result.streams.filter { $0.streamKey != BackupStream.preferences.key }.count, 1)
         XCTAssertNil(TargetFailure.of(.gameStarted))
         XCTAssertNil(BackupNotificationRule.failFastCause(of: .gameStarted))
+    }
+
+    func testAGameThatStartsMidStreamStopsBeforeTheNextFile() async throws {
+        try makeGameTree("Alpha")
+        let target = makeTarget()
+        let gate = RunGate(membersBeforeTheGame: 1)
+        let engine = try makeEngine(target, observer: gate)
+
+        let result = await engine.run(request(games: [game("Alpha")]))
+
+        XCTAssertEqual(result.stop, .gameStarted)
+        let confirmCount = await gate.confirmCount
+        XCTAssertEqual(confirmCount, 1)
+        XCTAssertTrue(result.streams.isEmpty)
     }
 
     func testProgressAdvancesOnAConfirmedBlobAndNotOnAStartedUpload() async throws {
@@ -1094,22 +1108,22 @@ final class NoteRecorder: @unchecked Sendable {
     }
 }
 
-/// Lets a set number of game streams through, then answers as if a
-/// game had started.
+/// Answers as if a game had started once a set number of members
+/// landed on the target.
 actor RunGate: BackupRunObserver {
 
-    private var allowedStreams: Int
+    private var membersBeforeTheGame: Int
+    private(set) var confirmCount = 0
 
-    init(allowedStreams: Int) {
-        self.allowedStreams = allowedStreams
+    init(membersBeforeTheGame: Int) {
+        self.membersBeforeTheGame = membersBeforeTheGame
     }
 
     func runPlanned(streamKey: String, bytes: Int64) {}
-    func runConfirmed(streamKey: String, bytes: Int64) {}
+    func runConfirmed(streamKey: String, bytes: Int64) { confirmCount += 1 }
 
     func runMayGoOn() -> Bool {
-        defer { allowedStreams -= 1 }
-        return allowedStreams > 0
+        confirmCount < membersBeforeTheGame
     }
 }
 
