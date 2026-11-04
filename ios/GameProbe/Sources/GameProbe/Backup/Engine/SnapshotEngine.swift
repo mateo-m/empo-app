@@ -129,6 +129,11 @@ public actor SnapshotEngine {
             try await readTheSpaceLeft(context)
         } catch let stop as BackupRunStop {
             return finish(context, startedAt: startedAt, stop: Task.isCancelled ? .paused : stop)
+        } catch BackupProviderError.permissionDenied {
+            let reason = BackupProviderError.permissionDenied.line(for: request.descriptor.provider)
+            return finish(
+                context, startedAt: startedAt,
+                stop: Task.isCancelled ? .paused : .blocked(reason: reason))
         } catch {
             // A pause cancels the upload in flight, and that error
             // arrives before the file boundary reads the cancel.
@@ -725,8 +730,8 @@ public actor SnapshotEngine {
         case .authExpired:
             return BackupRunStop.needsSignIn
         case .permissionDenied:
-            return BackupRunStop.blocked(
-                reason: "Empo can't write here any more. Sign in again and allow all the access Empo asks for.")
+            // `run` names the fix, because only the request knows the service.
+            return error
         case .rejected(let message):
             return BackupRunStop.rejected(message: message)
         case .offline:

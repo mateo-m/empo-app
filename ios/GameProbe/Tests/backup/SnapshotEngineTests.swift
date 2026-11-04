@@ -355,6 +355,18 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(blobPaths(target).count, 5)
     }
 
+    func testAWriteTheServiceRefusesNamesTheFixForThatService() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        await target.addFault(FakeTargetFault(operation: .list, error: .permissionDenied))
+        let engine = try makeEngine(target)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(
+            result.stop, .blocked(reason: BackupProviderError.permissionDenied.line(for: .webdav)))
+    }
+
     func testAServerThatIsDownStopsTheRunBeforeATransferWaitsForIt() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
