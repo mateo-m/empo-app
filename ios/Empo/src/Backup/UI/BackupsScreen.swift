@@ -289,6 +289,7 @@ struct BackupsScreen: View {
                 } label: {
                     HStack(spacing: Spacing.lg) {
                         TargetRowView(row: item.row, target: item.descriptor)
+                        Spacer(minLength: 0)
                         if let action = item.row.action {
                             Button(action.label) { Task { await press(action, on: item) } }
                                 .buttonStyle(.bordered)
