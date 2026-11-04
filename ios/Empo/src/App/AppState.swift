@@ -90,9 +90,6 @@ class AppState {
             errorMessage = error.localizedDescription
             return
         }
-        // The hard stop of 7.6. A restore in flight stops at once,
-        // and it keeps its record and its staged blobs.
-        RestoreCoordinator.shared.stopForGameLaunch()
         selectedGame = game
         launchedSettings = start.launchedSettings
         // Bind the controls layout to this game so edits during play
@@ -113,8 +110,11 @@ class AppState {
         )
 
         // The hop to the next main-actor turn lets SwiftUI commit
-        // `phase = .loading` before the engine takes the path.
+        // `phase = .loading` before the engine takes the path. The
+        // hard stop of 7.6 ends a restore in flight before the game
+        // reads its files.
         Task { @MainActor in
+            await RestoreCoordinator.shared.stopForGameLaunch()
             session.launchGamePath(game.path)
         }
     }

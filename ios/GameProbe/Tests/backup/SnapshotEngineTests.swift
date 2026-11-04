@@ -899,6 +899,49 @@ final class SnapshotEngineTests: XCTestCase {
         }
     }
 
+    // MARK: - The hard stop of 7.6 during a restore
+
+    func testARestoreStoppedDuringADownloadLeavesTheSaveAsItIs() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+
+        // The format file and the manifest pass, and the first blob
+        // download holds.
+        let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
+        let latch = TransferLatch(holdFrom: reads + 1)
+        await target.setLatch(latch)
+        let engine = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot)
+        let restore = RestoreRequest(
+            targetId: targetId,
+            root: "",
+            namespaceId: namespaceId,
+            stream: BackupStream(key: key(gameName)),
+            snapshotId: snapshotId,
+            scope: .wholeGame,
+            destination: MemberSource(container: container(gameName)),
+            freeSpaceBytes: .max)
+        let running = Task { await engine.run(restore) }
+
+        let arrived = await waitForArrivals(reads + 1, at: latch)
+        XCTAssertTrue(arrived)
+        running.cancel()
+        await latch.open()
+        let outcome = await running.value
+
+        guard case .stopped(.gameLaunched, let result) = outcome else {
+            return XCTFail("the restore did not stop for the game: \(outcome)")
+        }
+        XCTAssertEqual(result.writtenFileCount, 0)
+        let save = try String(
+            contentsOf: container(gameName).appendingPathComponent("Game/save1.dat"),
+            encoding: .utf8)
+        XCTAssertEqual(save, "played after the backup")
+    }
+
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
 
     func testTheRunReportsOnePlanForTheStreamAndConfirmsEveryBlobOfIt() async throws {

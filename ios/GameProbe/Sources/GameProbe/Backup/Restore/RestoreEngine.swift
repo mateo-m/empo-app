@@ -178,6 +178,9 @@ public actor RestoreEngine {
             throw RestoreStopReason.targetFailed
         }
         let staged = try await stageBlob(entry, paths: paths, fanOutWidth: fanOutWidth)
+        // A download can finish after the cancel of 7.6. The game may
+        // already run, so the file stays as it is.
+        guard !Task.isCancelled else { throw RestoreStopReason.gameLaunched }
 
         if case .writeAfterDisplacing(let displacedPath) = step.action,
             let displaced = request.destination.url(root: entry.root, path: displacedPath)

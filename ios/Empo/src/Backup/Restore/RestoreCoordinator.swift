@@ -214,10 +214,12 @@ final class RestoreCoordinator {
     private static let unreadableLine = "this backup could not be read"
 
     /// The hard stop of 7.6. A game launched, so the restore stops at
-    /// once and leaves its record and its staged blobs.
-    func stopForGameLaunch() {
+    /// once and leaves its record and its staged blobs. It returns
+    /// when the restore wrote its last file.
+    func stopForGameLaunch() async {
         guard let running else { return }
         running.cancel()
+        _ = await running.value
         log("a game launched, so the restore stopped")
     }
 
