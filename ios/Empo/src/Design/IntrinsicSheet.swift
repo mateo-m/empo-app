@@ -12,7 +12,15 @@ import SwiftUI
 /// `ios/Empo/docs/design-system.md`.
 struct IntrinsicSheetSize {
     var width: CGFloat = 0
-    var height: CGFloat = 0
+    var content: CGSize = .zero
+
+    /// The content height, or zero while the content was last laid
+    /// out at a width other than the sheet's. The two widths can
+    /// differ by a rounding error (402 against 402.00000000000006),
+    /// and the content does not lay out again to fix it.
+    var height: CGFloat {
+        width > 0 && abs(content.width - width) < 1 ? content.height : 0
+    }
 }
 
 extension View {
@@ -25,7 +33,8 @@ extension View {
         // before the sheet has a size. The text then wraps on every
         // word, and the sheet opens several times too tall and slides
         // down to its real height. The width comes from outside the
-        // stack, and a height measured at any other width is dropped.
+        // stack, and `IntrinsicSheetSize.height` ignores a height
+        // measured at any other width.
         return
             self
             .frame(width: width > 0 ? width : nil)
@@ -33,8 +42,7 @@ extension View {
             .onGeometryChange(for: CGSize.self) { proxy in
                 proxy.size
             } action: { newSize in
-                guard width > 0, newSize.width == width else { return }
-                size.wrappedValue.height = newSize.height
+                size.wrappedValue.content = newSize
             }
             .frame(maxWidth: .infinity, alignment: .top)
     }
