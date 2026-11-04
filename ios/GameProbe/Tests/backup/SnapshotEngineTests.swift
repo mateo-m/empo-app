@@ -569,6 +569,25 @@ final class SnapshotEngineTests: XCTestCase {
             1)
     }
 
+    /// A sign-in into another account keeps the target id, so the
+    /// new place holds none of the blobs the state store remembers.
+    func testANamespaceWithNoClaimStartsFromAFullUpload() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        try FileManager.default.removeItem(at: targetDirectory)
+        await target.forgetCommittedPaths()
+
+        clock.advance(3_600)
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .success)
+        XCTAssertEqual(result.stream(key(gameName))?.uploadedBlobCount, 4)
+        XCTAssertEqual(target.objectPaths().filter { $0.contains("/blobs/") }.count, 4)
+    }
+
     // MARK: - 8. The prune ladder, per 5.14
 
     func testTheLadderRetriesAfterAPruneAndThenBlocksTheTarget() async throws {

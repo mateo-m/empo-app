@@ -283,6 +283,13 @@ public actor SnapshotEngine {
         case .proceed:
             break
         case .claim:
+            // No claim means this place holds nothing this namespace
+            // wrote: another account behind the same target id, or a
+            // deleted folder. The blobs the store remembers are not
+            // here, so the run starts from a full upload.
+            save(
+                try store.clearNamespaceState(targetId: context.request.descriptor.id),
+                "the namespace state of a place with no claim")
             try await writeClaim(context)
         case .conflict(let claim):
             guard let resolution = context.request.writerResolution else {
