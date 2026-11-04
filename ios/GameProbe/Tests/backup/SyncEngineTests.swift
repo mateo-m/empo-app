@@ -145,6 +145,7 @@ final class SyncEngineTests: XCTestCase {
 
         func apply(_ model: SyncDocumentModel, identities: inout SyncProfileIdentities) {
             applied.append(model)
+            if !model.controllerBindings.isEmpty { mine.controllerBindings = model.controllerBindings }
         }
     }
 
@@ -231,6 +232,51 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(outcome, .done)
         XCTAssertEqual(document.saved?.preferences, ["theme": .string("light")])
         XCTAssertEqual(state.value.removedPreferenceKeys, [])
+    }
+
+    /// A binding the user cleared here, or a settings restore took
+    /// away, is missing from the local map. The pass deletes it from
+    /// the document, or the merge would bring it back.
+    func testABindingRemovedHereLeavesTheDocument() async throws {
+        let document = FakeDocument()
+        document.held.controllerBindings = ["a": .string("confirm"), "b": .string("cancel")]
+        let local = FakeLocalValues()
+        local.mine.controllerBindings = ["a": .string("confirm")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.heldBindingIds = ["a", "b"]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.saved?.controllerBindings, ["a": .string("confirm")])
+        XCTAssertEqual(state.value.heldBindingIds, ["a"])
+    }
+
+    /// A binding this device never held came from another device. It
+    /// stays, and the device holds it after the pass.
+    func testABindingAnotherDeviceAddedStays() async throws {
+        let document = FakeDocument()
+        document.held.controllerBindings = ["a": .string("confirm"), "b": .string("cancel")]
+        let local = FakeLocalValues()
+        local.mine.controllerBindings = ["a": .string("confirm")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.heldBindingIds = ["a"]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(
+            document.saved?.controllerBindings,
+            ["a": .string("confirm"), "b": .string("cancel")])
+        XCTAssertEqual(state.value.heldBindingIds, ["a", "b"])
     }
 
     /// A document with no history writes nothing of its own before

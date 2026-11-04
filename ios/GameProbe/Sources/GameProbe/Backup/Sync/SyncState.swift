@@ -29,6 +29,10 @@ public struct SyncState: Codable, Equatable, Sendable {
     /// local key is not a delete, so the next pass deletes these from
     /// the document by name.
     public var removedPreferenceKeys: [String]
+    /// The global binding ids this device held after its last saved
+    /// pass. One missing from the device now was removed here, and a
+    /// missing local key is not a delete on its own.
+    public var heldBindingIds: [String]
 
     public init(
         version: Int = SyncState.currentVersion,
@@ -37,7 +41,8 @@ public struct SyncState: Codable, Equatable, Sendable {
         joinedAt: Date? = nil,
         targets: [SyncTargetProgress] = [],
         removedTargetIds: [String] = [],
-        removedPreferenceKeys: [String] = []
+        removedPreferenceKeys: [String] = [],
+        heldBindingIds: [String] = []
     ) {
         self.version = version
         self.actorId = actorId
@@ -46,6 +51,7 @@ public struct SyncState: Codable, Equatable, Sendable {
         self.targets = targets
         self.removedTargetIds = removedTargetIds
         self.removedPreferenceKeys = removedPreferenceKeys
+        self.heldBindingIds = heldBindingIds
     }
 
     public init(from decoder: Decoder) throws {
@@ -59,6 +65,8 @@ public struct SyncState: Codable, Equatable, Sendable {
             try values.decodeIfPresent([String].self, forKey: .removedTargetIds) ?? []
         removedPreferenceKeys =
             try values.decodeIfPresent([String].self, forKey: .removedPreferenceKeys) ?? []
+        heldBindingIds =
+            try values.decodeIfPresent([String].self, forKey: .heldBindingIds) ?? []
     }
 
     public var hasJoined: Bool { groupId != nil }

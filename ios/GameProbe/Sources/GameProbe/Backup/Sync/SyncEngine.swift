@@ -108,8 +108,12 @@ public final class SyncEngine {
         updateIdentities { mine = local.read(identities: &$0) }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
         let removed = state.state().removedPreferenceKeys
+        let removedBindings = state.state().heldBindingIds.filter {
+            mine.controllerBindings[$0] == nil
+        }
         if publishes, !isNew {
-            try? document.write(held.overlaid(with: mine, removingPreferences: removed))
+            try? document.write(held.overlaid(
+                with: mine, removingPreferences: removed, removingBindings: removedBindings))
         }
 
         var seen: [SeenCopy] = []
@@ -128,7 +132,8 @@ public final class SyncEngine {
         if isNew, let fetched = try? document.model(),
             !SyncCopyValidation.readsButDoesNotPublish(fetched)
         {
-            try? document.write(fetched.overlaid(with: mine, removingPreferences: removed))
+            try? document.write(fetched.overlaid(
+                with: mine, removingPreferences: removed, removingBindings: removedBindings))
         }
 
         guard let merged = try? document.model() else {
@@ -147,6 +152,11 @@ public final class SyncEngine {
         // Only a saved pass counts as read. A pass that stops before
         // the save reads the same copies and local values again.
         lastLocalValues = mine
+        var after = SyncDocumentModel()
+        updateIdentities { after = local.read(identities: &$0) }
+        updateState("the bindings this device holds") {
+            $0.heldBindingIds = after.controllerBindings.keys.sorted()
+        }
         if !seen.isEmpty {
             updateState("what this pass read") { state in
                 for copy in seen {

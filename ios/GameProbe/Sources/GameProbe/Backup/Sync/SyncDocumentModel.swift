@@ -51,11 +51,15 @@ public struct SyncDocumentModel: Equatable, Sendable {
     /// preference must not clear it for everyone. A delete travels
     /// as its own record, which is what `deletedAt` is for.
     public func overlaid(
-        with local: SyncDocumentModel, removingPreferences removed: [String] = []
+        with local: SyncDocumentModel, removingPreferences removed: [String] = [],
+        removingBindings removedBindings: [String] = []
     ) -> SyncDocumentModel {
         var out = self
         for key in removed where local.preferences[key] == nil {
             out.preferences[key] = nil
+        }
+        for id in removedBindings where local.controllerBindings[id] == nil {
+            out.controllerBindings[id] = nil
         }
         out.preferences.merge(local.preferences) { _, mine in mine }
         out.controllerBindings.merge(local.controllerBindings) { _, mine in mine }
