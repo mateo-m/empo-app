@@ -18,13 +18,15 @@ public struct LayoutProfileStore {
 
     // MARK: - Names
 
+    public static let maxNameLength = 64
+
     /// Extends the game-folder rule with a leading-`$` rejection so a
     /// profile can never collide with the pin sentinels. Returns nil
     /// for an unusable name. Never silently strips.
     public static func validatedName(_ raw: String) -> String? {
         let name = raw.precomposedStringWithCanonicalMapping
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, name.count <= 64 else { return nil }
+        guard !name.isEmpty, name.count <= maxNameLength else { return nil }
         guard !name.hasPrefix("$"), !name.hasPrefix(".") else { return nil }
         guard !name.contains("/"), !name.contains("\\"), name != ".." else { return nil }
         return name

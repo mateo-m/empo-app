@@ -272,6 +272,23 @@ final class PreferenceSyncTests: XCTestCase {
                 profileId: "p1", losing: ["portrait.dpad": .string("{\"x\":0.9}")]))
     }
 
+    func testAConflictProfileNameIsOneTheProfileStoreTakes() {
+        let longProfile = String(repeating: "Layout ", count: 9).trimmingCharacters(in: .whitespaces)
+        let cases = [
+            (longProfile, "Mateo's iPad"),
+            ("Small hands", "Work / travel iPhone with a very long device name"),
+            ("Small hands", "  "),
+            (String(repeating: "x", count: 64), "iPad"),
+        ]
+        for (profile, device) in cases {
+            let name = SyncProfileConflict.name(of: profile, deviceName: device)
+            XCTAssertEqual(LayoutProfileStore.validatedName(name), name, name)
+        }
+        XCTAssertEqual(
+            SyncProfileConflict.name(of: "Small hands", deviceName: "Work/iPad"),
+            "Small hands from Work-iPad")
+    }
+
     func testNoRuleReadsTheClock() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

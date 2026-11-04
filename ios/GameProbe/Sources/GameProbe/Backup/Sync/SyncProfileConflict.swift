@@ -8,10 +8,24 @@ import Foundation
 /// it becomes a profile of its own, so no edit disappears.
 public enum SyncProfileConflict {
 
-    /// `<profile name> from <device name>`, per 10.6.
+    /// `<profile name> from <device name>`, per 10.6, cut to a name
+    /// that `LayoutProfileStore.validatedName` takes. The store
+    /// refuses any other name, and the losing version is then lost.
     public static func name(of profileName: String, deviceName: String) -> String {
-        "\(profileName) from \(deviceName)"
+        let device = String(
+            deviceName.precomposedStringWithCanonicalMapping
+                .replacingOccurrences(of: "/", with: "-")
+                .replacingOccurrences(of: "\\", with: "-")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .prefix(maxDeviceNameLength))
+        let suffix = " from " + (device.isEmpty ? "another device" : device)
+        let profile = profileName.precomposedStringWithCanonicalMapping
+            .prefix(LayoutProfileStore.maxNameLength - suffix.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return profile + suffix
     }
+
+    private static let maxDeviceNameLength = 24
 
     /// The one short origin note the conflict profile carries.
     public static func originNote(deviceName: String) -> String {
