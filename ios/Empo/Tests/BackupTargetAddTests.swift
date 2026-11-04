@@ -9,6 +9,31 @@ import XCTest
 @MainActor
 final class BackupTargetAddTests: XCTestCase {
 
+    func testTheFormShowsTheFolderTheBackupsGoTo() {
+        XCTAssertEqual(
+            BackupTargetAdd.backupAddress(
+                of: .s3,
+                form: [
+                    "address": "https://127.0.0.1:9443", "bucket": "empo-live", "region": "us-east-1",
+                    "root": "demo",
+                ]),
+            "https://127.0.0.1:9443/empo-live/demo/Empo")
+        XCTAssertEqual(
+            BackupTargetAdd.backupAddress(
+                of: .s3,
+                form: ["address": "https://s3.us-east-1.amazonaws.com", "bucket": "my-saves"]),
+            "https://my-saves.s3.us-east-1.amazonaws.com/Empo")
+        XCTAssertEqual(
+            BackupTargetAdd.backupAddress(
+                of: .webdav,
+                form: [
+                    "address": "https://cloud.example.com/remote.php/dav/files/you/", "root": "games saves",
+                ]),
+            "https://cloud.example.com/remote.php/dav/files/you/games%20saves/Empo")
+        XCTAssertNil(BackupTargetAdd.backupAddress(of: .webdav, form: ["address": "cloud.example.com"]))
+        XCTAssertNil(BackupTargetAdd.backupAddress(of: .s3, form: [:]))
+    }
+
     func testTheS3FormPutsTheBucketInThePathForEveryHostButAmazon() {
         XCTAssertTrue(
             BackupTargetAdd.isOn("usesPathStyle", in: ["address": "https://127.0.0.1:9443"]))

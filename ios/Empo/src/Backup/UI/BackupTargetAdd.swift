@@ -106,14 +106,10 @@ enum BackupTargetAdd {
     /// A sign-in passes the `existing` target, which keeps its id,
     /// its folder, and its backup policy.
     static func s3(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
-        guard let address = URL(string: form["address"] ?? "") else {
+        guard let bucket = s3Bucket(form: form) else {
             return .failed("Enter the address.")
         }
-        let bucket = S3Bucket(
-            address: address,
-            region: form["region"] ?? "",
-            name: form["bucket"] ?? "",
-            usesPathStyle: isOn("usesPathStyle", in: form))
+        let address = bucket.address
         if let refusal = bucket.refusal { return .failed(line(of: refusal)) }
         let connection = S3Connection(
             bucket: bucket,
@@ -140,6 +136,34 @@ enum BackupTargetAdd {
         }
     }
 
+    private static func s3Bucket(form: [String: String]) -> S3Bucket? {
+        URL(string: form["address"] ?? "").map {
+            S3Bucket(
+                address: $0,
+                region: form["region"] ?? "",
+                name: form["bucket"] ?? "",
+                usesPathStyle: isOn("usesPathStyle", in: form))
+        }
+    }
+
+    private static func webdavServer(form: [String: String]) -> WebDAVServer? {
+        URL(string: form["address"] ?? "").map {
+            WebDAVServer(address: $0, username: form["username"] ?? "")
+        }
+    }
+
+    /// The Empo folder the form would back up to, or nil while the
+    /// address has no host.
+    static func backupAddress(of service: BackupProviderKind, form: [String: String]) -> String? {
+        let folder = BackupNamespacePaths.join(
+            form["root"] ?? "", BackupNamespacePaths.empoDirectoryName)
+        switch service {
+        case .s3: return s3Bucket(form: form)?.url(key: folder)?.absoluteString
+        case .webdav: return webdavServer(form: form)?.url(path: folder)?.absoluteString
+        case .iCloudDrive, .dropbox, .googleDrive, .sftp: return nil
+        }
+    }
+
     /// A toggle the user did not touch reads as the default of its
     /// service.
     static func isOn(_ toggle: String, in form: [String: String]) -> Bool {
@@ -151,10 +175,10 @@ enum BackupTargetAdd {
     }
 
     static func webdav(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
-        guard let address = URL(string: form["address"] ?? "") else {
+        guard let server = webdavServer(form: form) else {
             return .failed("Enter the address.")
         }
-        let server = WebDAVServer(address: address, username: form["username"] ?? "")
+        let address = server.address
         if let refusal = server.refusal { return .failed(line(of: refusal)) }
         let connection = WebDAVConnection(server: server, password: form["password"] ?? "")
         var descriptor =

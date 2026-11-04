@@ -191,9 +191,18 @@ struct TargetFormScreen: View {
         ScrollViewReader { scroll in
             Form {
                 ForEach(groups, id: \.self) { group in
-                    Section(group) {
-                        ForEach(fields.filter { $0.group == group }, id: \.name) { field in
+                    let groupFields = fields.filter { $0.group == group }
+                    Section {
+                        ForEach(groupFields, id: \.name) { field in
                             row(field)
+                        }
+                    } header: {
+                        Text(group)
+                    } footer: {
+                        if groupFields.contains(where: { $0.name == "address" }),
+                            let address = BackupTargetAdd.backupAddress(of: service, form: typed)
+                        {
+                            Text("Empo saves backups at \(Text(address).monospaced())")
                         }
                     }
                 }
