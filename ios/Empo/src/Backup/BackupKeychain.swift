@@ -2,8 +2,8 @@ import Foundation
 import GameProbe
 import Security
 
-/// The Keychain items of SPEC 6.7: the namespace id and every target
-/// secret.
+/// The Keychain items of SPEC 6.7: the namespace id, the sync actor
+/// id, and every target secret.
 ///
 /// Two attributes are forced by the design, not chosen.
 ///
@@ -25,6 +25,7 @@ enum BackupKeychain {
 
     private static let service = "sh.mateo.empo.backup"
     private static let namespaceAccount = "namespace-id"
+    private static let syncActorAccount = "sync-actor-id"
 
     /// The namespace id of 5.2 for this install. Makes one on the
     /// first call and gives the same one back after that.
@@ -43,6 +44,15 @@ enum BackupKeychain {
     /// space, per 5.2, so adopting is this one write.
     static func adoptNamespaceId(_ namespaceId: String) throws {
         try setString(namespaceId, account: namespaceAccount)
+    }
+
+    /// The Automerge actor id that `sync.json` holds on this device.
+    static func syncActorId() throws -> String? {
+        try string(account: syncActorAccount)
+    }
+
+    static func setSyncActorId(_ actorId: String) throws {
+        try setString(actorId, account: syncActorAccount)
     }
 
     /// An OAuth token, a key, or a password for one target. Section 8

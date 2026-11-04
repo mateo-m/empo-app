@@ -63,6 +63,18 @@ public struct SyncState: Codable, Equatable, Sendable {
 
     public var hasJoined: Bool { groupId != nil }
 
+    /// A new phone set up from an iPhone backup gets this file, but
+    /// not the Keychain items of the old phone. Automerge needs one
+    /// writer per actor id, so an id that the device does not hold
+    /// gives way to a fresh one. Returns whether the id changed.
+    public mutating func replaceActor(
+        unlessTheDeviceHolds deviceActorId: String?, fresh: () -> String
+    ) -> Bool {
+        guard actorId != deviceActorId else { return false }
+        actorId = fresh()
+        return true
+    }
+
     public func progress(ofTarget targetId: String) -> SyncTargetProgress? {
         targets.first { $0.targetId == targetId }
     }

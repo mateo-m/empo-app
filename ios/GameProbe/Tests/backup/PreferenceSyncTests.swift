@@ -170,6 +170,17 @@ final class PreferenceSyncTests: XCTestCase {
             "a state file from before the sizes reads every copy once")
     }
 
+    func testTheActorChangesOnADeviceThatDoesNotHoldIt() {
+        var state = SyncState(actorId: "actor-1")
+        XCTAssertFalse(state.replaceActor(unlessTheDeviceHolds: "actor-1", fresh: { "new" }))
+        XCTAssertEqual(state.actorId, "actor-1")
+
+        XCTAssertTrue(state.replaceActor(unlessTheDeviceHolds: nil, fresh: { "new" }))
+        XCTAssertEqual(state.actorId, "new")
+        XCTAssertTrue(state.replaceActor(unlessTheDeviceHolds: "other", fresh: { "newer" }))
+        XCTAssertEqual(state.actorId, "newer")
+    }
+
     func testATruncatedAndACorruptCopyChangeNothing() {
         XCTAssertEqual(
             SyncCopyValidation.check(Data()) { _ in SyncDocumentModel() }.failure, .empty)

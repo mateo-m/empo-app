@@ -5,15 +5,22 @@ import GameProbe
 ///
 /// `sync.json` holds the actor identity and the group. The actor id
 /// is minted once and written at once, because a second mint would
-/// split this device's own history in the document.
+/// split this device's own history in the document. The Keychain
+/// holds a second copy that does not move to a new phone, so a file
+/// that a backup restored there gets a fresh id.
 @MainActor
 enum SyncStore {
 
     static func state() -> SyncState {
         let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
-        let state = SyncState.read(
+        var state = SyncState.read(
             applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
-        if !FileManager.default.fileExists(atPath: url.path) {
+        let replaced = state.replaceActor(
+            unlessTheDeviceHolds: try? BackupKeychain.syncActorId(), fresh: { UUID().uuidString })
+        if replaced {
+            try? BackupKeychain.setSyncActorId(state.actorId)
+        }
+        if replaced || !FileManager.default.fileExists(atPath: url.path) {
             try? state.write(applicationSupport: BackupRoot.layout.applicationSupport)
         }
         return state
