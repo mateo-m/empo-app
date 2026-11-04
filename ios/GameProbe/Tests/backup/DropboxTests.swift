@@ -57,13 +57,10 @@ final class DropboxTests: XCTestCase {
         XCTAssertEqual(Dropbox.error(status: 500), .serverError(status: 500))
     }
 
-    func testAnUnknownReasonReachesTheUserWordForWord() {
+    func testAnUnknownReasonShowsNoTagOrStatus() {
         let error = Dropbox.error(status: 409, errorSummary: "path/malformed_path/")
-        XCTAssertEqual(
-            error, .rejected(message: "Dropbox answered 409: path/malformed_path/"))
-        XCTAssertEqual(
-            error.effect,
-            .stopAndShow(message: "Dropbox answered 409: path/malformed_path/"))
+        XCTAssertEqual(error, .rejected(message: "Dropbox refused the request."))
+        XCTAssertTrue(error.effect.stopsTheRun)
     }
 
     func testTheErrorSummaryComesOutOfTheBody() {

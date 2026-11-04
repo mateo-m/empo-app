@@ -191,7 +191,7 @@ actor S3Target: BackupProvider {
             try check(answer)
             guard let page = S3.page(fromBody: answer.body) else {
                 throw BackupProviderError.rejected(
-                    message: "the bucket sent a page Empo cannot read")
+                    message: "the bucket sent a reply Empo can't read")
             }
             pages.append(page)
             guard page.hasMore, let next = page.nextContinuationToken else { break }

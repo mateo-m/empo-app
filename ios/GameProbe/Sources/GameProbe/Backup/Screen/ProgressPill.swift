@@ -33,13 +33,13 @@ public enum ProgressPill {
     public static func stopReason(of stop: BackupRunStop, targetLabel: String) -> String? {
         switch stop {
         case .offline:
-            return "couldn't connect to \(targetLabel)"
+            return "Empo couldn't connect to \(targetLabel)."
         case .serverError:
-            return "\(targetLabel) had a server error"
+            return "\(targetLabel) had a server error."
         case .throttled:
-            return "\(targetLabel) asked Empo to wait"
+            return "\(targetLabel) asked Empo to wait."
         case .readOnlyFormat(.newerFormatVersion):
-            return "\(targetLabel) needs a newer version of Empo"
+            return "\(targetLabel) needs a newer version of Empo."
         case .readOnlyFormat(.unreadableFormat), .needsSignIn, .blocked, .full, .quotaShortfall, .rejected, .writerConflict,
             .gameStarted, .paused:
             return nil
@@ -71,14 +71,14 @@ public enum ProgressPill {
         switch phase {
         case .checking(let gameName):
             guard let gameName else { return "Checking for changes…" }
-            return "Checking \(gameName) for changes"
+            return "Checking \(gameName) for changes…"
         case .uploading(let gameName):
             guard let leftText else { return "Backing up \(gameName)" }
             return "Backing up \(gameName), about \(leftText) left"
         case .paused(let reason):
             return "Paused, \(reason)"
         case .stopped(let reason):
-            return "Backup stopped, \(reason)"
+            return "Backup stopped. \(reason)"
         case .complete:
             return "Backup complete"
         }

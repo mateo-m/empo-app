@@ -47,7 +47,7 @@ enum BackupNetwork {
     }
 
     /// The line the UI shows while the system holds the tasks.
-    static let waitingLine = StaleCause.waitingForWiFi.line(targetLabel: nil)
+    static let waitingLine = "waiting for Wi-Fi"
 
     static let lowDataModeLine = "Low Data Mode is on"
 

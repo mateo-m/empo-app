@@ -237,7 +237,7 @@ public enum Dropbox {
         case Status.serverError..<600:
             return .serverError(status: status)
         default:
-            return .rejected(message: message(fromSummary: errorSummary, status: status))
+            return refusal
         }
     }
 
@@ -256,15 +256,12 @@ public enum Dropbox {
         if tags.contains("too_many_write_operations") || tags.contains("too_many_requests") {
             return .throttled(retryAfter: defaultRetryAfter)
         }
-        return .rejected(message: message(fromSummary: summary, status: Status.endpointError))
+        return refusal
     }
 
-    /// What a `rejected` shows the user, word for word, per 8.4.
-    private static func message(fromSummary summary: String, status: Int) -> String {
-        let text = summary.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return "Dropbox answered \(status)" }
-        return "Dropbox answered \(status): \(text)"
-    }
+    /// Dropbox writes its reason as a tag such as
+    /// `path/malformed_path/`, which is not for people to read.
+    private static let refusal = BackupProviderError.refusal(by: "Dropbox")
 
     /// The offset Dropbox wants when an append lands at the wrong
     /// one, or `nil` when the failure is something else.

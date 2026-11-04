@@ -432,7 +432,7 @@ public enum GoogleDrive {
         case Status.serverError..<600:
             return .serverError(status: status)
         default:
-            return .rejected(message: message(from: failure, status: status))
+            return refusal(failure)
         }
     }
 
@@ -449,14 +449,11 @@ public enum GoogleDrive {
         if throttleReasons.contains(failure.reason) {
             return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
         }
-        return .rejected(message: message(from: failure, status: Status.forbidden))
+        return refusal(failure)
     }
 
-    /// What a `rejected` shows the user, word for word, per 8.4.
-    private static func message(from failure: Failure, status: Int) -> String {
-        let text = failure.message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return "Google Drive answered \(status)" }
-        return "Google Drive answered \(status): \(text)"
+    private static func refusal(_ failure: Failure) -> BackupProviderError {
+        .refusal(by: "Google Drive", said: failure.message)
     }
 
     /// Whether Drive lost the session and the upload has to start

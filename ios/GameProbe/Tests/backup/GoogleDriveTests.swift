@@ -86,10 +86,9 @@ final class GoogleDriveTests: XCTestCase {
         let body = failureBody(reason: "badRequest", message: "Invalid field selection", code: 400)
         let error = GoogleDrive.error(status: 400, failure: GoogleDrive.failure(inBody: body))
         XCTAssertEqual(
-            error, .rejected(message: "Google Drive answered 400: Invalid field selection"))
-        XCTAssertEqual(
-            error.effect,
-            .stopAndShow(message: "Google Drive answered 400: Invalid field selection"))
+            error,
+            .rejected(
+                message: "Google Drive refused the request. It said: “Invalid field selection”"))
     }
 
     func testTheReasonAndTheMessageComeOutOfTheBody() {

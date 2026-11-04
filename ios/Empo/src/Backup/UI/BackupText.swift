@@ -11,9 +11,17 @@ enum BackupText {
         ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
     }
 
-    /// "14:03", for the unreachable line of 13.5.
     static func time(_ date: Date) -> String {
         date.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// "at 14:03", "yesterday at 14:03", or "on 3 Nov at 14:03", for
+    /// the unreachable line of 13.5.
+    static func when(_ date: Date) -> String {
+        let clock = date.formatted(date: .omitted, time: .shortened)
+        if Calendar.current.isDateInToday(date) { return "at \(clock)" }
+        if Calendar.current.isDateInYesterday(date) { return "yesterday at \(clock)" }
+        return "on \(date.formatted(.dateTime.day().month(.abbreviated))) at \(clock)"
     }
 
     /// "2 minutes ago", for the row of a working target.

@@ -52,7 +52,8 @@ public enum GameBackupState: Equatable, Sendable {
     case failed(StaleCause)
     /// Empo's own policy holds the run, per 7.4.
     case waitingForWiFi
-    case stale(days: Int)
+    /// `nil` days: the game is late and never had a backup.
+    case stale(days: Int?)
     case healthy
     case neverRun
     case notSetUp
@@ -109,7 +110,9 @@ public struct GameBackupStatus: Equatable, Sendable {
             return "Last backup failed"
         case .waitingForWiFi:
             return "Waiting for Wi-Fi"
-        case .stale(let days):
+        case .stale(nil):
+            return "Never backed up"
+        case .stale(let days?):
             return days == 1 ? "Backed up 1 day ago" : "Backed up \(days) days ago"
         case .healthy:
             let day = lastSuccessText ?? "today"
@@ -172,7 +175,7 @@ public enum GameBackupStatusRules {
         let worstId = Staleness.worst(of: late.map(\.freshness), now: now).targetId
         if let worst = late.first(where: { $0.targetId == worstId }) {
             return GameBackupStatus(
-                state: .stale(days: days(since: worst.lastSuccessAt, now: now) ?? staleDays),
+                state: .stale(days: days(since: worst.lastSuccessAt, now: now)),
                 targetLabel: label(late))
         }
 
@@ -189,7 +192,6 @@ public enum GameBackupStatusRules {
         targets.filter { !$0.isPaused }.compactMap(\.lastSuccessAt).max()
     }
 
-    private static let staleDays = Int(Staleness.staleAfter / 86_400)
 
     /// A cause that is not the clock and not the policy is a
     /// failure, per 13.16.

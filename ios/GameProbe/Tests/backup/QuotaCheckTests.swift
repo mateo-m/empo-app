@@ -103,6 +103,6 @@ final class QuotaCheckTests: XCTestCase {
         // ByteCountFormatter follows the region: "2,1 GB" on a Mac set to France,
         // "2.1 GB" on the Linux runner.
         let missing = ByteCountFormatter.string(fromByteCount: 2_100_000_000, countStyle: .file)
-        XCTAssertEqual(line, "This location needs \(missing) more for the next backup")
+        XCTAssertEqual(line, "This location needs \(missing) more space for the next backup.")
     }
 }

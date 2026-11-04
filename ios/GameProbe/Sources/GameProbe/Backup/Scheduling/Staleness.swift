@@ -39,25 +39,27 @@ public enum StaleCause: Equatable, Sendable {
 
     /// The line the Backup sheet and the banner show. Tickets 016,
     /// 017, and 018 render it.
+    /// A whole sentence. `nil` names no location, because several
+    /// failed.
     public func line(targetLabel: String?, deviceName: String = "This device") -> String {
-        let target = targetLabel ?? "the backup location"
+        let target = targetLabel ?? "A backup location"
         switch self {
         case .waitingForWiFi:
-            return "waiting for Wi-Fi"
+            return "Empo is waiting for Wi-Fi."
         case .needsSignIn:
-            return "\(target) needs you to sign in again"
+            return "\(target) needs you to sign in again."
         case .refusedTheRequest:
-            return "\(target) refused the request"
+            return "\(target) stopped letting Empo save backups."
         case .targetBlocked:
-            return "\(target) is full"
+            return "\(target) is full."
         case .deviceStorageLow:
-            return "\(deviceName) is low on storage"
+            return "\(deviceName) is low on storage."
         case .savesPartial(let path):
-            return "one save file did not copy: \(path)"
+            return "A save file didn't copy (\(path))."
         case .runsInterrupted:
             return ForceQuitRule.habitLine
         case .waitingForARun:
-            return "waiting for the next backup"
+            return "Empo is waiting for the next backup."
         }
     }
 
@@ -181,10 +183,10 @@ public struct LibraryStaleBanner: Equatable, Sendable {
 
     /// The words the one banner shows. It names the cause, because
     /// the cause is what the single action clears.
-    public func line(targetLabel: String? = nil, deviceName: String = "this device") -> String {
+    public func line(targetLabel: String? = nil, deviceName: String = "This device") -> String {
         let games = gameCount == 1 ? "1 game has" : "\(gameCount) games have"
         let reason = cause.line(targetLabel: targetLabel, deviceName: deviceName)
-        return "\(games) had no backup for 3 weeks, \(reason)."
+        return "\(games) had no backup for 3 weeks. \(reason)"
     }
 }
 

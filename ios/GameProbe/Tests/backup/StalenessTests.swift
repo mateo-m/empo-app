@@ -72,7 +72,7 @@ final class StalenessTests: XCTestCase {
         let freshness = Staleness.worst(gameKey: "g", of: [target], now: now)
         XCTAssertEqual(freshness.level, .banner)
         XCTAssertEqual(freshness.cause, .waitingForWiFi)
-        XCTAssertEqual(freshness.cause?.line(targetLabel: "Dropbox"), "waiting for Wi-Fi")
+        XCTAssertEqual(freshness.cause?.line(targetLabel: "Dropbox"), "Empo is waiting for Wi-Fi.")
     }
 
     // MARK: - The worst target

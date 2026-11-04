@@ -65,19 +65,30 @@ public enum TargetRowState: Equatable, Sendable {
         case .current: return 9
         }
     }
+
+    /// Whether the line under the name draws as a problem the user
+    /// has to fix.
+    public var isProblem: Bool {
+        switch self {
+        case .needsSignIn, .blockedByPermissions, .rejected, .full, .unreachable: return true
+        case .cannotOpen, .placeholder, .paused, .current: return false
+        }
+    }
 }
 
 /// The button on the right of a target row, where one exists.
 public enum TargetRowAction: String, Equatable, Sendable {
     case signIn
     case resume
-    case makeSpace
+    /// Backs up now, after the user made space or the server came
+    /// back.
+    case tryAgain
 
     public var label: String {
         switch self {
         case .signIn: return "Sign in"
         case .resume: return "Resume"
-        case .makeSpace: return StaleAction.makeSpaceOnTheTarget.label
+        case .tryAgain: return "Try again"
         }
     }
 }
@@ -91,7 +102,7 @@ public struct TargetRowFacts: Equatable, Sendable {
     /// When the failure happened. The unreachable line names it.
     public var failedAt: Date?
     /// The failure time in the words the caller formatted, such as
-    /// "14:03".
+    /// "at 14:03" or "yesterday at 14:03".
     public var failedAtText: String
     /// False for a foreground-only target, per 8.9.
     public var supportsBackgroundTransfer: Bool
@@ -133,7 +144,8 @@ public struct TargetRow: Equatable, Sendable {
     public var action: TargetRowAction?
     /// The permanent line of 8.9, under the state line.
     public var foregroundOnlyLine: String?
-    /// Whether the row draws greyed and takes no tap.
+    /// Whether the row draws greyed. It still opens, so the user can
+    /// remove the location.
     public var isDisabled: Bool
 
     public init(
@@ -199,7 +211,7 @@ public enum TargetRowRules {
     /// so no line repeats it.
     ///
     /// `time` is the failure time in the words the caller formatted,
-    /// such as "14:03". The unreachable line reads as a past event,
+    /// such as "at 14:03". The unreachable line reads as a past event,
     /// because the screen holds no connection.
     public static func stateLine(
         _ state: TargetRowState, target: TargetDescriptor, time: String = "",
@@ -209,7 +221,7 @@ public enum TargetRowRules {
         case .cannotOpen(.accountOff):
             return iCloudOffLine
         case .cannotOpen:
-            return "This build cannot open \(target.provider.serviceName)"
+            return "This version of Empo can't use \(target.provider.serviceName)."
         case .placeholder:
             return "Sign in on this device to start"
         case .paused:
@@ -221,11 +233,11 @@ public enum TargetRowRules {
         case .rejected(let message):
             return message
         case .unreachable(_, .noAnswer):
-            return "Couldn't connect at \(time)"
+            return "Couldn't connect \(time)"
         case .unreachable(_, .serverError):
-            return "Server error at \(time)"
+            return "Server error \(time)"
         case .unreachable(_, .busy):
-            return "Server busy at \(time)"
+            return "Server busy \(time)"
         case .current:
             guard let lastSuccessText else { return "No backup yet" }
             return "Last backup \(lastSuccessText)"
@@ -243,9 +255,9 @@ public enum TargetRowRules {
             return .signIn
         case .paused:
             return .resume
-        case .full:
-            return .makeSpace
-        case .cannotOpen, .rejected, .unreachable, .current:
+        case .full, .unreachable:
+            return .tryAgain
+        case .cannotOpen, .rejected, .current:
             return nil
         }
     }

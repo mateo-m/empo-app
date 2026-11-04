@@ -64,7 +64,7 @@ final class BackupNotificationRuleTests: XCTestCase {
         XCTAssertEqual(
             BackupNotificationRule.text(
                 for: .targetBlocked, targetLabel: "Dropbox", deviceName: "iPhone"),
-            "Dropbox is full. Make space or raise the cap to continue.")
+            "Dropbox is full. Free up space on it, or raise its storage limit in Empo.")
         XCTAssertEqual(
             BackupNotificationRule.text(
                 for: .deviceStorageLow, targetLabel: "Dropbox", deviceName: "iPhone"),

@@ -66,7 +66,7 @@ public enum BackupNotificationRule {
         case .signInDead:
             return "Sign in to \(targetLabel) again. Your backups are waiting."
         case .targetBlocked:
-            return "\(targetLabel) is full. Make space or raise the cap to continue."
+            return "\(targetLabel) is full. Free up space on it, or raise its storage limit in Empo."
         case .deviceStorageLow:
             return "\(deviceName) storage is low. Free up space to keep backing up."
         }

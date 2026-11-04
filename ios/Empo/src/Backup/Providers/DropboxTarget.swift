@@ -137,7 +137,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
                 throw Self.error(answer)
             }
             guard let page = Dropbox.page(fromBody: answer.body) else {
-                throw BackupProviderError.rejected(message: "Dropbox sent a page Empo cannot read")
+                throw BackupProviderError.rejected(message: "Dropbox sent a reply Empo can't read")
             }
             pages.append(page)
             guard page.hasMore else { break }

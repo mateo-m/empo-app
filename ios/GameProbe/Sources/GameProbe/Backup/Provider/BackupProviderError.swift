@@ -66,6 +66,15 @@ public enum BackupProviderError: Error, Equatable, Sendable {
     /// message reaches the user as it is, per 8.4 and 13.7.
     case rejected(message: String)
 
+    /// A refusal the screen can show as it is. The status number
+    /// stays out, and the server's own words, where it gave some,
+    /// follow in quotes.
+    static func refusal(by who: String, said: String = "") -> BackupProviderError {
+        let said = said.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !said.isEmpty else { return .rejected(message: "\(who) refused the request.") }
+        return .rejected(message: "\(who) refused the request. It said: “\(said)”")
+    }
+
     /// The one effect of 8.4.
     public var effect: TargetEffect {
         switch self {

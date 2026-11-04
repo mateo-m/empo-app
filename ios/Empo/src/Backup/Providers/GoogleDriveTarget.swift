@@ -196,7 +196,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
             throttleAttempt = 1
             guard let page = GoogleDrive.page(fromBody: answer.body) else {
                 throw BackupProviderError.rejected(
-                    message: "Google Drive sent a page Empo cannot read")
+                    message: "Google Drive sent a reply Empo can't read")
             }
             pages.append(page)
             guard page.hasMore, let next = page.nextPageToken else { break }
