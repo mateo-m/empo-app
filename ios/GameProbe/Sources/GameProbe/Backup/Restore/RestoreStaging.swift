@@ -29,6 +29,21 @@ public enum RestoreStaging {
         return ContentHash.hex(of: decoded) == entry.hash
     }
 
+    /// The bytes of a staged `zlib` blob, or nil for a damaged one.
+    ///
+    /// `BlobCodec.encode` keeps a zlib blob only when it is smaller
+    /// than its content, so a staged file of that size or more is
+    /// damaged. The check runs before the read, so such a file never
+    /// enters memory.
+    public static func zlibBytes(at file: URL, entry: SnapshotManifest.Entry) -> Data? {
+        guard
+            let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size])
+                as? Int,
+            size < inflatedSizeLimit(of: entry)
+        else { return nil }
+        return try? Data(contentsOf: file)
+    }
+
     /// The manifest comes from the storage service, so its size alone
     /// does not bound the memory. A run compresses no file over the
     /// compression limit.
