@@ -100,10 +100,35 @@ extension SnapshotEngine {
             if input.isGame, await !(observer?.runMayGoOn() ?? true) {
                 throw BackupRunStop.gameStarted
             }
-            try await upload(member, at: index, of: run, in: context)
+            do {
+                try await upload(member, at: index, of: run, in: context)
+            } catch let noRoom as NoRoom {
+                let rest = run.plan.changed.dropFirst(index + 1).reduce(0) { $0 + $1.size }
+                skipForRoom(run, noRoom, neededBytes: noRoom.blobBytes + rest, in: context)
+                return
+            }
         }
         context.uploadedBytes += run.result.uploadedBytes
         try await close(run, in: context)
+    }
+
+    /// The checkpoint keeps the blobs that went up, so the next run
+    /// reuses them once the target has room.
+    private func skipForRoom(
+        _ run: StreamRun, _ noRoom: NoRoom, neededBytes: Int64, in context: RunContext
+    ) {
+        let missing = QuotaCheck.Shortfall(neededBytes: neededBytes, freeBytes: noRoom.freeBytes)
+        context.uploadedBytes += run.result.uploadedBytes
+        run.result.outcome = .failed(reason: QuotaCheck.blockedLine(missing))
+        context.streams.append(run.result)
+        try? markAttempt(targetId: context.request.descriptor.id, gameKey: run.key)
+        if let earlier = context.shortfall {
+            context.shortfall = QuotaCheck.Shortfall(
+                neededBytes: earlier.neededBytes + missing.missingBytes,
+                freeBytes: earlier.freeBytes)
+        } else {
+            context.shortfall = missing
+        }
     }
 
     /// Everything the stream reads before it moves a byte, or `nil`
@@ -137,8 +162,6 @@ extension SnapshotEngine {
             try? markAttempt(targetId: targetId, gameKey: stream.key)
             return nil
         }
-
-        try await refuseARunThatCannotFit(context, pending: plan.changed)
 
         var confirmed: [String: BlobCompression] = [:]
         for blob in (try? store.checkpoint(targetId: targetId, gameKey: stream.key))?

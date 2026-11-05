@@ -93,8 +93,14 @@ public actor SnapshotEngine {
         var didSplit = false
         var uploadedBytes: Int64 = 0
         var streams: [StreamResult] = []
-        /// The quota the run read before staging, per 5.14.
+        /// The quota the run read before its first upload.
         var quota: QuotaReading?
+        /// What the target has left for this run's blobs, or `nil`
+        /// where no number governs. The first upload reads it.
+        var room: Int64?
+        var hasReadTheRoom = false
+        /// What the games the run skipped for room still need.
+        var shortfall: QuotaCheck.Shortfall?
 
         init(request: BackupRunRequest, paths: BackupNamespacePaths) {
             self.request = request
@@ -128,6 +134,7 @@ public actor SnapshotEngine {
             try await runStreams(context)
             await sweepWhenDue(context)
             try await readTheSpaceLeft(context)
+            if let shortfall = context.shortfall { throw BackupRunStop.quotaShortfall(shortfall) }
         } catch let stop as BackupRunStop {
             return finish(context, startedAt: startedAt, stop: Task.isCancelled ? .paused : stop)
         } catch BackupProviderError.permissionDenied {
@@ -560,8 +567,9 @@ public actor SnapshotEngine {
         }
         defer { if let outbox { try? fm.removeItem(at: outbox) } }
 
-        try await put(fileAt: source, to: path, context: context)
         let uploaded = BackupSetResolver.stamp(of: source, fm: fm)?.size ?? size
+        try await claimRoom(context, bytes: uploaded)
+        try await put(fileAt: source, to: path, context: context)
         let confirmation = (try? await provider.confirm(path: path)) ?? .pending
         return UploadedBlob(
             compression: compression, bytes: uploaded, path: path,
@@ -696,8 +704,7 @@ public actor SnapshotEngine {
     }
 
     /// Reads the space again once the uploads are in, so the row the
-    /// detail screen shows counts them. A run that moved nothing
-    /// keeps the reading it took before staging.
+    /// detail screen shows counts them.
     func readTheSpaceLeft(_ context: RunContext) async throws {
         guard provider.capabilities.canQueryQuota, context.uploadedBytes > 0 else { return }
         if let fresh = try? await provider.quota() {
@@ -705,21 +712,28 @@ public actor SnapshotEngine {
         }
     }
 
-    /// Refuse a run that cannot fit under the provider quota or the
-    /// cap, and name the shortfall, per 5.14.
-    func refuseARunThatCannotFit(
-        _ context: RunContext, pending: [BackupSetMember]
-    ) async throws {
-        if provider.capabilities.canQueryQuota, context.quota == nil {
-            context.quota = try? await provider.quota()
+    /// A blob that does not fit under the provider quota or the cap.
+    /// It stops its own game only.
+    struct NoRoom: Error {
+        let blobBytes: Int64
+        let freeBytes: Int64
+    }
+
+    /// Takes the room for one blob out of what the target has left.
+    func claimRoom(_ context: RunContext, bytes: Int64) async throws {
+        if !context.hasReadTheRoom {
+            if provider.capabilities.canQueryQuota, context.quota == nil {
+                context.quota = try? await provider.quota()
+            }
+            context.room = QuotaCheck.freeBytes(
+                reading: context.quota,
+                capBytes: context.request.descriptor.capBytes,
+                storedBytes: storedBytes(targetId: context.request.descriptor.id))
+            context.hasReadTheRoom = true
         }
-        let shortfall = QuotaCheck.shortfall(
-            pendingBytes: pending.reduce(0) { $0 + $1.size },
-            reading: context.quota,
-            capBytes: context.request.descriptor.capBytes,
-            storedBytes: storedBytes(targetId: context.request.descriptor.id))
-        guard let shortfall else { return }
-        throw BackupRunStop.quotaShortfall(shortfall)
+        guard let room = context.room else { return }
+        guard bytes <= room else { throw NoRoom(blobBytes: bytes, freeBytes: room) }
+        context.room = room - bytes
     }
 
     /// What Empo holds on the target now, the number the cap of 5.14

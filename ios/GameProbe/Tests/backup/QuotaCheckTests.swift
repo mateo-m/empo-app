@@ -54,46 +54,13 @@ final class QuotaCheckTests: XCTestCase {
             QuotaCheck.freeBytes(reading: nil, capBytes: 100, storedBytes: 300), 0)
     }
 
-    func testARunThatFitsIsNotRefused() {
-        XCTAssertNil(
-            QuotaCheck.shortfall(
-                pendingBytes: 100, reading: reading(used: 0, limit: 500), capBytes: nil,
-                storedBytes: 0))
+    func testAShortfallNamesTheMissingBytes() {
+        XCTAssertEqual(QuotaCheck.Shortfall(neededBytes: 700, freeBytes: 400).missingBytes, 300)
+        XCTAssertEqual(QuotaCheck.Shortfall(neededBytes: 300, freeBytes: 400).missingBytes, 0)
     }
 
-    func testARunThatCannotFitNamesTheShortfall() {
-        let shortfall = QuotaCheck.shortfall(
-            pendingBytes: 700, reading: reading(used: 100, limit: 500), capBytes: nil,
-            storedBytes: 0)
-
-        XCTAssertEqual(shortfall?.neededBytes, 700)
-        XCTAssertEqual(shortfall?.freeBytes, 400)
-        XCTAssertEqual(shortfall?.missingBytes, 300)
-    }
-
-    func testTheCapRefusesARunTheProviderWouldTake() {
-        XCTAssertNil(
-            QuotaCheck.shortfall(
-                pendingBytes: 300, reading: reading(used: 0, limit: 10_000), capBytes: nil,
-                storedBytes: 0))
-        XCTAssertEqual(
-            QuotaCheck.shortfall(
-                pendingBytes: 300, reading: reading(used: 0, limit: 10_000), capBytes: 200,
-                storedBytes: 0)?
-                .missingBytes,
-            100)
-    }
-
-    func testTheCapRefusesARunOnATargetWithNoSpaceQuery() {
-        XCTAssertEqual(
-            QuotaCheck.shortfall(pendingBytes: 700, reading: nil, capBytes: 100, storedBytes: 0)?
-                .missingBytes,
-            600)
-    }
-
-    func testATargetWithNoSpaceQueryAndNoCapRefusesNothing() {
-        XCTAssertNil(
-            QuotaCheck.shortfall(pendingBytes: 700, reading: nil, capBytes: nil, storedBytes: 0))
+    func testATargetWithNoSpaceQueryAndNoCapHasNoLimit() {
+        XCTAssertNil(QuotaCheck.freeBytes(reading: nil, capBytes: nil, storedBytes: 0))
     }
 
     func testTheBlockedLineNamesTheMissingBytesInHumanUnits() {

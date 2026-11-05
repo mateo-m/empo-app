@@ -225,8 +225,7 @@ final class WebDAVTests: XCTestCase {
         let today = WebDAV.quota(fromBody: quotaBody(available: nil, used: nil))
         XCTAssertNil(today)
         // Nothing throws, and the run keeps its room check off.
-        XCTAssertNil(QuotaCheck.shortfall(
-                pendingBytes: 999, reading: today, capBytes: nil, storedBytes: 0))
+        XCTAssertNil(QuotaCheck.freeBytes(reading: today, capBytes: nil, storedBytes: 0))
         XCTAssertEqual(
             TargetCapabilities.noSpaceQueryLine, "This service doesn't show how much free space is left.")
     }

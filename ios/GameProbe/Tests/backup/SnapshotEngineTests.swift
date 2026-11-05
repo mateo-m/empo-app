@@ -882,6 +882,42 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(blobPaths(target).isEmpty)
     }
 
+    func testAGameOverTheCapLeavesTheOtherGamesToBackUp() async throws {
+        try makeGameTree(gameName)
+        let big = "Big Game"
+        let bigRoot = try makeGameTree(big)
+        let noise = Data((0..<200_000).map { _ in UInt8.random(in: 0...255) })
+        try noise.write(to: bigRoot.appendingPathComponent("Game/save1.dat"))
+        let engine = try makeEngine(makeTarget(capabilities: TargetCapabilities(canQueryQuota: false)))
+
+        let result = await engine.run(
+            request(
+                games: [game(gameName), game(big, lastPlayedAt: clock.now)],
+                capBytes: 50_000))
+
+        guard case .wroteSnapshot? = result.stream(key(gameName))?.outcome else {
+            return XCTFail("the small game was not backed up: \(result.streams)")
+        }
+        guard case .failed? = result.stream(key(big))?.outcome else {
+            return XCTFail("the big game was not stopped: \(result.streams)")
+        }
+        guard case .quotaShortfall(let shortfall)? = result.stop else {
+            return XCTFail("the run names no shortfall: \(String(describing: result.stop))")
+        }
+        XCTAssertGreaterThan(shortfall.missingBytes, 0)
+    }
+
+    func testTheCapCountsTheBytesThatGoUp() async throws {
+        let root = try makeGameTree(gameName)
+        try write(
+            String(repeating: "a", count: 200_000), to: root.appendingPathComponent("Game/save1.dat"))
+        let engine = try makeEngine(makeTarget(capabilities: TargetCapabilities(canQueryQuota: false)))
+
+        let result = await engine.run(request(games: [game(gameName)], capBytes: 20_000))
+
+        XCTAssertEqual(result.outcome, .success, "\(String(describing: result.stop))")
+    }
+
     func testTheRunWritesTheSpaceReadingItTookAfterTheUploads() async throws {
         try makeGameTree(gameName)
         let target = makeTarget(

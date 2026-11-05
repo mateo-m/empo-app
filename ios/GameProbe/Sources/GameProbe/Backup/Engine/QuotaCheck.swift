@@ -1,17 +1,18 @@
 import Foundation
 
-/// The room a target has for this run, per SPEC 5.14.
+/// The room a target has for this run.
 ///
-/// Where the provider answers a space query, the engine checks
-/// before staging and refuses a run that cannot fit, naming the
-/// shortfall. Where no query exists, the limit comes from the first
-/// upload error, and the same ladder runs either way.
+/// The engine checks each blob before its upload against the space
+/// query and the cap. A blob that does not fit stops its own game,
+/// and the run names the shortfall. Where no query exists, the limit
+/// comes from the first upload error, and the same ladder runs
+/// either way.
 ///
 /// Quota pressure never touches a namespace this device does not
 /// own. That is invariant 8, and nothing here names a namespace.
 public enum QuotaCheck {
 
-    /// What a refused run reports.
+    /// What a game that does not fit reports.
     public struct Shortfall: Equatable, Sendable {
         /// What the run would upload.
         public var neededBytes: Int64
@@ -46,18 +47,6 @@ public enum QuotaCheck {
         case (nil, let cap?): return cap
         case (nil, nil): return nil
         }
-    }
-
-    /// The shortfall that refuses the run, or `nil` when it fits or
-    /// when no number governs.
-    public static func shortfall(
-        pendingBytes: Int64, reading: QuotaReading?, capBytes: Int64?, storedBytes: Int64
-    ) -> Shortfall? {
-        guard
-            let free = freeBytes(reading: reading, capBytes: capBytes, storedBytes: storedBytes)
-        else { return nil }
-        guard pendingBytes > free else { return nil }
-        return Shortfall(neededBytes: pendingBytes, freeBytes: free)
     }
 
     /// The reason the target row and the run record carry, per 13.5
