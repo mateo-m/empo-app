@@ -77,6 +77,9 @@ final class BackupScheduler {
     private var foregroundWait: Task<Void, Never>?
     /// The pass in flight, whatever started it, so that Pause stops it.
     private var runTask: Task<BackupPassResult, Never>?
+    /// A press that came while a pass ran. It starts when that pass
+    /// ends.
+    private var queuedPress: ManualBackupPress?
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
 
     // MARK: - Launch
@@ -234,6 +237,7 @@ final class BackupScheduler {
         log("the user paused the run")
         runTask?.cancel()
         runTask = nil
+        queuedPress = nil
         recordThePause()
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
     }
@@ -303,7 +307,13 @@ final class BackupScheduler {
         press: ManualBackupPress? = nil,
         progress: Progress? = nil
     ) async -> Bool {
-        guard !isRunning else { return false }
+        guard !isRunning else {
+            if let press {
+                queuedPress = queuedPress == nil || queuedPress == press ? press : .library
+            }
+            close(progress)
+            return false
+        }
 
         let conditions = BackupDeviceConditions.now(isManual: trigger == .manual)
         switch ResourcePolicy.stagingGate(conditions) {
@@ -340,6 +350,10 @@ final class BackupScheduler {
             runTask = nil
             BackupNetwork.allowsThisRunOverCellular = false
             BackupBadges.shared.invalidate()
+            if let queued = queuedPress {
+                queuedPress = nil
+                startManualRun(queued)
+            }
         }
         progress?.totalUnitCount = 1
 
