@@ -13,9 +13,9 @@
 	breaks the document picker. Empo.entitlements carries the same
 	note.
 
-	The iCloud target hides itself at runtime here, per SPEC 9.1: with
-	no entitlement the container URL is nil, the gate closes, and the
-	add flow drops the iCloud entry.
+	With no entitlement, the container URL is nil and the gate of
+	SPEC 9.1 closes. The add flow then shows iCloud Drive greyed out,
+	with "Not available in this version of Empo".
 -->
 <plist version="1.0">
 <dict>

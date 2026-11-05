@@ -24,7 +24,7 @@ final class BackupsScreenTests: XCTestCase {
     /// Every state, worst first, with the facts that produce it.
     private func factsInRankOrder() -> [TargetRowFacts] {
         [
-            TargetRowFacts(descriptor: target(), reach: .accountOff),
+            TargetRowFacts(descriptor: target(), reach: .iCloudDriveOff),
             TargetRowFacts(descriptor: target(accountHint: nil)),
             TargetRowFacts(descriptor: target(isPaused: true), hasPlus: false),
             TargetRowFacts(descriptor: target(isPaused: true)),
@@ -90,11 +90,20 @@ final class BackupsScreenTests: XCTestCase {
     func testACannotOpenTargetKeepsItsRowAndTakesNoAction() {
         let row = TargetRowRules.row(
             TargetRowFacts(
-                descriptor: target(provider: .iCloudDrive, label: "iCloud Drive"),
-                reach: .accountOff))
+                descriptor: target(provider: .iCloudDrive, label: "", accountHint: nil),
+                reach: .iCloudDriveOff))
         XCTAssertEqual(row.title, "iCloud Drive")
         XCTAssertEqual(row.stateLine, TargetRowRules.iCloudOffLine)
         XCTAssertNil(row.action)
+        XCTAssertTrue(row.isDisabled)
+    }
+
+    func testASignedOutICloudTargetSaysSo() {
+        let row = TargetRowRules.row(
+            TargetRowFacts(
+                descriptor: target(provider: .iCloudDrive, label: "", accountHint: nil),
+                reach: .signedOut))
+        XCTAssertEqual(row.stateLine, TargetRowRules.iCloudSignedOutLine)
         XCTAssertTrue(row.isDisabled)
     }
 
@@ -137,7 +146,7 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertFalse(TargetRowState.current.isProblem)
         XCTAssertFalse(TargetRowState.paused.isProblem)
         XCTAssertFalse(TargetRowState.placeholder.isProblem)
-        XCTAssertFalse(TargetRowState.cannotOpen(.accountOff).isProblem)
+        XCTAssertFalse(TargetRowState.cannotOpen(.signedOut).isProblem)
         XCTAssertTrue(TargetRowState.needsSignIn.isProblem)
     }
 

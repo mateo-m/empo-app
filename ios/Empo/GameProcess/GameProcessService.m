@@ -292,9 +292,9 @@ void EmpoGameProcessSceneHasSize(void) {
     });
 }
 
-- (void)setLauncherIdentity:(NSString *)name {
+- (void)setLauncherIdentity:(NSString *)name version:(NSString *)version {
     onMain(^{
-      gamecore_setLauncherIdentity(name.UTF8String);
+      gamecore_setLauncherIdentity(name.UTF8String, version.UTF8String);
     });
 }
 

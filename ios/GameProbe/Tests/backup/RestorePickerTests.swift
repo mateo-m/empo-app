@@ -171,19 +171,28 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertTrue(plan.rescuedSaves?.isSelected == true)
     }
 
-    func testTheDoorOpensOnlyForAnEmptyLibraryAndAFirstTarget() {
+    func testTheDoorOpensOnlyForAnEmptyLibraryAFirstTargetAndARowToShow() {
+        let preferences = row(0)
+        let withAGame = FreshInstallMerge.plan(gameRows: [row(0)])
+        XCTAssertTrue(
+            FreshInstallMerge.opens(libraryIsEmpty: true, isFirstTarget: true, plan: withAGame))
+        XCTAssertFalse(
+            FreshInstallMerge.opens(libraryIsEmpty: false, isFirstTarget: true, plan: withAGame))
+        XCTAssertFalse(
+            FreshInstallMerge.opens(libraryIsEmpty: true, isFirstTarget: false, plan: withAGame))
+        XCTAssertFalse(
+            FreshInstallMerge.opens(
+                libraryIsEmpty: true, isFirstTarget: true, plan: FreshInstallMerge.plan(gameRows: [])))
+
+        let onlySyncedPreferences = FreshInstallMerge.plan(
+            gameRows: [], preferencesRow: preferences, joinedSyncGroup: true)
+        XCTAssertFalse(
+            FreshInstallMerge.opens(
+                libraryIsEmpty: true, isFirstTarget: true, plan: onlySyncedPreferences))
         XCTAssertTrue(
             FreshInstallMerge.opens(
-                libraryIsEmpty: true, isFirstTarget: true, foundNamespaces: true))
-        XCTAssertFalse(
-            FreshInstallMerge.opens(
-                libraryIsEmpty: false, isFirstTarget: true, foundNamespaces: true))
-        XCTAssertFalse(
-            FreshInstallMerge.opens(
-                libraryIsEmpty: true, isFirstTarget: false, foundNamespaces: true))
-        XCTAssertFalse(
-            FreshInstallMerge.opens(
-                libraryIsEmpty: true, isFirstTarget: true, foundNamespaces: false))
+                libraryIsEmpty: true, isFirstTarget: true,
+                plan: FreshInstallMerge.plan(gameRows: [], preferencesRow: preferences)))
     }
 
     // MARK: - The hints, per 11.4

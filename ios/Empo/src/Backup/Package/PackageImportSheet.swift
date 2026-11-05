@@ -90,39 +90,44 @@ struct PackageImportSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            Group {
                 if let rejection = model.rejection {
-                    Section {
-                        Text(rejection)
-                            .font(.subheadline)
+                    List {
+                        Section {
+                            Text(rejection)
+                                .font(.subheadline)
+                        }
                     }
                 } else {
                     ReadFirst(value: model.exportedAt) { exportedAt in
-                        Section {
-                            Text("\(BackupText.date(exportedAt)) from \(model.sourceDevice)")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        let games = model.rows.filter { !$0.identity.containerFolderName.isEmpty }
-                        let settings = model.rows.filter { $0.identity.containerFolderName.isEmpty }
-                        if !games.isEmpty {
+                        List {
                             Section {
-                                ForEach(games, id: \.snapshotId) { row in
-                                    rowButton(row, title: model.name(of: row)) {
-                                        BackupGameArtwork(gameKey: model.installedGameKeys[row.snapshotId])
-                                    }
-                                }
-                            } header: {
-                                Text("What this package holds")
+                                Text("\(BackupText.date(exportedAt)) from \(model.sourceDevice)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
                             }
-                        }
-                        if !settings.isEmpty {
-                            Section {
-                                ForEach(settings, id: \.snapshotId) { row in
-                                    rowButton(row, title: "Settings") { EmptyView() }
+                            let games = model.rows.filter { !$0.identity.containerFolderName.isEmpty }
+                            let settings = model.rows.filter { $0.identity.containerFolderName.isEmpty }
+                            if !games.isEmpty {
+                                Section {
+                                    ForEach(games, id: \.snapshotId) { row in
+                                        rowButton(row, title: model.name(of: row)) {
+                                            BackupGameArtwork(
+                                                gameKey: model.installedGameKeys[row.snapshotId])
+                                        }
+                                    }
+                                } header: {
+                                    Text("What this package holds")
                                 }
-                            } header: {
-                                if games.isEmpty { Text("What this package holds") }
+                            }
+                            if !settings.isEmpty {
+                                Section {
+                                    ForEach(settings, id: \.snapshotId) { row in
+                                        rowButton(row, title: "Settings") { EmptyView() }
+                                    }
+                                } header: {
+                                    if games.isEmpty { Text("What this package holds") }
+                                }
                             }
                         }
                     }

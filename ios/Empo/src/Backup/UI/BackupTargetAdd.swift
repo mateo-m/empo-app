@@ -24,20 +24,24 @@ enum BackupTargetAdd {
         }
     }
 
-    static let offeredServices: [BackupProviderKind] = [.iCloudDrive, .dropbox, .googleDrive, .s3, .webdav]
+    static let services: [BackupProviderKind] = [.iCloudDrive, .dropbox, .googleDrive, .s3, .webdav]
 
     static func iCloud() async -> Outcome {
+        let descriptor = TargetDescriptor(
+            id: "icloud-drive",
+            provider: .iCloudDrive,
+            label: "iCloud Drive",
+            accountHint: "this device",
+            root: ICloudDrive.root)
         guard let provider = await ICloudDriveGate.shared.target() else {
-            return .failed(TargetRowRules.iCloudOffLine)
+            return .failed(await iCloudClosedLine(descriptor))
         }
-        return await check(
-            TargetDescriptor(
-                id: "icloud-drive",
-                provider: .iCloudDrive,
-                label: "iCloud Drive",
-                accountHint: "this device",
-                root: ICloudDrive.root),
-            provider: provider)
+        return await check(descriptor, provider: provider)
+    }
+
+    private static func iCloudClosedLine(_ target: TargetDescriptor) async -> String {
+        TargetRowRules.stateLine(
+            .cannotOpen(await ICloudDriveGate.shared.availability().reach), target: target)
     }
 
     static func dropbox(presenting screen: UIViewController) async -> Outcome {
@@ -235,7 +239,7 @@ enum BackupTargetAdd {
         switch target.provider {
         case .iCloudDrive:
             guard let provider = await ICloudDriveGate.shared.target() else {
-                return .failed(TargetRowRules.iCloudOffLine)
+                return .failed(await iCloudClosedLine(target))
             }
             return await check(target, provider: provider)
         case .dropbox, .googleDrive:

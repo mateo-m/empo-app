@@ -19,6 +19,10 @@ struct BackupTargetItem: Identifiable {
 struct NamespaceContents {
     var games: [NamespaceGameRow]
     var preferences: [SnapshotRow]
+
+    var bytes: Int64 {
+        (games.flatMap(\.rows) + preferences).reduce(0) { $0 + $1.bytesToDownload }
+    }
 }
 
 /// One game's snapshots in a namespace, with the name the browser
@@ -85,7 +89,7 @@ final class BackupsScreenModel {
     // MARK: - Reading
 
     func refresh() async {
-        iCloudReach = await Self.reach()
+        iCloudReach = await ICloudDriveGate.shared.availability().reach
         let descriptors = BackupTargets.load()
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []
@@ -140,14 +144,6 @@ final class BackupsScreenModel {
             run.outcome == .success && active.contains(run.targetId)
         }?.finishedAt.map(BackupText.day)
         await readTheNotificationPermission()
-    }
-
-    private static func reach() async -> TargetReach {
-        switch await ICloudDriveGate.shared.availability() {
-        case .ready: return .open
-        case .notSignedIn: return .accountOff
-        case .noContainer: return .notInThisBuild
-        }
     }
 
     private static func lastSuccess(of targetId: String, in runs: [BackupRunRecord]) -> String? {
@@ -277,22 +273,9 @@ final class BackupsScreenModel {
         guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
         else { return [] }
-        let mine = try? BackupKeychain.namespaceId()
-        let deviceId = UIDevice.current.identifierForVendor?.uuidString
-        let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        return try await scan.namespaces(localMarkers: Self.localMarkers()).map { scanned in
-            let rows = scanned.gameRows + scanned.preferencesRows
-            return BackupNamespaceRow(
-                namespaceId: scanned.id,
-                deviceName: scanned.deviceName,
-                snapshotCount: rows.count,
-                gameCount: Set(scanned.gameRows.map(\.identity.containerFolderName)).count,
-                totalBytes: rows.reduce(0) { $0 + $1.bytesToDownload },
-                oldestSnapshotAt: rows.map(\.createdAt).min(),
-                newestSnapshotAt: rows.map(\.createdAt).max(),
-                isThisDevice: scanned.id == mine,
-                isEarlierSpace: scanned.id != mine && scanned.deviceId == deviceId)
-        }
+        return try await RestoreScan(provider: provider, descriptor: descriptor).namespaceRows(
+            thisNamespaceId: try? BackupKeychain.namespaceId(),
+            thisDeviceId: UIDevice.current.identifierForVendor?.uuidString)
     }
 
     /// What one namespace holds, per 11.3. The trailing game

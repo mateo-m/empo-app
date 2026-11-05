@@ -208,7 +208,9 @@ public actor RestoreEngine {
         case .zlib:
             // A compressed blob is under the 32 MB limit of 6.4, so
             // one of them in memory is the peak cost.
-            let bytes = try Data(contentsOf: staged)
+            guard let bytes = RestoreStaging.zlibBytes(at: staged, entry: entry) else {
+                throw BlobCodec.Failure.corruptZlibStream
+            }
             try BlobCodec.decode(bytes, algorithm: .zlib, maxBytes: RestoreStaging.inflatedSizeLimit(of: entry))
                 .write(to: destination, options: .atomic)
         }
@@ -257,7 +259,7 @@ public actor RestoreEngine {
         case .stored:
             return (try? ContentHash.hexOfFile(at: file)) == entry.hash
         case .zlib:
-            guard let bytes = try? Data(contentsOf: file) else { return false }
+            guard let bytes = RestoreStaging.zlibBytes(at: file, entry: entry) else { return false }
             return RestoreStaging.holds(bytes, entry: entry)
         }
     }

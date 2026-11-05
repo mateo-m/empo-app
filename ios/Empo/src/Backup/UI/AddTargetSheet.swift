@@ -2,9 +2,6 @@ import GameProbe
 import SwiftUI
 
 /// The service list of SPEC 13.7.
-///
-/// The iCloud entry is greyed, with the reason under its name, when
-/// the device or the build cannot open it.
 struct AddTargetSheet: View {
 
     let iCloudReach: TargetReach
@@ -16,20 +13,19 @@ struct AddTargetSheet: View {
     @State private var failure: String?
     @State private var showsPlus = false
 
-    private let services = BackupTargetAdd.offeredServices
-
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    serviceRows(services.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
+                    serviceRows(
+                        BackupTargetAdd.services.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
                 } header: {
                     Text("Accounts")
                 } footer: {
                     Text("Sign in with an account you already have.")
                 }
                 Section {
-                    serviceRows(services.filter(BackupTargetAdd.signsInThroughTheForm))
+                    serviceRows(BackupTargetAdd.services.filter(BackupTargetAdd.signsInThroughTheForm))
                 } header: {
                     Text("Servers and storage")
                 } footer: {
@@ -84,8 +80,8 @@ struct AddTargetSheet: View {
             AccountAvatar(photo: nil, provider: service, size: 32)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(service.serviceName).foregroundStyle(.primary)
-                if let detail = detail(of: service) {
-                    Text(detail).font(.footnote).foregroundStyle(.secondary)
+                if let note = note(on: service) {
+                    Text(note).font(.footnote).foregroundStyle(.secondary)
                 }
             }
             if needsPlus(service) {
@@ -95,17 +91,14 @@ struct AddTargetSheet: View {
         }
     }
 
-    private func detail(of service: BackupProviderKind) -> String? {
-        switch service {
-        case .s3: return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
-        case .webdav: return "Nextcloud, ownCloud, Synology, Koofr"
-        case .iCloudDrive:
-            switch iCloudReach {
-            case .open: return nil
-            case .accountOff: return "Turn on iCloud Drive in Settings to use it."
-            case .notInThisBuild: return "Not available in this version of Empo."
-            }
-        case .dropbox, .googleDrive, .sftp: return nil
+    private func note(on service: BackupProviderKind) -> String? {
+        switch (service, iCloudReach) {
+        case (.s3, _): return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
+        case (.webdav, _): return "Nextcloud, ownCloud, Synology, Koofr"
+        case (.iCloudDrive, .signedOut): return "Sign in to iCloud in Settings to use it."
+        case (.iCloudDrive, .iCloudDriveOff): return "Turn on iCloud Drive for Empo in Settings."
+        case (.iCloudDrive, .notInThisBuild): return "Not available in this version of Empo."
+        case (.iCloudDrive, .open), (.dropbox, _), (.googleDrive, _), (.sftp, _): return nil
         }
     }
 

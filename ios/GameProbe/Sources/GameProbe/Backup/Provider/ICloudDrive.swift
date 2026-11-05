@@ -10,14 +10,26 @@ public enum ICloudAvailability: Equatable, Sendable {
 
     /// Both reads answered, so the target opens.
     case ready
-    /// No Apple ID is signed in on this device.
-    case notSignedIn
+    /// No Apple Account is signed in on this device.
+    case signedOut
+    /// An Apple Account is signed in, but iCloud Drive is off on the
+    /// device or for Empo.
+    case iCloudDriveOff
     /// The build holds no entitlement for the container, so the
     /// container URL came back nil. A sideloaded Empo is always
     /// here, per 9.1.
     case noContainer
 
     public var isReady: Bool { self == .ready }
+
+    public var reach: TargetReach {
+        switch self {
+        case .ready: return .open
+        case .signedOut: return .signedOut
+        case .iCloudDriveOff: return .iCloudDriveOff
+        case .noContainer: return .notInThisBuild
+        }
+    }
 }
 
 /// The one state a target row shows, per SPEC 13.5. "Cannot open in
@@ -26,7 +38,7 @@ public enum ICloudRowState: Equatable, Sendable {
 
     case usable
     /// The row keeps its place and the target is not deleted, per
-    /// 9.1. Only the entry in the add flow's service list hides.
+    /// 9.1.
     case cannotOpen(line: String)
 }
 
@@ -63,7 +75,8 @@ public enum ICloudDrive {
         reportsObjectAge: true,
         supportsBackgroundTransfer: true,
         maxFileSize: nil,
-        foldsCase: false)
+        foldsCase: false,
+        listReportsSize: false)
 
     // MARK: - The runtime gate
 
@@ -71,18 +84,23 @@ public enum ICloudDrive {
     ///
     /// It answers `ready` only when both are non-nil. The check is at
     /// runtime, every launch, and never on a build flag.
+    ///
+    /// A nil token means either no Apple Account or iCloud Drive off
+    /// (Apple QA1935). `hasAppleAccount` comes from CloudKit and tells
+    /// the two apart. It is nil in a build without the CloudKit
+    /// entitlement, which also has no iCloud container.
     public static func availability(
-        hasIdentityToken: Bool, containerURL: URL?
+        hasIdentityToken: Bool, containerURL: URL?, hasAppleAccount: Bool? = nil
     ) -> ICloudAvailability {
-        guard hasIdentityToken else { return .notSignedIn }
+        guard hasIdentityToken else {
+            switch hasAppleAccount {
+            case false: return .signedOut
+            case true: return .iCloudDriveOff
+            case nil: return .noContainer
+            }
+        }
         guard containerURL != nil else { return .noContainer }
         return .ready
-    }
-
-    /// Whether the add flow lists iCloud Drive, per 9.1 and 13.7.
-    /// This is the one entry that hides.
-    public static func showsInAddFlow(_ availability: ICloudAvailability) -> Bool {
-        availability.isReady
     }
 
     /// The row state of one configured target, or `nil` for a target

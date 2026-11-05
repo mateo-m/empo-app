@@ -122,10 +122,13 @@ public enum FreshInstallMerge {
     /// library is empty. Adding a target to a library that already
     /// holds games starts nothing, and there is no restore offer
     /// before any target exists.
+    ///
+    /// A target can hold namespaces with no row to show: no game, and
+    /// a preferences row that the sync group hides. Then nothing opens.
     public static func opens(
-        libraryIsEmpty: Bool, isFirstTarget: Bool, foundNamespaces: Bool
+        libraryIsEmpty: Bool, isFirstTarget: Bool, plan: FreshInstallPlan
     ) -> Bool {
-        libraryIsEmpty && isFirstTarget && foundNamespaces
+        libraryIsEmpty && isFirstTarget && !plan.isEmpty
     }
 
     /// Merges the rows of every namespace into one screen.

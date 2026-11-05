@@ -13,7 +13,14 @@ struct ReadFirst<Value, Content: View>: View {
         if let value {
             content(value)
         } else {
+            #if os(macOS)
             ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #else
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemGroupedBackground))
+            #endif
         }
     }
 }

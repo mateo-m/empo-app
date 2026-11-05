@@ -107,6 +107,22 @@ final class RestoreCoverageTests: XCTestCase {
         XCTAssertFalse(RestoreStaging.holds(try BlobCodec.encodeZlib(content), entry: entry))
     }
 
+    func testAStagedCompressedBlobAsLargeAsItsContentIsNotRead() throws {
+        let content = Data(repeating: 7, count: 1_000)
+        let entry = SnapshotManifest.Entry(
+            root: .container, path: "UserData/save.rxdata", size: Int64(content.count),
+            modifiedAt: stamp, hash: ContentHash.hex(of: content), compression: .zlib)
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("staged-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: file) }
+
+        try BlobCodec.encodeZlib(content).write(to: file)
+        XCTAssertNotNil(RestoreStaging.zlibBytes(at: file, entry: entry))
+
+        try Data(count: content.count).write(to: file)
+        XCTAssertNil(RestoreStaging.zlibBytes(at: file, entry: entry))
+    }
+
     func testAStagedBlobVerifiesBeforeItIsSkipped() {
         let content = Data("a save file".utf8)
         let encoded = BlobCodec.encode(content)

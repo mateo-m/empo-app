@@ -51,11 +51,9 @@ final class RestoreCoordinator {
         descriptor: TargetDescriptor, provider: some BackupProvider, targetCount: Int
     ) async -> FreshInstallScan? {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        guard let namespaces = try? await scan.namespaces(),
-            FreshInstallMerge.opens(
-                libraryIsEmpty: GameContainer.discover().isEmpty,
-                isFirstTarget: targetCount == 1,
-                foundNamespaces: !namespaces.isEmpty)
+        let libraryIsEmpty = GameContainer.discover().isEmpty
+        let isFirstTarget = targetCount == 1
+        guard libraryIsEmpty, isFirstTarget, let namespaces = try? await scan.namespaces()
         else { return nil }
 
         let preferencesRows = namespaces.flatMap(\.preferencesRows)
@@ -74,6 +72,10 @@ final class RestoreCoordinator {
                 streamed: streamed,
                 canOpenICloud: await ICloudDriveGate.shared.availability().isReady),
             joinedSyncGroup: SyncStore.state().hasJoined)
+        guard
+            FreshInstallMerge.opens(
+                libraryIsEmpty: libraryIsEmpty, isFirstTarget: isFirstTarget, plan: plan)
+        else { return nil }
 
         let mine = try? BackupKeychain.namespaceId()
         let thisDevice = UIDevice.current.identifierForVendor?.uuidString ?? ""

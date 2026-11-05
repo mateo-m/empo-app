@@ -34,8 +34,10 @@ extension TargetDescriptor {
 /// 9.1. Only iCloud Drive answers anything but `open` in v1.
 public enum TargetReach: Equatable, Sendable {
     case open
-    /// The Apple ID is signed out, or iCloud Drive is off.
-    case accountOff
+    /// No Apple Account is signed in on this device.
+    case signedOut
+    /// iCloud Drive is off on this device or for Empo.
+    case iCloudDriveOff
     /// A sideloaded build never holds the entitlement.
     case notInThisBuild
 }
@@ -189,11 +191,12 @@ public enum TargetRowRules {
     /// The line an iCloud target shows while the runtime gate of 9.1
     /// answers nil.
     public static let iCloudOffLine = "iCloud Drive is off on this device"
+    public static let iCloudSignedOutLine = "Not signed in to iCloud on this device"
 
     /// The one state the row shows.
     public static func state(of facts: TargetRowFacts) -> TargetRowState {
         switch facts.reach {
-        case .accountOff, .notInThisBuild:
+        case .signedOut, .iCloudDriveOff, .notInThisBuild:
             return .cannotOpen(facts.reach)
         case .open:
             break
@@ -230,7 +233,9 @@ public enum TargetRowRules {
         lastSuccessText: String? = nil
     ) -> String {
         switch state {
-        case .cannotOpen(.accountOff):
+        case .cannotOpen(.signedOut):
+            return iCloudSignedOutLine
+        case .cannotOpen(.iCloudDriveOff):
             return iCloudOffLine
         case .cannotOpen:
             return "This version of Empo can't use \(target.provider.serviceName)."
