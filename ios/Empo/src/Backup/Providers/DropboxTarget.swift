@@ -78,7 +78,9 @@ actor DropboxTarget: BackupProvider, AccountReading {
             // type it did not ask for.
             request.setValue(nil, forHTTPHeaderField: "Content-Type")
 
-            let answer = try await BackupTransferSession.shared.download(request, to: localFile, path: path)
+            let answer = try await self.tokens.send(request) { request throws(BackupProviderError) in
+                try await BackupTransferSession.shared.download(request, to: localFile, path: path)
+            }
             guard answer.isSuccess else { throw Self.error(answer) }
         }
     }
@@ -101,7 +103,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
             request.httpBody = nil
             request.setValue(nil, forHTTPHeaderField: "Content-Type")
 
-            let answer = try await BackupAPISession.shared.send(request)
+            let answer = try await api(request)
             guard answer.isSuccess else { throw Self.error(answer) }
             return Dropbox.quota(fromBody: answer.body)
         }
@@ -109,9 +111,9 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
     func account() async -> BackupAccount? {
         // Like `get_space_usage`, the endpoint refuses a body.
-        guard var request = try? await apiRequest(.currentAccount) else { return nil }
+        guard var request = try? apiRequest(.currentAccount) else { return nil }
         request.setValue(nil, forHTTPHeaderField: "Content-Type")
-        guard let answer = try? await BackupAPISession.shared.send(request), answer.isSuccess
+        guard let answer = try? await api(request), answer.isSuccess
         else { return nil }
         return Dropbox.account(fromBody: answer.body)
     }
@@ -120,7 +122,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
     private func everyPage(under prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
         var pages: [DropboxListPage] = []
-        var request = try await apiRequest(.listFolder)
+        var request = try apiRequest(.listFolder)
         request.httpBody = Data(
             Self.json([
                 "path": Dropbox.listFolder(forPrefix: prefix),
@@ -129,7 +131,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
             ]).utf8)
 
         while true {
-            let answer = try await BackupAPISession.shared.send(request)
+            let answer = try await api(request)
             guard answer.isSuccess else {
                 // A folder that is not there holds no object, and 8.1
                 // says an empty answer, not an error.
@@ -142,7 +144,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
             pages.append(page)
             guard page.hasMore else { break }
 
-            request = try await apiRequest(.listFolderContinue)
+            request = try apiRequest(.listFolderContinue)
             request.httpBody = Data(Self.json(["cursor": page.cursor]).utf8)
         }
         return Dropbox.objects(fromPages: pages, prefix: prefix)
@@ -164,9 +166,9 @@ actor DropboxTarget: BackupProvider, AccountReading {
     }
 
     private func uploadWhole(_ localFile: URL, to path: String) async throws(BackupProviderError) {
-        let request = try await contentRequest(
+        let request = try contentRequest(
             .upload, argument: Self.json(Self.commit(path: path)))
-        let answer = try await BackupTransferSession.shared.upload(
+        let answer = try await upload(
             file: localFile, request: request, path: path)
         guard answer.isSuccess else { throw Self.error(answer) }
     }
@@ -213,14 +215,14 @@ actor DropboxTarget: BackupProvider, AccountReading {
                     "cursor": ["session_id": sessionId, "offset": chunk.offset],
                     "close": false,
                 ])
-                answer = try await BackupTransferSession.shared.upload(
+                answer = try await upload(
                     file: piece,
-                    request: try await contentRequest(.uploadSessionAppend, argument: argument),
+                    request: try contentRequest(.uploadSessionAppend, argument: argument),
                     path: path)
             } else {
-                answer = try await BackupTransferSession.shared.upload(
+                answer = try await upload(
                     file: piece,
-                    request: try await contentRequest(
+                    request: try contentRequest(
                         .uploadSessionStart, argument: Self.json(["close": false])),
                     path: path)
             }
@@ -304,9 +306,9 @@ actor DropboxTarget: BackupProvider, AccountReading {
         }
         defer { try? FileManager.default.removeItem(at: empty) }
 
-        return try await BackupTransferSession.shared.upload(
+        return try await upload(
             file: empty,
-            request: try await contentRequest(.uploadSessionFinish, argument: argument),
+            request: try contentRequest(.uploadSessionFinish, argument: argument),
             path: path)
     }
 
@@ -318,13 +320,13 @@ actor DropboxTarget: BackupProvider, AccountReading {
     private static let deleteJobPollWait: TimeInterval = 1
 
     private func deleteOneBatch(_ paths: [String]) async throws(BackupProviderError) {
-        var request = try await apiRequest(.deleteBatch)
+        var request = try apiRequest(.deleteBatch)
         request.httpBody = Data(
             Self.json([
                 "entries": paths.map { ["path": Dropbox.apiPath(for: $0)] }
             ]).utf8)
 
-        let answer = try await BackupAPISession.shared.send(request)
+        let answer = try await api(request)
         guard answer.isSuccess else { throw Self.error(answer) }
 
         // A large batch runs as a job. A small one is already done.
@@ -335,10 +337,10 @@ actor DropboxTarget: BackupProvider, AccountReading {
     private func waitForDelete(job: String) async throws(BackupProviderError) {
         var left = Self.deleteJobWait
         while left > 0 {
-            var request = try await apiRequest(.deleteBatchCheck)
+            var request = try apiRequest(.deleteBatchCheck)
             request.httpBody = Data(Self.json(["async_job_id": job]).utf8)
 
-            let answer = try await BackupAPISession.shared.send(request)
+            let answer = try await api(request)
             guard answer.isSuccess else { throw Self.error(answer) }
             if Self.tag(inBody: answer.body) != "in_progress" { return }
 
@@ -353,29 +355,41 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
     private func apiRequest(
         _ endpoint: Dropbox.Endpoint
-    ) async throws(BackupProviderError) -> URLRequest {
+    ) throws(BackupProviderError) -> URLRequest {
         guard let url = endpoint.url else {
             throw BackupProviderError.rejected(message: "Empo built no URL for \(endpoint)")
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(try await tokens.accessToken())", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         return request
     }
 
     private func contentRequest(
         _ endpoint: Dropbox.Endpoint, argument: String
-    ) async throws(BackupProviderError) -> URLRequest {
+    ) throws(BackupProviderError) -> URLRequest {
         guard let url = endpoint.url else {
             throw BackupProviderError.rejected(message: "Empo built no URL for \(endpoint)")
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(try await tokens.accessToken())", forHTTPHeaderField: "Authorization")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.setValue(Dropbox.headerSafe(argument), forHTTPHeaderField: "Dropbox-API-Arg")
         return request
+    }
+
+    private func api(_ request: URLRequest) async throws(BackupProviderError) -> HTTPAnswer {
+        try await tokens.send(request) { request throws(BackupProviderError) in
+            try await BackupAPISession.shared.send(request)
+        }
+    }
+
+    private func upload(
+        file: URL, request: URLRequest, path: String
+    ) async throws(BackupProviderError) -> HTTPAnswer {
+        try await tokens.send(request) { request throws(BackupProviderError) in
+            try await BackupTransferSession.shared.upload(file: file, request: request, path: path)
+        }
     }
 
     // MARK: - The bodies

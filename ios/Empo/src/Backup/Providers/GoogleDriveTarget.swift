@@ -92,8 +92,10 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
             guard let url = GoogleDrive.filesURL(id: id, alt: "media") else {
                 throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
             }
-            let answer = try await BackupTransferSession.shared.download(
-                try await self.authorized(url), to: localFile, path: path)
+            let answer = try await self.tokens.send(URLRequest(url: url)) {
+                request throws(BackupProviderError) in
+                try await BackupTransferSession.shared.download(request, to: localFile, path: path)
+            }
             try await self.check(answer)
         }
     }
@@ -113,7 +115,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
             guard let url = GoogleDrive.aboutURL() else {
                 throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
             }
-            let answer = try await BackupAPISession.shared.send(try await self.authorized(url))
+            let answer = try await api(URLRequest(url: url))
             try await self.check(answer)
             return GoogleDrive.quota(fromBody: answer.body)
         }
@@ -121,8 +123,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
 
     func account() async -> BackupAccount? {
         guard let url = GoogleDrive.aboutURL(fields: "user"),
-            let request = try? await authorized(url),
-            let answer = try? await BackupAPISession.shared.send(request), answer.isSuccess
+            let answer = try? await api(URLRequest(url: url)), answer.isSuccess
         else { return nil }
         return GoogleDrive.account(fromBody: answer.body)
     }
@@ -141,7 +142,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         guard let listURL = GoogleDrive.filesListURL(query: GoogleDrive.rootFolderQuery()) else {
             throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
         }
-        let found = try await BackupAPISession.shared.send(try await authorized(listURL))
+        let found = try await api(URLRequest(url: listURL))
         try check(found)
         if let id = GoogleDrive.fileId(inBody: found.body) {
             BackupLog.line("GoogleDriveTarget", "the grant already holds the folder \(id)")
@@ -158,12 +159,12 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         guard let createURL = GoogleDrive.filesURL() else {
             throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
         }
-        var request = try await authorized(createURL)
+        var request = URLRequest(url: createURL)
         request.httpMethod = "POST"
         request.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(GoogleDrive.folderMetadata().utf8)
 
-        let created = try await BackupAPISession.shared.send(request)
+        let created = try await api(request)
         try check(created)
         guard let id = GoogleDrive.fileId(inBody: created.body) else {
             throw BackupProviderError.rejected(
@@ -185,7 +186,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
             guard let url = GoogleDrive.filesListURL(query: query, pageToken: pageToken) else {
                 throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
             }
-            let answer = try await BackupAPISession.shared.send(try await authorized(url))
+            let answer = try await api(URLRequest(url: url))
             guard answer.isSuccess else {
                 // A folder that is not there holds no object, and 8.1
                 // says an empty answer, not an error.
@@ -221,7 +222,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         else {
             throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
         }
-        let answer = try await BackupAPISession.shared.send(try await authorized(url))
+        let answer = try await api(URLRequest(url: url))
         try check(answer)
         guard let id = GoogleDrive.fileId(inBody: answer.body) else { return nil }
         identifiers[path] = id
@@ -255,14 +256,15 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         guard let url = GoogleDrive.uploadURL(uploadType: "multipart", fileId: existing) else {
             throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
         }
-        var request = try await authorized(url)
+        var request = URLRequest(url: url)
         request.httpMethod = existing == nil ? "POST" : "PATCH"
         request.setValue(
             GoogleDrive.multipartContentType(boundary: boundary),
             forHTTPHeaderField: "Content-Type")
 
-        let answer = try await BackupTransferSession.shared.upload(
-            file: body, request: request, path: path)
+        let answer = try await tokens.send(request) { request throws(BackupProviderError) in
+            try await BackupTransferSession.shared.upload(file: body, request: request, path: path)
+        }
         try check(answer)
         remember(path: path, body: answer.body)
     }
@@ -362,7 +364,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         guard let url = GoogleDrive.uploadURL(uploadType: "resumable", fileId: fileId) else {
             throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
         }
-        var request = try await authorized(url)
+        var request = URLRequest(url: url)
         request.httpMethod = fileId == nil ? "POST" : "PATCH"
         request.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
         request.setValue("application/octet-stream", forHTTPHeaderField: "X-Upload-Content-Type")
@@ -370,7 +372,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         request.httpBody = Data(
             (fileId == nil ? GoogleDrive.metadata(name: path, parentId: parent) : "{}").utf8)
 
-        let answer = try await BackupAPISession.shared.send(request)
+        let answer = try await api(request)
         try check(answer)
         guard let location = answer.header("Location"), !location.isEmpty else {
             throw BackupProviderError.rejected(message: "Google Drive opened no upload session")
@@ -386,13 +388,13 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         sessionURI: String, fileSize: Int64
     ) async throws(BackupProviderError) -> Int64? {
         guard let url = URL(string: sessionURI) else { return nil }
-        var request = try await authorized(url)
+        var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue(
             GoogleDrive.probeContentRange(fileSize: fileSize),
             forHTTPHeaderField: "Content-Range")
 
-        let answer = try await BackupAPISession.shared.send(request)
+        let answer = try await api(request)
         if answer.status == GoogleDrive.Status.resumeIncomplete {
             return GoogleDrive.resumeOffset(fromRangeHeader: answer.header("Range"))
         }
@@ -410,14 +412,15 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         guard let url = URL(string: sessionURI) else {
             throw BackupProviderError.rejected(message: "Google Drive sent no session URI")
         }
-        var request = try await authorized(url)
+        var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.setValue(
             GoogleDrive.contentRange(of: chunk, fileSize: fileSize),
             forHTTPHeaderField: "Content-Range")
-        return try await BackupTransferSession.shared.upload(
-            file: piece, request: request, path: path)
+        return try await tokens.send(request) { request throws(BackupProviderError) in
+            try await BackupTransferSession.shared.upload(file: piece, request: request, path: path)
+        }
     }
 
     // MARK: - Delete
@@ -431,10 +434,10 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         guard let url = GoogleDrive.filesURL(id: id) else {
             throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
         }
-        var request = try await authorized(url)
+        var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
 
-        let answer = try await BackupAPISession.shared.send(request)
+        let answer = try await api(request)
         // Drive answers 204 for a delete that worked. A 404 means
         // someone else already deleted it, which is the same end.
         guard answer.isSuccess || answer.status == GoogleDrive.Status.notFound else {
@@ -447,11 +450,10 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
 
     // MARK: - The requests
 
-    private func authorized(_ url: URL) async throws(BackupProviderError) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.setValue(
-            "Bearer \(try await tokens.accessToken())", forHTTPHeaderField: "Authorization")
-        return request
+    private func api(_ request: URLRequest) async throws(BackupProviderError) -> HTTPAnswer {
+        try await tokens.send(request) { request throws(BackupProviderError) in
+            try await BackupAPISession.shared.send(request)
+        }
     }
 
     /// Keeps the id of a path a create or an update just answered, so

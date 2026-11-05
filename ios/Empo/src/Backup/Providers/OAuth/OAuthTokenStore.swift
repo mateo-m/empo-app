@@ -58,6 +58,34 @@ actor OAuthTokenStore {
         }
     }
 
+    /// Sends one request with a live token.
+    ///
+    /// A background transfer waits for a network, and the token can
+    /// die while it waits. So a 401 refreshes the token once and sends
+    /// the request again. Only a second 401 reaches the caller.
+    nonisolated func send(
+        _ request: URLRequest,
+        isolation: isolated (any Actor)? = #isolation,
+        through transport: (URLRequest) async throws(BackupProviderError) -> HTTPAnswer
+    ) async throws(BackupProviderError) -> HTTPAnswer {
+        var request = request
+        let token = try await accessToken()
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let answer = try await transport(request)
+        guard answer.status == 401 else { return answer }
+
+        let fresh = try await accessToken(replacing: token)
+        request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+        return try await transport(request)
+    }
+
+    /// A token other than `rejected`. When another call already
+    /// replaced it, that one comes back with no second refresh.
+    private func accessToken(replacing rejected: String) async throws(BackupProviderError) -> String {
+        if tokens.accessToken == rejected { tokens.expiresAt = .distantPast }
+        return try await accessToken()
+    }
+
     /// Replaces the pair after a sign-in, and drops a refresh that is
     /// no longer about the right account.
     func replace(with tokens: OAuthTokens) throws {
