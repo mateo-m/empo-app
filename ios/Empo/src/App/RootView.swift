@@ -140,6 +140,9 @@ struct RootView: View {
             await appState.checkForUpdatesIfStale()
         }
         .task {
+            await EmpoPlus.shared.renew()
+        }
+        .task {
             if appState.pendingCrashRecovery {
                 appState.consumeCrashRecovery()
                 return
@@ -231,6 +234,7 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) {
             _ in
+            Task { await EmpoPlus.shared.renew() }
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
                 // Re-create the crash marker, so the next launch still

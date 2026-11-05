@@ -26,10 +26,13 @@ final class BackupsScreenTests: XCTestCase {
         [
             TargetRowFacts(descriptor: target(), reach: .iCloudDriveOff),
             TargetRowFacts(descriptor: target(accountHint: nil)),
-            TargetRowFacts(descriptor: target(isPaused: true)),
-            TargetRowFacts(descriptor: target(), failure: .needsSignIn),
+            TargetRowFacts(descriptor: target(isPaused: true), hasPlus: false),
+            TargetRowFacts(descriptor: target(), failure: .needsSignIn, hasPlus: false),
             TargetRowFacts(
-                descriptor: target(), failure: .blockedByPermissions(reason: "no write right")),
+                descriptor: target(), failure: .blockedByPermissions(reason: "no write right"),
+                hasPlus: false),
+            TargetRowFacts(
+                descriptor: target(), failure: .rejected(message: "too big"), hasPlus: false),
             TargetRowFacts(descriptor: target(), failure: .rejected(message: "too big")),
             TargetRowFacts(descriptor: target(), failure: .full(reason: "no room")),
             TargetRowFacts(descriptor: target(), failure: .unreachable(), failedAt: failedAt),
@@ -37,11 +40,11 @@ final class BackupsScreenTests: XCTestCase {
         ]
     }
 
-    // MARK: - 1. The nine states, highest first
+    // MARK: - 1. The ten states, highest first
 
     func testEveryPairOfStatesKeepsTheOrderOfTheSpec() {
         let states = factsInRankOrder().map(TargetRowRules.state(of:))
-        XCTAssertEqual(states.map(\.rank), Array(1...9))
+        XCTAssertEqual(states.map(\.rank), Array(1...10))
         for (index, state) in states.enumerated() {
             for other in states[(index + 1)...] {
                 XCTAssertLessThan(
@@ -55,6 +58,34 @@ final class BackupsScreenTests: XCTestCase {
         let facts = TargetRowFacts(
             descriptor: target(isPaused: true), failure: .needsSignIn)
         XCTAssertEqual(TargetRowRules.state(of: facts), .paused)
+    }
+
+    func testEveryServiceButICloudDriveNeedsPlus() {
+        let free = BackupProviderKind.allCases.filter { !$0.needsPlus }
+        XCTAssertEqual(free, [.iCloudDrive])
+    }
+
+    func testALocationWithoutPlusOffersPlusAndSaysRestoreStillWorks() {
+        let row = TargetRowRules.row(
+            TargetRowFacts(descriptor: target(), failure: .full(reason: "no room"), hasPlus: false))
+        XCTAssertEqual(row.state, .needsPlus)
+        XCTAssertEqual(row.stateLine, "Backups stopped. You can still restore.")
+        XCTAssertEqual(row.action, .getPlus)
+        XCTAssertFalse(row.isDisabled)
+    }
+
+    func testALocationWithoutPlusStillAsksForTheSignInThatARestoreNeeds() {
+        let row = TargetRowRules.row(
+            TargetRowFacts(descriptor: target(), failure: .needsSignIn, hasPlus: false))
+        XCTAssertEqual(row.state, .needsSignIn)
+        XCTAssertEqual(row.action, .signIn)
+    }
+
+    func testICloudDriveBacksUpWithoutPlus() {
+        let facts = TargetRowFacts(
+            descriptor: target(provider: .iCloudDrive, label: "iCloud Drive"),
+            hasPlus: false)
+        XCTAssertEqual(TargetRowRules.state(of: facts), .current)
     }
 
     func testThePlaceholderSitsAtPositionTwo() {

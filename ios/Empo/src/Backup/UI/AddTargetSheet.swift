@@ -82,6 +82,10 @@ struct AddTargetSheet: View {
                     Text(note).font(.footnote).foregroundStyle(.secondary)
                 }
             }
+            if service.needsPlus && !EmpoPlus.shared.hasPlus {
+                Spacer(minLength: 0)
+                PlusBadge().font(.footnote.weight(.medium))
+            }
         }
     }
 

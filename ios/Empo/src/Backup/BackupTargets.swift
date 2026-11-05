@@ -17,6 +17,12 @@ enum BackupTargets {
         return file?.targets ?? []
     }
 
+    /// Restores use `load()`, so they still read from every target.
+    static func writable() -> [TargetDescriptor] {
+        let hasPlus = EmpoPlus.shared.hasPlus
+        return load().filter { !$0.isPaused && (hasPlus || !$0.provider.needsPlus) }
+    }
+
     /// Changes the targets on the file and not on a copy.
     ///
     /// A sync pass runs for seconds, and the user adds or pauses a

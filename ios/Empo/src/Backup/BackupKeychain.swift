@@ -75,6 +75,38 @@ enum BackupKeychain {
         "target.\(targetId)"
     }
 
+    private static let plusPassAccount = "plus-pass"
+    private static let plusRenewalAccount = "plus-renewal"
+    private static let plusDeviceKeyAccount = "plus-device-key"
+
+    static func plus() throws -> (pass: String?, renewal: String?) {
+        (try string(account: plusPassAccount), try string(account: plusRenewalAccount))
+    }
+
+    static func setPlus(pass: String, renewal: String) throws {
+        try setString(renewal, account: plusRenewalAccount)
+        try setString(pass, account: plusPassAccount)
+    }
+
+    static func removePlusRenewal() throws {
+        try remove(account: plusRenewalAccount)
+    }
+
+    static func removePlus() throws {
+        try remove(account: plusPassAccount)
+        try remove(account: plusRenewalAccount)
+    }
+
+    /// Stays after a sign-out, so a new sign-in on this device takes
+    /// the same place in the device list of the account.
+    static func plusDeviceKey() throws -> String? {
+        try string(account: plusDeviceKeyAccount)
+    }
+
+    static func setPlusDeviceKey(_ key: String) throws {
+        try setString(key, account: plusDeviceKeyAccount)
+    }
+
     // MARK: - The Keychain calls
 
     private static func baseQuery(account: String) -> [String: Any] {

@@ -16,7 +16,7 @@ enum SyncJoin {
         var records: [DeviceRecord] = []
         guard let mine = try? BackupKeychain.namespaceId() else { return .none }
 
-        for descriptor in BackupTargets.load() where !descriptor.isPaused {
+        for descriptor in BackupTargets.writable() {
             guard let provider = await BackupTargets.provider(for: descriptor) else { continue }
             for namespace in await SyncRemote.namespaces(
                 root: descriptor.root, provider: provider) ?? []

@@ -85,7 +85,7 @@ struct SettingsView: View {
 
                     Section {
                         SettingsNavigationRow(
-                            title: "Layout profiles",
+                            title: Text("Layout profiles"),
                             description:
                                 "Create and edit saved layouts for the on-screen controls and the game screen."
                         ) {
@@ -104,12 +104,20 @@ struct SettingsView: View {
 
                     Section {
                         SettingsNavigationRow(
-                            title: "Backups",
+                            title: Text("Backups"),
                             description:
                                 "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."
                         ) {
                             BackupsScreen()
                         }
+                        SettingsNavigationRow(
+                            title: Text("Empo \(plusWord)"),
+                            description:
+                                "Back up to Dropbox, Google Drive, and your own server with a Patreon membership."
+                        ) {
+                            PlusScreen()
+                        }
+                        .plusShine()
                     }
 
                     Section {

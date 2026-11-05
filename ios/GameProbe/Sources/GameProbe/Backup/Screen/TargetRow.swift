@@ -14,6 +14,8 @@ extension BackupProviderKind {
         case .sftp: return "SFTP server"
         }
     }
+
+    public var needsPlus: Bool { self != .iCloudDrive }
 }
 
 extension TargetDescriptor {
@@ -45,6 +47,7 @@ public enum TargetReach: Equatable, Sendable {
 public enum TargetRowState: Equatable, Sendable {
     case cannotOpen(TargetReach)
     case placeholder
+    case needsPlus
     case paused
     case needsSignIn
     case blockedByPermissions(reason: String)
@@ -53,7 +56,7 @@ public enum TargetRowState: Equatable, Sendable {
     case unreachable(at: Date, cause: UnreachableCause = .noAnswer)
     case current
 
-    /// 1 wins over 9.
+    /// 1 wins over 10.
     public var rank: Int {
         switch self {
         case .cannotOpen: return 1
@@ -61,10 +64,11 @@ public enum TargetRowState: Equatable, Sendable {
         case .paused: return 3
         case .needsSignIn: return 4
         case .blockedByPermissions: return 5
-        case .rejected: return 6
-        case .full: return 7
-        case .unreachable: return 8
-        case .current: return 9
+        case .needsPlus: return 6
+        case .rejected: return 7
+        case .full: return 8
+        case .unreachable: return 9
+        case .current: return 10
         }
     }
 
@@ -73,7 +77,7 @@ public enum TargetRowState: Equatable, Sendable {
     public var isProblem: Bool {
         switch self {
         case .needsSignIn, .blockedByPermissions, .rejected, .full, .unreachable: return true
-        case .cannotOpen, .placeholder, .paused, .current: return false
+        case .cannotOpen, .placeholder, .needsPlus, .paused, .current: return false
         }
     }
 }
@@ -85,12 +89,14 @@ public enum TargetRowAction: String, Equatable, Sendable {
     /// Backs up now, after the user made space or the server came
     /// back.
     case tryAgain
+    case getPlus
 
     public var label: String {
         switch self {
         case .signIn: return "Sign in"
         case .resume: return "Resume"
         case .tryAgain: return "Try again"
+        case .getPlus: return "Get Plus"
         }
     }
 }
@@ -111,6 +117,7 @@ public struct TargetRowFacts: Equatable, Sendable {
     /// How long ago the last run closed a snapshot here, in words
     /// the caller formatted, such as "2 minutes ago".
     public var lastSuccessText: String?
+    public var hasPlus: Bool
 
     public init(
         descriptor: TargetDescriptor,
@@ -119,7 +126,8 @@ public struct TargetRowFacts: Equatable, Sendable {
         failedAt: Date? = nil,
         failedAtText: String = "",
         supportsBackgroundTransfer: Bool = true,
-        lastSuccessText: String? = nil
+        lastSuccessText: String? = nil,
+        hasPlus: Bool = true
     ) {
         self.descriptor = descriptor
         self.reach = reach
@@ -128,6 +136,7 @@ public struct TargetRowFacts: Equatable, Sendable {
         self.failedAtText = failedAtText
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.lastSuccessText = lastSuccessText
+        self.hasPlus = hasPlus
     }
 }
 
@@ -199,6 +208,10 @@ public enum TargetRowRules {
             return .needsSignIn
         case .blockedByPermissions(let reason):
             return .blockedByPermissions(reason: reason)
+        case _ where facts.descriptor.provider.needsPlus && !facts.hasPlus:
+            // A restore needs a working sign-in, so the sign-in states
+            // above outrank this one.
+            return .needsPlus
         case .rejected(let message):
             return .rejected(message: message)
         case .full(let reason):
@@ -229,6 +242,8 @@ public enum TargetRowRules {
             return "This version of Empo can't use \(target.provider.serviceName)."
         case .placeholder:
             return "Sign in on this device to start"
+        case .needsPlus:
+            return "Backups stopped. You can still restore."
         case .paused:
             return "Paused"
         case .needsSignIn:
@@ -258,6 +273,8 @@ public enum TargetRowRules {
         switch state {
         case .placeholder, .needsSignIn, .blockedByPermissions:
             return .signIn
+        case .needsPlus:
+            return .getPlus
         case .paused:
             return .resume
         case .full, .unreachable, .rejected:
