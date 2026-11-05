@@ -7,7 +7,7 @@ import XCTest
 /// retroactive rule of 3.10, and the mode change of 3.9.
 final class BackupThresholdTests: XCTestCase {
 
-    private let megabyte: Int64 = 1024 * 1024
+    private let megabyte: Int64 = 1_000_000
 
     private func targets(_ values: [(String, Int64?)]) -> [BackupTargetThreshold] {
         values.map {

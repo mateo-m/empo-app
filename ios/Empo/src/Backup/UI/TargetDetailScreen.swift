@@ -173,7 +173,7 @@ struct TargetDetailScreen: View {
         }
     }
 
-    // MARK: - The cap and the threshold, per 13.8
+    // MARK: - The cap and the threshold
 
     private func limitsSection(_ item: BackupTargetItem) -> some View {
         Section {
@@ -203,14 +203,19 @@ struct TargetDetailScreen: View {
     }
 
     private static let capPresets: [Int64] = [
-        1 << 30, 5 << 30, 10 << 30, 50 << 30, 100 << 30,
+        1 * gigabyte, 5 * gigabyte, 10 * gigabyte, 50 * gigabyte, 100 * gigabyte,
     ]
 
     private static let thresholdPresets: [Int64] = [
-        100 << 20, 250 << 20, 500 << 20, 2 << 30, 5 << 30,
+        100 * megabyte, 250 * megabyte, 500 * megabyte, 2 * gigabyte, 5 * gigabyte,
     ]
 
-    // MARK: - Pending deletions and the sweep, per 13.8
+    // BackupText.bytes counts in powers of 1,000, so the
+    // presets do too, or "1 GB" reads "1,07 GB".
+    fileprivate static let megabyte: Int64 = 1_000_000
+    fileprivate static let gigabyte: Int64 = 1_000_000_000
+
+    // MARK: - Pending deletions and the sweep
 
     @ViewBuilder private func cleanupSection(_ item: BackupTargetItem) -> some View {
         if item.pendingDeletions > 0 {
@@ -225,7 +230,7 @@ struct TargetDetailScreen: View {
         }
     }
 
-    // MARK: - The namespace list and Remove, per 13.9 and 13.10
+    // MARK: - The namespace list and Remove
 
     private var devicesSection: some View {
         Section {
@@ -244,10 +249,6 @@ struct TargetDetailScreen: View {
     }
 }
 
-/// A size limit as the presets of 13.8 plus a Custom entry.
-///
-/// A value the user typed earlier is a preset of its own here, so
-/// reopening the screen shows what the target holds.
 private struct SizeLimitPicker: View {
 
     let label: String
@@ -283,7 +284,7 @@ private struct SizeLimitPicker: View {
                     .keyboardType(.decimalPad)
                 Button("Set") {
                     guard let gigabytes = typedGigabytes, gigabytes > 0 else { return }
-                    set(Int64(gigabytes * 1_073_741_824))
+                    set(Int64(gigabytes * Double(TargetDetailScreen.gigabyte)))
                     isCustom = false
                 }
                 .disabled(typedGigabytes == nil)
@@ -291,8 +292,6 @@ private struct SizeLimitPicker: View {
         }
     }
 
-    /// The presets plus the value the target holds, so a custom size
-    /// keeps its own row.
     private var options: [Int64] {
         guard let bytes, !presets.contains(bytes) else { return presets }
         return (presets + [bytes]).sorted()
@@ -313,7 +312,10 @@ private struct SizeLimitPicker: View {
                     isCustom = false
                     set(value)
                 case .custom:
-                    typed = bytes.map { (Double($0) / 1_073_741_824).formatted(Self.gigabytes) } ?? ""
+                    typed =
+                        bytes.map {
+                            (Double($0) / Double(TargetDetailScreen.gigabyte)).formatted(Self.gigabytes)
+                        } ?? ""
                     isCustom = true
                 }
             })

@@ -51,11 +51,10 @@ public enum BackupModeResolution: Equatable, Sendable {
     case ask(BackupThresholdAsk)
 }
 
-/// The size threshold of SPEC 3.5, and the ask it drives.
 public enum BackupThreshold {
 
     /// The app-wide default, measured on the game tree.
-    public static let defaultBytes: Int64 = 750 * 1024 * 1024
+    public static let defaultBytes: Int64 = 750_000_000
 
     /// The target with the lowest threshold among the enabled ones.
     /// The ask fires against this one and names it, per 3.5. A tie
