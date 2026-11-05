@@ -50,9 +50,13 @@ public struct SyncDocumentModel: Equatable, Sendable {
     /// "Not set here" is not a delete: a device that never set a
     /// preference must not clear it for everyone. A delete travels
     /// as its own record, which is what `deletedAt` is for.
+    ///
+    /// `keepsTheirs` fills only the leaves the document lacks. A
+    /// device that joins a group holds values that can be old, such
+    /// as settings just restored from a snapshot.
     public func overlaid(
         with local: SyncDocumentModel, removingPreferences removed: [String] = [],
-        removingBindings removedBindings: [String] = []
+        removingBindings removedBindings: [String] = [], keepsTheirs: Bool = false
     ) -> SyncDocumentModel {
         var out = self
         for key in removed where local.preferences[key] == nil {
@@ -61,11 +65,13 @@ public struct SyncDocumentModel: Equatable, Sendable {
         for id in removedBindings where local.controllerBindings[id] == nil {
             out.controllerBindings[id] = nil
         }
-        out.preferences.merge(local.preferences) { _, mine in mine }
-        out.controllerBindings.merge(local.controllerBindings) { _, mine in mine }
-        out.targetDescriptors.merge(local.targetDescriptors) { _, mine in mine }
+        out.preferences.merge(local.preferences) { keepsTheirs ? $0 : $1 }
+        out.controllerBindings.merge(local.controllerBindings) { keepsTheirs ? $0 : $1 }
+        out.targetDescriptors.merge(local.targetDescriptors) { keepsTheirs ? $0 : $1 }
         for (id, mine) in local.layoutProfiles {
-            out.layoutProfiles[id] = merged(theirs: out.layoutProfiles[id], mine: mine)
+            let theirs = out.layoutProfiles[id]
+            out.layoutProfiles[id] =
+                keepsTheirs ? theirs ?? mine : merged(theirs: theirs, mine: mine)
         }
         return out
     }

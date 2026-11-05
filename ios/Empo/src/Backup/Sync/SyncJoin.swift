@@ -35,9 +35,8 @@ enum SyncJoin {
     /// The local document goes first. Two documents that never shared
     /// a history give the root a second `preferences` map, and
     /// Automerge answers one of the two, so the group's keys would
-    /// read as absent here. This device's own values are not lost
-    /// with it: the next pass reads them from the device and writes
-    /// them over the group's copies.
+    /// read as absent here. The next pass reads this device's own
+    /// values and adds the ones the group does not hold.
     static func join(_ group: DiscoveredSyncGroup) {
         SyncPass.shared.join {
             AutomergeDocumentStore.delete()

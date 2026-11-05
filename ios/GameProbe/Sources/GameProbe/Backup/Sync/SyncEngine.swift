@@ -133,7 +133,8 @@ public final class SyncEngine {
             !SyncCopyValidation.readsButDoesNotPublish(fetched)
         {
             try? document.write(fetched.overlaid(
-                with: mine, removingPreferences: removed, removingBindings: removedBindings))
+                with: mine, removingPreferences: removed, removingBindings: removedBindings,
+                keepsTheirs: true))
         }
 
         guard let merged = try? document.model() else {

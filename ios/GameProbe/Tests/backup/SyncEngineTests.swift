@@ -309,11 +309,13 @@ final class SyncEngineTests: XCTestCase {
 
     /// A document with no history writes nothing of its own before
     /// the group's copies, or its root maps would hide the group's.
+    /// The local values can be old, such as settings just restored
+    /// from a snapshot, so the group's value wins a key both hold.
     func testANewDocumentTakesTheGroupsCopiesBeforeItsOwnValues() async throws {
         let document = FakeDocument()
         document.heldHeads = []
         let local = FakeLocalValues()
-        local.mine.preferences = ["theme": .string("dark")]
+        local.mine.preferences = ["theme": .string("dark"), "layout": .string("grid")]
 
         let targets = FakeTargets()
         targets.descriptors = [target("t1")]
@@ -328,8 +330,10 @@ final class SyncEngineTests: XCTestCase {
 
         XCTAssertEqual(outcome, .done)
         XCTAssertEqual(document.steps, ["load", "merge", "write", "save"])
-        XCTAssertEqual(document.saved?.preferences["theme"], .string("dark"))
+        XCTAssertEqual(document.saved?.preferences["theme"], .string("light"))
         XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("below"))
+        XCTAssertEqual(document.saved?.preferences["layout"], .string("grid"))
+        XCTAssertEqual(local.applied.last?.preferences["theme"], .string("light"))
     }
 
     /// The local document was lost after earlier passes. The copies
