@@ -100,7 +100,13 @@ final class BackupRunMonitor: BackupRunObserver {
     func runEnds() {
         // A cancelled run did not complete, so the pill hides instead
         // of saying "Backup complete".
-        if Task.isCancelled { startedAt = nil } else { finishedAt = Date() }
+        if Task.isCancelled {
+            startedAt = nil
+            ticker?.cancel()
+            ticker = nil
+        } else {
+            finishedAt = Date()
+        }
         now = Date()
         runningGameKeys = []
         progress = nil
