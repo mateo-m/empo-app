@@ -36,3 +36,7 @@ export function fromBase64(text: string): Uint8Array<ArrayBuffer> {
   const standard = text.replaceAll("-", "+").replaceAll("_", "/");
   return Uint8Array.from(atob(standard), (char) => char.charCodeAt(0));
 }
+
+export function toHex(bytes: ArrayBuffer): string {
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}

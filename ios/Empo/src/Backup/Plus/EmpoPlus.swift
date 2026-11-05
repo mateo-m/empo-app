@@ -13,6 +13,8 @@ final class EmpoPlus {
     enum SignInFailure: Error {
         case cancelled
         case server
+        /// The account is signed in on the most devices it can have.
+        case tooManyDevices
     }
 
     static let joinURL = URL(string: "https://www.patreon.com/checkout/mateo_m?rid=29989848")!
@@ -35,11 +37,18 @@ final class EmpoPlus {
 
     var hasPlus: Bool { pass?.grantsPlus(at: .now) ?? false }
 
-    func signIn(using session: WebAuthenticationSession) async throws(SignInFailure) {
+    /// With `replace`, the server signs out the other devices of the
+    /// account when it is at its device limit.
+    func signIn(using session: WebAuthenticationSession, replace: Bool = false) async throws(SignInFailure) {
         let state = UUID().uuidString
+        guard let device = try? PlusDeviceKey.publicKey() else { throw .server }
         var start = URLComponents(
             url: Self.api.appending(path: "patreon/start"), resolvingAgainstBaseURL: false)!
-        start.queryItems = [URLQueryItem(name: "state", value: state)]
+        start.queryItems = [
+            URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "device", value: device),
+            URLQueryItem(name: "replace", value: replace ? "true" : "false"),
+        ]
 
         let callback: URL
         do {
@@ -57,7 +66,11 @@ final class EmpoPlus {
         guard value("state") == state else { throw .server }
         if let error = value("error") {
             // Patreon sends `access_denied` when the user presses Deny.
-            throw error == "server" ? .server : .cancelled
+            switch error {
+            case "server": throw .server
+            case "too_many_devices": throw .tooManyDevices
+            default: throw .cancelled
+            }
         }
         guard let pass = value("pass"), let renewal = value("renewal"),
             keep(pass: pass, renewal: renewal)
@@ -79,25 +92,37 @@ final class EmpoPlus {
         if let renewal {
             // The server deletes its copy of the Patreon sign-in. When
             // the call fails, the server deletes it after 90 days.
-            let request = Self.post("patreon/sign-out", renewal: renewal)
-            Task { _ = try? await URLSession.shared.data(for: request) }
+            if let request = Self.signed("sign-out", renewal: renewal) {
+                Task { _ = try? await URLSession.shared.data(for: request) }
+            }
         }
         try? BackupKeychain.removePlus()
         pass = nil
         renewal = nil
     }
 
-    private static func post(_ path: String, renewal: String) -> URLRequest {
-        var request = URLRequest(url: api.appending(path: path))
+    private struct Signed: Encodable {
+        let renewal: String
+        let time: Int64
+        let signature: String
+    }
+
+    /// The server takes a call only when its time is later than the time
+    /// of the last call, so a copied call can't run again.
+    private static func signed(_ action: String, renewal: String) -> URLRequest? {
+        let time = Int64(Date.now.timeIntervalSince1970 * 1000)
+        guard let signature = try? PlusDeviceKey.sign(action, time: time) else { return nil }
+        var request = URLRequest(url: api.appending(path: "patreon/\(action)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try? JSONEncoder().encode(["renewal": renewal])
+        request.httpBody = try? JSONEncoder().encode(
+            Signed(renewal: renewal, time: time, signature: signature))
         return request
     }
 
     private func renew(with renewal: String) async -> Bool {
-        let request = Self.post("patreon/renew", renewal: renewal)
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
+        guard let request = Self.signed("renew", renewal: renewal),
+            let (data, response) = try? await URLSession.shared.data(for: request),
             let status = (response as? HTTPURLResponse)?.statusCode,
             // A sign-out or a new sign-in during the call wins.
             renewal == self.renewal

@@ -10,6 +10,7 @@ struct PlusScreen: View {
     @Environment(\.openURL) private var openURL
     @State private var isWorking = false
     @State private var failure: String?
+    @State private var tooManyDevices = false
 
     var body: some View {
         ScrollView {
@@ -130,6 +131,9 @@ struct PlusScreen: View {
                     .font(.footnote)
                     .foregroundStyle(.destructive)
             }
+            if tooManyDevices {
+                secondary("Sign out other devices") { Task { await signIn(replace: true) } }
+            }
         }
         .disabled(isWorking)
     }
@@ -153,14 +157,21 @@ struct PlusScreen: View {
             .foregroundStyle(.secondary)
     }
 
-    private func signIn() async {
+    private func signIn(replace: Bool = false) async {
         isWorking = true
         defer { isWorking = false }
         failure = nil
+        tooManyDevices = false
         do throws(EmpoPlus.SignInFailure) {
-            try await plus.signIn(using: webAuthenticationSession)
+            try await plus.signIn(using: webAuthenticationSession, replace: replace)
         } catch {
-            if error == .server { failure = "Couldn't sign in with Patreon. Try again." }
+            switch error {
+            case .cancelled: break
+            case .server: failure = "Couldn't sign in with Patreon. Try again."
+            case .tooManyDevices:
+                failure = "Empo Plus works on up to 3 devices at a time."
+                tooManyDevices = true
+            }
         }
     }
 

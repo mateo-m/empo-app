@@ -1,4 +1,4 @@
-import { fromBase64, toBase64Url } from "./pass";
+import { fromBase64, toBase64Url, toHex } from "./pass";
 
 // The device keeps the renewal. The server keeps only what it derives
 // from it, so the stored Patreon token opens only with the device's copy.
@@ -27,7 +27,7 @@ export async function renewalKeys(renewal: string): Promise<{ id: string; seal: 
     "encrypt",
     "decrypt",
   ]);
-  return { id: [...new Uint8Array(id)].map((byte) => byte.toString(16).padStart(2, "0")).join(""), seal };
+  return { id: toHex(id), seal };
 }
 
 export async function seal(text: string, key: CryptoKey): Promise<string> {

@@ -17,9 +17,11 @@ export default defineConfig({
       // Ed25519 private key, PKCS8, base64.
       PASS_SIGNING_KEY: bindings.secret(),
       SESSIONS: bindings.durableObject({ worker: "empo-api", exportName: "PatreonSession" }),
+      MEMBERS: bindings.durableObject({ worker: "empo-api", exportName: "PatreonMember" }),
     },
     exports: {
       PatreonSession: exports.durableObject({ storage: "sqlite" }),
+      PatreonMember: exports.durableObject({ storage: "sqlite" }),
     },
   },
 });

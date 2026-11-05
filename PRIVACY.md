@@ -43,9 +43,17 @@ the key, so it cannot open the sign-in on its own. Every few days, the device
 sends the key to get a new note. Cloudflare runs the server, and it sees each
 request and the IP address it came from.
 
+Empo Plus works on up to 3 devices for each Patreon account. Each device makes
+its own signing key, in the Secure Enclave when the device has one. The private
+part never leaves the device. The server keeps the public part with the locked
+sign-in, and it accepts a request only when the device signs it. For each
+Patreon user ID, the server keeps a list of the devices that are signed in. The
+list holds a number made from each public key, and no other device details.
+
 Sign out of Patreon in Settings > Empo Plus to delete the note and the key from
 the device, and the locked sign-in from the server. The server also deletes a
-locked sign-in that no device used for 90 days.
+locked sign-in that no device used for 90 days, and a device list with no
+signed-in devices.
 
 ## Games that go online
 

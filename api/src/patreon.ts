@@ -4,10 +4,11 @@ export interface Env {
   PATREON_CAMPAIGN_ID: string;
   PATREON_OWNER_USER_ID: string;
   PASS_SIGNING_KEY: string;
-  SESSIONS: SessionNamespace;
+  SESSIONS: Namespace;
+  MEMBERS: Namespace;
 }
 
-export interface SessionNamespace {
+export interface Namespace {
   idFromName(name: string): unknown;
   get(id: unknown): { fetch(request: Request): Promise<Response> };
 }
