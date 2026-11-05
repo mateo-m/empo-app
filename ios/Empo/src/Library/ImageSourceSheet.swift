@@ -28,7 +28,7 @@ struct ImageSourceSheet: View {
     var body: some View {
         StandardSheet(
             title: title,
-            trailingButton: SheetBarAction("Cancel") { isPresented = false }
+            trailingButton: .cancel { isPresented = false }
         ) {
             SheetCard {
                 ImageSourceRow(

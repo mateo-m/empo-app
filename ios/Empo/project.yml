@@ -485,6 +485,7 @@ targets:
           - Design/Sheet.swift
           - Design/IntrinsicSheet.swift
           - Design/SheetToolbar.swift
+          - Design/SheetBarButton.swift
           - Design/PauseSnapshotOverlay.swift
           - Design/SplashIcons.swift
           - Settings/SettingsView.swift

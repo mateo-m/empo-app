@@ -59,7 +59,7 @@ struct AddButtonSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    SheetBarButton.cancel { dismiss() }
                 }
             }
         }
@@ -294,7 +294,7 @@ struct ButtonEditSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
+                        SheetBarButton.done { dismiss() }
                     }
                 }
             }
@@ -399,7 +399,7 @@ struct ActionButtonEditSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { dismiss() }
+                        SheetBarButton.done { dismiss() }
                     }
                 }
             }
@@ -448,7 +448,7 @@ struct DPadEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                    SheetBarButton.done { dismiss() }
                 }
             }
         }

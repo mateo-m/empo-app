@@ -24,17 +24,6 @@ import SwiftUI
 /// }
 /// ```
 
-/// A navigation-bar action on a sheet ("Cancel", "Close").
-struct SheetBarAction {
-    let label: LocalizedStringResource
-    let action: () -> Void
-
-    init(_ label: LocalizedStringResource, action: @escaping () -> Void) {
-        self.label = label
-        self.action = action
-    }
-}
-
 /// The sheet's surface treatment.
 enum SheetSurface {
     /// One opaque grouped surface across the whole sheet - title
@@ -68,7 +57,7 @@ struct StandardSheet<Content: View, Footer: View>: View {
     /// grabber zone without one.
     var chromeAllowance: CGFloat?
     /// Optional top-trailing toolbar action.
-    var trailingButton: SheetBarAction?
+    var trailingButton: SheetBarButton?
     @ViewBuilder var content: Content
     /// Stays at the bottom while the content scrolls.
     @ViewBuilder var footer: Footer
@@ -162,7 +151,7 @@ struct StandardSheet<Content: View, Footer: View>: View {
             .toolbar {
                 if let trailingButton {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(trailingButton.label, action: trailingButton.action)
+                        trailingButton
                     }
                 }
             }
@@ -189,7 +178,7 @@ extension StandardSheet where Footer == EmptyView {
         emblem: String? = nil,
         surface: SheetSurface = .grouped,
         chromeAllowance: CGFloat? = nil,
-        trailingButton: SheetBarAction? = nil,
+        trailingButton: SheetBarButton? = nil,
         @ViewBuilder content: () -> Content
     ) {
         self.init(
