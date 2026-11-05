@@ -36,13 +36,16 @@ The server uses the code to read two facts from Patreon: your Patreon user ID,
 and whether you have a paid membership of Empo on Patreon. It does not read your
 name, your email address, or your payment details.
 
-The server sends back a signed note of these two facts and a locked copy of the
-Patreon sign-in. The device keeps both in its Keychain. Every few days, the device
-sends the locked copy back to the server to get a new note. The server keeps no
-copy of any of this. Cloudflare runs the server, and it sees each request and
-the IP address it came from.
+The server sends back a signed note of these two facts and a random key. The
+device keeps both in its Keychain. The server keeps the Patreon sign-in, locked
+with that key, so that it can ask Patreon again later. The server does not keep
+the key, so it cannot open the sign-in on its own. Every few days, the device
+sends the key to get a new note. Cloudflare runs the server, and it sees each
+request and the IP address it came from.
 
-Sign out of Patreon in Settings > Empo Plus to delete both from the device.
+Sign out of Patreon in Settings > Empo Plus to delete the note and the key from
+the device, and the locked sign-in from the server. The server also deletes a
+locked sign-in that no device used for 90 days.
 
 ## Games that go online
 
@@ -67,7 +70,8 @@ such a game can find other players. Empo itself does not use the local network.
 ## Children
 
 Empo is not directed at children under 13 and collects no data from anybody.
-Empo's server reads only the Patreon facts above, and only when you sign in.
+Empo's server reads only the Patreon facts above, and keeps only the locked
+Patreon sign-in.
 
 ## Changes
 

@@ -1,26 +1,17 @@
 import { Elysia, ElysiaError, t } from "elysia";
 import { WebStandardAdapter } from "elysia/adapter/web-standard";
 import { parseMembership } from "./membership";
-import { openRenewal, sealRenewal, signPass } from "./pass";
+import { signPass } from "./pass";
+import { type Env, patreon, token, userAgent } from "./patreon";
+import { newRenewal, renewalKeys } from "./renewal";
+import type { SessionRequest } from "./session";
 
-interface Env {
-  PATREON_CLIENT_ID: string;
-  PATREON_CLIENT_SECRET: string;
-  PATREON_CAMPAIGN_ID: string;
-  PATREON_OWNER_USER_ID: string;
-  PASS_SIGNING_KEY: string;
-  RENEWAL_KEY: string;
-}
+export { PatreonSession } from "./session";
 
 // Workers pass the same bindings to every request of an isolate.
 let env: Env;
-const patreon = "https://www.patreon.com";
 const callbackPath = "/patreon/callback";
 const appCallback = "empo://patreon";
-// Patreon drops calls without a User-Agent with a 403.
-const userAgent = "Empo API (+https://github.com/mateo-m/empo-app)";
-
-class SignedOut extends Error {}
 
 export const app = new Elysia({ adapter: WebStandardAdapter })
   .onError(({ error }) => {
@@ -62,14 +53,17 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
         return redirect(back.toString(), 302);
       }
       try {
-        const tokens = await token({
+        const tokens = await token(env, {
           grant_type: "authorization_code",
           code: query.code,
           redirect_uri: callbackUrl(request),
         });
-        const result = await issue(tokens);
-        back.searchParams.set("pass", result.pass);
-        back.searchParams.set("renewal", result.renewal);
+        const pass = await issue(tokens.access_token);
+        const renewal = newRenewal();
+        const started = await session(renewal, { action: "start", renewal, refreshToken: tokens.refresh_token });
+        if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
+        back.searchParams.set("pass", pass);
+        back.searchParams.set("renewal", renewal);
       } catch (error) {
         console.error(error);
         back.searchParams.set("error", "server");
@@ -78,14 +72,15 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     },
   )
   .post("/patreon/renew", { body: t.Object({ renewal: t.String() }) }, async ({ body, status }) => {
-    const refreshToken = await openRenewal(body.renewal, env.RENEWAL_KEY);
-    if (!refreshToken) return status(401, { error: "signed_out" });
-    try {
-      return await issue(await token({ grant_type: "refresh_token", refresh_token: refreshToken }));
-    } catch (error) {
-      if (error instanceof SignedOut) return status(401, { error: "signed_out" });
-      throw error;
-    }
+    const answer = await session(body.renewal, { action: "renew", renewal: body.renewal });
+    if (answer.status === 401) return status(401, { error: "signed_out" });
+    if (!answer.ok) throw new Error(`The session did not renew: ${answer.status}`);
+    const { accessToken } = (await answer.json()) as { accessToken: string };
+    return { pass: await issue(accessToken) };
+  })
+  .post("/patreon/sign-out", { body: t.Object({ renewal: t.String() }) }, async ({ body }) => {
+    await session(body.renewal, { action: "end" });
+    return new Response(null, { status: 204 });
   });
 
 export default {
@@ -99,51 +94,23 @@ function callbackUrl(request: Request): string {
   return `${new URL(request.url).origin}${callbackPath}`;
 }
 
-interface Tokens {
-  access_token: string;
-  refresh_token: string;
+async function session(renewal: string, request: SessionRequest): Promise<Response> {
+  const keys = await renewalKeys(renewal);
+  if (!keys) return Response.json({ error: "signed_out" }, { status: 401 });
+  const stub = env.SESSIONS.get(env.SESSIONS.idFromName(keys.id));
+  return stub.fetch(new Request("https://session", { method: "POST", body: JSON.stringify(request) }));
 }
 
-async function token(grant: Record<string, string>): Promise<Tokens> {
-  const response = await fetch(`${patreon}/api/oauth2/token`, {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": userAgent },
-    body: new URLSearchParams({
-      ...grant,
-      client_id: env.PATREON_CLIENT_ID,
-      client_secret: env.PATREON_CLIENT_SECRET,
-    }),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    const error = (JSON.parse(body || "{}") as { error?: string }).error;
-    // Only `invalid_grant` is about the user. The other errors, such
-    // as `invalid_client`, are a fault in this server.
-    throw new (error === "invalid_grant" ? SignedOut : Error)(`Patreon token call failed: ${response.status} ${body}`);
-  }
-  return (await response.json()) as Tokens;
-}
-
-async function issue(tokens: Tokens): Promise<{ pass: string; renewal: string }> {
+async function issue(accessToken: string): Promise<string> {
   const identity = new URL(`${patreon}/api/oauth2/v2/identity`);
   identity.search = new URLSearchParams({
     include: "memberships.campaign",
     "fields[member]": "patron_status,currently_entitled_amount_cents",
   }).toString();
   const response = await fetch(identity, {
-    headers: { authorization: `Bearer ${tokens.access_token}`, "user-agent": userAgent },
+    headers: { authorization: `Bearer ${accessToken}`, "user-agent": userAgent },
   });
-  if (response.status === 401) throw new SignedOut("Patreon refused the access token");
   if (!response.ok) throw new Error(`Patreon identity call failed: ${response.status}`);
-  const membership = parseMembership(
-    await response.json(),
-    env.PATREON_CAMPAIGN_ID,
-    env.PATREON_OWNER_USER_ID,
-  );
-  return {
-    pass: await signPass({ sub: membership.userId, plus: membership.plus }, env.PASS_SIGNING_KEY),
-    // Patreon refresh tokens are single use, so each renewal hands
-    // back the new one.
-    renewal: await sealRenewal(tokens.refresh_token, env.RENEWAL_KEY),
-  };
+  const membership = parseMembership(await response.json(), env.PATREON_CAMPAIGN_ID, env.PATREON_OWNER_USER_ID);
+  return signPass({ sub: membership.userId, plus: membership.plus }, env.PASS_SIGNING_KEY);
 }

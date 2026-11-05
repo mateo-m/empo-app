@@ -76,18 +76,27 @@ final class EmpoPlus {
     }
 
     func signOut() {
+        if let renewal {
+            // The server deletes its copy of the Patreon sign-in. When
+            // the call fails, the server deletes it after 90 days.
+            let request = Self.post("patreon/sign-out", renewal: renewal)
+            Task { _ = try? await URLSession.shared.data(for: request) }
+        }
         try? BackupKeychain.removePlus()
         pass = nil
         renewal = nil
     }
 
-    // Patreon refresh tokens are single use. Two renewals with the
-    // same token sign the user out, so `renew` runs one at a time.
-    private func renew(with renewal: String) async -> Bool {
-        var request = URLRequest(url: Self.api.appending(path: "patreon/renew"))
+    private static func post(_ path: String, renewal: String) -> URLRequest {
+        var request = URLRequest(url: api.appending(path: path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try? JSONEncoder().encode(["renewal": renewal])
+        return request
+    }
+
+    private func renew(with renewal: String) async -> Bool {
+        let request = Self.post("patreon/renew", renewal: renewal)
         guard let (data, response) = try? await URLSession.shared.data(for: request),
             let status = (response as? HTTPURLResponse)?.statusCode,
             // A sign-out or a new sign-in during the call wins.
@@ -102,9 +111,9 @@ final class EmpoPlus {
         }
         guard status == 200,
             let issued = try? JSONDecoder().decode([String: String].self, from: data),
-            let pass = issued["pass"], let next = issued["renewal"]
+            let pass = issued["pass"]
         else { return false }
-        return keep(pass: pass, renewal: next)
+        return keep(pass: pass, renewal: renewal)
     }
 
     @discardableResult

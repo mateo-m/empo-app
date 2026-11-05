@@ -1,4 +1,4 @@
-import { bindings, defineConfig } from "cf/config";
+import { bindings, defineConfig, exports } from "cf/config";
 
 export default defineConfig({
   worker: {
@@ -16,8 +16,10 @@ export default defineConfig({
       PATREON_CLIENT_SECRET: bindings.secret(),
       // Ed25519 private key, PKCS8, base64.
       PASS_SIGNING_KEY: bindings.secret(),
-      // 32 random bytes, base64.
-      RENEWAL_KEY: bindings.secret(),
+      SESSIONS: bindings.durableObject({ worker: "empo-api", exportName: "PatreonSession" }),
+    },
+    exports: {
+      PatreonSession: exports.durableObject({ storage: "sqlite" }),
     },
   },
 });

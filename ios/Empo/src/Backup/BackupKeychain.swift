@@ -82,7 +82,6 @@ enum BackupKeychain {
         (try string(account: plusPassAccount), try string(account: plusRenewalAccount))
     }
 
-    // The renewal goes first: the old one is spent once the API answers.
     static func setPlus(pass: String, renewal: String) throws {
         try setString(renewal, account: plusRenewalAccount)
         try setString(pass, account: plusPassAccount)
