@@ -93,8 +93,8 @@ public struct PackagePlan: Sendable {
 
     /// Writes the ZIP into the staging area and answers where it is.
     ///
-    /// It hashes each file, then writes it, so the manifest carries
-    /// the SHA-256 of exactly the bytes the ZIP holds.
+    /// The manifest takes each size and hash from the write itself,
+    /// because a game may write a save again after the scan.
     public func build(
         id: String = UUID().uuidString,
         localRoot: URL,
@@ -131,29 +131,27 @@ public struct PackagePlan: Sendable {
 
                 for member in planned.members {
                     try Task.checkCancellation()
-                    guard let file = planned.source.url(of: member),
-                        let hash = try? ContentHash.hexOfFile(at: file)
-                    else { continue }
-
-                    let entry = SnapshotManifest.Entry(
+                    var entry = SnapshotManifest.Entry(
                         root: member.root,
                         path: member.path,
                         size: member.size,
                         modifiedAt: member.modifiedAt,
-                        hash: hash,
-                        // A package stores each file at its own
-                        // path, so nothing here is a compressed
-                        // blob, per 12.3.
+                        hash: "",
                         compression: .stored,
                         detectionSource: member.detectionSource)
-                    guard let path = PackageLayout.zipPath(of: entry, in: manifest) else {
-                        continue
+                    guard let file = planned.source.url(of: member),
+                        let path = PackageLayout.zipPath(of: entry, in: manifest)
+                    else {
+                        throw ZipFailure.cannotRead(member.path)
                     }
-                    try writer.add(file: file, at: path, modifiedAt: member.modifiedAt)
+                    let written = try writer.add(
+                        file: file, at: path, modifiedAt: member.modifiedAt)
+                    entry.size = written.uncompressedSize
+                    entry.hash = written.hash
                     entries.append(entry)
 
                     progress.fileCount += 1
-                    progress.bytes += member.size
+                    progress.bytes += written.uncompressedSize
                     onProgress(progress)
                 }
 

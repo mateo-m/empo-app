@@ -47,7 +47,7 @@ public enum ContentHash {
         }
         defer { try? handle.close() }
 
-        var hasher = SHA256()
+        var hasher = Stream()
         while true {
             let more = try drainingAutoreleased { () throws -> Bool in
                 let chunk: Data?
@@ -57,12 +57,25 @@ public enum ContentHash {
                     throw Failure.cannotReadFile(path: url.path)
                 }
                 guard let chunk, !chunk.isEmpty else { return false }
-                hasher.update(data: chunk)
+                hasher.update(chunk)
                 return true
             }
             if !more { break }
         }
-        return hexString(hasher.finalize())
+        return hasher.hex()
+    }
+
+    /// SHA-256 fed one chunk at a time.
+    struct Stream {
+        private var hasher = SHA256()
+
+        mutating func update(_ data: Data) {
+            hasher.update(data: data)
+        }
+
+        func hex() -> String {
+            hexString(hasher.finalize())
+        }
     }
 
     private static func hexString(_ digest: SHA256Digest) -> String {

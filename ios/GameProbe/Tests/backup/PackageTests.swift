@@ -46,7 +46,6 @@ final class PackageTests: XCTestCase {
     private func writeAPackage(
         files: [(String, Data)] = [("Game/Save01.rvdata2", Data(repeating: 7, count: 4_096))]
     ) throws -> (url: URL, manifest: PackageManifest) {
-        let container = root.appendingPathComponent("Games/Quest", isDirectory: true)
         var members: [BackupSetMember] = []
         for (path, bytes) in files {
             _ = try file("Games/Quest/" + path, bytes: bytes)
@@ -55,6 +54,13 @@ final class PackageTests: XCTestCase {
                     root: .container, path: path, size: Int64(bytes.count), modifiedAt: stamp))
         }
 
+        let url = try build(members: members)
+        return (url, try PackageSource(zip: url, packageId: "p1").manifest)
+    }
+
+    /// Builds one Quest package from `members`, which the test wrote
+    /// under `Games/Quest/`, and answers where the ZIP is.
+    private func build(members: [BackupSetMember]) throws -> URL {
         let plan = PackagePlan(
             gameName: "Quest",
             streams: [
@@ -66,7 +72,8 @@ final class PackageTests: XCTestCase {
                     versionMarker: .init(),
                     rescuedSavesBuckets: [],
                     members: members,
-                    source: MemberSource(container: container))
+                    source: MemberSource(
+                        container: root.appendingPathComponent("Games/Quest", isDirectory: true)))
             ])
         // The staging area sits under the backup root, and the
         // root's own parent is Application Support.
@@ -77,8 +84,7 @@ final class PackageTests: XCTestCase {
             sourceDevice: "iPad",
             freeSpaceBytes: 1 << 40,
             at: stamp)
-        let url = record.zipURL(localRoot: localRoot)
-        return (url, try PackageSource(zip: url, packageId: "p1").manifest)
+        return record.zipURL(localRoot: localRoot)
     }
 
     // MARK: - 1. A stranger's ZIP tool reads it
@@ -485,6 +491,36 @@ final class PackageTests: XCTestCase {
         } catch {
             XCTAssertEqual(error, .notFound)
         }
+        await source.close()
+    }
+
+    // MARK: - An export holds every member or fails
+
+    func testAnExportWithAnUnreadableSaveFailsInsteadOfDroppingIt() throws {
+        _ = try file("Games/Quest/Game/Save01.rvdata2", bytes: Data(repeating: 1, count: 64))
+        let members = [
+            BackupSetMember(
+                root: .container, path: "Game/Save01.rvdata2", size: 64, modifiedAt: stamp),
+            BackupSetMember(
+                root: .container, path: "Game/Gone.rvdata2", size: 64, modifiedAt: stamp),
+        ]
+        XCTAssertThrowsError(try build(members: members))
+    }
+
+    /// The game wrote the save again after the scan, so the size the
+    /// plan holds is old. The manifest takes what the ZIP took.
+    func testASaveThatChangedAfterTheScanStillPassesTheImportCheck() async throws {
+        let bytes = Data(repeating: 5, count: 4_096)
+        _ = try file("Games/Quest/Game/Save01.rvdata2", bytes: bytes)
+        let url = try build(members: [
+            BackupSetMember(
+                root: .container, path: "Game/Save01.rvdata2", size: 10, modifiedAt: stamp)
+        ])
+
+        let source = try PackageSource(zip: url, packageId: "p1")
+        let file = try XCTUnwrap(source.manifest.files.first)
+        XCTAssertEqual(file.entry.size, 4_096)
+        XCTAssertEqual(file.entry.hash, ContentHash.hex(of: bytes))
         await source.close()
     }
 }

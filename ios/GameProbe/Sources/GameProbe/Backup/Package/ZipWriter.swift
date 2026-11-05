@@ -27,6 +27,8 @@ public final class ZipWriter {
         public var uncompressedSize: Int64
         public var compressedSize: Int64
         public var crc: UInt32
+        /// The SHA-256 of the bytes the entry holds.
+        public var hash: String
         public var isDeflated: Bool
         public var offset: Int64
         public var modifiedAt: Date
@@ -81,27 +83,21 @@ public final class ZipWriter {
         defer { try? reader.close() }
 
         let chunk = chunkSize
-        do {
-            return try add(path: path, size: size, modifiedAt: stamp) { push in
-                while true {
-                    let more = try drainingAutoreleased { () throws -> Bool in
-                        let bytes: Data
-                        do {
-                            bytes = try reader.read(upToCount: chunk) ?? Data()
-                        } catch {
-                            throw ZipFailure.cannotRead(file.lastPathComponent)
-                        }
-                        if bytes.isEmpty { return false }
-                        try push(bytes)
-                        return true
+        return try add(path: path, size: size, modifiedAt: stamp) { push in
+            while true {
+                let more = try drainingAutoreleased { () throws -> Bool in
+                    let bytes: Data
+                    do {
+                        bytes = try reader.read(upToCount: chunk) ?? Data()
+                    } catch {
+                        throw ZipFailure.cannotRead(file.lastPathComponent)
                     }
-                    if !more { return }
+                    if bytes.isEmpty { return false }
+                    try push(bytes)
+                    return true
                 }
+                if !more { return }
             }
-        } catch let failure as ZipFailure {
-            throw failure
-        } catch {
-            throw ZipFailure.cannotRead(file.lastPathComponent)
         }
     }
 
@@ -121,6 +117,7 @@ public final class ZipWriter {
         try write(localHeader(name: name, modifiedAt: modifiedAt, deflates: deflates))
 
         var crc: UInt32 = 0
+        var hasher = ContentHash.Stream()
         var uncompressed: Int64 = 0
         var compressed: Int64 = 0
         var body = DeflateBody(deflates: deflates)
@@ -128,6 +125,7 @@ public final class ZipWriter {
         do {
             try source { chunk in
                 crc = RawDeflate.crc32(chunk, seed: crc)
+                hasher.update(chunk)
                 uncompressed += Int64(chunk.count)
                 let out = try body.push(chunk)
                 compressed += Int64(out.count)
@@ -151,6 +149,7 @@ public final class ZipWriter {
             uncompressedSize: uncompressed,
             compressedSize: compressed,
             crc: crc,
+            hash: hasher.hex(),
             isDeflated: body.isDeflating,
             offset: start,
             modifiedAt: modifiedAt)
