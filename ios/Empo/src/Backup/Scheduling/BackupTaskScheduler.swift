@@ -207,9 +207,7 @@ enum BackupTaskScheduler {
         Task { @MainActor in
             let subtitle = Task { @MainActor in
                 var last = startingLine
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(1))
-                    let line = BackupRunMonitor.shared.line
+                for await line in Observations({ BackupRunMonitor.shared.line }) {
                     guard line != last, !expired.withLock({ $0 }) else { continue }
                     last = line
                     task.updateTitle(task.title, subtitle: line)
