@@ -26,6 +26,7 @@ public final class ZipReader {
         case truncated
         case unreadableEntry(String)
         case checksumMismatch(String)
+        case cannotWrite(String)
     }
 
     private let handle: FileHandle
@@ -62,7 +63,7 @@ public final class ZipReader {
         // search covers that much plus the record itself.
         let window = Int64(min(length, 66 * 1_024))
         guard window >= 22 else { throw Failure.notAZip }
-        let tail = read(at: length - window, count: Int(window))
+        let tail = try read(at: length - window, count: Int(window))
         guard let end = lastIndex(of: 0x0605_4B50, in: tail) else { throw Failure.notAZip }
 
         var count = Int(tail.u16(end + 10))
@@ -71,7 +72,7 @@ public final class ZipReader {
 
         if let locator {
             let record = Int64(bitPattern: tail.u64(locator + 8))
-            let head = read(at: record, count: 56)
+            let head = try read(at: record, count: 56)
             guard head.count == 56, head.u32(0) == 0x0606_4B50 else { throw Failure.truncated }
             count = Int(head.u64(32))
             directoryOffset = Int64(bitPattern: head.u64(48))
@@ -80,13 +81,13 @@ public final class ZipReader {
         var out: [ZipEntry] = []
         var cursor = directoryOffset
         for _ in 0..<count {
-            let head = read(at: cursor, count: 46)
+            let head = try read(at: cursor, count: 46)
             guard head.count == 46, head.u32(0) == 0x0201_4B50 else { throw Failure.truncated }
 
             let nameLength = Int(head.u16(28))
             let extraLength = Int(head.u16(30))
             let commentLength = Int(head.u16(32))
-            let fields = read(at: cursor + 46, count: nameLength + extraLength)
+            let fields = try read(at: cursor + 46, count: nameLength + extraLength)
             guard fields.count == nameLength + extraLength else { throw Failure.truncated }
 
             let name = String(decoding: fields.prefix(nameLength), as: UTF8.self)
@@ -185,10 +186,10 @@ public final class ZipReader {
         while left > 0 {
             try drainingAutoreleased {
                 let take = Int(min(chunk, left))
-                let bytes = read(at: start, count: take)
+                let bytes = try read(at: start, count: take)
                 guard bytes.count == take else { throw Failure.truncated }
                 crc = RawDeflate.crc32(bytes, seed: crc)
-                out.write(bytes)
+                try write(bytes, to: out, entry: entry)
                 start += Int64(take)
                 left -= Int64(take)
             }
@@ -208,23 +209,23 @@ public final class ZipReader {
         while left > 0 {
             try drainingAutoreleased {
                 let take = Int(min(chunk, left))
-                let bytes = read(at: start, count: take)
+                let bytes = try read(at: start, count: take)
                 guard bytes.count == take else { throw Failure.truncated }
                 guard let produced = stream.push(bytes) else {
                     throw Failure.unreadableEntry(entry.path)
                 }
                 crc = RawDeflate.crc32(produced, seed: crc)
-                out.write(produced)
+                try write(produced, to: out, entry: entry)
                 start += Int64(take)
                 left -= Int64(take)
             }
         }
         guard let tail = stream.finish() else { throw Failure.unreadableEntry(entry.path) }
         crc = RawDeflate.crc32(tail, seed: crc)
-        out.write(tail)
+        try write(tail, to: out, entry: entry)
         guard crc == entry.crc else { throw Failure.checksumMismatch(entry.path) }
         #else
-        try out.write(contentsOf: data(of: entry))
+        try write(data(of: entry), to: out, entry: entry)
         #endif
     }
 
@@ -246,7 +247,7 @@ public final class ZipReader {
 
     private func readTheBody(of entry: ZipEntry) throws -> Data {
         let start = try bodyOffset(of: entry)
-        let bytes = read(at: start, count: Int(entry.compressedSize))
+        let bytes = try read(at: start, count: Int(entry.compressedSize))
         guard bytes.count == Int(entry.compressedSize) else { throw Failure.truncated }
         return bytes
     }
@@ -255,17 +256,28 @@ public final class ZipReader {
     /// its own lengths, so the body starts past those and not past
     /// the ones the directory carries.
     private func bodyOffset(of entry: ZipEntry) throws -> Int64 {
-        let head = read(at: entry.headerOffset, count: 30)
+        let head = try read(at: entry.headerOffset, count: 30)
         guard head.count == 30, head.u32(0) == 0x0403_4B50 else { throw Failure.truncated }
         return entry.headerOffset + 30 + Int64(head.u16(26)) + Int64(head.u16(28))
     }
 
     // MARK: - Bytes
 
-    private func read(at offset: Int64, count: Int) -> Data {
+    /// `readData(ofLength:)` and `write(_:)` raise an Objective-C
+    /// exception on an I/O error, which Swift cannot catch, so every
+    /// read and write takes the throwing call.
+    private func read(at offset: Int64, count: Int) throws -> Data {
         guard offset >= 0, count > 0, offset < length else { return Data() }
-        try? handle.seek(toOffset: UInt64(offset))
-        return handle.readData(ofLength: count)
+        try handle.seek(toOffset: UInt64(offset))
+        return try handle.read(upToCount: count) ?? Data()
+    }
+
+    private func write(_ data: Data, to out: FileHandle, entry: ZipEntry) throws {
+        do {
+            try out.write(contentsOf: data)
+        } catch {
+            throw Failure.cannotWrite(entry.path)
+        }
     }
 
     private func lastIndex(of signature: UInt32, in data: Data) -> Int? {

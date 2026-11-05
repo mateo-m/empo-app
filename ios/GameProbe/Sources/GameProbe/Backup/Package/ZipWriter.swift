@@ -85,7 +85,12 @@ public final class ZipWriter {
             return try add(path: path, size: size, modifiedAt: stamp) { push in
                 while true {
                     let more = try drainingAutoreleased { () throws -> Bool in
-                        let bytes = reader.readData(ofLength: chunk)
+                        let bytes: Data
+                        do {
+                            bytes = try reader.read(upToCount: chunk) ?? Data()
+                        } catch {
+                            throw ZipFailure.cannotRead(file.lastPathComponent)
+                        }
                         if bytes.isEmpty { return false }
                         try push(bytes)
                         return true
@@ -113,7 +118,7 @@ public final class ZipWriter {
         let deflates = Self.deflates(path: path, size: size)
         let start = offset
         let name = Array(path.utf8)
-        write(localHeader(name: name, modifiedAt: modifiedAt, deflates: deflates))
+        try write(localHeader(name: name, modifiedAt: modifiedAt, deflates: deflates))
 
         var crc: UInt32 = 0
         var uncompressed: Int64 = 0
@@ -126,18 +131,18 @@ public final class ZipWriter {
                 uncompressed += Int64(chunk.count)
                 let out = try body.push(chunk)
                 compressed += Int64(out.count)
-                self.write(out)
+                try self.write(out)
             }
             let tail = try body.finish()
             compressed += Int64(tail.count)
-            write(tail)
+            try write(tail)
         } catch let failure as ZipFailure {
             throw failure
         } catch {
             throw ZipFailure.compressionFailed(path)
         }
 
-        patchTheHeader(
+        try patchTheHeader(
             at: start, name: name.count, crc: crc, compressed: compressed,
             uncompressed: uncompressed)
 
@@ -173,12 +178,12 @@ public final class ZipWriter {
     /// Writes the central directory and both ZIP64 end records.
     public func finish() throws(ZipFailure) {
         let directoryStart = offset
-        for entry in entries { write(centralHeader(entry)) }
+        for entry in entries { try write(centralHeader(entry)) }
         let directorySize = offset - directoryStart
 
-        write(zip64EndRecord(start: directoryStart, size: directorySize))
-        write(zip64Locator(at: directoryStart + directorySize))
-        write(endRecord(start: directoryStart, size: directorySize))
+        try write(zip64EndRecord(start: directoryStart, size: directorySize))
+        try write(zip64Locator(at: directoryStart + directorySize))
+        try write(endRecord(start: directoryStart, size: directorySize))
 
         do {
             try handle.close()
@@ -224,19 +229,21 @@ public final class ZipWriter {
 
     private func patchTheHeader(
         at start: Int64, name: Int, crc: UInt32, compressed: Int64, uncompressed: Int64
-    ) {
+    ) throws(ZipFailure) {
         var head = Data()
         head.append(le32: crc)
-        try? handle.seek(toOffset: UInt64(start + 14))
-        handle.write(head)
-
         var sizes = Data()
         sizes.append(le64: uncompressed)
         sizes.append(le64: compressed)
-        try? handle.seek(toOffset: UInt64(start + 30 + Int64(name) + 4))
-        handle.write(sizes)
-
-        try? handle.seek(toOffset: UInt64(offset))
+        do {
+            try handle.seek(toOffset: UInt64(start + 14))
+            try handle.write(contentsOf: head)
+            try handle.seek(toOffset: UInt64(start + 30 + Int64(name) + 4))
+            try handle.write(contentsOf: sizes)
+            try handle.seek(toOffset: UInt64(offset))
+        } catch {
+            throw ZipFailure.writeFailed(url.lastPathComponent)
+        }
     }
 
     private func centralHeader(_ entry: Entry) -> Data {
@@ -334,9 +341,16 @@ public final class ZipWriter {
         return day << 16 | time
     }
 
-    private func write(_ data: Data) {
+    /// `FileHandle.write(_:)` raises an Objective-C exception on a full
+    /// disk, which Swift cannot catch, so every write takes the
+    /// throwing call.
+    private func write(_ data: Data) throws(ZipFailure) {
         guard !data.isEmpty else { return }
-        handle.write(data)
+        do {
+            try handle.write(contentsOf: data)
+        } catch {
+            throw ZipFailure.writeFailed(url.lastPathComponent)
+        }
         offset += Int64(data.count)
     }
 }
