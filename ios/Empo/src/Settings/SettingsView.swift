@@ -201,9 +201,8 @@ struct SettingsView: View {
                                 Stepper(
                                     "Keep last \(settings.maxLogFiles) logs per game",
                                     value: $settings.maxLogFiles, in: 5...100, step: 5)
-                                Text("\(AppInfo.name) deletes older logs each time you start a game.")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                                SettingsDescription(
+                                    Text("\(AppInfo.name) deletes older logs each time you start a game."))
                             }
                             .padding(.vertical, Spacing.xxs)
                         }
