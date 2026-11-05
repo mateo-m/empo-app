@@ -29,7 +29,7 @@ struct PixelSegmentedPicker<Value: Hashable>: View {
         }
         .padding(PixelGrid.step)
         .background(Color(.tertiarySystemFill), in: .pixelRect(cornerRadius: Radius.sm))
-        .sensoryFeedback(.selection, trigger: selection)
+        .sensoryFeedback(.selection, trigger: selection) { _, _ in AppSettings.shared.interfaceHaptics }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(title))
     }
@@ -77,7 +77,9 @@ struct PixelToggleStyle: ToggleStyle {
         }
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : Alpha.disabled)
-        .sensoryFeedback(.selection, trigger: configuration.isOn)
+        .sensoryFeedback(.selection, trigger: configuration.isOn) { _, _ in
+            AppSettings.shared.interfaceHaptics
+        }
         .accessibilityRepresentation {
             Toggle(isOn: configuration.$isOn) { configuration.label }
         }
@@ -126,6 +128,7 @@ struct PixelSlider: View {
 
     @Environment(\.isEnabled) private var isEnabled
     @State private var editing = false
+    @GestureState private var dragging = false
 
     private let knob: CGFloat = PixelGrid.step * 9
     private let track: CGFloat = PixelGrid.step * 2
@@ -162,6 +165,7 @@ struct PixelSlider: View {
             .contentShape(.rect)
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($dragging) { _, state, _ in state = true }
                     .onChanged { drag in
                         if !editing {
                             editing = true
@@ -169,15 +173,19 @@ struct PixelSlider: View {
                         }
                         set(fraction: (drag.location.x - knob / 2) / travel)
                     }
-                    .onEnded { _ in
-                        editing = false
-                        onEditingChanged(false)
-                    }
+                    .onEnded { _ in endEditing() }
             )
         }
         .frame(height: 44)
         .opacity(isEnabled ? 1 : Alpha.disabled)
-        .sensoryFeedback(.selection, trigger: value) { _, _ in step != nil }
+        .sensoryFeedback(.selection, trigger: value) { _, _ in
+            step != nil && AppSettings.shared.interfaceHaptics
+        }
+        // A drag that the system cancels does not call `onEnded`.
+        // The gesture state resets in that case too.
+        .onChange(of: dragging) { _, active in
+            if !active { endEditing() }
+        }
         .accessibilityRepresentation {
             if let step {
                 Slider(value: $value, in: range, step: step)
@@ -185,6 +193,12 @@ struct PixelSlider: View {
                 Slider(value: $value, in: range)
             }
         }
+    }
+
+    private func endEditing() {
+        guard editing else { return }
+        editing = false
+        onEditingChanged(false)
     }
 
     private func set(fraction: Double) {
