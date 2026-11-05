@@ -30,7 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 // gamecore_run_app with the process arguments.
 - (void)runApp;
 - (void)injectKeyEvent:(int)scancode pressed:(int)pressed;
-- (void)setLauncherIdentity:(nullable NSString *)name;
+- (void)setLauncherIdentity:(nullable NSString *)name version:(nullable NSString *)version;
 - (void)setCABundlePath:(nullable NSString *)path;
 - (void)pushTextInput:(NSString *)text;
 - (void)setSafeAreaInsetsTop:(float)top bottom:(float)bottom left:(float)left right:(float)right;

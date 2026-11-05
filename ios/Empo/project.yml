@@ -595,6 +595,7 @@ targets:
       - path: src/Player/PlayerRuntimeState.swift
       - path: src/App/KeyHolder.swift
       - path: src/App/GameCoreSessionConfig.swift
+      - path: src/App/AppInfo.swift
       - path: Resources/Localizable.xcstrings
     settings:
       base:

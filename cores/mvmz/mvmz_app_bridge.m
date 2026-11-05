@@ -556,7 +556,7 @@ void gamecore_setSetting(const char *key, const char *value) {
 }
 
 // An MV or MZ game has nothing these could reach.
-void gamecore_setLauncherIdentity(const char *name) {
+void gamecore_setLauncherIdentity(const char *name, const char *version) {
 }
 void gamecore_setCABundlePath(const char *path) {
 }

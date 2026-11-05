@@ -47,7 +47,7 @@ export default defineConfig({
       },
       {
         label: "Ship a game",
-        items: ["/controls-format", "/config-format"],
+        items: ["/controls-format", "/config-format", "/launcher-identity"],
       },
       {
         label: "Contribute",

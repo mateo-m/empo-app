@@ -47,8 +47,8 @@ void gamecore_injectKeyEvent(int scancode, int pressed) {
     mkxp_injectKeyEvent(scancode, pressed);
 }
 
-void gamecore_setLauncherIdentity(const char *name) {
-    mkxp_setLauncherIdentity(name);
+void gamecore_setLauncherIdentity(const char *name, const char *version) {
+    mkxp_setLauncherIdentity(name, version);
 }
 
 void gamecore_setCABundlePath(const char *path) {
