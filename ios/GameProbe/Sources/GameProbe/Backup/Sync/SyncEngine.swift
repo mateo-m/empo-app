@@ -161,9 +161,9 @@ public final class SyncEngine {
         }
         // Only a saved pass counts as read. A pass that stops before
         // the save reads the same copies and local values again.
-        lastLocalValues = mine
         var after = SyncDocumentModel()
         updateIdentities { after = local.read(identities: &$0) }
+        lastLocalValues = after
         updateState("the bindings this device holds") {
             $0.heldBindingIds = after.controllerBindings.keys.sorted()
         }

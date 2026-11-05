@@ -449,6 +449,30 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertGreaterThan(document.writes.count, writes)
     }
 
+    /// The pass applied a binding another device added. Removing it
+    /// here brings the values back to what the pass read before the
+    /// apply, and that is still news.
+    func testALocalChangeBackToTheValuesBeforeTheApplyIsNews() async throws {
+        let document = FakeDocument()
+        document.held.controllerBindings = ["a": .string("confirm"), "c": .string("menu")]
+        let local = FakeLocalValues()
+        local.mine.controllerBindings = ["a": .string("confirm")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.heldBindingIds = ["a"]
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+
+        var outcome = await engine.run(.afterALocalChange)
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(local.mine.controllerBindings["c"], .string("menu"))
+
+        local.mine.controllerBindings = ["a": .string("confirm")]
+        outcome = await engine.run(.afterALocalChange)
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.saved?.controllerBindings, ["a": .string("confirm")])
+    }
+
     // MARK: - Step 1 reads the group and nothing else
 
     func testACopyOfAnotherGroupAndThisDevicesOwnCopyAreNeverRead() async throws {
