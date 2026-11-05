@@ -11,6 +11,7 @@ struct MidiSoundSetRow: View {
     @State private var current = MidiSoundSet.current
     @State private var isImporting = false
     @State private var importFailed = false
+    @State private var isCopying = false
 
     private var choice: Binding<Choice> {
         Binding {
@@ -45,19 +46,43 @@ struct MidiSoundSetRow: View {
             Divider()
             Text("Import Sound Set…").tag(Choice.importNew)
         }
+        .disabled(isCopying)
+        #if os(iOS)
+        .sheet(isPresented: $isImporting) {
+            DocumentPickerView(contentTypes: MidiSoundSet.contentTypes, allowsMultipleSelection: false) {
+                urls in
+                importSoundSet(urls[0])
+            }
+        }
+        #else
         .fileImporter(isPresented: $isImporting, allowedContentTypes: MidiSoundSet.contentTypes) { result in
+            switch result {
+            case .success(let url):
+                importSoundSet(url)
+            case .failure(let error):
+                NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
+                importFailed = true
+            }
+        }
+        #endif
+        .alert("Can't use this file", isPresented: $importFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Pick a SoundFont (.sf2) or a DLS file (.dls).")
+        }
+    }
+
+    private func importSoundSet(_ url: URL) {
+        isCopying = true
+        Task {
             do {
-                try MidiSoundSet.replace(with: result.get())
+                try await Task.detached { try MidiSoundSet.replace(with: url) }.value
             } catch {
                 NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
                 importFailed = true
             }
             current = MidiSoundSet.current
-        }
-        .alert("Can't use this file", isPresented: $importFailed) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Pick a SoundFont (.sf2) or a DLS file (.dls).")
+            isCopying = false
         }
     }
 }

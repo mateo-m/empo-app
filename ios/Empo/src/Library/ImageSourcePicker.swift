@@ -37,7 +37,11 @@ struct ImageSourcePickerModifier: ViewModifier {
                     .ignoresSafeArea()
             }
             .sheet(isPresented: $showDocumentPicker) {
-                ImageDocumentPicker(onImageSelected: onImageSelected)
+                DocumentPickerView(contentTypes: [.image], allowsMultipleSelection: false) { urls in
+                    if let data = try? Data(contentsOf: urls[0]), let image = UIImage(data: data) {
+                        onImageSelected(image)
+                    }
+                }
             }
     }
 }
@@ -128,45 +132,6 @@ private struct CameraPicker: UIViewControllerRepresentable {
 
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             picker.dismiss(animated: true)
-        }
-    }
-}
-
-private struct ImageDocumentPicker: UIViewControllerRepresentable {
-    let onImageSelected: (UIImage) -> Void
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        // `asCopy: true` matches DocumentPickerView. The same
-        // sideloader-resigning rationale applies (see the comment there).
-        let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: [.image],
-            asCopy: true
-        )
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-    class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let parent: ImageDocumentPicker
-        init(_ parent: ImageDocumentPicker) { self.parent = parent }
-
-        func documentPicker(
-            _ controller: UIDocumentPickerViewController,
-            didPickDocumentsAt urls: [URL]
-        ) {
-            guard let url = urls.first else { return }
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-            if let data = try? Data(contentsOf: url),
-                let image = UIImage(data: data)
-            {
-                parent.onImageSelected(image)
-            }
         }
     }
 }
