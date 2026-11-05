@@ -74,8 +74,6 @@ final class BackupsScreenModel {
     private(set) var showsTheSplitLine = false
     /// Whether the row above Backup history shows, per 13.19.
     private(set) var asksForNotifications = false
-    /// Whether the sheet of 13.19 comes up after this add.
-    var showsTheNotificationSheet = false
 
     var iCloudReach: TargetReach = .open
 
@@ -408,7 +406,6 @@ final class BackupsScreenModel {
     }
 
     func answerTheNotificationSheet(_ answer: BackupNotificationAnswer) async {
-        showsTheNotificationSheet = false
         UserDefaults.standard.set(true, forKey: DefaultsKey.backupNotificationsAsked)
         let effect = BackupNotificationAsk.effect(of: answer)
         guard effect.showsTheSystemPrompt else { return }

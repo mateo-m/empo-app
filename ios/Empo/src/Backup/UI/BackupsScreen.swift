@@ -10,15 +10,12 @@ struct BackupsScreen: View {
 
     @State private var model = BackupsScreenModel()
     @State private var showsAddSheet = false
-    @State private var addedTarget: PermissionCheckOutcomeSheet?
     @State private var signingIn: BackupTargetItem?
-    /// The fresh-install flow of 11.4 and the notification ask of
-    /// 13.19 wait for the permission sheet of the added target to
-    /// close. SwiftUI drops a sheet asked for while another one is
-    /// up, and keeps its flag set, so no later sheet opens either.
-    @State private var pendingFreshInstall: FreshInstallItem?
-    @State private var pendingNotificationAsk = false
-    @State private var freshInstall: FreshInstallItem?
+    /// SwiftUI drops a sheet asked for while another one is up, and
+    /// keeps its flag set, so no later sheet opens either. The next
+    /// one waits here until `onDismiss` of the one that is up.
+    @State private var followUp: AddedTargetSheet?
+    @State private var nextFollowUps: [AddedTargetSheet] = []
     /// The games the ask of 3.5 still waits on, per the press below.
     @State private var waiting: [BackupModeAsk] = []
     @AppStorage(DefaultsKey.backupOverCellular) private var overCellular = false
@@ -84,39 +81,44 @@ struct BackupsScreen: View {
         )
         .sheet(isPresented: $showsAddSheet) {
             AddTargetSheet(iCloudReach: model.iCloudReach) { descriptor, result in
-                addedTarget = PermissionCheckOutcomeSheet(target: descriptor, result: result)
+                show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
                 Task {
                     await model.refresh()
-                    pendingNotificationAsk = model.asksAboutNotifications()
-                    if !result.allowsAdd {
-                        return
+                    let asksAboutNotifications = model.asksAboutNotifications()
+                    if result.allowsAdd {
+                        if let scan = await model.freshInstall(after: descriptor) {
+                            show(.freshInstall(FreshInstallItem(descriptor: descriptor, scan: scan)))
+                        } else {
+                            await model.readTheAdoptBanners(of: descriptor.id)
+                        }
                     }
-                    if let scan = await model.freshInstall(after: descriptor) {
-                        pendingFreshInstall = FreshInstallItem(descriptor: descriptor, scan: scan)
-                    } else {
-                        await model.readTheAdoptBanners(of: descriptor.id)
-                    }
-                    showTheNextSheet()
+                    if asksAboutNotifications { show(.notificationAsk) }
                 }
             }
         }
         .sheet(item: $signingIn) { item in
             TargetSignInSheet(target: item.descriptor) { descriptor, result in
-                addedTarget = PermissionCheckOutcomeSheet(target: descriptor, result: result)
+                show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
                 Task { await model.refresh() }
             }
         }
         .sheet(
-            item: $addedTarget,
+            item: $followUp,
             onDismiss: showTheNextSheet,
-            content: { outcome in
-                PermissionCheckSheet(target: outcome.target, result: outcome.result)
+            content: { sheet in
+                switch sheet {
+                case .permission(let outcome):
+                    PermissionCheckSheet(target: outcome.target, result: outcome.result)
+                case .freshInstall(let item):
+                    FreshInstallSheet(
+                        model: FreshInstallModel(descriptor: item.descriptor, scan: item.scan))
+                case .notificationAsk:
+                    NotificationAskSheet { answer in
+                        Task { await model.answerTheNotificationSheet(answer) }
+                    }
+                }
             }
         )
-        .sheet(item: $freshInstall, onDismiss: showTheNextSheet) { item in
-            FreshInstallSheet(
-                model: FreshInstallModel(descriptor: item.descriptor, scan: item.scan))
-        }
         .sheet(item: firstAsk) { ask in
             FirstBackupAskSheet(
                 model: BackupSheetModel(container: ask.container, gameName: ask.gameName),
@@ -125,24 +127,17 @@ struct BackupsScreen: View {
         .sheet(item: $joinAsk) { prompt in
             SyncJoinSheet(ask: prompt.ask) { group in SyncJoin.join(group) }
         }
-        .sheet(isPresented: $model.showsTheNotificationSheet) {
-            NotificationAskSheet { answer in
-                Task { await model.answerTheNotificationSheet(answer) }
-            }
-        }
     }
 
-    /// The permission sheet goes first, the fresh-install sheet
-    /// second, and the notification ask last.
+    private func show(_ sheet: AddedTargetSheet) {
+        nextFollowUps.append(sheet)
+        showTheNextSheet()
+    }
+
     private func showTheNextSheet() {
-        guard addedTarget == nil, freshInstall == nil else { return }
-        if let item = pendingFreshInstall {
-            pendingFreshInstall = nil
-            freshInstall = item
-        } else if pendingNotificationAsk {
-            pendingNotificationAsk = false
-            model.showsTheNotificationSheet = true
-        }
+        guard followUp == nil, let next = nextFollowUps.min() else { return }
+        nextFollowUps.removeAll { $0 == next }
+        followUp = next
     }
 
     /// The package a failed or cancelled save left behind, per 12.5.
@@ -317,7 +312,7 @@ struct BackupsScreen: View {
             if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
                 signingIn = item
             } else {
-                addedTarget = await model.signInAgain(item)
+                if let outcome = await model.signInAgain(item) { show(.permission(outcome)) }
             }
         case .tryAgain:
             model.backUpNow()
@@ -433,4 +428,32 @@ struct PermissionCheckOutcomeSheet: Identifiable {
     let target: TargetDescriptor
     let result: PermissionCheckResult
     var id: String { target.id }
+}
+
+/// The sheets that follow an added location, in the order they open:
+/// the permission check, the fresh-install restore, then the
+/// notification ask.
+private enum AddedTargetSheet: Identifiable, Comparable {
+    case permission(PermissionCheckOutcomeSheet)
+    case freshInstall(FreshInstallItem)
+    case notificationAsk
+
+    var id: String {
+        switch self {
+        case .permission(let outcome): return "permission-" + outcome.id
+        case .freshInstall(let item): return "fresh-install-" + item.id
+        case .notificationAsk: return "notification-ask"
+        }
+    }
+
+    private var rank: Int {
+        switch self {
+        case .permission: return 0
+        case .freshInstall: return 1
+        case .notificationAsk: return 2
+        }
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    static func < (lhs: Self, rhs: Self) -> Bool { lhs.rank < rhs.rank }
 }
