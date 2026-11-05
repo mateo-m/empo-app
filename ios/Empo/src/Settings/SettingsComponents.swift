@@ -50,7 +50,7 @@ struct SettingsNavigationRow<Destination: View>: View {
 struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
     let title: LocalizedStringResource
     @Binding var selection: SelectionValue
-    let description: LocalizedStringResource
+    let description: Text
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -60,7 +60,7 @@ struct SettingsPicker<SelectionValue: Hashable, Content: View>: View {
             } label: {
                 Text(title)
             }
-            Text(description)
+            description
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }

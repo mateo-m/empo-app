@@ -29,10 +29,14 @@ struct MidiSoundSetRow: View {
     }
 
     var body: some View {
+        // Under RootView's `.fontDesign(.rounded)`, only `Font.monospaced()` stays fixed-width.
+        let fileName = Text(verbatim: "gm.dls").font(.footnote.monospaced())
         SettingsPicker(
             title: "MIDI sound set",
             selection: choice,
-            description: "Plays music in older games. For the Windows sound, import gm.dls from a Windows PC."
+            description: Text(
+                "Plays music in older games. For the Windows sound, import \(fileName) from a Windows PC."
+            )
         ) {
             Text("Built-in").tag(Choice.builtIn)
             if let current {

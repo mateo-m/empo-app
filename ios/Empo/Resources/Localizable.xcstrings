@@ -24062,60 +24062,60 @@
         }
       }
     },
-    "Plays music in older games. For the Windows sound, import gm.dls from a Windows PC." : {
+    "Plays music in older games. For the Windows sound, import %@ from a Windows PC." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Spielt die Musik älterer Spiele. Für den Windows-Klang importiere gm.dls von einem Windows-PC."
+            "value" : "Spielt die Musik älterer Spiele. Für den Windows-Klang importiere %@ von einem Windows-PC."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Reproduce la música de juegos antiguos. Para el sonido de Windows, importa gm.dls desde un PC con Windows."
+            "value" : "Reproduce la música de juegos antiguos. Para el sonido de Windows, importa %@ desde un PC con Windows."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Joue la musique des anciens jeux. Pour le son de Windows, importe gm.dls depuis un PC Windows."
+            "value" : "Joue la musique des anciens jeux. Pour le son de Windows, importe %@ depuis un PC Windows."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Suona la musica dei giochi meno recenti. Per il suono di Windows, importa gm.dls da un PC Windows."
+            "value" : "Suona la musica dei giochi meno recenti. Per il suono di Windows, importa %@ da un PC Windows."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "古いゲームの音楽を再生します。Windows の音にするには、Windows PC から gm.dls を読み込んでください。"
+            "value" : "古いゲームの音楽を再生します。Windows の音にするには、Windows PC から %@ を読み込んでください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "오래된 게임의 음악을 재생합니다. Windows 소리로 들으려면 Windows PC에서 gm.dls를 가져오세요."
+            "value" : "오래된 게임의 음악을 재생합니다. Windows 소리로 들으려면 Windows PC에서 %@를 가져오세요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toca a música de jogos mais antigos. Para o som do Windows, importe o gm.dls de um PC com Windows."
+            "value" : "Toca a música de jogos mais antigos. Para o som do Windows, importe o %@ de um PC com Windows."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Играет музыку в старых играх. Для звука Windows импортируйте gm.dls с компьютера на Windows."
+            "value" : "Играет музыку в старых играх. Для звука Windows импортируйте %@ с компьютера на Windows."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "播放较旧游戏中的音乐。若想要 Windows 的声音，请从 Windows 电脑导入 gm.dls。"
+            "value" : "播放较旧游戏中的音乐。若想要 Windows 的声音，请从 Windows 电脑导入 %@。"
           }
         }
       }
