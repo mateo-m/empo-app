@@ -1,0 +1,18 @@
+{
+  "name": "empo-api",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "build": "bun build.ts",
+    "deploy": "bun build.ts && cf deploy --profile mateo"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "cf": "1.0.0-beta.27",
+    "wrangler": "4.157.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "elysia": "2.0.0-rc.3"
+  }
+}
