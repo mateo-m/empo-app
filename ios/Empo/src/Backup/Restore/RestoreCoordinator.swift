@@ -154,16 +154,19 @@ final class RestoreCoordinator {
         scope: RestoreScope,
         replacesTheTree: Bool
     ) async -> RestoreOutcome {
+        let destination = Self.destination(for: container, manifest: manifest)
+        let localFiles = await Self.localFiles(
+            destination: destination, manifest: manifest, scope: scope)
+        // The manifest read and the local file read await, so these
+        // checks come after them. A game can launch meanwhile, and
+        // another restore can start.
         guard running == nil else {
             return .failed("Another restore is running. Wait for it to finish, then try again.")
         }
-        // The manifest read above awaits, and a game can launch
-        // meanwhile.
         guard !gameLaunches, !BackupDeviceConditions.isSessionLive else {
             return .stopped(.gameLaunched, RestoreResult())
         }
 
-        let destination = Self.destination(for: container, manifest: manifest)
         let request = RestoreRequest(
             targetId: targetId,
             root: root,
@@ -172,8 +175,7 @@ final class RestoreCoordinator {
             snapshotId: row.snapshotId,
             scope: scope,
             destination: destination,
-            localFiles: Self.localFiles(
-                destination: destination, manifest: manifest, scope: scope),
+            localFiles: localFiles,
             localVersionMarker: container.map(GameIdentities.versionMarker(for:)),
             freeSpaceBytes: Self.freeSpaceBytes,
             replacesTheTree: replacesTheTree,
@@ -411,10 +413,11 @@ final class RestoreCoordinator {
     ///
     /// A hash costs a full read, so it is read only where the local
     /// size matches the entry's. A file of a different size can
-    /// never hold the same content.
-    static func localFiles(
+    /// never hold the same content. A game can hold gigabytes, so the
+    /// reads run off the main actor.
+    nonisolated static func localFiles(
         destination: MemberSource, manifest: SnapshotManifest, scope: RestoreScope
-    ) -> [RestoreLocalFile] {
+    ) async -> [RestoreLocalFile] {
         let fm = FileManager.default
         var files: [RestoreLocalFile] = []
         var seen: Set<String> = []
@@ -454,11 +457,11 @@ final class RestoreCoordinator {
         var path: String
     }
 
-    private static func key(_ root: EntryRoot, _ path: String) -> String {
+    nonisolated private static func key(_ root: EntryRoot, _ path: String) -> String {
         root.rawValue + "/" + path
     }
 
-    private static func directory(of path: String) -> String {
+    nonisolated private static func directory(of path: String) -> String {
         guard let slash = path.lastIndex(of: "/") else { return "" }
         return String(path[path.startIndex..<slash])
     }
