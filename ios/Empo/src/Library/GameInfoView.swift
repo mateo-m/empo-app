@@ -167,8 +167,7 @@ struct GameInfoView: View {
 
                             DetailRow("Folder name") {
                                 Text(game.id)
-                                    .monospaced()
-                                    .font(.caption)
+                                    .font(.caption.monospaced())
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                     .textSelection(.enabled)
@@ -182,7 +181,7 @@ struct GameInfoView: View {
                                 ForEach(runtimeRows) { row in
                                     DetailRow(Text(row.label)) {
                                         if let value = row.value {
-                                            Text(value).monospaced()
+                                            Text(value).font(.body.monospaced())
                                         } else {
                                             Text("Unknown")
                                                 .foregroundStyle(.secondary)

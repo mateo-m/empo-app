@@ -26,11 +26,11 @@ struct GameCoresView: View {
                                 Text(core.gamesLine)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                // `.font(.caption)` plus `.fontDesign(.monospaced)`
-                                // renders rounded under RootView's app-wide
-                                // `.fontDesign(.rounded)`. A point size keeps it.
+                                // Under RootView's `.fontDesign(.rounded)`, only
+                                // `Font.monospaced()` stays fixed-width.
+                                // `Text.monospaced()` and `.system(design: .monospaced)` render rounded.
                                 Text("Built from \(core.version)")
-                                    .font(.system(size: 13, design: .monospaced))
+                                    .font(.footnote.monospaced())
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
                             }
