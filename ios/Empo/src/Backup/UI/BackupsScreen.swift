@@ -11,6 +11,7 @@ struct BackupsScreen: View {
     @State private var model = BackupsScreenModel()
     @State private var showsAddSheet = false
     @State private var signingIn: BackupTargetItem?
+    @State private var showsPlus = false
     /// SwiftUI drops a sheet asked for while another one is up, and
     /// keeps its flag set, so no later sheet opens either. The next
     /// one waits here until `onDismiss` of the one that is up.
@@ -61,6 +62,8 @@ struct BackupsScreen: View {
         }
         .task { readTheUnsavedPackage() }
         .refreshable { await model.refresh() }
+        .sheet(isPresented: $showsPlus) { PlusSheet() }
+        .onChange(of: EmpoPlus.shared.hasPlus) { Task { await model.refresh() } }
         .sheet(isPresented: $exports) {
             PackageExportSheet(source: .library)
         }
@@ -286,10 +289,16 @@ struct BackupsScreen: View {
                         TargetRowView(row: item.row, target: item.descriptor)
                         Spacer(minLength: 0)
                         if let action = item.row.action {
-                            Button(action.label) { Task { await press(action, on: item) } }
-                                .buttonStyle(.bordered)
-                                .buttonBorderShape(.capsule)
-                                .font(.subheadline.weight(.medium))
+                            if action == .getPlus {
+                                Button(action.label) { Task { await press(action, on: item) } }
+                                    .buttonStyle(.primary(size: .sm))
+                                    .plusShine(over: .capsule)
+                            } else {
+                                Button(action.label) { Task { await press(action, on: item) } }
+                                    .buttonStyle(.bordered)
+                                    .buttonBorderShape(.capsule)
+                                    .font(.subheadline.weight(.medium))
+                            }
                         }
                     }
                 }
@@ -316,6 +325,8 @@ struct BackupsScreen: View {
             }
         case .tryAgain:
             model.backUpNow()
+        case .getPlus:
+            showsPlus = true
         }
     }
 

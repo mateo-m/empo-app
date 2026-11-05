@@ -17,6 +17,7 @@ struct TargetDetailScreen: View {
     @State private var showsRemoveSheet = false
     @State private var signInOutcome: PermissionCheckOutcomeSheet?
     @State private var signsInThroughTheForm = false
+    @State private var showsPlus = false
     @State private var gameNames: [String: String] = [:]
 
     private var item: BackupTargetItem? {
@@ -38,6 +39,7 @@ struct TargetDetailScreen: View {
             }
         }
         .navigationTitle(item?.descriptor.displayName ?? "")
+        .sheet(isPresented: $showsPlus) { PlusSheet() }
         .navigationBarTitleDisplayMode(.inline)
         .task { gameNames = BackupGameNames().namesByGameKey() }
         .sheet(isPresented: $showsRemoveSheet, onDismiss: leaveIfRemoved) {
@@ -107,6 +109,14 @@ struct TargetDetailScreen: View {
                     Button("Resume backups") { Task { await model.setPaused(false, targetId: targetId) } }
                 case .tryAgain:
                     Button("Try again") { model.backUpNow() }
+                case .getPlus:
+                    Button {
+                        showsPlus = true
+                    } label: {
+                        Text("Get Empo Plus").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.primary(size: .md))
+                    .plusShine(over: .capsule)
                 }
             }
         }

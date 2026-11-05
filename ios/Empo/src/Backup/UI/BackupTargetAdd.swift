@@ -24,20 +24,7 @@ enum BackupTargetAdd {
         }
     }
 
-    /// The services the add sheet offers, with iCloud under the
-    /// runtime gate of 9.1.
-    static func offeredServices(iCloudReach: TargetReach) -> [BackupProviderKind] {
-        var services: [BackupProviderKind] = [.dropbox, .googleDrive, .s3, .webdav]
-        switch iCloudReach {
-        case .open, .notInThisBuild:
-            services.insert(.iCloudDrive, at: 0)
-        case .accountOff:
-            // Hidden while the probe answers nil, per 9.1. A
-            // configured target keeps its row either way.
-            break
-        }
-        return services
-    }
+    static let offeredServices: [BackupProviderKind] = [.iCloudDrive, .dropbox, .googleDrive, .s3, .webdav]
 
     static func iCloud() async -> Outcome {
         guard let provider = await ICloudDriveGate.shared.target() else {

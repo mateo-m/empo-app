@@ -70,7 +70,7 @@ enum SyncRemote {
 final class ProviderSyncTargets: SyncTargets {
 
     func enabled() -> [TargetDescriptor] {
-        BackupTargets.load().filter { !$0.isPaused }
+        BackupTargets.writable()
     }
 
     func namespaces(of target: TargetDescriptor) async -> [SyncNamespace]? {

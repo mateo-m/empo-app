@@ -106,7 +106,8 @@ final class BackupsScreenModel {
                 failedAt: status?.failedAt,
                 failedAtText: (status?.failedAt).map(BackupText.when) ?? "",
                 supportsBackgroundTransfer: capabilities?.supportsBackgroundTransfer ?? true,
-                lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs))
+                lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs),
+                hasPlus: EmpoPlus.shared.hasPlus)
             facts.append(row)
             items.append(
                 BackupTargetItem(

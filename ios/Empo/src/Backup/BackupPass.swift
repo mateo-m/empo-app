@@ -22,7 +22,8 @@ final class BackupPass: BackupRunning {
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult {
-        let targets = BackupTargets.load().filter { !$0.isPaused }
+        await EmpoPlus.shared.renew()
+        let targets = BackupTargets.writable()
         guard !targets.isEmpty else {
             log("the pass found no target")
             return BackupPassResult(didFinish: true)

@@ -110,6 +110,14 @@ struct SettingsView: View {
                         ) {
                             BackupsScreen()
                         }
+                        SettingsNavigationRow(
+                            description:
+                                "Back up to Dropbox, Google Drive, and your own server with a Patreon membership."
+                        ) {
+                            PlusScreen()
+                        } title: {
+                            EmpoPlusName()
+                        }
                     }
 
                     Section {
