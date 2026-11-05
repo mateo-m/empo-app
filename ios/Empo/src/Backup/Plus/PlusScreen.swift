@@ -14,7 +14,7 @@ struct PlusScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing._3xl) {
-                PlusOrbit(isMember: stage == .member).padding(.top, Spacing.lg)
+                PlusOrbit(isMember: plus.hasPlus).padding(.top, Spacing.lg)
                 headline.padding(.horizontal, Spacing._3xl)
                 places
             }
@@ -30,22 +30,25 @@ struct PlusScreen: View {
                 .padding(.bottom, Spacing.md)
         }
         .overlay {
-            if isWorking { ProgressView() }
+            if isWorking { ProgressView().accessibilityLabel("Checking with Patreon") }
         }
         .navigationTitle("Empo Plus")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                EmpoPlusName().font(.headline).accessibilityAddTraits(.isHeader)
+                Text("Empo \(plusWord)").font(.headline).plusShine().accessibilityAddTraits(.isHeader)
             }
         }
-        .task { await plus.renew() }
     }
 
     private var stage: PlusStage {
-        if plus.hasPlus { return .member }
-        if plus.isSignedIn { return .notYet }
-        return .join
+        switch (plus.isSignedIn, plus.pass) {
+        case (true, let pass?) where pass.grantsPlus(at: .now): return .member
+        case (true, let pass?) where pass.includesPlus: return .expired
+        case (true, _): return .notYet
+        case (false, let pass?) where pass.grantsPlus(at: .now): return .signInAgain(until: pass.expiresAt)
+        case (false, _): return .join
+        }
     }
 
     private var headline: some View {
@@ -85,8 +88,9 @@ struct PlusScreen: View {
             Group {
                 if service == .iCloudDrive {
                     Text("Free").foregroundStyle(.secondary)
-                } else if stage == .member {
+                } else if plus.hasPlus {
                     Image(systemName: "checkmark").foregroundStyle(.brand)
+                        .accessibilityLabel("Included")
                 } else {
                     PlusBadge()
                 }
@@ -113,6 +117,11 @@ struct PlusScreen: View {
                 }
                 secondary("Check again") { Task { await checkAgain() } }
                 quiet("Sign out of Patreon") { plus.signOut() }
+            case .expired:
+                primary("Check again") { Task { await checkAgain() } }
+                quiet("Sign out of Patreon") { plus.signOut() }
+            case .signInAgain:
+                primary("Sign in with Patreon") { Task { await signIn() } }
             case .member:
                 quiet("Sign out of Patreon") { plus.signOut() }
             }
@@ -158,12 +167,11 @@ struct PlusScreen: View {
     private func checkAgain() async {
         isWorking = true
         defer { isWorking = false }
-        await plus.renew(force: true)
+        failure = nil
+        if await !plus.renew(force: true) { failure = "Couldn't check your membership. Try again." }
     }
 }
 
-/// The Plus screen in its own sheet, for the places that are not a
-/// navigation stack.
 struct PlusSheet: View {
 
     @Environment(\.dismiss) private var dismiss
@@ -181,12 +189,16 @@ struct PlusSheet: View {
 }
 
 private enum PlusStage {
-    case join, notYet, member
+    case join, notYet, expired
+    case signInAgain(until: Date)
+    case member
 
     var headline: Text {
         switch self {
         case .member: Text("You have Empo \(plusWord)")
         case .notYet: Text("Your Patreon account isn't a member yet")
+        case .expired: Text("Empo couldn't check your membership")
+        case .signInAgain: Text("Sign in to Patreon again")
         case .join: Text("Keep your saves in more places")
         }
     }
@@ -195,6 +207,11 @@ private enum PlusStage {
         switch self {
         case .member: Text("Add Dropbox, Google Drive, or your own server in Backups.")
         case .notYet: Text("Join on Patreon, then tap Check again.")
+        case .expired: Text("Connect to the internet, then tap Check again.")
+        case .signInAgain(let date):
+            Text(
+                "\(plusWord) stays on until \(date.formatted(date: .abbreviated, time: .omitted)). Sign in to keep it."
+            )
         case .join:
             Text("iCloud Drive stays free. \(plusWord) adds Dropbox, Google Drive, and your own server.")
         }
@@ -211,8 +228,6 @@ private func placeTitle(_ service: BackupProviderKind) -> String {
     }
 }
 
-/// Empo in the middle, with the places a save can go on a ring
-/// around it.
 private struct PlusOrbit: View {
     let isMember: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -224,7 +239,6 @@ private struct PlusOrbit: View {
 
     var body: some View {
         ZStack {
-            // One ripple leaves the icon as the first place comes out.
             Circle()
                 .stroke(Color.brand, lineWidth: 2)
                 .frame(width: radius * 2, height: radius * 2)
@@ -266,8 +280,6 @@ private struct PlusOrbit: View {
         withAnimation(.linear(duration: 60).repeatForever(autoreverses: false)) { spin = 360 }
     }
 
-    // Each place comes out from under the icon and swings out on a
-    // curve to its spot on the ring.
     private func place(_ service: BackupProviderKind, index: Int) -> some View {
         let angle = -Double.pi / 2 + Double(index) * 2 * .pi / Double(plusPlaces.count)
         let unlocked = service == .iCloudDrive || isMember
@@ -294,12 +306,9 @@ private struct PlusOrbit: View {
                     ? .easeOut(duration: Motion.durationNormal) : reach(0.8).delay(0.1 + dealt(index)),
                 value: entered
             )
-            // A sign-in colors the locked places in, one by one.
             .animation(Motion.slow.delay(dealt(index)), value: isMember)
     }
 
-    // The icon lands first, then gives a small push as each place
-    // leaves it.
     private var center: some View {
         // iOS does not load an app icon set as an image, so
         // `EmpoAppIcon` is a smaller copy of `AppIcon`.
@@ -323,8 +332,6 @@ private struct PlusOrbit: View {
     }
 }
 
-/// A service logo with no shape behind it. A flat logo is one tone,
-/// so every service has the same weight.
 private struct ServiceMark: View {
     let service: BackupProviderKind
     var size: CGFloat = 24
@@ -362,20 +369,15 @@ private struct LockBadge: View {
     }
 }
 
-/// A slow start, a fast middle, and a long soft stop: the bell-shaped
-/// speed of a human reach (the minimum-jerk curve).
 private func reach(_ duration: Double) -> Animation {
     .timingCurve(0.45, 0, 0.15, 1, duration: duration)
 }
 
-/// The start time of item `index`. Each gap is 80% of the gap before,
-/// as a hand that deals cards gets faster.
+/// Each gap is 80% of the gap before.
 private func dealt(_ index: Int, gap: Double = 0.09) -> Double {
     (0..<index).reduce(0) { total, step in total + gap * pow(0.8, Double(step)) }
 }
 
-/// Moves a view to `end` on a curve, not on a straight line, and
-/// brings it into focus on the way.
 private struct ArcEntrance: ViewModifier, Animatable {
     var progress: Double
     let end: CGSize
@@ -407,31 +409,11 @@ struct PlusBadge: View {
         // A Label moves the row separator of a List row to its own text.
         HStack(spacing: Spacing.xs) {
             Image(systemName: "lock.fill").foregroundStyle(.brand)
-            PlusWord()
+            plusWord.plusShine()
         }
     }
 }
 
-/// "Empo Plus", with "Plus" as its own mark.
-struct EmpoPlusName: View {
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text(verbatim: "Empo ")
-            PlusWord()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Empo Plus")
-    }
-}
-
-/// "Plus" in bold brand orange, on its own.
-struct PlusWord: View {
-    var body: some View {
-        plusWord.plusShine()
-    }
-}
-
-/// "Plus" in bold brand orange, to put inside a sentence or a title.
 /// Give the view that holds the text `.plusShine()` for the light.
 /// Not for a button title: orange on an orange button cannot be read.
 let plusWord = Text(verbatim: "Plus").fontWeight(.bold).foregroundStyle(.brand)
@@ -440,13 +422,9 @@ let plusWord = Text(verbatim: "Plus").fontWeight(.bold).foregroundStyle(.brand)
 private struct PlusMark: TextAttribute {}
 
 extension View {
-    /// A light passes once over each "Plus" in the text of this view
-    /// when it comes on screen.
     func plusShine() -> some View { modifier(PlusShine(shape: nil)) }
 
-    /// The light of `plusShine()`, over the whole view in `shape`. For a
-    /// button with a white title, which would hide the light, and for the
-    /// app icon.
+    /// For a button with a white title, which would hide the light.
     func plusShine(over shape: some Shape) -> some View { modifier(PlusShine(shape: AnyShape(shape))) }
 }
 
@@ -473,9 +451,8 @@ private struct PlusShine: ViewModifier {
     }
 }
 
-/// A tilted light band that crosses `rect` from top left to bottom right.
-/// At phase 0 the whole band is before the rect, and at phase 1 the
-/// whole band is past it, so no light stays on a corner.
+/// The band is tilted, so it starts and ends past the corners of
+/// `rect`. Otherwise light stays on a corner at phase 0 and 1.
 private enum PlusBand {
     static let gradient = Gradient(colors: [.white.opacity(0), .white.opacity(0.5), .white.opacity(0)])
     private static let direction = CGVector(
@@ -498,7 +475,6 @@ private enum PlusBand {
     }
 }
 
-/// Draws the text, then the light band over the "Plus" runs only.
 private struct PlusShineRenderer: TextRenderer, Animatable {
     var phase: Double
 
@@ -518,7 +494,6 @@ private struct PlusShineRenderer: TextRenderer, Animatable {
                     layer.draw(run)
                     let bounds = run.typographicBounds.rect
                     let band = PlusBand.ends(in: bounds, phase: phase)
-                    // Paints only where the run already drew glyphs.
                     layer.blendMode = .sourceAtop
                     layer.fill(
                         Path(bounds),

@@ -78,16 +78,18 @@ enum BackupKeychain {
     private static let plusPassAccount = "plus-pass"
     private static let plusRenewalAccount = "plus-renewal"
 
-    static func plus() throws -> (pass: String, renewal: String)? {
-        guard let pass = try string(account: plusPassAccount),
-            let renewal = try string(account: plusRenewalAccount)
-        else { return nil }
-        return (pass, renewal)
+    static func plus() throws -> (pass: String?, renewal: String?) {
+        (try string(account: plusPassAccount), try string(account: plusRenewalAccount))
     }
 
+    // The renewal goes first: the old one is spent once the API answers.
     static func setPlus(pass: String, renewal: String) throws {
-        try setString(pass, account: plusPassAccount)
         try setString(renewal, account: plusRenewalAccount)
+        try setString(pass, account: plusPassAccount)
+    }
+
+    static func removePlusRenewal() throws {
+        try remove(account: plusRenewalAccount)
     }
 
     static func removePlus() throws {

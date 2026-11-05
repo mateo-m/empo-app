@@ -4,11 +4,6 @@ import GameProbe
 import Observation
 import SwiftUI
 
-/// Whether this device has Empo Plus, from the Patreon sign-in that
-/// the Empo API (`api/` in this repo) turns into a signed pass.
-///
-/// Every backup location except iCloud Drive needs Plus to take new
-/// backups. Restores never need it.
 @MainActor
 @Observable
 final class EmpoPlus {
@@ -28,12 +23,12 @@ final class EmpoPlus {
 
     private(set) var pass: PlusPass?
     private var renewal: String?
-    private var renewing: Task<Void, Never>?
+    private var renewing: Task<Bool, Never>?
 
     private init() {
         let stored = try? BackupKeychain.plus()
         renewal = stored?.renewal
-        pass = stored.flatMap { PlusPass($0.pass, publicKey: Self.publicKey) }
+        pass = stored?.pass.flatMap { PlusPass($0, publicKey: Self.publicKey) }
     }
 
     var isSignedIn: Bool { renewal != nil }
@@ -69,15 +64,15 @@ final class EmpoPlus {
         else { throw .server }
     }
 
-    /// Asks the API for a new pass when the stored one ends in less
-    /// than 3 days, or always with `force`.
-    func renew(force: Bool = false) async {
+    /// Returns false when the API did not answer.
+    @discardableResult
+    func renew(force: Bool = false) async -> Bool {
         if let renewing { return await renewing.value }
-        guard let renewal, force || pass?.needsRenewal(at: .now) ?? true else { return }
+        guard let renewal, force || pass?.needsRenewal(at: .now) ?? true else { return true }
         let task = Task { await self.renew(with: renewal) }
         renewing = task
-        await task.value
-        renewing = nil
+        defer { renewing = nil }
+        return await task.value
     }
 
     func signOut() {
@@ -88,7 +83,7 @@ final class EmpoPlus {
 
     // Patreon refresh tokens are single use. Two renewals with the
     // same token sign the user out, so `renew` runs one at a time.
-    private func renew(with renewal: String) async {
+    private func renew(with renewal: String) async -> Bool {
         var request = URLRequest(url: Self.api.appending(path: "patreon/renew"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -97,23 +92,25 @@ final class EmpoPlus {
             let status = (response as? HTTPURLResponse)?.statusCode,
             // A sign-out or a new sign-in during the call wins.
             renewal == self.renewal
-        else { return }
+        else { return false }
         if status == 401 {
-            signOut()
-            return
+            // Patreon refused the sign-in. The pass stays good until it
+            // ends, and the Plus screen asks for a new sign-in.
+            try? BackupKeychain.removePlusRenewal()
+            self.renewal = nil
+            return true
         }
         guard status == 200,
             let issued = try? JSONDecoder().decode([String: String].self, from: data),
             let pass = issued["pass"], let next = issued["renewal"]
-        else { return }
-        keep(pass: pass, renewal: next)
+        else { return false }
+        return keep(pass: pass, renewal: next)
     }
 
     @discardableResult
     private func keep(pass text: String, renewal: String) -> Bool {
-        guard let pass = PlusPass(text, publicKey: Self.publicKey),
-            (try? BackupKeychain.setPlus(pass: text, renewal: renewal)) != nil
-        else { return false }
+        guard let pass = PlusPass(text, publicKey: Self.publicKey) else { return false }
+        try? BackupKeychain.setPlus(pass: text, renewal: renewal)
         self.pass = pass
         self.renewal = renewal
         return true
