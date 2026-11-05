@@ -57,8 +57,11 @@ final class OAuthSignIn {
     }
 
     /// How long a sign-in waits for the app to reach the foreground.
-    private static let activeWait: TimeInterval = 10
-    private static let activePollWait: TimeInterval = 0.2
+    /// The app can stay in the background, and then no event comes.
+    private static let activeWait: Duration = .seconds(10)
+
+    private var activationWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    private var activationObservers: [NSObjectProtocol] = []
 
     /// Answers the screen a sheet can come up from.
     ///
@@ -68,17 +71,46 @@ final class OAuthSignIn {
     ///
     /// It answers `nil` when the app never became active.
     static func screenForTheSheet() async -> UIViewController? {
-        var left = activeWait
-        while left > 0 {
+        let deadline = ContinuousClock.now + activeWait
+        while true {
             if UIApplication.shared.applicationState == .active,
                 let front = frontViewController(), front.viewIfLoaded?.window != nil
             {
                 return front
             }
-            try? await Task.sleep(for: .seconds(activePollWait))
-            left -= activePollWait
+            let left = deadline - ContinuousClock.now
+            guard left > .zero else { return nil }
+            await shared.nextActivation(within: left)
         }
-        return nil
+    }
+
+    /// Waits until the app becomes active or a window becomes key, or
+    /// for `limit`.
+    private func nextActivation(within limit: Duration) async {
+        if activationObservers.isEmpty {
+            activationObservers = [
+                UIApplication.didBecomeActiveNotification, UIWindow.didBecomeKeyNotification,
+            ].map { name in
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
+                    [weak self] _ in
+                    MainActor.assumeIsolated { self?.wakeActivationWaiters() }
+                }
+            }
+        }
+        let id = UUID()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            activationWaiters[id] = continuation
+            Task { [weak self] in
+                try? await Task.sleep(for: limit)
+                self?.activationWaiters.removeValue(forKey: id)?.resume()
+            }
+        }
+    }
+
+    private func wakeActivationWaiters() {
+        let waiting = activationWaiters.values
+        activationWaiters = [:]
+        for continuation in waiting { continuation.resume() }
     }
 
     private static func frontViewController() -> UIViewController? {
@@ -118,9 +150,18 @@ final class OAuthSignIn {
             responseType: OIDResponseTypeCode,
             additionalParameters: service.additionalParameters)
 
+        // AppAuth routes a callback URL to one session only. Its cancel
+        // dismisses the earlier browser, then ends that sign-in with
+        // `userCanceledAuthorizationFlow`, so the earlier caller gets nil.
+        if let earlier = session {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                earlier.cancel { continuation.resume() }
+            }
+        }
+        var mine: OIDExternalUserAgentSession?
         let state = try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<OIDAuthState?, Error>) in
-            session = OIDAuthState.authState(
+            mine = OIDAuthState.authState(
                 byPresenting: request, presenting: viewController
             ) { state, error in
                 if let error, state == nil {
@@ -136,8 +177,9 @@ final class OAuthSignIn {
                 }
                 continuation.resume(returning: state)
             }
+            session = mine
         }
-        session = nil
+        if session === mine { session = nil }
 
         guard let response = state?.lastTokenResponse, let access = response.accessToken else {
             return nil
