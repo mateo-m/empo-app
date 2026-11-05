@@ -114,19 +114,21 @@ async function token(grant: Record<string, string>): Promise<Tokens> {
       client_secret: env.PATREON_CLIENT_SECRET,
     }),
   });
-  if (response.status === 400 || response.status === 401) {
-    throw new SignedOut(`Patreon refused the grant: ${response.status} ${await response.text()}`);
+  if (!response.ok) {
+    const body = await response.text();
+    const error = (JSON.parse(body || "{}") as { error?: string }).error;
+    // Only `invalid_grant` is about the user. The other errors, such
+    // as `invalid_client`, are a fault in this server.
+    throw new (error === "invalid_grant" ? SignedOut : Error)(`Patreon token call failed: ${response.status} ${body}`);
   }
-  if (!response.ok) throw new Error(`Patreon token call failed: ${response.status}`);
   return (await response.json()) as Tokens;
 }
 
 async function issue(tokens: Tokens): Promise<{ pass: string; renewal: string }> {
   const identity = new URL(`${patreon}/api/oauth2/v2/identity`);
   identity.search = new URLSearchParams({
-    include: "memberships.campaign,memberships.currently_entitled_tiers",
-    "fields[member]": "patron_status",
-    "fields[tier]": "amount_cents",
+    include: "memberships.campaign",
+    "fields[member]": "patron_status,currently_entitled_amount_cents",
   }).toString();
   const response = await fetch(identity, {
     headers: { authorization: `Bearer ${tokens.access_token}`, "user-agent": userAgent },

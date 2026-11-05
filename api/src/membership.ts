@@ -16,25 +16,22 @@ export function parseMembership(
   ownerUserId: string,
 ): { userId: string; plus: boolean } {
   const { data, included = [] } = document as IdentityDocument;
-  const find = (type: string, id: string) =>
-    included.find((resource) => resource.type === type && resource.id === id);
-  const related = (resource: Resource, name: string) => {
-    const link = resource.relationships?.[name]?.data;
-    return link == null ? [] : Array.isArray(link) ? link : [link];
-  };
+  const memberships = data.relationships?.memberships?.data;
+  const ids = new Set((Array.isArray(memberships) ? memberships : []).map((link) => link.id));
 
   // Patreon lists no membership for a creator on their own campaign.
-  const plus = data.id === ownerUserId || related(data, "memberships")
-    .map((link) => find("member", link.id))
-    .some(
-      (member) =>
-        member !== undefined &&
-        member.attributes?.patron_status === "active_patron" &&
-        related(member, "campaign")[0]?.id === campaignId &&
-        related(member, "currently_entitled_tiers").some((link) => {
-          const cents = find("tier", link.id)?.attributes?.amount_cents;
-          return typeof cents === "number" && cents > 0;
-        }),
+  const plus = data.id === ownerUserId || included.some((member) => {
+    const campaign = member.relationships?.campaign?.data;
+    const cents = member.attributes?.currently_entitled_amount_cents;
+    return (
+      member.type === "member" &&
+      ids.has(member.id) &&
+      member.attributes?.patron_status === "active_patron" &&
+      !Array.isArray(campaign) &&
+      campaign?.id === campaignId &&
+      typeof cents === "number" &&
+      cents > 0
     );
+  });
   return { userId: data.id, plus };
 }
