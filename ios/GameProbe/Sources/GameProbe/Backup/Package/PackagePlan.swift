@@ -116,6 +116,8 @@ public struct PackagePlan: Sendable {
 
         var progress = PackageBuildProgress(totalFileCount: fileCount, totalBytes: sourceBytes)
         var written: [PackageStream] = []
+        let record = PackageRecord(
+            id: id, kind: .built, fileName: fileName, gameName: gameName, createdAt: date)
 
         do {
             for planned in streams {
@@ -166,6 +168,7 @@ public struct PackagePlan: Sendable {
             try writer.add(data: Data(PackageLayout.readmeText.utf8), at: PackageLayout.readmePath)
             try writer.add(data: try manifest.jsonData(), at: PackageLayout.manifestPath)
             try writer.finish()
+            try record.save(in: directory)
         } catch is CancellationError {
             // A cancelled build deletes the partial ZIP, per 12.5.
             writer.cancel()
@@ -177,10 +180,6 @@ public struct PackagePlan: Sendable {
             throw PackageBuildFailure.failed(String(describing: error))
         }
 
-        let record = PackageRecord(
-            id: id, kind: .built, fileName: fileName, gameName: gameName,
-            createdAt: date, isSaved: false)
-        record.save(in: directory)
         return record
     }
 }

@@ -50,9 +50,4 @@ public enum PackageSaveChoice: String, Codable, Sendable, CaseIterable, Equatabl
     public static func question(fileName: String) -> String {
         "Empo built \(fileName) but did not save it. Save it again?"
     }
-
-    /// Whether the choice returns for this package.
-    public static func asks(isComplete: Bool, isSaved: Bool) -> Bool {
-        isComplete && !isSaved
-    }
 }

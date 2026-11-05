@@ -523,4 +523,14 @@ final class PackageTests: XCTestCase {
         XCTAssertEqual(file.entry.hash, ContentHash.hex(of: bytes))
         await source.close()
     }
+
+    // MARK: - The staged record
+
+    func testARecordThatCannotBeSavedSaysSo() throws {
+        let blocked = root.appendingPathComponent("blocked")
+        try Data("a file where the folder goes".utf8).write(to: blocked)
+        let record = PackageRecord(
+            id: "p1", kind: .built, fileName: "Quest.zip", createdAt: stamp)
+        XCTAssertThrowsError(try record.save(in: blocked))
+    }
 }

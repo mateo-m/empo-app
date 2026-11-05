@@ -21,8 +21,7 @@ enum PackageImport {
             id: UUID().uuidString,
             kind: .imported,
             fileName: picked.lastPathComponent,
-            createdAt: date,
-            isSaved: false)
+            createdAt: date)
         let directory = record.directory(localRoot: localRoot)
         let fm = FileManager.default
         try fm.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -40,7 +39,7 @@ enum PackageImport {
         } else {
             try fm.copyItem(at: picked, to: destination)
         }
-        record.save(in: directory)
+        try record.save(in: directory)
         return record
     }
 

@@ -24,22 +24,19 @@ public struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
     /// The game the package covers, or `nil` for a library package.
     public var gameName: String?
     public var createdAt: Date
-    public var isSaved: Bool
 
     public init(
         id: String,
         kind: PackageKind,
         fileName: String,
         gameName: String? = nil,
-        createdAt: Date,
-        isSaved: Bool
+        createdAt: Date
     ) {
         self.id = id
         self.kind = kind
         self.fileName = fileName
         self.gameName = gameName
         self.createdAt = createdAt
-        self.isSaved = isSaved
     }
 
     public func directory(localRoot: URL) -> URL {
@@ -50,11 +47,11 @@ public struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
         directory(localRoot: localRoot).appendingPathComponent(fileName)
     }
 
-    public func save(in directory: URL) {
-        guard let data = try? JSONEncoder().encode(self) else { return }
-        try? FileManager.default.createDirectory(
+    public func save(in directory: URL) throws {
+        let data = try JSONEncoder().encode(self)
+        try FileManager.default.createDirectory(
             at: directory, withIntermediateDirectories: true)
-        try? data.write(to: directory.appendingPathComponent(Self.fileName), options: .atomic)
+        try data.write(to: directory.appendingPathComponent(Self.fileName), options: .atomic)
     }
 
     /// Every package still in staging, newest first.
@@ -87,24 +84,13 @@ public struct PackageRecord: Codable, Equatable, Identifiable, Sendable {
         }
     }
 
-    /// The package that still waits for a save, per 12.5.
+    /// The package that still waits for a save. A saved package
+    /// leaves staging at once, so every built one still here waits.
     public static func waitingForASave(localRoot: URL) -> PackageRecord? {
         all(localRoot: localRoot).first { record in
             record.kind == .built
-                && PackageSaveChoice.asks(
-                    isComplete: FileManager.default.fileExists(
-                        atPath: record.zipURL(localRoot: localRoot).path),
-                    isSaved: record.isSaved)
+                && FileManager.default.fileExists(atPath: record.zipURL(localRoot: localRoot).path)
         }
-    }
-
-    public func markSaved(localRoot: URL) {
-        var copy = self
-        copy.isSaved = true
-        copy.save(in: directory(localRoot: localRoot))
-        // Files owns the copy now, and Empo keeps no second one, per
-        // 12.5.
-        try? FileManager.default.removeItem(at: directory(localRoot: localRoot))
     }
 
     public func delete(localRoot: URL) {

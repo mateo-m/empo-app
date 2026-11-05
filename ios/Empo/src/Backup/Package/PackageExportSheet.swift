@@ -111,8 +111,9 @@ final class PackageExportModel {
         phase = .done
     }
 
+    /// Files owns the copy now, and Empo keeps no second one.
     func saved() {
-        record?.markSaved(localRoot: localRoot)
+        record?.delete(localRoot: localRoot)
         phase = .done
     }
 
