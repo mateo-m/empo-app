@@ -744,6 +744,8 @@ targets:
     sources:
       - Tests
       - TestsShared
+      - path: Empo.storekit
+        buildPhase: resources
     dependencies:
       - target: Empo
     settings:
@@ -790,6 +792,7 @@ schemes:
         - EmpoTests
     run:
       config: Debug
+      storeKitConfiguration: Empo.storekit
     profile:
       config: Release
     analyze:

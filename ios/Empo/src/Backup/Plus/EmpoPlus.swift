@@ -35,7 +35,7 @@ final class EmpoPlus {
 
     var isSignedIn: Bool { renewal != nil }
 
-    var hasPlus: Bool { pass?.grantsPlus(at: .now) ?? false }
+    var hasPlus: Bool { (pass?.grantsPlus(at: .now) ?? false) || PlusStore.shared.isSubscribed }
 
     /// With `replace`, the server signs out the other devices of the
     /// account when it is at its device limit.

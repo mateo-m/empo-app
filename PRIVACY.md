@@ -1,6 +1,6 @@
 Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
-Empo Plus.
+Empo Plus. A purchase of Empo Plus on the App Store does not use that server.
 
 Last update: 5 November 2026.
 
@@ -54,6 +54,14 @@ Sign out of Patreon in Settings > Empo Plus to delete the note and the key from
 the device, and the locked sign-in from the server. The server also deletes a
 locked sign-in that no device used for 90 days, and a device list with no
 signed-in devices.
+
+## Empo Plus on the App Store
+
+Apple handles a purchase of Empo Plus on the App Store. Empo gets no name, email,
+or payment details. The app asks the App Store on the device if the
+subscription is active. Apple signs that answer, and the app checks the
+signature. No Empo server takes part. Apple's privacy policy covers the
+purchase.
 
 ## Games that go online
 
