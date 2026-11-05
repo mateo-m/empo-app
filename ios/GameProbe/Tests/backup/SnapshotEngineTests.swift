@@ -588,6 +588,23 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(target.objectPaths(), [paths.writerFile])
     }
 
+    func testAClaimThatCannotBeReadStopsTheRunBeforeAnyWrite() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let damaged = Data("{\"version\":".utf8)
+        try target.seed(path: paths.writerFile, contents: damaged)
+        let engine = try makeEngine(target)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        guard case .writerConflict? = result.stop else {
+            return XCTFail("the run did not stop: \(String(describing: result.stop))")
+        }
+        let committed = await target.committedPaths
+        XCTAssertTrue(committed.isEmpty)
+        XCTAssertEqual(target.contents(atPath: paths.writerFile), damaged)
+    }
+
     func testASplitStartsANewNamespaceWithAFullUpload() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
@@ -871,6 +888,25 @@ final class SnapshotEngineTests: XCTestCase {
                 hash: entry.hash, fanOutWidth: FormatDescriptor.version1FanOutWidth)
             XCTAssertNotNil(target.contents(atPath: path), "blob gone for \(entry.path)")
         }
+    }
+
+    func testADeleteLeavesTheManifestsWhenAnotherDeviceHoldsTheClaim() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        _ = await engine.run(request(games: [game(gameName)]))
+        let other = WriterClaim(
+            namespaceId: namespaceId, deviceId: "device-b", deviceName: "iPad",
+            claimedAt: clock.now)
+        try target.seed(path: paths.writerFile, contents: try other.jsonData())
+
+        let outcome = await engine.deleteBackups(
+            BackupDeleteRequest(
+                descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId,
+                gameKey: key(gameName)))
+
+        XCTAssertEqual(outcome, .pending)
+        XCTAssertEqual(manifestPaths(target).count, 1)
     }
 
     // MARK: - 12. A pending deletion

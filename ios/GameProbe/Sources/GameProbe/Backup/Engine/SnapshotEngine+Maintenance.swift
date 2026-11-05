@@ -170,13 +170,7 @@ extension SnapshotEngine {
             return []
         }
 
-        let claim = try await fetch(paths.writerFile)
-            .flatMap { try? WriterClaim.decode(json: $0) }
-        if case .conflict(let other) = WriterClaimCheck.decide(
-            found: claim, deviceId: deviceId, namespaceId: paths.namespaceId)
-        {
-            throw BackupRunStop.writerConflict(other)
-        }
+        try await refuseAnotherWriter(paths: paths, deviceId: deviceId)
 
         let manifests = try await everyManifest(in: paths)
         let listed = try await list(prefix: paths.blobsPrefix + "/")
@@ -202,6 +196,26 @@ extension SnapshotEngine {
         }
         save(try store.recordSweep(targetId: targetId, at: now), "the sweep time of \(targetId)")
         return full
+    }
+
+    /// The claim in `writer.json`, or `nil` where the namespace holds
+    /// none. A claim that does not decode counts as another device's,
+    /// so a damaged file never reads as a free namespace.
+    func readTheClaim(_ paths: BackupNamespacePaths) async throws -> WriterClaim? {
+        guard let data = try await fetch(paths.writerFile) else { return nil }
+        return (try? WriterClaim.decode(json: data))
+            ?? WriterClaim(
+                namespaceId: paths.namespaceId, deviceId: "", deviceName: "Another device",
+                claimedAt: .distantPast)
+    }
+
+    func refuseAnotherWriter(paths: BackupNamespacePaths, deviceId: String) async throws {
+        if case .conflict(let other) = WriterClaimCheck.decide(
+            found: try await readTheClaim(paths), deviceId: deviceId,
+            namespaceId: paths.namespaceId)
+        {
+            throw BackupRunStop.writerConflict(other)
+        }
     }
 
     /// Every manifest in the namespace, for the mark of 5.11.
@@ -252,6 +266,7 @@ extension SnapshotEngine {
         let ids = ledger.map(\.snapshotId)
 
         do {
+            try await refuseAnotherWriter(paths: paths, deviceId: request.deviceId)
             if !ids.isEmpty {
                 try await provider.delete(
                     paths: ids.map { paths.manifestPath(stream: stream, snapshotId: $0) })

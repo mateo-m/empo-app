@@ -287,10 +287,8 @@ public actor SnapshotEngine {
     }
 
     private func holdTheWriterClaim(_ context: RunContext) async throws {
-        let found = try await fetch(context.paths.writerFile)
-            .flatMap { try? WriterClaim.decode(json: $0) }
         let decision = WriterClaimCheck.decide(
-            found: found,
+            found: try await readTheClaim(context.paths),
             deviceId: context.request.deviceId,
             namespaceId: context.paths.namespaceId)
 
