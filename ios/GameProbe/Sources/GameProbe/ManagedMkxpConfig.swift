@@ -326,6 +326,14 @@ public enum ManagedMkxpConfig {
 
     // MARK: - Overlay string for engine bridge
 
+    public enum MidiSoundFont: Equatable, Sendable {
+        /// Used only when the game's `mkxp.json` names no sound font.
+        case fallback(String)
+        /// Replaces the sound font of the game. An empty path makes the
+        /// engine load its built-in set.
+        case replacement(String)
+    }
+
     /// The JSON object string that the mkxp core takes as its `configOverlay` setting,
     /// or nil when there is nothing to send (no overlay keys, and no
     /// host normalization patches apply).
@@ -333,7 +341,7 @@ public enum ManagedMkxpConfig {
         gameDirectory: URL,
         stateDirectory: URL,
         overrides: MkxpEngineValues = MkxpEngineValues(),
-        midiSoundFont: String? = nil,
+        midiSoundFont: MidiSoundFont? = nil,
         onUnparseableOverlay: ((String) -> Void)? = nil
     ) -> String? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
@@ -380,8 +388,13 @@ public enum ManagedMkxpConfig {
             patches["defScreenH"] = 0
         }
 
-        if let midiSoundFont, (base?["midiSoundFont"] as? String ?? "").isEmpty {
-            patches["midiSoundFont"] = midiSoundFont
+        switch midiSoundFont {
+        case .replacement(let path):
+            patches["midiSoundFont"] = path
+        case .fallback(let path) where (base?["midiSoundFont"] as? String ?? "").isEmpty:
+            patches["midiSoundFont"] = path
+        case .fallback, nil:
+            break
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {

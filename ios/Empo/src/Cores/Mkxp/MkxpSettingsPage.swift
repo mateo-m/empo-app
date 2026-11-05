@@ -142,6 +142,8 @@ struct GameMidiSoundSetRow: View {
                     case .builtIn: .builtIn
                     case .imported: .imported
                     }
+                // An import can end after the page closed and stopped its onChange.
+                state.save()
             }
         )
     }

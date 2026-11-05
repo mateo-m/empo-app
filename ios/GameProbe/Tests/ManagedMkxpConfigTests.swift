@@ -54,7 +54,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
             ManagedMkxpConfig.overlayJSONString(
                 gameDirectory: gameDir,
                 stateDirectory: stateDir,
-                midiSoundFont: "/SoundFonts/gm.sf2"
+                midiSoundFont: .fallback("/SoundFonts/gm.sf2")
             )
         )
         let payload = try parseOverlayJSON(json)
@@ -74,9 +74,32 @@ final class ManagedMkxpConfigTests: XCTestCase {
         let json = ManagedMkxpConfig.overlayJSONString(
             gameDirectory: gameDir,
             stateDirectory: stateDir,
-            midiSoundFont: "/SoundFonts/gm.sf2"
+            midiSoundFont: .fallback("/SoundFonts/gm.sf2")
         )
         XCTAssertNil(json)
+    }
+
+    func testOverlayStringReplacesTheSoundFontOfTheGame() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "midiSoundFont": "Audio/BGM/GMGSx.sf2" }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        for path in ["/SoundFonts/gm.sf2", ""] {
+            let json = try XCTUnwrap(
+                ManagedMkxpConfig.overlayJSONString(
+                    gameDirectory: gameDir,
+                    stateDirectory: stateDir,
+                    midiSoundFont: .replacement(path)
+                )
+            )
+            let payload = try parseOverlayJSON(json)
+            XCTAssertEqual(payload["midiSoundFont"] as? String, path)
+        }
     }
 
     func testOverlayStringNeutralizesScreenKeysTheBaseDefines() throws {
