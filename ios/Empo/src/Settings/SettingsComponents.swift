@@ -27,32 +27,23 @@ struct SettingsToggle: View {
     }
 }
 
-struct SettingsNavigationRow<Title: View, Destination: View>: View {
+struct SettingsNavigationRow<Destination: View>: View {
+    let title: LocalizedStringResource
     let description: LocalizedStringResource
     @ViewBuilder let destination: () -> Destination
-    @ViewBuilder let title: () -> Title
 
     var body: some View {
         NavigationLink {
             destination()
         } label: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                title()
+                Text(title)
                 Text(description)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
         }
-    }
-}
-
-extension SettingsNavigationRow where Title == Text {
-    init(
-        title: LocalizedStringResource, description: LocalizedStringResource,
-        @ViewBuilder destination: @escaping () -> Destination
-    ) {
-        self.init(description: description, destination: destination) { Text(title) }
     }
 }
 

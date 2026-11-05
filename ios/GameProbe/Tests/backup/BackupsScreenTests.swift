@@ -27,10 +27,12 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowFacts(descriptor: target(), reach: .iCloudDriveOff),
             TargetRowFacts(descriptor: target(accountHint: nil)),
             TargetRowFacts(descriptor: target(isPaused: true), hasPlus: false),
-            TargetRowFacts(descriptor: target(isPaused: true)),
-            TargetRowFacts(descriptor: target(), failure: .needsSignIn),
+            TargetRowFacts(descriptor: target(), failure: .needsSignIn, hasPlus: false),
             TargetRowFacts(
-                descriptor: target(), failure: .blockedByPermissions(reason: "no write right")),
+                descriptor: target(), failure: .blockedByPermissions(reason: "no write right"),
+                hasPlus: false),
+            TargetRowFacts(
+                descriptor: target(), failure: .rejected(message: "too big"), hasPlus: false),
             TargetRowFacts(descriptor: target(), failure: .rejected(message: "too big")),
             TargetRowFacts(descriptor: target(), failure: .full(reason: "no room")),
             TargetRowFacts(descriptor: target(), failure: .unreachable(), failedAt: failedAt),
@@ -65,11 +67,18 @@ final class BackupsScreenTests: XCTestCase {
 
     func testALocationWithoutPlusOffersPlusAndSaysRestoreStillWorks() {
         let row = TargetRowRules.row(
-            TargetRowFacts(descriptor: target(), failure: .needsSignIn, hasPlus: false))
+            TargetRowFacts(descriptor: target(), failure: .full(reason: "no room"), hasPlus: false))
         XCTAssertEqual(row.state, .needsPlus)
         XCTAssertEqual(row.stateLine, "Backups stopped. You can still restore.")
         XCTAssertEqual(row.action, .getPlus)
         XCTAssertFalse(row.isDisabled)
+    }
+
+    func testALocationWithoutPlusStillAsksForTheSignInThatARestoreNeeds() {
+        let row = TargetRowRules.row(
+            TargetRowFacts(descriptor: target(), failure: .needsSignIn, hasPlus: false))
+        XCTAssertEqual(row.state, .needsSignIn)
+        XCTAssertEqual(row.action, .signIn)
     }
 
     func testICloudDriveBacksUpWithoutPlus() {

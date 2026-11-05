@@ -63,7 +63,7 @@ actor OAuthTokenStore {
     /// A background transfer waits for a network, and the token can
     /// die while it waits. So a 401 refreshes the token once and sends
     /// the request again. Only a second 401 reaches the caller.
-    func send(
+    nonisolated func send(
         _ request: URLRequest,
         isolation: isolated (any Actor)? = #isolation,
         through transport: (URLRequest) async throws(BackupProviderError) -> HTTPAnswer

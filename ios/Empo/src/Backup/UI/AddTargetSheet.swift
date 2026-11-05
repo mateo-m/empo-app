@@ -11,7 +11,6 @@ struct AddTargetSheet: View {
     @State private var typing: BackupProviderKind?
     @State private var isWorking = false
     @State private var failure: String?
-    @State private var showsPlus = false
 
     var body: some View {
         NavigationStack {
@@ -48,7 +47,6 @@ struct AddTargetSheet: View {
             .overlay {
                 if isWorking { CheckingOverlay() }
             }
-            .navigationDestination(isPresented: $showsPlus) { PlusScreen() }
             .navigationDestination(item: $typing) { service in
                 TargetFormScreen(service: service) { values in
                     service == .s3
@@ -84,7 +82,7 @@ struct AddTargetSheet: View {
                     Text(note).font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            if needsPlus(service) {
+            if service.needsPlus && !EmpoPlus.shared.hasPlus {
                 Spacer(minLength: 0)
                 PlusBadge().font(.footnote.weight(.medium))
             }
@@ -106,16 +104,8 @@ struct AddTargetSheet: View {
         service == .iCloudDrive && iCloudReach != .open
     }
 
-    private func needsPlus(_ service: BackupProviderKind) -> Bool {
-        service.needsPlus && !EmpoPlus.shared.hasPlus
-    }
-
     private func start(_ service: BackupProviderKind) {
         failure = nil
-        guard !needsPlus(service) else {
-            showsPlus = true
-            return
-        }
         switch service {
         case .s3, .webdav, .sftp:
             typing = service

@@ -15,8 +15,6 @@ extension BackupProviderKind {
         }
     }
 
-    /// Every service but iCloud Drive backs up only with Empo Plus.
-    /// A restore never needs it.
     public var needsPlus: Bool { self != .iCloudDrive }
 }
 
@@ -63,10 +61,10 @@ public enum TargetRowState: Equatable, Sendable {
         switch self {
         case .cannotOpen: return 1
         case .placeholder: return 2
-        case .needsPlus: return 3
-        case .paused: return 4
-        case .needsSignIn: return 5
-        case .blockedByPermissions: return 6
+        case .paused: return 3
+        case .needsSignIn: return 4
+        case .blockedByPermissions: return 5
+        case .needsPlus: return 6
         case .rejected: return 7
         case .full: return 8
         case .unreachable: return 9
@@ -202,7 +200,6 @@ public enum TargetRowRules {
             break
         }
         if facts.descriptor.isPlaceholder { return .placeholder }
-        if facts.descriptor.provider.needsPlus && !facts.hasPlus { return .needsPlus }
         // Paused outranks needs-sign-in on purpose. Signing in again
         // to a paused target changes nothing the user can see.
         if facts.descriptor.isPaused { return .paused }
@@ -211,6 +208,10 @@ public enum TargetRowRules {
             return .needsSignIn
         case .blockedByPermissions(let reason):
             return .blockedByPermissions(reason: reason)
+        case _ where facts.descriptor.provider.needsPlus && !facts.hasPlus:
+            // A restore needs a working sign-in, so the sign-in states
+            // above outrank this one.
+            return .needsPlus
         case .rejected(let message):
             return .rejected(message: message)
         case .full(let reason):
