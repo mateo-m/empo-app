@@ -7,7 +7,7 @@ import SwiftUI
 /// then the cleanup. The destructive part is last.
 struct BackupSheet: View {
 
-    let model: BackupSheetModel
+    @Bindable var model: BackupSheetModel
 
     @Environment(\.dismiss) private var dismiss
     @State private var confirmation: LeftoverConfirmation?
@@ -59,10 +59,13 @@ struct BackupSheet: View {
             .sheet(isPresented: $exports) {
                 PackageExportSheet(source: .game(model.container))
             }
-            .sheet(item: firstPendingAsk) { ask in
+            .sheet(item: $model.pendingAsk) { ask in
                 OversizedWriteAskSheet(path: ask.path, sizeBytes: ask.sizeBytes) { joins in
                     Task { await model.answerTheAsk(path: ask.path, joins: joins) }
                 }
+                // A swipe would close the ask with no answer, and the
+                // write would wait for one with no sheet to give it.
+                .interactiveDismissDisabled()
             }
         }
         .tint(.brand)
@@ -235,23 +238,6 @@ struct BackupSheet: View {
             }
             .padding(.vertical, Spacing.md)
         }
-    }
-
-    // MARK: - The oversized write of 3.6
-
-    private var firstPendingAsk: Binding<PendingWriteAsk?> {
-        Binding(
-            get: {
-                model.pendingAsks.first.map {
-                    PendingWriteAsk(path: $0, sizeBytes: Self.size(of: $0, in: model.container))
-                }
-            },
-            set: { _ in })
-    }
-
-    private static func size(of path: String, in container: GameContainer) -> Int64 {
-        let url = container.url.appendingPathComponent(path)
-        return Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
     }
 }
 

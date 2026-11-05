@@ -35,8 +35,8 @@ final class BackupSheetModel {
     private(set) var editor: SaveFileEditorModel?
     private(set) var leftovers = GameLeftovers()
     private(set) var hasATarget = false
-    /// The oversized writes of 3.6 this game still owes an answer.
-    private(set) var pendingAsks: [String] = []
+    /// The first oversized write this game still owes an answer.
+    var pendingAsk: PendingWriteAsk?
 
     var gameKey: String { BackupKeys.gameKey(containerFolderName: container.folderName) }
 
@@ -71,7 +71,9 @@ final class BackupSheetModel {
         defer { store?.close() }
         readTheStatus(descriptors, store: store)
         readTheStore(descriptors, store: store)
-        pendingAsks = GameSaveWatch.shared.pendingAsks(forGame: container.id)
+        pendingAsk = GameSaveWatch.shared.pendingAsks(forGame: container.id).first.map {
+            PendingWriteAsk(path: $0, sizeBytes: Self.size(of: $0, in: container))
+        }
     }
 
     /// What a change to the game's own files changes. It resolves
@@ -159,6 +161,11 @@ final class BackupSheetModel {
             GameSaveWatch.shared.declineAsk(path: path, container: container)
         }
         await load()
+    }
+
+    private static func size(of path: String, in container: GameContainer) -> Int64 {
+        let url = container.url.appendingPathComponent(path)
+        return Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
     }
 
     // MARK: - The restore door of 11.3
