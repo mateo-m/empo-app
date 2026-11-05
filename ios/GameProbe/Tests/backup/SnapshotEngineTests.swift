@@ -201,7 +201,8 @@ final class SnapshotEngineTests: XCTestCase {
     ) throws -> SnapshotManifest {
         let stream = try XCTUnwrap(result.streams.last)
         guard case .wroteSnapshot(let id) = stream.outcome else {
-            throw XCTSkip("the run wrote no snapshot for \(stream.streamKey)")
+            XCTFail("the run wrote no snapshot for \(stream.streamKey)")
+            throw NoSnapshot()
         }
         return try manifest(
             on: target,
@@ -211,7 +212,8 @@ final class SnapshotEngineTests: XCTestCase {
 
     private func snapshotId(of result: BackupRunResult, stream key: String) throws -> String {
         guard case .wroteSnapshot(let id)? = result.stream(key)?.outcome else {
-            throw XCTSkip("the run wrote no snapshot for \(key)")
+            XCTFail("the run wrote no snapshot for \(key)")
+            throw NoSnapshot()
         }
         return id
     }
@@ -1289,6 +1291,8 @@ final class SnapshotEngineTests: XCTestCase {
 }
 
 /// What the engine could not save.
+private struct NoSnapshot: Error {}
+
 final class NoteRecorder: @unchecked Sendable {
 
     private let lock = NSLock()

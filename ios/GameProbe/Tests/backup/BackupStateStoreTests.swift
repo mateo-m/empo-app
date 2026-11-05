@@ -532,13 +532,14 @@ final class BackupStateStoreTests: XCTestCase {
     // MARK: - The scheduler's own state, per SPEC 7.10 and 7.11
 
     func testTheInterruptedRunTallySurvivesAReopen() throws {
-        let store = try BackupStateStore(url: nil)
-        defer { store.close() }
-        XCTAssertEqual(try store.interruptedRunTally().count, 0)
-        try store.saveInterruptedRunTally(InterruptedRunTally(count: 3))
-        XCTAssertEqual(try store.interruptedRunTally().count, 3)
-        try store.saveInterruptedRunTally(InterruptedRunTally(count: 0))
-        XCTAssertEqual(try store.interruptedRunTally().count, 0)
+        let first = try BackupStateStore(url: databaseURL)
+        XCTAssertEqual(try first.interruptedRunTally().count, 0)
+        try first.saveInterruptedRunTally(InterruptedRunTally(count: 3))
+        first.close()
+
+        let second = try BackupStateStore(url: databaseURL)
+        defer { second.close() }
+        XCTAssertEqual(try second.interruptedRunTally().count, 3)
     }
 
     func testTheNotificationLedgerRoundTrips() throws {
