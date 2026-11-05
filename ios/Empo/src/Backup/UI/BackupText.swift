@@ -8,8 +8,16 @@ import GameProbe
 enum BackupText {
 
     static func bytes(_ count: Int64) -> String {
-        ByteCountFormatter.string(fromByteCount: count, countStyle: .file)
+        bytesFormatter.string(fromByteCount: count)
     }
+
+    // The formatter writes 0 as "Zero KB" unless nonnumeric words are off.
+    private static let bytesFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter
+    }()
 
     static func time(_ date: Date) -> String {
         date.formatted(date: .omitted, time: .shortened)
