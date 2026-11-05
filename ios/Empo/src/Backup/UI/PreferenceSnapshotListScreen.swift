@@ -13,6 +13,7 @@ struct PreferenceSnapshotListScreen: View {
     @State private var chosen: SnapshotRow?
     @State private var line: String?
     @State private var isRunning = false
+    @State private var hasUndo = false
 
     var body: some View {
         List {
@@ -49,22 +50,31 @@ struct PreferenceSnapshotListScreen: View {
         }
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .alert(item: $chosen) { row in
-            Alert(
-                title: Text("Use these settings?"),
-                message: Text(PreferenceRestore.confirmation),
-                primaryButton: .default(Text("Use them")) { run(row) },
-                secondaryButton: .cancel())
+        .task { hasUndo = PreferenceRestore.hasUndo() }
+        .alert(
+            "Use these settings?",
+            isPresented: Binding(get: { chosen != nil }, set: { if !$0 { chosen = nil } }),
+            presenting: chosen
+        ) { row in
+            Button("Use them") { run(row) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text(PreferenceRestore.confirmation)
         }
     }
 
     @ViewBuilder
     private var undoSection: some View {
-        if PreferenceRestore.hasUndo() {
+        if hasUndo {
             Section {
                 Button(GameProbe.PreferenceRestore.undoLabel) {
-                    line = PreferenceRestore.undo() ? "Your earlier settings are back." : nil
+                    line =
+                        PreferenceRestore.undo()
+                        ? "Your earlier settings are back."
+                        : "Empo couldn't bring back your earlier settings. Try again."
+                    hasUndo = PreferenceRestore.hasUndo()
                 }
+                .disabled(isRunning)
             } footer: {
                 Text("Empo keeps one undo for 7 days.")
             }
@@ -76,6 +86,7 @@ struct PreferenceSnapshotListScreen: View {
         Task {
             let outcome = await restore(row)
             isRunning = false
+            hasUndo = PreferenceRestore.hasUndo()
             if case .finished = outcome {
                 line = "Your settings from this backup are back."
             } else {
