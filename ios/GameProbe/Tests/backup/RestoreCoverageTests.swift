@@ -32,12 +32,32 @@ final class RestoreCoverageTests: XCTestCase {
         let decision = ProvenCoverage.decide(
             mode: .full,
             treeFiles: tree(["a", "b", "c"]),
-            readableSnapshot: snapshot(hashes: ["a", "c"], mode: .full))
+            readableSnapshot: snapshot(hashes: ["a", "x", "c"], mode: .full))
 
         XCTAssertEqual(decision.drop, ["file-0", "file-2"])
         XCTAssertEqual(decision.keep, ["file-1"])
         XCTAssertEqual(decision.keptBytes, 10)
         XCTAssertFalse(decision.clearsItself)
+    }
+
+    func testASlotWithTheSameBytesAsACoveredSlotStaysWhenTheSnapshotLacksItsPath() {
+        let decision = ProvenCoverage.decide(
+            mode: .full,
+            treeFiles: tree(["a", "a"]),
+            readableSnapshot: snapshot(hashes: ["a"], mode: .full))
+
+        XCTAssertEqual(decision.drop, ["file-0"])
+        XCTAssertEqual(decision.keep, ["file-1"])
+    }
+
+    func testAFileOutsideTheContainerRootDoesNotCoverATreeFile() {
+        var outside = snapshot(hashes: ["a"], mode: .full)
+        outside.entries[0].root = .sharedData
+
+        let decision = ProvenCoverage.decide(
+            mode: .full, treeFiles: tree(["a"]), readableSnapshot: outside)
+
+        XCTAssertEqual(decision.keep, ["file-0"])
     }
 
     func testAFullyCoveredTreeClearsItself() {

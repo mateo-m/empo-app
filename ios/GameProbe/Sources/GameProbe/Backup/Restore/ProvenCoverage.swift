@@ -5,8 +5,8 @@ import Foundation
 /// The replace choice is the one place bytes leave the container, and
 /// it is gated on proof and never on judgement. Empo drops a file
 /// from the replaced tree only when the game is in full mode **and**
-/// the file is matched by hash inside a snapshot that is readable at
-/// that moment. Everything else stays on disk.
+/// the snapshot holds the same bytes at the same path, and that
+/// snapshot is readable at that moment. Everything else stays on disk.
 ///
 /// This type reads hashes and nothing else. The save classifier never
 /// reaches it, and it never may: the classifier reads the game root
@@ -75,10 +75,12 @@ public enum ProvenCoverage {
                 keptBytes: treeFiles.reduce(0) { $0 + $1.sizeBytes })
         }
 
-        let covered = Set(snapshot.entries.map(\.hash))
+        let covered = Set(
+            snapshot.entries.filter { $0.root == .container }.map { [$0.path, $0.hash] })
+        let tree = BackupSetRules.gameDirectoryName + "/"
         var decision = Decision()
         for file in treeFiles {
-            if covered.contains(file.hash) {
+            if covered.contains([tree + file.path, file.hash]) {
                 decision.drop.append(file.path)
             } else {
                 decision.keep.append(file.path)
