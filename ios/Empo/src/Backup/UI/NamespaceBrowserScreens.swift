@@ -43,6 +43,12 @@ struct NamespaceGamesScreen: View {
                     Text(RestoreNotices.emptyTargetLine)
                         .foregroundStyle(.secondary)
                 }
+                if row.totalBytes == nil {
+                    Text(BackupText.backups(row.snapshotCount, bytes: contents.bytes))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                }
                 ForEach(contents.games) { section in
                     NavigationLink {
                         SnapshotListScreen(

@@ -8,7 +8,9 @@ public struct BackupNamespaceRow: Equatable, Sendable {
     public var deviceName: String
     public var snapshotCount: Int
     public var gameCount: Int
-    public var totalBytes: Int64
+    /// Every object under the namespace, which is what the delete
+    /// frees, or `nil` where the location's listing gives no real size.
+    public var totalBytes: Int64?
     public var oldestSnapshotAt: Date?
     public var newestSnapshotAt: Date?
     /// The namespace this device writes to now.
@@ -21,7 +23,7 @@ public struct BackupNamespaceRow: Equatable, Sendable {
         deviceName: String,
         snapshotCount: Int,
         gameCount: Int,
-        totalBytes: Int64,
+        totalBytes: Int64?,
         oldestSnapshotAt: Date? = nil,
         newestSnapshotAt: Date? = nil,
         isThisDevice: Bool = false,

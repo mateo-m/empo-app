@@ -63,7 +63,8 @@ public enum ICloudDrive {
         reportsObjectAge: true,
         supportsBackgroundTransfer: true,
         maxFileSize: nil,
-        foldsCase: false)
+        foldsCase: false,
+        listReportsSize: false)
 
     // MARK: - The runtime gate
 

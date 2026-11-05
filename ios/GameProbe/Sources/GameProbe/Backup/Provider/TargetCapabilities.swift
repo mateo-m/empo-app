@@ -31,18 +31,25 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// opposite.
     public var foldsCase: Bool
 
+    /// Whether `list` gives each object's real size. False for iCloud
+    /// Drive: a file that is not on the device has the size of its
+    /// placeholder until the metadata query reports the real one.
+    public var listReportsSize: Bool
+
     public init(
         canQueryQuota: Bool = false,
         reportsObjectAge: Bool = true,
         supportsBackgroundTransfer: Bool = true,
         maxFileSize: Int64? = nil,
-        foldsCase: Bool = false
+        foldsCase: Bool = false,
+        listReportsSize: Bool = true
     ) {
         self.canQueryQuota = canQueryQuota
         self.reportsObjectAge = reportsObjectAge
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.maxFileSize = maxFileSize
         self.foldsCase = foldsCase
+        self.listReportsSize = listReportsSize
     }
 
     /// What the target screen shows in place of a usage bar, per

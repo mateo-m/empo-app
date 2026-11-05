@@ -11,6 +11,11 @@ enum BackupText {
         bytesFormatter.string(fromByteCount: count)
     }
 
+    static func backups(_ count: Int, bytes: Int64?) -> String {
+        guard let bytes else { return NamespaceListRules.backups(count) }
+        return "\(NamespaceListRules.backups(count)), \(Self.bytes(bytes))"
+    }
+
     // The formatter writes 0 as "Zero KB" unless nonnumeric words are off.
     private static let bytesFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()

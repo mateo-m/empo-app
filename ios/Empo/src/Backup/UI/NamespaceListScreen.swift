@@ -53,12 +53,9 @@ struct NamespaceListScreen: View {
                         } label: {
                             VStack(alignment: .leading, spacing: Spacing.xs) {
                                 Text(NamespaceListRules.title(of: row))
-                                Text(
-                                    "\(NamespaceListRules.backups(row.snapshotCount)), "
-                                        + BackupText.bytes(row.totalBytes)
-                                )
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
+                                Text(BackupText.backups(row.snapshotCount, bytes: row.totalBytes))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
                                 if let newest = row.newestSnapshotAt {
                                     Text("Newest \(BackupText.date(newest))")
                                         .font(.footnote)

@@ -61,6 +61,62 @@ public struct RestoreScan: Sendable {
         return scanned
     }
 
+    /// The namespace list of 13.9, from one listing and one
+    /// `device.json` read per namespace. It reads no manifest: Dropbox
+    /// takes about half a second for each read and answers 429 above
+    /// four at a time, so 100 backups took 20 seconds.
+    public func namespaceRows(
+        thisNamespaceId: String?, thisDeviceId: String?
+    ) async throws -> [BackupNamespaceRow] {
+        let prefix = BackupNamespacePaths(root: descriptor.root, namespaceId: "").devicesPrefix + "/"
+        let objects = Dictionary(
+            grouping: try await provider.list(prefix: prefix).filter { $0.path.hasPrefix(prefix) }
+        ) { String($0.path.dropFirst(prefix.count).split(separator: "/").first ?? "") }
+        .filter { !$0.key.isEmpty }
+
+        let records = try await withThrowingTaskGroup(of: (String, DeviceRecord?).self) { group in
+            for id in objects.keys {
+                group.addTask {
+                    (id, try await deviceRecord(BackupNamespacePaths(root: descriptor.root, namespaceId: id)))
+                }
+            }
+            var records: [String: DeviceRecord] = [:]
+            for try await (id, record) in group { records[id] = record }
+            return records
+        }
+
+        return objects.keys.sorted().map { id in
+            let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: id)
+            let owned = objects[id] ?? []
+            let gamesPrefix = paths.gamesPrefix + "/"
+            let manifests = owned.filter {
+                $0.path.hasPrefix(gamesPrefix) || $0.path.hasPrefix(paths.preferencesPrefix + "/")
+            }
+            .compactMap { object in
+                BackupNamespacePaths.snapshotId(ofManifestPath: object.path).map {
+                    (path: object.path, id: $0)
+                }
+            }
+            let gameKeys = Set(
+                manifests.filter { $0.path.hasPrefix(gamesPrefix) }
+                    .compactMap { $0.path.dropFirst(gamesPrefix.count).split(separator: "/").first })
+            let dates = manifests.compactMap { BackupKeys.timestamp(ofSnapshotId: $0.id) }
+            let record = records[id]
+            return BackupNamespaceRow(
+                namespaceId: id,
+                deviceName: record?.name ?? id,
+                snapshotCount: manifests.count,
+                gameCount: gameKeys.count,
+                totalBytes: provider.capabilities.listReportsSize
+                    ? owned.reduce(0) { $0 + $1.sizeBytes } : nil,
+                oldestSnapshotAt: dates.min(),
+                newestSnapshotAt: dates.max(),
+                isThisDevice: id == thisNamespaceId,
+                isEarlierSpace: id != thisNamespaceId && thisDeviceId != nil
+                    && record?.deviceId == thisDeviceId)
+        }
+    }
+
     /// One game's rows in every namespace of the target, per 11.3.
     ///
     /// The door of one game lists one prefix for each namespace, so

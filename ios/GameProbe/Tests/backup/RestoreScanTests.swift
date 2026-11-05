@@ -74,6 +74,49 @@ final class RestoreScanTests: XCTestCase {
         XCTAssertLessThanOrEqual(mostAtOnce, RestoreScan.readsAtOnce)
     }
 
+    // MARK: - The namespace list, per 13.9
+
+    func testTheDeviceListReadsOnlyTheDeviceRecords() async throws {
+        try seed(namespace: "ns1", deviceName: "iPad", games: ["Quest", "Other"], snapshotsEach: 3)
+        try seed(namespace: "ns2", deviceName: "iPhone", games: ["Quest"])
+        let ns1 = BackupNamespacePaths(root: descriptor.root, namespaceId: "ns1")
+        try target.seed(path: ns1.blobPath(hash: "abcdef", fanOutWidth: 2), contents: Data(count: 500))
+
+        let rows = try await scan().namespaceRows(thisNamespaceId: "ns2", thisDeviceId: "d-ns1")
+
+        let readPaths = await target.readPaths
+        XCTAssertEqual(Set(readPaths), [ns1.deviceFile, ns1.inNamespace("ns2").deviceFile])
+        XCTAssertEqual(rows.map(\.namespaceId), ["ns1", "ns2"])
+
+        let ipad = try XCTUnwrap(rows.first)
+        XCTAssertEqual(ipad.deviceName, "iPad")
+        XCTAssertEqual(ipad.snapshotCount, 6)
+        XCTAssertEqual(ipad.gameCount, 2)
+        XCTAssertEqual(ipad.oldestSnapshotAt, stamp)
+        XCTAssertEqual(ipad.newestSnapshotAt, stamp.addingTimeInterval(120))
+        let stored = try await target.list(prefix: ns1.namespacePrefix + "/")
+        XCTAssertEqual(ipad.totalBytes, stored.reduce(0) { $0 + $1.sizeBytes })
+        XCTAssertGreaterThan(try XCTUnwrap(ipad.totalBytes), 500)
+        XCTAssertFalse(ipad.isThisDevice)
+        XCTAssertTrue(ipad.isEarlierSpace)
+
+        let iphone = try XCTUnwrap(rows.last)
+        XCTAssertTrue(iphone.isThisDevice)
+        XCTAssertFalse(iphone.isEarlierSpace)
+    }
+
+    func testTheDeviceListLeavesOutASizeTheListingCannotGive() async throws {
+        try seed(namespace: "ns1", deviceName: "iPad", games: ["Quest"])
+        let icloud = FakeBackupTarget(
+            directory: tempRoot, capabilities: ICloudDrive.capabilities, clock: FakeBackupClock())
+
+        let rows = try await RestoreScan(provider: icloud, descriptor: descriptor)
+            .namespaceRows(thisNamespaceId: nil, thisDeviceId: nil)
+
+        XCTAssertEqual(rows.first?.snapshotCount, 1)
+        XCTAssertNil(rows.first?.totalBytes)
+    }
+
     // MARK: - The door of one game, per 11.3
 
     func testOneGameReadsNoManifestOfAnotherGame() async throws {
