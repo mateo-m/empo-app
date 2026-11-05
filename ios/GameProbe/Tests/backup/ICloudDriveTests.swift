@@ -195,4 +195,39 @@ final class ICloudDriveTests: XCTestCase {
     func testNoFileSizeIsRejectedBecauseTheAccountQuotaSetsTheLimit() {
         XCTAssertNil(ICloudDrive.capabilities.rejection(forFileOfSize: 8 * 1024 * 1024 * 1024))
     }
+
+    // MARK: - The download stall
+
+    func testADownloadThatKeepsMovingNeverStalls() {
+        let start = Date(timeIntervalSince1970: 0)
+        var progress = ICloudDownloadProgress(startedAt: start)
+        let limit = ICloudDownloadProgress.stallLimit
+
+        // Ten minutes of slow progress is still a live download.
+        for minute in 1...10 {
+            let now = start.addingTimeInterval(TimeInterval(minute) * limit * 0.9)
+            XCTAssertTrue(progress.record(percent: Double(minute), at: now))
+        }
+    }
+
+    func testADownloadStallsWhenItsProgressStopsForTheLimit() {
+        let start = Date(timeIntervalSince1970: 0)
+        var progress = ICloudDownloadProgress(startedAt: start)
+        let limit = ICloudDownloadProgress.stallLimit
+
+        XCTAssertTrue(progress.record(percent: 0, at: start))
+        XCTAssertTrue(progress.record(percent: 40, at: start.addingTimeInterval(10)))
+        XCTAssertTrue(progress.record(percent: 40, at: start.addingTimeInterval(limit)))
+        XCTAssertEqual(progress.timeLeft(at: start.addingTimeInterval(limit)), 10)
+        XCTAssertFalse(progress.record(percent: 40, at: start.addingTimeInterval(10 + limit)))
+    }
+
+    func testADownloadThatNeverStartsStallsAfterTheLimit() {
+        let start = Date(timeIntervalSince1970: 0)
+        var progress = ICloudDownloadProgress(startedAt: start)
+        let limit = ICloudDownloadProgress.stallLimit
+
+        XCTAssertTrue(progress.record(percent: 0, at: start.addingTimeInterval(limit - 1)))
+        XCTAssertFalse(progress.record(percent: 0, at: start.addingTimeInterval(limit)))
+    }
 }

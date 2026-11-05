@@ -18,11 +18,6 @@ actor ICloudDriveTarget: BackupProvider {
 
     nonisolated let capabilities = ICloudDrive.capabilities
 
-    /// How long a `get` waits for the daemon to bring an item down
-    /// before it leaves the work for the next pass.
-    private static let downloadWait: TimeInterval = 60
-    private static let downloadPollWait: TimeInterval = 0.5
-
     /// The ubiquity container. Every path a caller gives already
     /// carries the fixed root of 8.7, because the engine builds it in
     /// through `BackupNamespacePaths` and the permission check builds
@@ -42,8 +37,9 @@ actor ICloudDriveTarget: BackupProvider {
     func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
         let root = self.root
         return try await gate.request { () async throws(BackupProviderError) -> [RemoteObject] in
-            try await Self.offTheCooperativePool {
-                Self.objects(under: root, prefix: prefix)
+            let cloudSizes = await self.watch.sizes()
+            return try await Self.offTheCooperativePool {
+                Self.objects(under: root, prefix: prefix, cloudSizes: cloudSizes)
             }
         }
     }
@@ -139,24 +135,23 @@ actor ICloudDriveTarget: BackupProvider {
     // MARK: - The download wait
 
     /// Asks the daemon for an item this device does not hold, then
-    /// waits for it.
+    /// waits for it while its progress moves.
     ///
-    /// A wait that runs out is not a failure of the target. The next
-    /// pass asks again, per 8.4.
+    /// A download that stalls is not a failure of the target. The
+    /// next pass asks again.
     private func download(_ url: URL) async throws(BackupProviderError) {
         if let reading = await watch.reading(for: url), reading.isDownloaded { return }
         try? FileManager.default.startDownloadingUbiquitousItem(at: url)
 
-        var left = Self.downloadWait
-        while left > 0 {
-            if let reading = await watch.reading(for: url) {
-                if let error = reading.uploadingError { throw error }
-                if reading.isDownloaded { return }
-            }
-            try? await Task.sleep(for: .seconds(Self.downloadPollWait))
-            left -= Self.downloadPollWait
+        var progress = ICloudDownloadProgress(startedAt: Date())
+        while true {
+            let reading = await watch.reading(for: url)
+            if let error = reading?.downloadingError { throw error }
+            if reading?.isDownloaded == true { return }
+            guard progress.record(percent: reading?.percentDownloaded ?? 0, at: Date()),
+                await watch.nextChange(within: .seconds(progress.timeLeft(at: Date())))
+            else { throw BackupProviderError.offline }
         }
-        throw BackupProviderError.offline
     }
 
     // MARK: - The file work
@@ -277,7 +272,7 @@ actor ICloudDriveTarget: BackupProvider {
     /// There is no directory model, per 8.1, so the path a caller
     /// sees is the whole name under the root.
     private static func objects(
-        under root: URL, prefix: String
+        under root: URL, prefix: String, cloudSizes: [String: Int64]
     ) -> Result<[RemoteObject], BackupProviderError> {
         let manager = FileManager.default
         do {
@@ -307,13 +302,21 @@ actor ICloudDriveTarget: BackupProvider {
             guard full.hasPrefix(base + "/") else { continue }
 
             var path = String(full.dropFirst(base.count + 1))
-            path = realName(ofPlaceholderPath: path) ?? path
+            var size = Int64(values?.fileSize ?? 0)
+            if let real = realName(ofPlaceholderPath: path) {
+                path = real
+                // The placeholder is a small file of its own. The
+                // query knows the size of the object it stands for.
+                let realURL = url.deletingLastPathComponent()
+                    .appendingPathComponent((real as NSString).lastPathComponent)
+                size = cloudSizes[ICloudUploadWatch.key(for: realURL)] ?? size
+            }
             guard path.hasPrefix(prefix) else { continue }
 
             found.append(
                 RemoteObject(
                     path: path,
-                    sizeBytes: Int64(values?.fileSize ?? 0),
+                    sizeBytes: size,
                     modifiedAt: values?.contentModificationDate))
         }
         return .success(found.sorted { $0.path < $1.path })

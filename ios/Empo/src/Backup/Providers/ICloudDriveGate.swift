@@ -93,6 +93,7 @@ final class ICloudDriveGate {
     private func identityDidChange() {
         cache.identityDidChange()
         containerURL = nil
+        watch?.stop()
         watch = nil
         Task { await probeAndLog() }
     }

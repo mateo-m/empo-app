@@ -187,3 +187,34 @@ public struct ICloudProbeCache: Equatable, Sendable {
         cached = nil
     }
 }
+
+/// Whether a download from iCloud still moves.
+///
+/// A large file on a slow link can take many minutes, so the download
+/// fails only when its progress stops for `stallLimit`.
+public struct ICloudDownloadProgress: Sendable {
+
+    public static let stallLimit: TimeInterval = 60
+
+    private var percent: Double = -1
+    private var movedAt: Date
+
+    public init(startedAt: Date) {
+        movedAt = startedAt
+    }
+
+    /// Records one reading. It answers false when the download has
+    /// not moved for `stallLimit`.
+    public mutating func record(percent: Double, at now: Date) -> Bool {
+        if percent > self.percent {
+            if self.percent >= 0 { movedAt = now }
+            self.percent = percent
+        }
+        return timeLeft(at: now) > 0
+    }
+
+    /// How long the download may stay still from `now`.
+    public func timeLeft(at now: Date) -> TimeInterval {
+        Self.stallLimit - now.timeIntervalSince(movedAt)
+    }
+}
