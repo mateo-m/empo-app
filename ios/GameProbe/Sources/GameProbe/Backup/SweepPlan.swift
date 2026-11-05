@@ -63,13 +63,16 @@ public enum SweepPlan {
     ///
     /// An object whose path names no hash is never deleted. The
     /// sweep cannot tell whether it is referenced, and 5.11 deletes
-    /// only what it has proven unreachable.
+    /// only what it has proven unreachable. `held` names the blobs a
+    /// paused run will reuse without an upload, so they stay at any
+    /// age.
     public static func blobsToDelete(
         manifests: [SnapshotManifest],
+        held: Set<String> = [],
         blobs: [BlobObject],
         now: Date
     ) -> [String] {
-        let referenced = referencedHashes(in: manifests)
+        let referenced = referencedHashes(in: manifests).union(held)
         return
             blobs
             .filter { blob in

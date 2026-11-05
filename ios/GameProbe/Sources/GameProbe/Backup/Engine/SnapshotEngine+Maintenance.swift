@@ -185,7 +185,9 @@ extension SnapshotEngine {
                 modifiedAt: modifiedAt)
         }
 
-        let doomed = SweepPlan.blobsToDelete(manifests: manifests, blobs: blobs, now: now)
+        let doomed = SweepPlan.blobsToDelete(
+            manifests: manifests, held: try store.checkpointBlobHashes(targetId: targetId),
+            blobs: blobs, now: now)
         let full = doomed.map { namespacePrefix + $0 }
         if !full.isEmpty {
             do {

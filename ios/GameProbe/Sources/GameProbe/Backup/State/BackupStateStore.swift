@@ -137,14 +137,6 @@ public final class BackupStateStore {
             uploadedAt REAL NOT NULL,
             PRIMARY KEY (targetId, gameKey)
         );
-        CREATE TABLE IF NOT EXISTS known_blob (
-            targetId TEXT NOT NULL,
-            namespaceId TEXT NOT NULL,
-            hash TEXT NOT NULL,
-            compression TEXT NOT NULL,
-            provenAt REAL NOT NULL,
-            PRIMARY KEY (targetId, namespaceId, hash)
-        );
         CREATE TABLE IF NOT EXISTS run_checkpoint (
             targetId TEXT NOT NULL,
             gameKey TEXT NOT NULL,
@@ -258,7 +250,7 @@ public final class BackupStateStore {
     /// history and the staleness clocks belong to the target and
     /// stay, per the split of 5.12.
     private static let namespaceScopedTables = [
-        "uploaded_manifest", "known_blob", "run_checkpoint", "snapshot_ledger",
+        "uploaded_manifest", "run_checkpoint", "snapshot_ledger",
     ]
 
     /// Drops every row that describes what one namespace holds.

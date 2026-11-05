@@ -37,11 +37,9 @@ public struct RunCheckpoint: Equatable, Sendable {
     /// durable.
     ///
     /// A run that died before its manifest landed leaves those blobs
-    /// orphaned, per 5.8. `known_blob` cannot hold them, because a
-    /// blob counts as known present only once a manifest that names
-    /// it uploaded, per 6.2. This list is the weaker claim the
-    /// resumed run reads, so it reuses the orphans for free instead
-    /// of paying for the bytes twice.
+    /// orphaned, and no manifest names them. The resumed run reads
+    /// this list to reuse them, and the sweep keeps every blob it
+    /// names.
     public var confirmedBlobs: [ConfirmedBlob]
     public var updatedAt: Date
 

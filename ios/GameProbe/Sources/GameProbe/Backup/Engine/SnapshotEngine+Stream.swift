@@ -179,13 +179,9 @@ extension SnapshotEngine {
             partial: staged.partial,
             detectionSource: member.detectionSource)
 
-        var known = run.confirmed[staged.hash]
-        if known == nil {
-            known =
-                (try? store.knownBlobCompression(
-                    hash: staged.hash, targetId: targetId,
-                    namespaceId: context.paths.namespaceId)) ?? nil
-        }
+        let known =
+            run.confirmed[staged.hash]
+            ?? run.previous?.entries.first { $0.hash == staged.hash }?.compression
 
         if let algorithm = known {
             // The blob is already on the target, so the entry costs
@@ -282,8 +278,7 @@ extension SnapshotEngine {
 
         save(
             try store.recordUploadedManifest(
-                manifest, snapshotId: run.snapshotId, targetId: targetId,
-                namespaceId: context.paths.namespaceId, uploadedAt: now),
+                manifest, snapshotId: run.snapshotId, targetId: targetId, uploadedAt: now),
             "the manifest record of \(run.key)")
         save(
             try store.recordSnapshot(

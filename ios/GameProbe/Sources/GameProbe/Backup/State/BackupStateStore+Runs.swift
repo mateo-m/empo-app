@@ -54,6 +54,17 @@ extension BackupStateStore {
             updatedAt: Date(timeIntervalSince1970: updatedAt))
     }
 
+    /// Every blob hash the checkpoints of one target name.
+    public func checkpointBlobHashes(targetId: String) throws -> Set<String> {
+        let rows = try database.query(
+            "SELECT confirmedBlobs FROM run_checkpoint WHERE targetId = ?",
+            [.text(targetId)])
+        return Set(
+            rows.flatMap { row in
+                Self.decodeList(row[0].string ?? "[]").compactMap { ConfirmedBlob(text: $0)?.hash }
+            })
+    }
+
     public func clearCheckpoint(targetId: String, gameKey: String) throws {
         try database.run(
             "DELETE FROM run_checkpoint WHERE targetId = ? AND gameKey = ?",

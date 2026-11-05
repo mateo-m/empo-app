@@ -140,85 +140,7 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
 
-    // MARK: - Known blobs, per 6.2
-
-    func testABlobIsNotKnownPresentUntilItsManifestUploads() throws {
-        let store = try makeStore()
-        defer { store.close() }
-        let blob = hash("save bytes")
-        let snapshot = manifest(hashes: [blob])
-
-        // The blob itself may already be on the target. Its existence
-        // is not proven until the manifest that names it succeeds.
-        XCTAssertFalse(
-            try store.isBlobKnownPresent(
-                hash: blob, targetId: targetId, namespaceId: namespaceId))
-
-        try store.recordUploadedManifest(
-            snapshot, snapshotId: "20260501T000000Z-aabbcc",
-            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
-
-        XCTAssertTrue(
-            try store.isBlobKnownPresent(
-                hash: blob, targetId: targetId, namespaceId: namespaceId))
-    }
-
-    func testAKnownBlobIsScopedToItsTargetAndNamespace() throws {
-        let store = try makeStore()
-        defer { store.close() }
-        let blob = hash("save bytes")
-
-        try store.recordUploadedManifest(
-            manifest(hashes: [blob]), snapshotId: "20260501T000000Z-aabbcc",
-            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
-
-        XCTAssertFalse(
-            try store.isBlobKnownPresent(
-                hash: blob, targetId: "target-dropbox", namespaceId: namespaceId))
-        XCTAssertFalse(
-            try store.isBlobKnownPresent(
-                hash: blob, targetId: targetId, namespaceId: "another-device"))
-    }
-
-    func testEveryHashOfTheManifestBecomesKnown() throws {
-        let store = try makeStore()
-        defer { store.close() }
-        let hashes = [hash("one"), hash("two"), hash("three")]
-
-        try store.recordUploadedManifest(
-            manifest(hashes: hashes), snapshotId: "20260501T000000Z-aabbcc",
-            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
-
-        XCTAssertEqual(
-            try store.knownBlobHashes(targetId: targetId, namespaceId: namespaceId),
-            Set(hashes))
-    }
-
-    func testAKnownBlobCarriesTheAlgorithmItWentUpWith() throws {
-        let store = try makeStore()
-        defer { store.close() }
-        var snapshot = manifest(hashes: [hash("one"), hash("two")])
-        snapshot.entries[1].compression = .stored
-
-        try store.recordUploadedManifest(
-            snapshot, snapshotId: "20260501T000000Z-aabbcc",
-            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
-
-        // The hash names the content, and 5.6 chooses the algorithm
-        // per blob, so a run that reuses a blob has to read back
-        // what the blob holds.
-        XCTAssertEqual(
-            try store.knownBlobCompression(
-                hash: hash("one"), targetId: targetId, namespaceId: namespaceId),
-            .zlib)
-        XCTAssertEqual(
-            try store.knownBlobCompression(
-                hash: hash("two"), targetId: targetId, namespaceId: namespaceId),
-            .stored)
-        XCTAssertNil(
-            try store.knownBlobCompression(
-                hash: hash("three"), targetId: targetId, namespaceId: namespaceId))
-    }
+    // MARK: - The last uploaded manifest
 
     func testTheLastUploadedManifestComesBackWhole() throws {
         let store = try makeStore()
@@ -227,7 +149,7 @@ final class BackupStateStoreTests: XCTestCase {
 
         try store.recordUploadedManifest(
             snapshot, snapshotId: "20260501T000000Z-aabbcc",
-            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
+            targetId: targetId, uploadedAt: now)
         let record = try store.lastUploadedManifest(
             targetId: targetId, gameKey: snapshot.gameKey)
 
@@ -244,19 +166,14 @@ final class BackupStateStoreTests: XCTestCase {
 
         try store.recordUploadedManifest(
             first, snapshotId: "20260501T000000Z-aaaaaa",
-            targetId: targetId, namespaceId: namespaceId, uploadedAt: now)
+            targetId: targetId, uploadedAt: now)
         try store.recordUploadedManifest(
             second, snapshotId: "20260502T000000Z-bbbbbb",
-            targetId: targetId, namespaceId: namespaceId,
-            uploadedAt: now.addingTimeInterval(86_400))
+            targetId: targetId, uploadedAt: now.addingTimeInterval(86_400))
 
         let record = try store.lastUploadedManifest(
             targetId: targetId, gameKey: first.gameKey)
         XCTAssertEqual(record?.snapshotId, "20260502T000000Z-bbbbbb")
-        // The older manifest's blobs stay known. Deleting a manifest
-        // frees no space, per invariant 1.1.6.
-        XCTAssertEqual(
-            try store.knownBlobHashes(targetId: targetId, namespaceId: namespaceId).count, 2)
     }
 
     // MARK: - Checkpoints, dirty flags, and pending deletions
@@ -350,15 +267,13 @@ final class BackupStateStoreTests: XCTestCase {
         for target in [targetId, "target-dropbox"] {
             try store.recordUploadedManifest(
                 snapshot, snapshotId: "20260501T000000Z-aabbcc",
-                targetId: target, namespaceId: namespaceId, uploadedAt: now)
+                targetId: target, uploadedAt: now)
         }
 
         try store.removeTarget(targetId: targetId)
 
         XCTAssertNil(
             try store.lastUploadedManifest(targetId: targetId, gameKey: snapshot.gameKey))
-        XCTAssertEqual(
-            try store.knownBlobHashes(targetId: targetId, namespaceId: namespaceId), [])
         XCTAssertNotNil(
             try store.lastUploadedManifest(
                 targetId: "target-dropbox", gameKey: snapshot.gameKey))
@@ -622,10 +537,10 @@ final class BackupStateStoreTests: XCTestCase {
         defer { store.close() }
         try store.recordUploadedManifest(
             manifest(containerFolderName: "Yume Nikki", hashes: [hash("a")]),
-            snapshotId: "s1", targetId: "t1", namespaceId: namespaceId, uploadedAt: now)
+            snapshotId: "s1", targetId: "t1", uploadedAt: now)
         try store.recordUploadedManifest(
             manifest(containerFolderName: "Ib", hashes: [hash("b"), hash("c")]),
-            snapshotId: "s2", targetId: "t1", namespaceId: namespaceId, uploadedAt: now)
+            snapshotId: "s2", targetId: "t1", uploadedAt: now)
         XCTAssertEqual(
             try store.usage(targetId: "t1"),
             [
@@ -655,8 +570,7 @@ final class BackupStateStoreTests: XCTestCase {
         let gameKey = snapshot.gameKey
 
         try store.recordUploadedManifest(
-            snapshot, snapshotId: "s1", targetId: targetId, namespaceId: namespaceId,
-            uploadedAt: now)
+            snapshot, snapshotId: "s1", targetId: targetId, uploadedAt: now)
         try store.saveCheckpoint(
             RunCheckpoint(
                 targetId: targetId, gameKey: gameKey, snapshotId: "s1", uploadedBytes: 1,
@@ -683,7 +597,6 @@ final class BackupStateStoreTests: XCTestCase {
         try store.removeTarget(targetId: targetId)
 
         XCTAssertNil(try store.lastUploadedManifest(targetId: targetId, gameKey: gameKey))
-        XCTAssertEqual(try store.knownBlobHashes(targetId: targetId, namespaceId: namespaceId), [])
         XCTAssertNil(try store.checkpoint(targetId: targetId, gameKey: gameKey))
         XCTAssertEqual(try store.snapshots(targetId: targetId, gameKey: gameKey), [])
         XCTAssertNil(try store.lastSweep(targetId: targetId))

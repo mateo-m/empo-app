@@ -543,6 +543,63 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(forced.deletedPaths, [orphan])
     }
 
+    private func sweepNow(_ engine: SnapshotEngine) async throws {
+        _ = try await engine.sweep(
+            SweepRequest(
+                descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId,
+                force: true))
+    }
+
+    private func assertEveryBlobOfTheLastSnapshotIsThere(
+        _ result: BackupRunResult, on target: FakeBackupTarget,
+        file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        let manifest = try manifestOfTheLastSnapshot(of: result, on: target)
+        for entry in manifest.entries {
+            let path = paths.blobPath(
+                hash: entry.hash, fanOutWidth: FormatDescriptor.version1FanOutWidth)
+            XCTAssertNotNil(
+                target.contents(atPath: path), "no blob for \(entry.path)", file: file, line: line)
+        }
+    }
+
+    func testASaveThatGoesBackToSweptBytesUploadsItsBlobAgain() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        let first = await engine.run(request(games: [game(gameName)]))
+        let firstManifest = paths.manifestPath(
+            stream: .game(key: key(gameName)),
+            snapshotId: try snapshotId(of: first, stream: key(gameName)))
+
+        clock.advance(3_600)
+        try changeTheSave(of: gameName, to: "slot one, later")
+        _ = await engine.run(request(games: [game(gameName)]))
+        try await target.delete(paths: [firstManifest])
+        clock.advance(8 * 86_400)
+        try await sweepNow(engine)
+
+        try changeTheSave(of: gameName, to: "slot one of \(gameName)")
+        let third = await engine.run(request(games: [game(gameName)]))
+
+        try assertEveryBlobOfTheLastSnapshotIsThere(third, on: target)
+    }
+
+    func testAResumedRunAfterASweepNamesNoMissingBlob() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        await target.addFault(.crashBeforeTheManifest())
+        let engine = try makeEngine(target)
+        _ = await engine.run(request(games: [game(gameName)]))
+        await target.removeFaults()
+
+        clock.advance(8 * 86_400)
+        try await sweepNow(engine)
+        let resumed = await engine.run(request(games: [game(gameName)]))
+
+        try assertEveryBlobOfTheLastSnapshotIsThere(resumed, on: target)
+    }
+
     func testTheSweepDeletesNothingWhenAManifestCannotBeRead() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

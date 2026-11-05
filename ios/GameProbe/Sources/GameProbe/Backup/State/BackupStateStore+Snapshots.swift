@@ -1,67 +1,35 @@
 import Foundation
 
 /// What one device namespace holds on one target: the newest
-/// manifest per stream, the blobs a manifest proved present, and
-/// the snapshot ledger the restore picker reads.
+/// manifest per stream and the snapshot ledger the restore picker
+/// reads.
 extension BackupStateStore {
 
-    // MARK: - Manifests and known blobs
+    // MARK: - Manifests
 
-    /// Writes the manifest row and marks every hash it names known
-    /// present, in one transaction.
-    ///
-    /// This is the only writer of `known_blob`, on purpose. A blob
-    /// counts as known present only once a manifest that names it
-    /// uploaded successfully, per 6.2. That is the moment its
-    /// existence is proven.
+    /// The next run diffs against this manifest and reuses the blobs
+    /// it names. The sweep never deletes those, because the manifest
+    /// is still on the target.
     public func recordUploadedManifest(
         _ manifest: SnapshotManifest,
         snapshotId: String,
         targetId: String,
-        namespaceId: String,
         uploadedAt: Date
     ) throws {
-        let payload = try manifest.jsonData()
-        try database.transaction {
-            try database.run(
-                """
-                INSERT INTO uploaded_manifest
-                    (targetId, gameKey, snapshotId, manifest, uploadedAt)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT (targetId, gameKey) DO UPDATE SET
-                    snapshotId = excluded.snapshotId,
-                    manifest = excluded.manifest,
-                    uploadedAt = excluded.uploadedAt
-                """,
-                [
-                    .text(targetId), .text(manifest.gameKey), .text(snapshotId),
-                    .blob(payload), .real(uploadedAt.timeIntervalSince1970),
-                ])
-
-            // The algorithm rides with the hash. A later run that
-            // reuses the blob has to name what the blob holds, and
-            // the hash alone cannot give that back.
-            var algorithms: [String: BlobCompression] = [:]
-            for entry in manifest.entries {
-                algorithms[entry.hash] = entry.compression
-                for chunk in entry.chunks ?? [] where algorithms[chunk] == nil {
-                    algorithms[chunk] = .stored
-                }
-            }
-            for hash in algorithms.keys.sorted() {
-                try database.run(
-                    """
-                    INSERT OR IGNORE INTO known_blob
-                        (targetId, namespaceId, hash, compression, provenAt)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
-                    [
-                        .text(targetId), .text(namespaceId), .text(hash),
-                        .text((algorithms[hash] ?? .stored).rawValue),
-                        .real(uploadedAt.timeIntervalSince1970),
-                    ])
-            }
-        }
+        try database.run(
+            """
+            INSERT INTO uploaded_manifest
+                (targetId, gameKey, snapshotId, manifest, uploadedAt)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (targetId, gameKey) DO UPDATE SET
+                snapshotId = excluded.snapshotId,
+                manifest = excluded.manifest,
+                uploadedAt = excluded.uploadedAt
+            """,
+            [
+                .text(targetId), .text(manifest.gameKey), .text(snapshotId),
+                .blob(try manifest.jsonData()), .real(uploadedAt.timeIntervalSince1970),
+            ])
     }
 
     public func lastUploadedManifest(
@@ -92,42 +60,6 @@ extension BackupStateStore {
         try database.run(
             "DELETE FROM uploaded_manifest WHERE targetId = ? AND gameKey = ?",
             [.text(targetId), .text(gameKey)])
-    }
-
-    public func isBlobKnownPresent(
-        hash: String, targetId: String, namespaceId: String
-    ) throws -> Bool {
-        let rows = try database.query(
-            """
-            SELECT 1 FROM known_blob
-            WHERE targetId = ? AND namespaceId = ? AND hash = ?
-            """,
-            [.text(targetId), .text(namespaceId), .text(hash)])
-        return !rows.isEmpty
-    }
-
-    /// The algorithm a known blob went up with, or `nil` where this
-    /// namespace has no proof the blob is there.
-    public func knownBlobCompression(
-        hash: String, targetId: String, namespaceId: String
-    ) throws -> BlobCompression? {
-        let rows = try database.query(
-            """
-            SELECT compression FROM known_blob
-            WHERE targetId = ? AND namespaceId = ? AND hash = ?
-            """,
-            [.text(targetId), .text(namespaceId), .text(hash)])
-        guard let text = rows.first?.first?.string else { return nil }
-        return BlobCompression(rawValue: text)
-    }
-
-    public func knownBlobHashes(
-        targetId: String, namespaceId: String
-    ) throws -> Set<String> {
-        let rows = try database.query(
-            "SELECT hash FROM known_blob WHERE targetId = ? AND namespaceId = ?",
-            [.text(targetId), .text(namespaceId)])
-        return Set(rows.compactMap { $0.first?.string })
     }
 
     // MARK: - The snapshot ledger
