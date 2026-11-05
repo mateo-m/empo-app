@@ -114,7 +114,7 @@ final class BackupLiveTests: XCTestCase {
                 _ = try await provider.list(prefix: target.root + "/")
                 XCTFail("\(target.label) answered a listing with the server down")
             } catch {
-                XCTAssertEqual(error as? BackupProviderError, .offline, target.label)
+                XCTAssertEqual(error, .offline, target.label)
             }
             let localRoot = scratch.appendingPathComponent("local-\(target.id)", isDirectory: true)
             try fm.createDirectory(at: localRoot, withIntermediateDirectories: true)
