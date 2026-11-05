@@ -23888,60 +23888,60 @@
         }
       }
     },
-    "Pick a SoundFont (.sf2 or .sf3) or a DLS file (.dls)." : {
+    "Pick a SoundFont (.sf2) or a DLS file (.dls)." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle eine SoundFont (.sf2 oder .sf3) oder eine DLS-Datei (.dls)."
+            "value" : "Wähle eine SoundFont (.sf2) oder eine DLS-Datei (.dls)."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elige un SoundFont (.sf2 o .sf3) o un archivo DLS (.dls)."
+            "value" : "Elige un SoundFont (.sf2) o un archivo DLS (.dls)."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisis une SoundFont (.sf2 ou .sf3) ou un fichier DLS (.dls)."
+            "value" : "Choisis une SoundFont (.sf2) ou un fichier DLS (.dls)."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Scegli un SoundFont (.sf2 o .sf3) o un file DLS (.dls)."
+            "value" : "Scegli un SoundFont (.sf2) o un file DLS (.dls)."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SoundFont（.sf2 または .sf3）か DLS ファイル（.dls）を選んでください。"
+            "value" : "SoundFont（.sf2）か DLS ファイル（.dls）を選んでください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "SoundFont(.sf2 또는 .sf3) 또는 DLS 파일(.dls)을 선택하세요."
+            "value" : "SoundFont(.sf2) 또는 DLS 파일(.dls)을 선택하세요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Escolha um SoundFont (.sf2 ou .sf3) ou um arquivo DLS (.dls)."
+            "value" : "Escolha um SoundFont (.sf2) ou um arquivo DLS (.dls)."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выберите SoundFont (.sf2 или .sf3) или файл DLS (.dls)."
+            "value" : "Выберите SoundFont (.sf2) или файл DLS (.dls)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "请选择 SoundFont（.sf2 或 .sf3）或 DLS 文件（.dls）。"
+            "value" : "请选择 SoundFont（.sf2）或 DLS 文件（.dls）。"
           }
         }
       }

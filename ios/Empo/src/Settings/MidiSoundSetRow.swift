@@ -57,7 +57,7 @@ struct MidiSoundSetRow: View {
         .alert("Can't use this file", isPresented: $importFailed) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Pick a SoundFont (.sf2 or .sf3) or a DLS file (.dls).")
+            Text("Pick a SoundFont (.sf2) or a DLS file (.dls).")
         }
     }
 }

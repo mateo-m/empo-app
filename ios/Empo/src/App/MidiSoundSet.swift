@@ -14,7 +14,7 @@ enum MidiSoundSet {
     static let folderURL = DataDirectory.documentsRootURL.appendingPathComponent(
         "SoundFonts", isDirectory: true)
 
-    private static let extensions = ["sf2", "sf3", "dls"]
+    private static let extensions = ["sf2", "dls"]
     static let contentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
 
     static var current: URL? {
@@ -53,12 +53,18 @@ enum MidiSoundSet {
     }
 
     /// SoundFont and DLS files are RIFF files with the form type
-    /// "sfbk" or "DLS ".
+    /// "sfbk" or "DLS ". The engine's FluidSynth has no libsndfile, so it
+    /// can't read SoundFont 3, which has 3 as the major version in `ifil`.
     private static func isSoundSet(_ url: URL) -> Bool {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
         defer { try? handle.close() }
-        guard let header = try? handle.read(upToCount: 12), header.count == 12 else { return false }
-        return header.prefix(4) == Data("RIFF".utf8)
-            && [Data("sfbk".utf8), Data("DLS ".utf8)].contains(header.suffix(4))
+        guard let header = try? handle.read(upToCount: 34), header.count >= 12,
+            header.subdata(in: 0..<4) == Data("RIFF".utf8)
+        else { return false }
+        let form = header.subdata(in: 8..<12)
+        if form == Data("DLS ".utf8) { return true }
+        // A SoundFont starts with the LIST INFO chunk, and `ifil` comes first in it.
+        return form == Data("sfbk".utf8) && header.count == 34
+            && header.subdata(in: 24..<28) == Data("ifil".utf8) && header[32] == 2
     }
 }
