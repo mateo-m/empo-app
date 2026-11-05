@@ -338,6 +338,7 @@ final class BackupLiveTests: XCTestCase {
         await engine.run(
             BackupRunRequest(
                 runId: UUID().uuidString,
+                trigger: .manual,
                 descriptor: descriptor,
                 namespaceId: namespaceId,
                 deviceId: "live-test-device",
