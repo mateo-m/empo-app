@@ -535,10 +535,14 @@ public actor SnapshotEngine {
     // MARK: - Uploads
 
     struct UploadedBlob {
+        var hash: String
         var compression: BlobCompression
         var bytes: Int64
         var path: String
         var isPending: Bool
+        /// The put read the file itself, so a write during the put
+        /// can reach the blob.
+        var readTheFile: Bool
     }
 
     /// Compresses one blob at a time into the outbox and puts it,
@@ -546,34 +550,35 @@ public actor SnapshotEngine {
     func uploadBlob(
         _ context: RunContext, file: URL, hash: String
     ) async throws -> UploadedBlob {
-        let path = context.paths.blobPath(hash: hash, fanOutWidth: context.fanOutWidth)
         let size = BackupSetResolver.stamp(of: file, fm: fm)?.size ?? 0
 
+        var hash = hash
         var source = file
         var compression = BlobCompression.stored
         var outbox: URL?
         if size <= Self.compressionSizeLimit, let data = try? Data(contentsOf: file) {
+            // A save can change between its hash and this read, so
+            // the blob takes the hash of the bytes that go up.
+            hash = ContentHash.hex(of: data)
             let encoded = BlobCodec.encode(data)
-            if encoded.algorithm == .zlib {
-                let url = BackupRootLayout(root: localRoot).outbox
-                    .appendingPathComponent(hash)
-                try? fm.createDirectory(
-                    at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-                try encoded.bytes.write(to: url, options: .atomic)
-                source = url
-                outbox = url
-                compression = .zlib
-            }
+            let url = BackupRootLayout(root: localRoot).outbox.appendingPathComponent(hash)
+            try? fm.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try encoded.bytes.write(to: url, options: .atomic)
+            source = url
+            outbox = url
+            compression = encoded.algorithm
         }
         defer { if let outbox { try? fm.removeItem(at: outbox) } }
+        let path = context.paths.blobPath(hash: hash, fanOutWidth: context.fanOutWidth)
 
         let uploaded = BackupSetResolver.stamp(of: source, fm: fm)?.size ?? size
         try await claimRoom(context, bytes: uploaded)
         try await put(fileAt: source, to: path, context: context)
         let confirmation = (try? await provider.confirm(path: path)) ?? .pending
         return UploadedBlob(
-            compression: compression, bytes: uploaded, path: path,
-            isPending: confirmation == .pending)
+            hash: hash, compression: compression, bytes: uploaded, path: path,
+            isPending: confirmation == .pending, readTheFile: outbox == nil)
     }
 
     /// Waits for the puts that came back pending, per 8.5.

@@ -208,19 +208,22 @@ extension SnapshotEngine {
             run.confirmed[staged.hash]
             ?? run.previous?.entries.first { $0.hash == staged.hash }?.compression
 
+        var readTheFile = false
         if let algorithm = known {
             // The blob is already on the target, so the entry costs
             // nothing. It still has to name the algorithm the blob
-            // went up with, per 5.6.
+            // went up with.
             entry.compression = algorithm
         } else {
             await observer?.runSendsBlob(bytes: member.size)
             let uploaded = try await uploadBlob(context, file: staged.file, hash: staged.hash)
+            entry.hash = uploaded.hash
             entry.compression = uploaded.compression
             run.result.uploadedBytes += uploaded.bytes
             run.result.uploadedBlobCount += 1
-            run.confirmed[staged.hash] = uploaded.compression
+            run.confirmed[uploaded.hash] = uploaded.compression
             if uploaded.isPending { run.pendingPaths.append(uploaded.path) }
+            readTheFile = uploaded.readTheFile
         }
         // The plan counts the member, so the progress counts the
         // member as well, whichever of the two paths above put the
@@ -228,15 +231,28 @@ extension SnapshotEngine {
         run.confirmedBytes += member.size
         await observer?.runConfirmed(streamKey: run.key, bytes: member.size)
 
+        var kept: SnapshotManifest.Entry? = entry
         if case .inPlace = run.route, SaveMemberRule.isSaveMember(member) {
-            // Rule 3 of 6.4: hash, upload, re-hash, and mark the
-            // path partial on a mismatch.
+            // Hash, upload, re-hash, and mark the path partial on a
+            // mismatch.
             let after = try? ContentHash.hexOfFile(at: staged.file)
-            if after != staged.hash { entry.partial = true }
+            if after != staged.hash {
+                entry.partial = true
+                kept = entry
+                if readTheFile {
+                    // The blob can hold bytes from two moments under
+                    // one hash. The entry keeps the last snapshot's
+                    // bytes, and the sweep takes the blob.
+                    run.confirmed[entry.hash] = nil
+                    kept = run.previous?.entries
+                        .first { $0.root == member.root && $0.path == member.path }
+                    kept?.partial = true
+                }
+            }
         }
 
         if entry.partial { run.result.partialPaths.append(member.path) }
-        run.entries.append(entry)
+        if let kept { run.entries.append(kept) }
         save(
             try store.saveCheckpoint(
                 RunCheckpoint(

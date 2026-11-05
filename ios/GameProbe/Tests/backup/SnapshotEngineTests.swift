@@ -918,6 +918,44 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(result.outcome, .success, "\(String(describing: result.stop))")
     }
 
+    private func assertASaveThatChangesBeforeItsUploadLeavesNoFalseBlob(
+        sizeBytes: Int, file: StaticString = #filePath, line: UInt = #line
+    ) async throws {
+        let root = try makeGameTree(gameName)
+        let target = makeTarget()
+        let save = root.appendingPathComponent("Game/save1.dat")
+        try write(String(repeating: "s", count: sizeBytes), to: save)
+        let engine = try makeEngine(
+            target, observer: WriteBeforeItsUpload(file: save, sizeBytes: Int64(sizeBytes)))
+        var inPlace = request(games: [game(gameName)])
+        inPlace.freeSpaceBytes = Int64(sizeBytes) + 1_000_000
+
+        let result = await engine.run(inPlace)
+
+        XCTAssertEqual(
+            result.stream(key(gameName))?.partialPaths, ["Game/save1.dat"], file: file, line: line)
+        for entry in try manifestOfTheLastSnapshot(of: result, on: target).entries {
+            let blob = try XCTUnwrap(
+                target.contents(
+                    atPath: paths.blobPath(
+                        hash: entry.hash, fanOutWidth: FormatDescriptor.version1FanOutWidth)),
+                file: file, line: line)
+            let bytes = try BlobCodec.decode(blob, algorithm: entry.compression)
+            XCTAssertEqual(
+                ContentHash.hex(of: bytes), entry.hash, "the blob of \(entry.path)",
+                file: file, line: line)
+        }
+    }
+
+    func testASaveThatChangesBeforeItsUploadGoesUpUnderItsOwnHash() async throws {
+        try await assertASaveThatChangesBeforeItsUploadLeavesNoFalseBlob(sizeBytes: 1_234)
+    }
+
+    func testALargeSaveThatChangesDuringItsUploadNamesNoFalseBlob() async throws {
+        try await assertASaveThatChangesBeforeItsUploadLeavesNoFalseBlob(
+            sizeBytes: Int(SnapshotEngine.compressionSizeLimit) + 1)
+    }
+
     func testTheRunWritesTheSpaceReadingItTookAfterTheUploads() async throws {
         try makeGameTree(gameName)
         let target = makeTarget(
@@ -1553,6 +1591,31 @@ actor RunGate: BackupRunObserver {
 
 /// Builds the run plan of SPEC 13.2 from what the engine reports,
 /// the way `BackupRunMonitor` does on the app side.
+/// Writes new bytes to one file as its blob starts to upload, the
+/// way a game that saves mid-run does. The observer sees sizes only,
+/// so the file has a size no other member has.
+actor WriteBeforeItsUpload: BackupRunObserver {
+
+    let file: URL
+    let sizeBytes: Int64
+    private var wrote = false
+
+    init(file: URL, sizeBytes: Int64) {
+        self.file = file
+        self.sizeBytes = sizeBytes
+    }
+
+    func runPlanned(streamKey: String, bytes: Int64) {}
+
+    func runConfirmed(streamKey: String, bytes: Int64) {}
+
+    func runSendsBlob(bytes: Int64) {
+        guard !wrote, bytes == sizeBytes else { return }
+        wrote = true
+        try? Data(repeating: UInt8(ascii: "t"), count: Int(bytes)).write(to: file)
+    }
+}
+
 actor RunPlanRecorder: BackupRunObserver {
 
     private(set) var plan = BackupRunPlan()
