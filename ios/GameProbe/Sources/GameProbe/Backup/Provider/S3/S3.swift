@@ -300,16 +300,24 @@ public enum S3 {
         .sorted { $0.number < $1.number }
     }
 
-    /// The upload ids `ListMultipartUploads` reports for one key.
+    /// The uploads of one key, from a `ListMultipartUploads` answer,
+    /// that nobody will finish: the one this device recorded, and
+    /// every one older than a resume record lives.
     ///
-    /// An abandoned multipart upload leaves parts, and parts cost
-    /// money, per 9.4. A new upload of the same key aborts every one
-    /// of these first.
-    public static func uploadIds(fromBody body: Data, key: String) -> [String] {
+    /// Another device can upload the same key at the same moment, and
+    /// an abort of its upload fails its commit.
+    public static func abandonedUploadIds(
+        fromBody body: Data, key: String, ownUploadId: String?, now: Date
+    ) -> [String] {
         guard let xml = String(data: body, encoding: .utf8) else { return [] }
+        let cutoff = now.addingTimeInterval(-S3MultipartUpload.lifetime)
         return S3XML.blocks(named: "Upload", in: xml).compactMap { block in
             guard S3XML.value(of: "Key", in: block) == key else { return nil }
             guard let id = S3XML.value(of: "UploadId", in: block), !id.isEmpty else { return nil }
+            if id == ownUploadId { return id }
+            guard let initiated = S3XML.value(of: "Initiated", in: block).flatMap(date(fromTimestamp:)),
+                initiated < cutoff
+            else { return nil }
             return id
         }
     }

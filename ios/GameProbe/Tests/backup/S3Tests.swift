@@ -322,18 +322,32 @@ final class S3Tests: XCTestCase {
                 + "</CompleteMultipartUpload>")
     }
 
-    func testTheUploadsOfOneKeyComeOutOfTheListAnswer() {
+    func testOnlyThisDevicesUploadAndUploadsOlderThanAWeekAreAbandoned() {
         let body = Data(
             """
             <?xml version="1.0" encoding="UTF-8"?>
             <ListMultipartUploadsResult><Bucket>my-saves</Bucket>\
-            <Upload><Key>Empo/a</Key><UploadId>one</UploadId></Upload>\
-            <Upload><Key>Empo/b</Key><UploadId>two</UploadId></Upload>\
-            <Upload><Key>Empo/a</Key><UploadId>three</UploadId></Upload>\
+            <Upload><Key>Empo/a</Key><UploadId>mine</UploadId>\
+            <Initiated>2026-11-04T10:00:00.000Z</Initiated></Upload>\
+            <Upload><Key>Empo/a</Key><UploadId>other-device</UploadId>\
+            <Initiated>2026-11-04T11:00:00.000Z</Initiated></Upload>\
+            <Upload><Key>Empo/a</Key><UploadId>old</UploadId>\
+            <Initiated>2026-10-20T10:00:00.000Z</Initiated></Upload>\
+            <Upload><Key>Empo/a</Key><UploadId>no-date</UploadId></Upload>\
+            <Upload><Key>Empo/b</Key><UploadId>other-key</UploadId>\
+            <Initiated>2026-10-01T10:00:00.000Z</Initiated></Upload>\
             </ListMultipartUploadsResult>
             """.utf8)
-        XCTAssertEqual(S3.uploadIds(fromBody: body, key: "Empo/a"), ["one", "three"])
-        XCTAssertEqual(S3.uploadIds(fromBody: body, key: "Empo/z"), [])
+        let now = S3.date(fromTimestamp: "2026-11-05T10:00:00.000Z")!
+
+        XCTAssertEqual(
+            S3.abandonedUploadIds(fromBody: body, key: "Empo/a", ownUploadId: "mine", now: now),
+            ["mine", "old"])
+        XCTAssertEqual(
+            S3.abandonedUploadIds(fromBody: body, key: "Empo/a", ownUploadId: nil, now: now),
+            ["old"])
+        XCTAssertEqual(
+            S3.abandonedUploadIds(fromBody: body, key: "Empo/z", ownUploadId: nil, now: now), [])
     }
 
     func testEachMultipartCallNamesTheUploadItWorksOn() {

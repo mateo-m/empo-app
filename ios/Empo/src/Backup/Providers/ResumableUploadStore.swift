@@ -48,6 +48,11 @@ actor ResumableUploadStore<Record: ResumableUpload> {
         return record
     }
 
+    /// The record as it is on disk, also one that `record` would drop.
+    func stored(targetId: String, path: String) -> Record? {
+        load()[Self.key(targetId, path)]
+    }
+
     /// Writes the cursor after a chunk lands. The next launch reads it.
     func remember(_ record: Record, targetId: String, path: String) {
         var records = load()

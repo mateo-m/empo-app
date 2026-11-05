@@ -262,11 +262,13 @@ actor S3Target: BackupProvider {
     private func openUpload(
         key: String, size: Int64, parts: [S3.Part]
     ) async throws(BackupProviderError) -> S3MultipartUpload {
+        let stored = await s3MultipartUploads.stored(targetId: targetId, path: key)
         guard
             let saved = await s3MultipartUploads.record(
                 targetId: targetId, path: key, fileSize: size)
         else {
-            return try await startUpload(key: key, size: size, parts: parts)
+            return try await startUpload(
+                key: key, size: size, parts: parts, abandoning: stored?.uploadId)
         }
         // The record on disk may be one part behind what the service
         // took, and the service is the truth.
@@ -284,9 +286,9 @@ actor S3Target: BackupProvider {
     /// Opens one multipart upload, after it clears what an earlier
     /// run left on this key.
     private func startUpload(
-        key: String, size: Int64, parts: [S3.Part]
+        key: String, size: Int64, parts: [S3.Part], abandoning ownUploadId: String? = nil
     ) async throws(BackupProviderError) -> S3MultipartUpload {
-        try await abandonedUploads(ofKey: key)
+        try await abandonedUploads(ofKey: key, ownUploadId: ownUploadId)
 
         let answer = try await BackupAPISession.shared.send(
             try signed(method: "POST", key: key, query: S3.uploadsQuery()))
@@ -305,13 +307,11 @@ actor S3Target: BackupProvider {
         return record
     }
 
-    /// Aborts every multipart upload the service still holds for this
-    /// key.
-    ///
-    /// An abandoned upload leaves parts, and parts cost money, per
-    /// 9.4. A run that died between two parts left an upload nothing
-    /// will ever finish, and this is where it goes.
-    private func abandonedUploads(ofKey key: String) async throws(BackupProviderError) {
+    /// Aborts the multipart uploads of this key that nobody will
+    /// finish. Their parts stay in the bucket, and parts cost money.
+    private func abandonedUploads(
+        ofKey key: String, ownUploadId: String?
+    ) async throws(BackupProviderError) {
         let answer = try await BackupAPISession.shared.send(
             try signed(method: "GET", query: S3.uploadsQuery(prefix: key)))
         // A service that does not answer this list is not a reason to
@@ -319,7 +319,9 @@ actor S3Target: BackupProvider {
         // works, and the parts of the older one stay until a rule of
         // the bucket clears them.
         guard answer.isSuccess else { return }
-        for uploadId in S3.uploadIds(fromBody: answer.body, key: key) {
+        for uploadId in S3.abandonedUploadIds(
+            fromBody: answer.body, key: key, ownUploadId: ownUploadId, now: Date())
+        {
             BackupLog.line("S3Target", "an earlier run left parts, so this one aborts them")
             await abort(uploadId: uploadId, key: key)
         }
