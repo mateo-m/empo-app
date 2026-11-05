@@ -6,23 +6,17 @@ import CryptoKit
 import Crypto
 #endif
 
-/// The signed answer of the Empo API to "does this Patreon account
-/// have Empo Plus".
-///
 /// The text is `base64url(payload).base64url(signature)`. The payload
 /// is the JSON `{v, sub, plus, iat, exp}`, and the API signs it with
 /// Ed25519.
 public struct PlusPass: Equatable, Sendable {
 
-    public let userId: String
     public let includesPlus: Bool
     public let expiresAt: Date
 
-    /// The API makes a new pass when this much time is left on the
-    /// old one.
+    /// The app asks for a new pass when this much time is left.
     public static let renewalWindow: TimeInterval = 3 * 24 * 60 * 60
 
-    /// Reads a pass, or `nil` when the signature or the shape is wrong.
     public init?(_ text: String, publicKey: Data) {
         let parts = text.split(separator: ".", omittingEmptySubsequences: false)
         guard parts.count == 2,
@@ -33,7 +27,6 @@ public struct PlusPass: Equatable, Sendable {
             let claims = try? JSONDecoder().decode(Claims.self, from: payload),
             claims.v == 1
         else { return nil }
-        userId = claims.sub
         includesPlus = claims.plus
         expiresAt = Date(timeIntervalSince1970: claims.exp)
     }
@@ -48,7 +41,6 @@ public struct PlusPass: Equatable, Sendable {
 
     private struct Claims: Decodable {
         let v: Int
-        let sub: String
         let plus: Bool
         let exp: TimeInterval
     }

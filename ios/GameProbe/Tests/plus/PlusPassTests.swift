@@ -3,8 +3,6 @@ import XCTest
 
 @testable import GameProbe
 
-/// The passes below come from `signPass` in `api/src/pass.ts`, signed
-/// with a key made for this test only.
 final class PlusPassTests: XCTestCase {
 
     private let publicKey = Data(base64Encoded: "lv8MNMW4DtAtq2iyjD+1w6PhBFUp1+oWs1uVNT5wvj0=")!
@@ -17,7 +15,6 @@ final class PlusPassTests: XCTestCase {
 
     func testAPassFromTheAPIGrantsPlusForSevenDays() throws {
         let pass = try XCTUnwrap(PlusPass(plus, publicKey: publicKey))
-        XCTAssertEqual(pass.userId, "user-1")
         XCTAssertEqual(pass.expiresAt, issuedAt.addingTimeInterval(7 * day))
         XCTAssertTrue(pass.grantsPlus(at: issuedAt))
         XCTAssertTrue(pass.grantsPlus(at: issuedAt.addingTimeInterval(7 * day - 1)))

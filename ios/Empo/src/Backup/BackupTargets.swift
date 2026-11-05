@@ -17,9 +17,7 @@ enum BackupTargets {
         return file?.targets ?? []
     }
 
-    /// The targets that take new backups and settings sync. Every
-    /// target except iCloud Drive needs Plus for that. Restores read
-    /// from every target.
+    /// Restores use `load()`, so they still read from every target.
     static func writable() -> [TargetDescriptor] {
         let hasPlus = EmpoPlus.shared.hasPlus
         return load().filter { !$0.isPaused && (hasPlus || !$0.provider.needsPlus) }
