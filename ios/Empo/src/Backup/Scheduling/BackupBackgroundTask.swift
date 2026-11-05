@@ -22,15 +22,6 @@ import UIKit
 @MainActor
 enum BackupBackgroundTask {
 
-    /// What 7.3 plans for, in seconds of local work.
-    static let plannedSeconds: TimeInterval = 30
-
-    /// The shortest grant this app run saw, or `nil` while no grant
-    /// has ended yet. iOS calls the expiry handler about five seconds
-    /// before the grant really ends, so this is the time a run can
-    /// use. The device check of ticket 007 reads it.
-    private(set) static var shortestGrantSeconds: TimeInterval?
-
     /// Runs `body` under a background task and reports whether it
     /// finished before the grant ended.
     ///
@@ -48,9 +39,7 @@ enum BackupBackgroundTask {
         let work = Task { await body() }
         identifier = application.beginBackgroundTask(withName: name) {
             work.cancel()
-            let used = Date().timeIntervalSince(startedAt)
-            record(used)
-            log("the grant ended after \(seconds(used)) of \(name)")
+            log("the grant ended after \(seconds(Date().timeIntervalSince(startedAt))) of \(name)")
             application.endBackgroundTask(identifier)
             identifier = .invalid
         }
@@ -77,13 +66,10 @@ enum BackupBackgroundTask {
         return finished
     }
 
-    /// Holds the grant open and logs the time left every five
-    /// seconds, when the process starts with `-backupHoldGrant YES`.
-    ///
-    /// The device check of ticket 007 measures the grant this way.
+    #if DEBUG
     /// `backgroundTimeRemaining` reads as unlimited while the app
-    /// still runs in the foreground, so one reading at the start
-    /// proves nothing. Nothing but the device check calls this.
+    /// still runs in the foreground, so measuring the grant needs a
+    /// hold that logs the time left from inside the background task.
     static func holdForADeviceCheck() async {
         guard UserDefaults.standard.bool(forKey: "backupHoldGrant") else { return }
         while !Task.isCancelled {
@@ -93,11 +79,7 @@ enum BackupBackgroundTask {
         }
         log("the hold stopped")
     }
-
-    /// Keeps the shortest grant that ended.
-    private static func record(_ used: TimeInterval) {
-        shortestGrantSeconds = min(shortestGrantSeconds ?? used, used)
-    }
+    #endif
 
     private static func seconds(_ value: TimeInterval) -> String {
         value > 1_000 ? "unlimited" : String(format: "%.1fs", value)

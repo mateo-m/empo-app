@@ -62,7 +62,9 @@ final class SyncPass {
         ) { _ in
             MainActor.assumeIsolated { SyncPass.shared.schedule(.afterALocalChange) }
         }
+        #if DEBUG
         SyncDeviceCheck.run()
+        #endif
         schedule(.now)
     }
 
@@ -158,7 +160,11 @@ final class SyncPass {
                 lastWriteAt: Date()),
             namespaceId: namespaceId,
             now: { Date() },
-            didMerge: { SyncDeviceCheck.dump($0, heads: $1) },
+            didMerge: { model, heads in
+                #if DEBUG
+                SyncDeviceCheck.dump(model, heads: heads)
+                #endif
+            },
             note: { [weak self] in self?.log($0) })
         self.engine = engine
         return engine

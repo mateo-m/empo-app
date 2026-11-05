@@ -1,6 +1,7 @@
 import Foundation
 import GameProbe
 
+#if DEBUG
 /// The launch arguments the preference-sync device checks of ticket
 /// 020 use.
 ///
@@ -76,3 +77,4 @@ enum SyncDeviceCheck {
         BackupLog.line("SyncDeviceCheck", message)
     }
 }
+#endif

@@ -2,6 +2,7 @@ import Foundation
 import GameProbe
 import UIKit
 
+#if DEBUG
 /// The launch arguments a backup device check uses.
 ///
 /// `-backupAddICloud YES`, `-backupAddDropbox YES`,
@@ -445,3 +446,4 @@ enum BackupDeviceCheck {
         BackupLog.line("BackupDeviceCheck", message)
     }
 }
+#endif
