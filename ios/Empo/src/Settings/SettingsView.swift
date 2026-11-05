@@ -110,6 +110,12 @@ struct SettingsView: View {
                     }
 
                     Section {
+                        MidiSoundSetRow()
+                    } header: {
+                        Text("Music")
+                    }
+
+                    Section {
                         Button {
                             if let url = DataDirectory.filesAppURL(for: DataDirectory.documentsRootURL.path) {
                                 UIApplication.shared.open(url)
