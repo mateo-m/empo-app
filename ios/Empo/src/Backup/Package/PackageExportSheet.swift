@@ -1,6 +1,8 @@
+import CoreTransferable
 import GameProbe
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// What an export covers, per SPEC 12.4.
 enum PackageExportSource {
@@ -178,15 +180,22 @@ struct PackageExportSheet: View {
         .onChange(of: model.phase) { _, phase in
             if phase == .done { dismiss() }
         }
-        .sheet(isPresented: .constant(model.phase == .saving)) {
-            if let record = model.record {
-                PackageExportPicker(file: record.zipURL(localRoot: BackupRoot.layout.root)) { saved in
-                    if saved {
-                        model.saved()
-                    } else {
-                        model.notSaved()
-                    }
-                }
+        .fileExporter(
+            isPresented: Binding(
+                get: { model.phase == .saving },
+                set: { isPresented in
+                    if !isPresented, model.phase == .saving { model.notSaved() }
+                }),
+            item: model.record.map {
+                PackageZip(url: $0.zipURL(localRoot: BackupRoot.layout.root))
+            },
+            contentTypes: [.zip],
+            defaultFilename: model.record?.fileName
+        ) { result in
+            if case .success = result {
+                model.saved()
+            } else {
+                model.notSaved()
             }
         }
     }
@@ -200,5 +209,15 @@ struct PackageExportSheet: View {
         SheetDestructiveButton(PackageSaveChoice.delete.label) {
             model.answer(.delete)
         }
+    }
+}
+
+/// Files copies the bytes out, so Empo still holds the staged ZIP until
+/// the save reports back.
+private struct PackageZip: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(exportedContentType: .zip) { SentTransferredFile($0.url) }
     }
 }
