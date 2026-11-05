@@ -4,37 +4,43 @@
 import SwiftUI
 
 struct MidiSoundSetRow: View {
+    private enum Choice: Hashable {
+        case builtIn, imported, importNew
+    }
+
     @State private var current = MidiSoundSet.current
     @State private var isImporting = false
     @State private var importFailed = false
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("MIDI sound set")
-                    Text(
-                        "Plays music in older games. For the Windows sound, import gm.dls from a Windows PC."
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(current?.deletingPathExtension().lastPathComponent ?? String(localized: "Built-in"))
-                    .foregroundStyle(.secondary)
+    private var choice: Binding<Choice> {
+        Binding {
+            current == nil ? .builtIn : .imported
+        } set: { choice in
+            switch choice {
+            case .builtIn:
+                try? MidiSoundSet.removeImported()
+                current = MidiSoundSet.current
+            case .imported:
+                break
+            case .importNew:
+                isImporting = true
             }
-            HStack {
-                Button("Import Sound Set…") { isImporting = true }
-                if current != nil {
-                    Button("Use Built-in") {
-                        try? MidiSoundSet.removeImported()
-                        current = MidiSoundSet.current
-                    }
-                }
-            }
-            .buttonStyle(.bordered)
         }
-        .padding(.vertical, Spacing.xxs)
+    }
+
+    var body: some View {
+        SettingsPicker(
+            title: "MIDI sound set",
+            selection: choice,
+            description: "Plays music in older games. For the Windows sound, import gm.dls from a Windows PC."
+        ) {
+            Text("Built-in").tag(Choice.builtIn)
+            if let current {
+                Text(current.deletingPathExtension().lastPathComponent).tag(Choice.imported)
+            }
+            Divider()
+            Text("Import Sound Set…").tag(Choice.importNew)
+        }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: MidiSoundSet.contentTypes) { result in
             do {
                 try MidiSoundSet.replace(with: result.get())
