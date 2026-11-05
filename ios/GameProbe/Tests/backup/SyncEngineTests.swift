@@ -589,6 +589,33 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(targets.puts.isEmpty)
     }
 
+    /// A build that may not write cannot delete the binding from the
+    /// document, so the apply must not bring it back on every pass.
+    func testABuildThatMayNotWriteKeepsABindingRemovedHereRemoved() async throws {
+        let document = FakeDocument()
+        document.held.minimumWriterVersion = SyncSchema.currentVersion + 1
+        document.held.controllerBindings = ["a": .string("confirm"), "b": .string("cancel")]
+        let local = FakeLocalValues()
+        local.mine.controllerBindings = ["a": .string("confirm")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.heldBindingIds = ["a", "b"]
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+
+        for _ in 0..<2 {
+            let outcome = await engine.run(.now)
+            XCTAssertEqual(outcome, .failed("this build reads the document but does not write it"))
+            XCTAssertEqual(local.mine.controllerBindings, ["a": .string("confirm")])
+        }
+    }
+
+    func testAJoinForgetsTheBindingsTheOldGroupHeld() {
+        var state = SyncState(actorId: "actor", groupId: "g1", heldBindingIds: ["a"])
+        state.join("g2", at: stamp)
+        XCTAssertEqual(state.heldBindingIds, [])
+    }
+
     // MARK: - Steps 5 and 6
 
     func testATargetThatRefusesTheCopyTakesNothingFromTheOthers() async throws {

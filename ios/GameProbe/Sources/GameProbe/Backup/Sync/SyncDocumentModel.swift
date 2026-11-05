@@ -58,13 +58,7 @@ public struct SyncDocumentModel: Equatable, Sendable {
         with local: SyncDocumentModel, removingPreferences removed: [String] = [],
         removingBindings removedBindings: [String] = [], keepsTheirs: Bool = false
     ) -> SyncDocumentModel {
-        var out = self
-        for key in removed where local.preferences[key] == nil {
-            out.preferences[key] = nil
-        }
-        for id in removedBindings where local.controllerBindings[id] == nil {
-            out.controllerBindings[id] = nil
-        }
+        var out = removing(preferences: removed, bindings: removedBindings, absentFrom: local)
         out.preferences.merge(local.preferences) { keepsTheirs ? $0 : $1 }
         out.controllerBindings.merge(local.controllerBindings) { keepsTheirs ? $0 : $1 }
         out.targetDescriptors.merge(local.targetDescriptors) { keepsTheirs ? $0 : $1 }
@@ -72,6 +66,20 @@ public struct SyncDocumentModel: Equatable, Sendable {
             let theirs = out.layoutProfiles[id]
             out.layoutProfiles[id] =
                 keepsTheirs ? theirs ?? mine : merged(theirs: theirs, mine: mine)
+        }
+        return out
+    }
+
+    public func removing(
+        preferences removed: [String], bindings removedBindings: [String],
+        absentFrom local: SyncDocumentModel
+    ) -> SyncDocumentModel {
+        var out = self
+        for key in removed where local.preferences[key] == nil {
+            out.preferences[key] = nil
+        }
+        for id in removedBindings where local.controllerBindings[id] == nil {
+            out.controllerBindings[id] = nil
         }
         return out
     }

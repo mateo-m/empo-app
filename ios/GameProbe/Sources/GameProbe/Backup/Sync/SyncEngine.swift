@@ -145,7 +145,11 @@ public final class SyncEngine {
         var latest = SyncDocumentModel()
         updateIdentities { latest = local.read(identities: &$0) }
         guard latest == mine else { return .runAgain }
-        updateIdentities { local.apply(merged, identities: &$0) }
+        // A build that may not write leaves a removal out of the
+        // document, so the apply drops it here.
+        let applied = merged.removing(
+            preferences: removed, bindings: removedBindings, absentFrom: mine)
+        updateIdentities { local.apply(applied, identities: &$0) }
 
         guard publishes, !SyncCopyValidation.readsButDoesNotPublish(merged) else {
             return .failed("this build reads the document but does not write it")

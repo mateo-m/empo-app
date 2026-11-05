@@ -139,6 +139,7 @@ public struct SyncState: Codable, Equatable, Sendable {
         // uploaded before counts as confirmed.
         targets = []
         removedPreferenceKeys = []
+        heldBindingIds = []
     }
 
     // MARK: - The file
