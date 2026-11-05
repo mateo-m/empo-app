@@ -49,7 +49,7 @@ private struct SheetToolbar<Title: View>: ViewModifier {
                         }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done", action: done)
+                    SheetBarButton.done(action: done)
                         .tint(.brand)
                 }
             }

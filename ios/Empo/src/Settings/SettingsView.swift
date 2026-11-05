@@ -334,7 +334,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    SheetBarButton.done { dismiss() }
                 }
             }
         }
@@ -954,7 +954,7 @@ private struct BuildInfoSheet: View {
         StandardSheet(
             title: "Build info",
             chromeAllowance: AppSize.libraryHeader,
-            trailingButton: SheetBarAction("Done") { dismiss() }
+            trailingButton: .done { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
