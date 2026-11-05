@@ -186,6 +186,56 @@ public enum Dropbox {
         }
     }
 
+    public enum DeleteBatchState: Equatable, Sendable {
+        /// The job still runs. `delete_batch` names the job, and
+        /// `delete_batch/check` does not.
+        case running(jobId: String?)
+        case done
+        case failed(BackupProviderError)
+    }
+
+    /// The state that a `delete_batch` or `delete_batch/check` answer
+    /// states. A path that is already gone counts as deleted.
+    ///
+    /// A finished job answers `complete` with one `success` or
+    /// `failure` per path, and a job that stopped answers `failed`:
+    /// https://github.com/dropbox/dropbox-api-spec/blob/master/files.stone
+    public static func deleteBatchState(inBody body: Data) -> DeleteBatchState {
+        guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
+            return .failed(refusal)
+        }
+        switch root[".tag"] as? String {
+        case "async_job_id":
+            guard let job = root["async_job_id"] as? String else { return .failed(refusal) }
+            return .running(jobId: job)
+        case "in_progress":
+            return .running(jobId: nil)
+        case "failed":
+            return .failed(endpointError(summary: tagPath(root["failed"])))
+        case "complete":
+            let entries = root["entries"] as? [[String: Any]] ?? []
+            for entry in entries where entry[".tag"] as? String != "success" {
+                let error = endpointError(summary: tagPath(entry["failure"]))
+                if error != .notFound { return .failed(error) }
+            }
+            return .done
+        default:
+            return .failed(refusal)
+        }
+    }
+
+    /// A nested union as the slash-joined tags of `error_summary`,
+    /// such as `path_lookup/not_found`.
+    private static func tagPath(_ value: Any?) -> String {
+        var tags: [String] = []
+        var current = value as? [String: Any]
+        while let union = current, let tag = union[".tag"] as? String {
+            tags.append(tag)
+            current = union[tag] as? [String: Any]
+        }
+        return tags.joined(separator: "/")
+    }
+
     // MARK: - The error map, per 8.4
 
     /// The HTTP codes Dropbox answers, named so the map below reads

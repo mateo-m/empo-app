@@ -329,11 +329,19 @@ actor DropboxTarget: BackupProvider, AccountReading {
         let answer = try await api(request)
         guard answer.isSuccess else { throw Self.error(answer) }
 
-        // A large batch runs as a job. A small one is already done.
-        guard let job = Self.asyncJobId(inBody: answer.body) else { return }
-        try await waitForDelete(job: job)
+        switch Dropbox.deleteBatchState(inBody: answer.body) {
+        case .done, .running(jobId: nil):
+            return
+        case .failed(let error):
+            throw error
+        case .running(jobId: let job?):
+            try await waitForDelete(job: job)
+        }
     }
 
+    /// Dropbox has no callback for this job. `delete_batch/check` is
+    /// the only way to learn its result:
+    /// https://www.dropbox.com/developers/documentation/http/documentation#files-delete_batch-check
     private func waitForDelete(job: String) async throws(BackupProviderError) {
         var left = Self.deleteJobWait
         while left > 0 {
@@ -342,13 +350,18 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
             let answer = try await api(request)
             guard answer.isSuccess else { throw Self.error(answer) }
-            if Self.tag(inBody: answer.body) != "in_progress" { return }
+            switch Dropbox.deleteBatchState(inBody: answer.body) {
+            case .done: return
+            case .failed(let error): throw error
+            case .running: break
+            }
 
             try? await Task.sleep(for: .seconds(Self.deleteJobPollWait))
             left -= Self.deleteJobPollWait
         }
-        // The job is still running on Dropbox's side. It finishes
-        // there, and the sweep of 5.11 checks again on the next pass.
+        // The next pass sends the delete again. A path that is
+        // already gone then counts as deleted.
+        throw BackupProviderError.throttled(retryAfter: Dropbox.defaultRetryAfter)
     }
 
     // MARK: - The requests
@@ -412,14 +425,6 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
     private static func sessionId(inBody body: Data) -> String? {
         field("session_id", inBody: body) as? String
-    }
-
-    private static func asyncJobId(inBody body: Data) -> String? {
-        field("async_job_id", inBody: body) as? String
-    }
-
-    private static func tag(inBody body: Data) -> String? {
-        field(".tag", inBody: body) as? String
     }
 
     private static func field(_ name: String, inBody body: Data) -> Any? {

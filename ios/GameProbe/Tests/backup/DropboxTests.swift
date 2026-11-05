@@ -422,6 +422,49 @@ final class DropboxTests: XCTestCase {
         XCTAssertNil(Dropbox.account(fromBody: Data("{}".utf8)))
         XCTAssertNil(Dropbox.account(fromBody: Data("not json".utf8)))
     }
+
+    // MARK: - delete_batch
+
+    private func deleteState(_ json: String) -> Dropbox.DeleteBatchState {
+        Dropbox.deleteBatchState(inBody: Data(json.utf8))
+    }
+
+    func testADeleteBatchThatStartsAJobNamesIt() {
+        XCTAssertEqual(
+            deleteState(#"{".tag":"async_job_id","async_job_id":"job-1"}"#), .running(jobId: "job-1"))
+        XCTAssertEqual(deleteState(#"{".tag":"in_progress"}"#), .running(jobId: nil))
+    }
+
+    func testADeleteBatchIsDoneWhenEveryPathIsGone() {
+        let body = """
+            {".tag":"complete","entries":[
+            {".tag":"success","metadata":{".tag":"file","name":"a"}},
+            {".tag":"failure","failure":{".tag":"path_lookup","path_lookup":{".tag":"not_found"}}}
+            ]}
+            """
+        XCTAssertEqual(deleteState(body), .done)
+    }
+
+    func testAFailedDeleteBatchIsAnError() {
+        XCTAssertEqual(
+            deleteState(#"{".tag":"failed","failed":{".tag":"too_many_write_operations"}}"#),
+            .failed(.throttled(retryAfter: Dropbox.defaultRetryAfter)))
+    }
+
+    func testAPathThatDropboxRefusedToDeleteIsAnError() {
+        let body = """
+            {".tag":"complete","entries":[
+            {".tag":"success","metadata":{".tag":"file","name":"a"}},
+            {".tag":"failure","failure":{".tag":"too_many_write_operations"}}
+            ]}
+            """
+        XCTAssertEqual(deleteState(body), .failed(.throttled(retryAfter: Dropbox.defaultRetryAfter)))
+    }
+
+    func testAnAnswerThatNamesNoKnownStateIsAnError() {
+        XCTAssertEqual(deleteState(#"{".tag":"other"}"#), .failed(.refusal(by: "Dropbox")))
+        XCTAssertEqual(deleteState("not json"), .failed(.refusal(by: "Dropbox")))
+    }
 }
 
 /// A clock that records a wait and returns at once.
