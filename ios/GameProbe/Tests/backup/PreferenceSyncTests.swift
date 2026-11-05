@@ -337,6 +337,27 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertEqual(TouchSectionSyncCoder.section(of: controls).landscape, nil)
     }
 
+    /// The file order is the draw order, and the numbered ids follow
+    /// it, so a read keeps it and a second write keeps every id.
+    func testTheControlsReadBackInTheFileOrder() {
+        let same = (0..<11).map { ButtonSpec(label: "\($0)", key: "KeyX", x: Double($0), y: 0) }
+        let section = TouchSection(
+            portrait: nil,
+            landscape: TouchLayout(
+                dpad: nil,
+                buttons: [ButtonSpec(key: "KeyZ", x: 0.9, y: 0)] + same
+                    + [ButtonSpec(key: "KeyA", x: 0.1, y: 0)],
+                actionButtons: [
+                    ActionButtonSpec(action: "menu", x: 0, y: 0),
+                    ActionButtonSpec(action: "fastForward", x: 1, y: 0),
+                ]))
+        let controls = TouchSectionSyncCoder.controls(of: section)
+        let readBack = TouchSectionSyncCoder.section(of: controls)
+
+        XCTAssertEqual(readBack, section)
+        XCTAssertEqual(TouchSectionSyncCoder.controls(of: readBack), controls)
+    }
+
     func testAControlAtAWholeNumberReadsBackUnchanged() throws {
         let section = TouchSection(
             portrait: TouchLayout(

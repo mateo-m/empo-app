@@ -34,13 +34,13 @@ public enum TouchSectionSyncCoder {
             out["\(prefix).dpad"] = value(of: dpad)
         }
         var taken: Set<String> = []
-        for button in layout.buttons ?? [] {
+        for (order, button) in (layout.buttons ?? []).enumerated() {
             let id = free("\(prefix).key.\(button.key)", taken: &taken)
-            out[id] = value(of: button)
+            out[id] = value(of: button, order: order)
         }
-        for button in layout.actionButtons ?? [] {
+        for (order, button) in (layout.actionButtons ?? []).enumerated() {
             let id = free("\(prefix).action.\(button.action)", taken: &taken)
-            out[id] = value(of: button)
+            out[id] = value(of: button, order: order)
         }
     }
 
@@ -66,9 +66,12 @@ public enum TouchSectionSyncCoder {
         return .object(fields.compactMapValues { $0 })
     }
 
-    private static func value(of button: ButtonSpec) -> JSONValue {
+    /// `order` is the place in the file, which is the draw order. The
+    /// document is a map, so it keeps no order of its own.
+    private static func value(of button: ButtonSpec, order: Int) -> JSONValue {
         var fields: [String: JSONValue] = [
             "key": .string(button.key), "x": .double(button.x), "y": .double(button.y),
+            "order": .int(order),
         ]
         fields["label"] = button.label.map(JSONValue.string)
         fields["size"] = button.size.map(JSONValue.double)
@@ -76,9 +79,10 @@ public enum TouchSectionSyncCoder {
         return .object(fields.compactMapValues { $0 })
     }
 
-    private static func value(of button: ActionButtonSpec) -> JSONValue {
+    private static func value(of button: ActionButtonSpec, order: Int) -> JSONValue {
         var fields: [String: JSONValue] = [
             "action": .string(button.action), "x": .double(button.x), "y": .double(button.y),
+            "order": .int(order),
         ]
         fields["size"] = button.size.map(JSONValue.double)
         fields["opacity"] = button.opacity.map(JSONValue.double)
@@ -91,8 +95,7 @@ public enum TouchSectionSyncCoder {
         let dpad = controls["\(prefix).dpad"].flatMap(dpadSpec(of:))
         var buttons: [ButtonSpec] = []
         var actionButtons: [ActionButtonSpec] = []
-        for id in controls.keys.sorted() {
-            guard let value = controls[id] else { continue }
+        for (id, value) in controls.sorted(by: fileOrder) {
             if id.hasPrefix("\(prefix).key."), let button = buttonSpec(of: value) {
                 buttons.append(button)
             }
@@ -105,6 +108,25 @@ public enum TouchSectionSyncCoder {
             dpad: dpad,
             buttons: buttons.isEmpty ? nil : buttons,
             actionButtons: actionButtons.isEmpty ? nil : actionButtons)
+    }
+
+    /// Two devices that each add a button can write the same place, and
+    /// a copy from an older build has none. The id breaks the tie, with
+    /// "X#2" before "X#10".
+    private static func fileOrder(
+        _ left: (key: String, value: JSONValue), _ right: (key: String, value: JSONValue)
+    ) -> Bool {
+        let leftOrder = place(of: left.value)
+        let rightOrder = place(of: right.value)
+        if leftOrder != rightOrder { return leftOrder < rightOrder }
+        return left.key.compare(right.key, options: .numeric) == .orderedAscending
+    }
+
+    private static func place(of value: JSONValue) -> Int {
+        guard case .object(let fields) = value, case .int(let order) = fields["order"] else {
+            return .max
+        }
+        return order
     }
 
     private static func dpadSpec(of value: JSONValue) -> DPadSpec? {
