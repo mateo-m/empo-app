@@ -20,6 +20,8 @@ public enum PackageRejection: Error, Equatable, Sendable {
     case duplicatePath(String)
     case wrongSize(String)
     case wrongHash(String)
+    case unsupportedCompression(String)
+    case unreadableFile(String)
 
     /// The line the import sheet shows. It names the fault and the
     /// path, because the user can only act on a package Empo names.
@@ -47,6 +49,10 @@ public enum PackageRejection: Error, Equatable, Sendable {
             return "A file is not the size the package states: \(path)."
         case .wrongHash(let path):
             return "A file does not match the package hash: \(path)."
+        case .unsupportedCompression(let path):
+            return "The package holds a file Empo can't unpack: \(path)."
+        case .unreadableFile(let path):
+            return "A file in the package does not read: \(path)."
         }
     }
 }

@@ -31,7 +31,7 @@ final class PackageZipTests: XCTestCase {
 
     /// Runs `body` while the process may grow no file past `bytes`.
     /// A write past the limit then fails with EFBIG, as on a full disk.
-    private func withFileSizeLimit(_ bytes: Int, _ body: () throws -> Void) throws {
+    private func withFileSizeLimit(_ bytes: Int, _ body: () async throws -> Void) async throws {
         #if canImport(Darwin)
         var old = rlimit()
         getrlimit(RLIMIT_FSIZE, &old)
@@ -43,16 +43,16 @@ final class PackageZipTests: XCTestCase {
             setrlimit(RLIMIT_FSIZE, &old)
             signal(SIGXFSZ, oldHandler)
         }
-        try body()
+        try await body()
         #else
         try skipOrFail("this host sets no file size limit from a test")
         #endif
     }
 
-    func testAFullDiskFailsTheWriteInsteadOfCrashing() throws {
+    func testAFullDiskFailsTheWriteInsteadOfCrashing() async throws {
         let url = root.appendingPathComponent("full.zip")
         let writer = try ZipWriter(creating: url)
-        try withFileSizeLimit(16 * 1_024) {
+        try await withFileSizeLimit(16 * 1_024) {
             XCTAssertThrowsError(
                 try writer.add(data: randomBytes(256 * 1_024), at: "big.png")
             ) {
@@ -62,7 +62,7 @@ final class PackageZipTests: XCTestCase {
         writer.cancel()
     }
 
-    func testAFullDiskFailsTheExtractInsteadOfCrashing() throws {
+    func testAFullDiskFailsTheExtractInsteadOfCrashing() async throws {
         let url = root.appendingPathComponent("ok.zip")
         let writer = try ZipWriter(creating: url)
         try writer.add(data: randomBytes(256 * 1_024), at: "big.png")
@@ -71,7 +71,7 @@ final class PackageZipTests: XCTestCase {
 
         let reader = try ZipReader(reading: url)
         defer { reader.close() }
-        try withFileSizeLimit(16 * 1_024) {
+        try await withFileSizeLimit(16 * 1_024) {
             for entry in reader.entries {
                 let out = root.appendingPathComponent("out-" + entry.path)
                 XCTAssertThrowsError(try reader.extract(entry, to: out)) {
@@ -220,6 +220,77 @@ final class PackageZipTests: XCTestCase {
             with: le32(UInt32(PackageValidation.manifestSizeLimit + 1)))
         XCTAssertThrowsError(try PackageSource(zip: url, packageId: "p1")) {
             XCTAssertEqual($0 as? PackageRejection, .unreadableManifest)
+        }
+    }
+
+    // MARK: - What the import says
+
+    /// A one-file package and the path a restore asks for its blob.
+    private func package(_ bytes: Data) throws -> (url: URL, zipPath: String, blobPath: String) {
+        var manifest = SnapshotManifest(mode: .slim, containerFolderName: "Quest")
+        manifest.entries = [
+            SnapshotManifest.Entry(
+                root: .container, path: "Game/cover.png", size: Int64(bytes.count),
+                modifiedAt: Date(), hash: ContentHash.hex(of: bytes), compression: .stored)
+        ]
+        let package = PackageManifest(
+            exportedAt: Date(), sourceDevice: "iPad",
+            streams: [PackageStream(key: manifest.gameKey, manifest: manifest)])
+        let zipPath = try XCTUnwrap(package.files.first).zipPath
+
+        let url = root.appendingPathComponent(UUID().uuidString + ".zip")
+        let writer = try ZipWriter(creating: url)
+        try writer.add(data: bytes, at: zipPath)
+        try writer.add(data: package.jsonData(), at: PackageLayout.manifestPath)
+        try writer.finish()
+        let blobPath = BackupNamespacePaths(root: "", namespaceId: "p1").blobPath(
+            hash: ContentHash.hex(of: bytes), fanOutWidth: FormatDescriptor.version1FanOutWidth)
+        return (url, zipPath, blobPath)
+    }
+
+    func testADamagedFileSaysItDoesNotMatchTheHash() async throws {
+        let bytes = randomBytes(4_096)
+        let package = try package(bytes)
+        var raw = try Data(contentsOf: package.url)
+        let body = try XCTUnwrap(raw.range(of: bytes))
+        raw[body.lowerBound + 100] ^= 0xFF
+        try raw.write(to: package.url)
+
+        let source = try PackageSource(zip: package.url, packageId: "p1")
+        do {
+            try await source.get(
+                path: package.blobPath, localFile: root.appendingPathComponent("blob"))
+            XCTFail("a damaged file staged")
+        } catch {
+            XCTAssertEqual(
+                error, .rejected(message: PackageRejection.wrongHash(package.zipPath).line))
+        }
+        await source.close()
+    }
+
+    func testAFullDiskDuringTheImportSaysTheDeviceIsFull() async throws {
+        let package = try package(randomBytes(256 * 1_024))
+        let source = try PackageSource(zip: package.url, packageId: "p1")
+        try await withFileSizeLimit(16 * 1_024) {
+            do {
+                try await source.get(
+                    path: package.blobPath, localFile: root.appendingPathComponent("blob"))
+                XCTFail("a full disk staged the file")
+            } catch {
+                XCTAssertEqual(error as? BackupProviderError, .outOfSpace)
+            }
+        }
+        await source.close()
+    }
+
+    func testAPackageWithAnUnknownCompressionSaysSo() throws {
+        let url = try zip(
+            [("Documents/Games/Quest/Game/Save01.rvdata2", Data(repeating: 4, count: 1_000))],
+            patching: "Documents/Games/Quest/Game/Save01.rvdata2", at: 10, with: [12, 0])
+        XCTAssertThrowsError(try PackageSource(zip: url, packageId: "p1")) {
+            XCTAssertEqual(
+                $0 as? PackageRejection,
+                .unsupportedCompression("Documents/Games/Quest/Game/Save01.rvdata2"))
         }
     }
 }

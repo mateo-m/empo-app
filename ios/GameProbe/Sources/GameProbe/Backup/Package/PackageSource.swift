@@ -48,7 +48,14 @@ public actor PackageSource: BackupProvider {
     /// Opens a staged package and checks it, before any restore
     /// reads a byte of it.
     public init(zip url: URL, packageId: String) throws {
-        guard let reader = try? ZipReader(reading: url) else {
+        // A throw from here on closes the file through the reader's
+        // deinit.
+        let reader: ZipReader
+        do {
+            reader = try ZipReader(reading: url)
+        } catch ZipReader.Failure.unsupportedMethod(let path) {
+            throw PackageRejection.unsupportedCompression(path)
+        } catch {
             throw PackageRejection.noManifest
         }
         let entries = reader.entries
@@ -60,12 +67,7 @@ public actor PackageSource: BackupProvider {
         }
         let data = manifestEntry.flatMap { try? reader.data(of: $0) }
         let manifest = try PackageValidation.manifest(ofZip: entries, data: data)
-        do {
-            try PackageValidation.check(manifest, against: entries)
-        } catch {
-            reader.close()
-            throw error
-        }
+        try PackageValidation.check(manifest, against: entries)
 
         let paths = BackupNamespacePaths(root: "", namespaceId: packageId)
         var manifests: [String: Data] = [:]
@@ -174,17 +176,25 @@ public actor PackageSource: BackupProvider {
             try PackageValidation.checkTheContent(
                 of: file,
                 stagedSize: size,
-                stagedHash: (try? ContentHash.hexOfFile(at: localFile)) ?? "")
+                stagedHash: try ContentHash.hexOfFile(at: localFile))
         } catch {
             try? fm.removeItem(at: localFile)
-            throw .rejected(message: Self.line(of: error, path: file.zipPath))
+            throw Self.failure(of: error, path: file.zipPath)
         }
     }
 
-    private static func line(of error: Error, path: String) -> String {
-        guard let rejection = error as? PackageRejection else {
-            return PackageRejection.missingFile(path).line
+    private static func failure(of error: Error, path: String) -> BackupProviderError {
+        switch error {
+        case let rejection as PackageRejection:
+            return .rejected(message: rejection.line)
+        case ZipReader.Failure.cannotWrite:
+            return .outOfSpace
+        case ZipReader.Failure.checksumMismatch:
+            return .rejected(message: PackageRejection.wrongHash(path).line)
+        case ZipReader.Failure.wrongSize:
+            return .rejected(message: PackageRejection.wrongSize(path).line)
+        default:
+            return .rejected(message: PackageRejection.unreadableFile(path).line)
         }
-        return rejection.line
     }
 }
