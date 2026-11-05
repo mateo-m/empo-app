@@ -52,6 +52,7 @@ namespace {
 std::mutex gLock;
 std::string gGamePath;
 std::string gLauncherIdentity;
+std::string gLauncherVersion = "unknown";
 std::string gCABundlePath;
 std::string gDebugLogPath;
 
@@ -183,27 +184,36 @@ std::string supportPath() {
     return found ? path : std::string();
 }
 
-// Gives the game $userAgent = "<name>" and $<name> = true. psdk_run
-// takes Ruby code only as a file. Each byte of the name is a \x escape,
-// so no name can end the string early. The file deletes itself when
-// Ruby loads it, because a killed game never gets back here.
+// Each byte is a \x escape, so no value can end the string early.
+std::string rubyStringLiteral(const std::string &value) {
+    std::string literal = "\"";
+    char escaped[5];
+    for (unsigned char byte : value) {
+        snprintf(escaped, sizeof(escaped), "\\x%02x", byte);
+        literal += escaped;
+    }
+    return literal + "\".force_encoding(Encoding::UTF_8)";
+}
+
+// Gives the game $userAgent = "<name>", $<name> = true, and
+// $userAgentVersion = "<version>". psdk_run takes Ruby code only as a
+// file. The file deletes itself when Ruby loads it, because a killed
+// game never gets back here.
 std::string writeLauncherIdentityPrelude() {
     std::string identity;
+    std::string version;
     {
         std::lock_guard<std::mutex> guard(gLock);
         identity = gLauncherIdentity;
+        version = gLauncherVersion;
     }
     if (identity.empty()) {
         return {};
     }
 
-    std::string ruby = "File.delete(__FILE__) rescue nil\n$userAgent = \"";
-    char escaped[5];
-    for (unsigned char byte : identity) {
-        snprintf(escaped, sizeof(escaped), "\\x%02x", byte);
-        ruby += escaped;
-    }
-    ruby += "\".force_encoding(Encoding::UTF_8)\n";
+    std::string ruby = "File.delete(__FILE__) rescue nil\n";
+    ruby += "$userAgent = " + rubyStringLiteral(identity) + "\n";
+    ruby += "$userAgentVersion = " + rubyStringLiteral(version) + ".freeze\n";
 
     bool validIdentifier = isalpha(static_cast<unsigned char>(identity[0])) || identity[0] == '_';
     for (size_t i = 1; validIdentifier && i < identity.size(); ++i) {
@@ -778,9 +788,10 @@ void gamecore_signalInfoDismissed(void) {
 
 // MARK: - What the launcher pushes
 
-void gamecore_setLauncherIdentity(const char *name) {
+void gamecore_setLauncherIdentity(const char *name, const char *version) {
     std::lock_guard<std::mutex> guard(gLock);
     gLauncherIdentity = name ? name : "";
+    gLauncherVersion = version && *version ? version : "unknown";
 }
 
 void gamecore_setCABundlePath(const char *path) {

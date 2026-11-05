@@ -449,7 +449,6 @@ targets:
         excludes:
           - Player
           - App/main.m
-          - App/AppLoader.m
           - App/AppCoreForwarders.c
           - App/GameProcessClient.m
           - App/GameProcessHost.swift
@@ -595,6 +594,7 @@ targets:
       - path: src/Player/PlayerRuntimeState.swift
       - path: src/App/KeyHolder.swift
       - path: src/App/GameCoreSessionConfig.swift
+      - path: src/App/AppInfo.swift
       - path: Resources/Localizable.xcstrings
     settings:
       base:

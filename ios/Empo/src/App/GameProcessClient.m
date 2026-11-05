@@ -494,6 +494,10 @@ int EmpoGameProcessIsOpen(void) {
     return open;
 }
 
+void EmpoGameProcessSetRespectsSilentMode(bool respects) {
+    send(^(id<EmpoGameProcess> process) { [process setRespectsSilentMode:respects]; });
+}
+
 // MARK: - GameCore.h
 
 // AppCoreForwarders.c sends each gamecore_* call here while games run
@@ -563,9 +567,10 @@ void gameprocess_injectKeyEvent(int scancode, int pressed) {
     send(^(id<EmpoGameProcess> process) { [process injectKeyEvent:scancode pressed:pressed]; });
 }
 
-void gameprocess_setLauncherIdentity(const char *name) {
-    NSString *value = name != NULL ? @(name) : nil;
-    send(^(id<EmpoGameProcess> process) { [process setLauncherIdentity:value]; });
+void gameprocess_setLauncherIdentity(const char *name, const char *version) {
+    NSString *nameValue = name != NULL ? @(name) : nil;
+    NSString *versionValue = version != NULL ? @(version) : nil;
+    send(^(id<EmpoGameProcess> process) { [process setLauncherIdentity:nameValue version:versionValue]; });
 }
 
 void gameprocess_setCABundlePath(const char *path) {

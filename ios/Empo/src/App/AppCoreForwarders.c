@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "AudioSession.h"
 #include "GameCore.h"
 
 static bool gUseGameProcess;
@@ -59,6 +60,14 @@ void EmpoCoreKillSession(void) {
 
 int EmpoCoreIsOpen(void) {
     return gUseGameProcess ? EmpoGameProcessIsOpen() : gCore != NULL;
+}
+
+void EmpoCoreSetRespectsSilentMode(bool respects) {
+    if (gUseGameProcess) {
+        EmpoGameProcessSetRespectsSilentMode(respects);
+    } else {
+        EmpoConfigureAudioSession(respects);
+    }
 }
 
 // dlsym with the core's handle searches that image only, so each core

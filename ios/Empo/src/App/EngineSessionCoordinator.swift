@@ -101,11 +101,12 @@ final class EngineSessionCoordinator {
         openedCore = core
         NSLog("[empo] core opened: %@", core.framework)
 
-        // Game scripts see `$userAgent = "empo"` and `$empo = true`,
-        // alongside the engine's JoiPlay-compat `$joiplay`.
-        gamecore_setLauncherIdentity("empo")
+        // Game scripts see `$userAgent = "empo"`, `$empo = true`, and
+        // `$userAgentVersion`, alongside the engine's JoiPlay-compat `$joiplay`.
+        gamecore_setLauncherIdentity("empo", AppInfo.version)
         pushCABundlePath()
         AppSettings.shared.pushToCore()
+        AppSettings.shared.pushSilentModeToCore()
         AppWindow.pushSafeAreaInsets()
         registerBridgeCallbacks()
     }
