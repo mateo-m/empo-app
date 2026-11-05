@@ -84,7 +84,7 @@ public actor RestoreEngine {
         let plan = RestorePlanner.plan(
             manifest: manifest,
             scope: request.scope,
-            localFiles: request.localFiles,
+            localFiles: request.plannedLocalFiles,
             localVersionMarker: request.localVersionMarker,
             stagedBlobHashes: stagedBlobHashes())
 

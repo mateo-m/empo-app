@@ -1362,6 +1362,85 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(kept, "played after the backup")
     }
 
+    // MARK: - Use only this backup
+
+    /// Every file of the container with its hash, as the app lists it.
+    private func localFiles(of folderName: String) throws -> [RestoreLocalFile] {
+        let root = container(folderName)
+        return try BackupSetResolver.files(under: root, fm: fm).map {
+            RestoreLocalFile(
+                root: .container, path: $0.path, size: $0.size,
+                hash: try ContentHash.hexOfFile(at: root.appendingPathComponent($0.path)))
+        }
+    }
+
+    private func replace(
+        with snapshotId: String, on target: FakeBackupTarget
+    ) async throws -> RestoreOutcome {
+        let engine = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot)
+        return await engine.run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: BackupStream(key: key(gameName)),
+                snapshotId: snapshotId,
+                scope: .wholeGame,
+                destination: MemberSource(container: container(gameName)),
+                localFiles: try localFiles(of: gameName),
+                freeSpaceBytes: .max,
+                replacesTheTree: true,
+                mode: .full))
+    }
+
+    private func gameText(_ path: String, in tree: String = "Game") throws -> String {
+        try String(
+            contentsOf: container(gameName).appendingPathComponent("\(tree)/\(path)"),
+            encoding: .utf8)
+    }
+
+    func testAReplaceWritesTheFilesThatMatchTheBackupIntoTheNewTree() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+
+        let outcome = try await replace(with: snapshotId, on: target)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        XCTAssertEqual(try gameText("Game.ini"), "[Game]\nTitle=\(gameName)\n")
+        XCTAssertEqual(try gameText("save1.dat"), "slot one of \(gameName)")
+        XCTAssertEqual(try gameText("autosave.sav"), "auto of \(gameName)")
+        XCTAssertNil(result.replacedTreeName)
+    }
+
+    func testAReplaceOverAChangedSaveKeepsTheChangedSaveInTheMovedTree() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+
+        let outcome = try await replace(with: snapshotId, on: target)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        XCTAssertEqual(try gameText("save1.dat"), "slot one of \(gameName)")
+        XCTAssertEqual(try gameText("Game.ini"), "[Game]\nTitle=\(gameName)\n")
+        XCTAssertEqual(result.displacedFileCount, 0)
+        let moved = try XCTUnwrap(result.replacedTreeName)
+        XCTAssertEqual(try gameText("save1.dat", in: moved), "played after the backup")
+        XCTAssertFalse(
+            fm.fileExists(
+                atPath: container(gameName).appendingPathComponent("\(moved)/Game.ini").path))
+    }
+
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
 
     func testTheRunReportsOnePlanForTheStreamAndConfirmsEveryBlobOfIt() async throws {

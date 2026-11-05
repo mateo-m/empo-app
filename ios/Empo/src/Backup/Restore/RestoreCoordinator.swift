@@ -177,8 +177,7 @@ final class RestoreCoordinator {
             localVersionMarker: container.map(GameIdentities.versionMarker(for:)),
             freeSpaceBytes: Self.freeSpaceBytes,
             replacesTheTree: replacesTheTree,
-            mode: manifest.mode,
-            gameTreeURL: container?.gameURL)
+            mode: manifest.mode)
 
         let store: BackupStateStore
         do {

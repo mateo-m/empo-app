@@ -29,9 +29,6 @@ public struct RestoreRequest: Sendable {
     public var replacesTheTree: Bool
     /// The game's mode, which gates proven coverage.
     public var mode: BackupMode
-    /// `Documents/Games/<folderName>/Game/`, the tree a replace
-    /// moves aside.
-    public var gameTreeURL: URL?
 
     public init(
         restoreId: String = UUID().uuidString,
@@ -46,8 +43,7 @@ public struct RestoreRequest: Sendable {
         localVersionMarker: SnapshotManifest.VersionMarker? = nil,
         freeSpaceBytes: Int64,
         replacesTheTree: Bool = false,
-        mode: BackupMode = .slim,
-        gameTreeURL: URL? = nil
+        mode: BackupMode = .slim
     ) {
         self.restoreId = restoreId
         self.targetId = targetId
@@ -62,7 +58,22 @@ public struct RestoreRequest: Sendable {
         self.freeSpaceBytes = freeSpaceBytes
         self.replacesTheTree = replacesTheTree
         self.mode = mode
-        self.gameTreeURL = gameTreeURL
+    }
+
+    /// `Documents/Games/<folderName>/Game/`, the tree a replace
+    /// moves aside.
+    var gameTreeURL: URL? {
+        destination.container?.appendingPathComponent(
+            BackupSetRules.gameDirectoryName, isDirectory: true)
+    }
+
+    /// The local files the plan reads. A replace moves the tree aside
+    /// after the plan and before the first write, so the plan must not
+    /// count on a file in it.
+    var plannedLocalFiles: [RestoreLocalFile] {
+        guard replacesTheTree else { return localFiles }
+        let tree = BackupSetRules.gameDirectoryName + "/"
+        return localFiles.filter { $0.root != .container || !$0.path.hasPrefix(tree) }
     }
 }
 
