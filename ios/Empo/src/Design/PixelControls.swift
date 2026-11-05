@@ -128,6 +128,7 @@ struct PixelSlider: View {
 
     @Environment(\.isEnabled) private var isEnabled
     @State private var editing = false
+    @State private var grabOffset: CGFloat = 0
     @GestureState private var dragging = false
 
     private let knob: CGFloat = PixelGrid.step * 9
@@ -169,9 +170,11 @@ struct PixelSlider: View {
                     .onChanged { drag in
                         if !editing {
                             editing = true
+                            let fromCenter = drag.startLocation.x - (x + knob / 2)
+                            grabOffset = abs(fromCenter) <= knob / 2 ? fromCenter : 0
                             onEditingChanged(true)
                         }
-                        set(fraction: (drag.location.x - knob / 2) / travel)
+                        set(fraction: (drag.location.x - grabOffset - knob / 2) / travel)
                     }
                     .onEnded { _ in endEditing() }
             )
