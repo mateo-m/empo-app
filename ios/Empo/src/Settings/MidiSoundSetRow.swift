@@ -10,14 +10,19 @@ struct MidiSoundSetRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
-            LabeledContent("MIDI sound set") {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("MIDI sound set")
+                    Text(
+                        "Plays music in older games. For the Windows sound, import gm.dls from a Windows PC."
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
                 Text(current?.deletingPathExtension().lastPathComponent ?? String(localized: "Built-in"))
+                    .foregroundStyle(.secondary)
             }
-            Text(
-                "Older games play their music with this sound set. To hear them as on Windows, import gm.dls from C:\\Windows\\System32\\drivers on a Windows PC."
-            )
-            .font(.footnote)
-            .foregroundStyle(.secondary)
             HStack {
                 Button("Import Sound Set…") { isImporting = true }
                 if current != nil {
