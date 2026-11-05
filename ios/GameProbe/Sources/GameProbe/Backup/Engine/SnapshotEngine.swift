@@ -633,9 +633,8 @@ public actor SnapshotEngine {
             if error == .notFound { return nil }
             throw mapped(error)
         }
-        let data = try? Data(contentsOf: scratch)
-        try? fm.removeItem(at: scratch)
-        return data
+        defer { try? fm.removeItem(at: scratch) }
+        return try Data(contentsOf: scratch)
     }
 
     /// Writes one small object.

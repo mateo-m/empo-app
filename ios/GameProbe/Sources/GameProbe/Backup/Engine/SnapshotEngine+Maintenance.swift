@@ -214,10 +214,9 @@ extension SnapshotEngine {
         for prefix in [paths.gamesPrefix + "/", paths.preferencesPrefix + "/"] {
             for object in try await list(prefix: prefix) {
                 guard BackupNamespacePaths.snapshotId(ofManifestPath: object.path) != nil,
-                    let data = try await fetch(object.path),
-                    let manifest = try? SnapshotManifest.decode(compressed: data)
+                    let data = try await fetch(object.path)
                 else { continue }
-                manifests.append(manifest)
+                manifests.append(try SnapshotManifest.decode(compressed: data))
             }
         }
         return manifests

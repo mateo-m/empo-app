@@ -543,6 +543,26 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(forced.deletedPaths, [orphan])
     }
 
+    func testTheSweepDeletesNothingWhenAManifestCannotBeRead() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        _ = await engine.run(request(games: [game(gameName)]))
+        let manifestPath = try XCTUnwrap(manifestPaths(target).first)
+        try target.seed(path: manifestPath, contents: Data("not a manifest".utf8))
+        clock.advance(8 * 86_400)
+
+        do {
+            _ = try await engine.sweep(
+                SweepRequest(
+                    descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId,
+                    force: true))
+            XCTFail("the sweep ran past a manifest it could not read")
+        } catch {}
+
+        XCTAssertEqual(blobPaths(target).count, 4)
+    }
+
     // MARK: - 7. The writer claim and the split, per 5.12
 
     func testAClaimFromAnotherDeviceStopsTheRunBeforeAnyWrite() async throws {
