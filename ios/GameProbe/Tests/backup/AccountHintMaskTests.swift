@@ -9,7 +9,7 @@ final class AccountHintMaskTests: XCTestCase {
             AccountHintMask.masked("jo.walker@gmail.com", provider: .googleDrive),
             "jo••••@gm••••.c••••")
         XCTAssertEqual(
-            AccountHintMask.masked("sam@protonmail.com", provider: .dropbox),
+            AccountHintMask.masked("samuel@protonmail.com", provider: .dropbox),
             "sa••••@pr••••.c••••")
         XCTAssertEqual(
             AccountHintMask.masked("ana@mail.example.co.uk", provider: .dropbox),
