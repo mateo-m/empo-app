@@ -5,27 +5,34 @@ import AVFoundation
 import Foundation
 import UniformTypeIdentifiers
 
-/// The sound set that the player imported for MIDI music. Without one,
-/// the engine uses the sound set it ships.
-enum MidiSoundSet {
+/// The sound set that the player imported for MIDI music, for the whole
+/// app or for one game. Without one, the engine uses the sound set it ships.
+struct MidiSoundSet {
     enum ImportError: Error {
         case notASoundSet
     }
 
-    static let folderURL = DataDirectory.documentsRootURL.appendingPathComponent(
-        "SoundFonts", isDirectory: true)
+    static let app = MidiSoundSet(
+        folderURL: DataDirectory.documentsRootURL.appendingPathComponent("SoundFonts", isDirectory: true))
+
+    static func game(_ container: GameContainer) -> MidiSoundSet {
+        MidiSoundSet(
+            folderURL: container.empoStateURL.appendingPathComponent("SoundFonts", isDirectory: true))
+    }
+
+    let folderURL: URL
 
     private static let extensions = ["sf2", "dls"]
     static let contentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
 
-    static var current: URL? {
+    var current: URL? {
         files.first
     }
 
-    static func replace(with source: URL) throws {
+    func replace(with source: URL) throws {
         let scoped = source.startAccessingSecurityScopedResource()
         defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-        guard isSoundSet(source) else { throw ImportError.notASoundSet }
+        guard Self.isSoundSet(source) else { throw ImportError.notASoundSet }
         let fm = FileManager.default
         try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
         let staged = folderURL.appendingPathComponent(".import-\(UUID().uuidString)")
@@ -39,15 +46,15 @@ enum MidiSoundSet {
         }
     }
 
-    static func removeImported() throws {
+    func removeImported() throws {
         for file in files {
             try FileManager.default.removeItem(at: file)
         }
     }
 
-    private static var files: [URL] {
+    private var files: [URL] {
         ((try? FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? [])
-            .filter { extensions.contains($0.pathExtension.lowercased()) }
+            .filter { Self.extensions.contains($0.pathExtension.lowercased()) }
             .sorted {
                 $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
             }

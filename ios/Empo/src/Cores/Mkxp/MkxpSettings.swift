@@ -34,6 +34,9 @@ struct MkxpSettings: GameSettingsGroup {
     /// `System.network_enabled?` before game scripts load.
     @Setting<Bool?, RestartFlag> var networkEnabled: Bool?
 
+    /// nil follows the sound set of the app settings.
+    @Setting<GameMidiSoundSet?, RestartFlag> var midiSoundSet: GameMidiSoundSet?
+
     static func displayLabel(forKey key: String) -> String {
         switch key {
         case "useInGameKeyboard": return String(localized: "In-game keyboard")
@@ -42,6 +45,7 @@ struct MkxpSettings: GameSettingsGroup {
         case "rubyVersionOverride": return String(localized: "Ruby version")
         case "joiplayCompat": return String(localized: "JoiPlay compatibility")
         case "networkEnabled": return String(localized: "Network access")
+        case "midiSoundSet": return String(localized: "MIDI sound set")
         default:
             assertionFailure("Missing displayLabel mapping for MkxpSettings.\(key)")
             return key
@@ -51,21 +55,43 @@ struct MkxpSettings: GameSettingsGroup {
     var postloadScriptsEnabled: Bool { postloadScripts ?? true }
     var joiplayCompatEnabled: Bool { joiplayCompat ?? false }
     var networkAccessEnabled: Bool { networkEnabled ?? true }
+
+    /// The sound set file the engine loads, or nil for its built-in one.
+    func midiSoundFont(for container: GameContainer) -> URL? {
+        switch midiSoundSet {
+        case .builtIn: nil
+        case .imported: MidiSoundSet.game(container).current ?? MidiSoundSet.app.current
+        case nil: MidiSoundSet.app.current
+        }
+    }
+}
+
+enum GameMidiSoundSet: String, Codable {
+    case builtIn
+    /// The file in the game's own `EmpoState/SoundFonts/`.
+    case imported
 }
 
 struct MkxpLaunchedSettings: CoreLaunchedSettings {
     let settings: MkxpSettings
     let engine: MkxpEngineSettings
+    let midiSoundFont: URL?
 
     init(container: GameContainer) {
         settings = MkxpSettings.load(from: container.empoStateURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)
+        midiSoundFont = settings.midiSoundFont(for: container)
     }
 
     func restartRequiredChanges(to current: any CoreSettings) -> [String] {
         guard let current = current as? MkxpSettingsState else { return [] }
-        return current.settings.restartRequiredFieldsChanged(from: settings)
-            + current.engine.restartRequiredFieldsChanged(from: engine)
+        var changed = current.settings.restartRequiredFieldsChanged(from: settings)
+        // An import replaces the file and keeps the setting the same.
+        let soundSetLabel = MkxpSettings.displayLabel(forKey: "midiSoundSet")
+        if current.midiSoundFont != midiSoundFont, !changed.contains(soundSetLabel) {
+            changed.append(soundSetLabel)
+        }
+        return changed + current.engine.restartRequiredFieldsChanged(from: engine)
     }
 }
 
@@ -77,8 +103,10 @@ final class MkxpSettingsState: CoreSettings {
     /// What the script scan found. It labels the Auto-detect rows.
     private(set) var profile: MkxpProfile
     let isPokemonEssentials: Bool
+    /// The file in the game's own sound set folder. The picker sets it after an import.
+    var gameMidiSoundSet: URL?
 
-    @ObservationIgnored private let container: GameContainer
+    @ObservationIgnored let container: GameContainer
 
     init(container: GameContainer) {
         self.container = container
@@ -89,7 +117,10 @@ final class MkxpSettingsState: CoreSettings {
         self.profile = MkxpProfile.load(for: container)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
+        self.gameMidiSoundSet = MidiSoundSet.game(container).current
     }
+
+    var midiSoundFont: URL? { settings.midiSoundFont(for: container) }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
 
@@ -99,6 +130,8 @@ final class MkxpSettingsState: CoreSettings {
     }
 
     func reset() {
+        try? MidiSoundSet.game(container).removeImported()
+        gameMidiSoundSet = nil
         settings = MkxpSettings()
         profile = MkxpProfile.load(for: container, rescan: true)
         ManagedMkxpConfig.resetAllEngineFields(

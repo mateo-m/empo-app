@@ -46,6 +46,13 @@ struct MkxpSettingsPage: View {
             } footer: {
                 Text("How the engine handles heavy scenes.")
             }
+            Section {
+                GameMidiSoundSetRow(state: state)
+            } header: {
+                Text("Music")
+            } footer: {
+                Text("How the game's music sounds.")
+            }
             MkxpEngineSection(model: model, state: state)
         }
         .onChange(of: state.settings) { state.save() }
@@ -115,5 +122,42 @@ struct MkxpEngineRow<Content: View>: View {
         } content: {
             content
         }
+    }
+}
+
+struct GameMidiSoundSetRow: View {
+    @Bindable var state: MkxpSettingsState
+
+    var body: some View {
+        MidiSoundSetPicker(
+            soundSet: .game(state.container),
+            appSettingLabel: appSettingLabel,
+            description: Text("Default uses the sound set from Settings."),
+            choice: choice,
+            imported: $state.gameMidiSoundSet,
+            pick: { choice in
+                state.settings.midiSoundSet =
+                    switch choice {
+                    case .appSetting: nil
+                    case .builtIn: .builtIn
+                    case .imported: .imported
+                    }
+            }
+        )
+    }
+
+    private var choice: MidiSoundSetPicker.Choice {
+        switch state.settings.midiSoundSet {
+        case .builtIn: .builtIn
+        case .imported where state.gameMidiSoundSet != nil: .imported
+        case .imported, nil: .appSetting
+        }
+    }
+
+    private var appSettingLabel: Text {
+        let name = MidiSoundSet.app.current?.deletingPathExtension().lastPathComponent
+        return Text(
+            "Default (\(name ?? String(localized: "Built-in")))",
+            comment: "Picker option. The placeholder is the sound set in the app settings.")
     }
 }
