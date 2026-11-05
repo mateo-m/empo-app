@@ -226,10 +226,16 @@ final class BackupsScreenModel {
     /// would leave the secret and the rows with no row to remove
     /// them from.
     func remove(targetId: String, deleteBackups: Bool) async -> String? {
-        do {
-            if deleteBackups {
+        if deleteBackups {
+            do {
                 try await deleteThisDeviceNamespace(targetId: targetId)
+            } catch {
+                BackupLog.line("BackupsScreenModel", "deleting the backups of \(targetId) failed: \(error)")
+                await refresh()
+                return "Empo couldn't delete all of these backups. Try again."
             }
+        }
+        do {
             let store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
             defer { store.close() }
             try store.removeTarget(targetId: targetId)
@@ -248,18 +254,13 @@ final class BackupsScreenModel {
 
     /// A checked box deletes this device's namespace only, per 5.13.
     private func deleteThisDeviceNamespace(targetId: String) async throws {
-        guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
-            let provider = await BackupTargets.provider(for: descriptor),
-            let namespaceId = try? BackupKeychain.namespaceId()
-        else { return }
-        let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
-        try await provider.deleteEverything(under: paths.namespacePrefix + "/")
+        try await deleteNamespace(try BackupKeychain.namespaceId(), targetId: targetId)
     }
 
     func deleteNamespace(_ namespaceId: String, targetId: String) async throws {
         guard let descriptor = targets.first(where: { $0.id == targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
-        else { return }
+        else { throw BackupProviderError.rejected(message: "Empo couldn't open \(targetId)") }
         let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: namespaceId)
         defer { Task { await refresh() } }
         try await provider.deleteEverything(under: paths.namespacePrefix + "/")
