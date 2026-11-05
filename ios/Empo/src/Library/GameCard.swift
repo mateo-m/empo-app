@@ -286,14 +286,15 @@ struct GameStatusIndicator: View {
             // so the indicator auto-inverts against whatever's behind
             // it (library surface in list mode, artwork in grid mode).
             // CSS `mix-blend-mode: difference` equivalent.
-            SpinnerRing(
-                progress: progress,
-                size: ringSize,
-                tint: AnyShapeStyle(Color.white),
-                trackOpacity: 0.2
-            )
-            .opacity(showsRing ? 1 : 0)
-            .scaleEffect(showsRing ? 1 : 0.5)
+            if showsRing {
+                SpinnerRing(
+                    progress: progress,
+                    size: ringSize,
+                    tint: AnyShapeStyle(Color.white),
+                    trackOpacity: 0.2
+                )
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+            }
 
             innerIcon
                 .transition(.blurReplace)
