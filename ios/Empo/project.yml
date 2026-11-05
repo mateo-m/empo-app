@@ -449,7 +449,6 @@ targets:
         excludes:
           - Player
           - App/main.m
-          - App/AppLoader.m
           - App/AppCoreForwarders.c
           - App/GameProcessClient.m
           - App/GameProcessHost.swift
