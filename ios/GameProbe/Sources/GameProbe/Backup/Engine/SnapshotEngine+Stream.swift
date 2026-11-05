@@ -124,7 +124,9 @@ extension SnapshotEngine {
             !input.isOneOff,
             !SnapshotDiff.earnsSnapshot(entries: plan.reused, previous: previous)
         {
-            context.streams.append(StreamResult(streamKey: stream.key, outcome: .noChange))
+            closeWithNoChange(
+                context, stream: stream, previous: previous, header: input.header,
+                scannedAt: input.scannedAt)
             return nil
         }
 
@@ -253,10 +255,9 @@ extension SnapshotEngine {
         // that matches the last one writes no snapshot.
         guard run.isOneOff || SnapshotDiff.earnsSnapshot(entries: run.entries, previous: run.previous)
         else {
-            context.streams.append(StreamResult(streamKey: run.key, outcome: .noChange))
-            save(
-                try store.clearCheckpoint(targetId: targetId, gameKey: run.key),
-                "the end of the checkpoint of \(run.key)")
+            closeWithNoChange(
+                context, stream: run.stream, previous: run.previous, header: run.header,
+                scannedAt: run.scannedAt)
             return
         }
 
@@ -302,5 +303,24 @@ extension SnapshotEngine {
             context, stream: run.stream, kind: run.kind,
             preset: context.request.retentionPreset)
         context.streams.append(run.result)
+    }
+
+    /// The last manifest already holds the files the run read, so the
+    /// game counts as backed up at the time of the read.
+    private func closeWithNoChange(
+        _ context: RunContext, stream: BackupStream, previous: SnapshotManifest?,
+        header: SnapshotManifest, scannedAt: Date
+    ) {
+        let targetId = context.request.descriptor.id
+        context.streams.append(StreamResult(streamKey: stream.key, outcome: .noChange))
+        save(
+            try store.clearCheckpoint(targetId: targetId, gameKey: stream.key),
+            "the end of the checkpoint of \(stream.key)")
+        save(
+            try store.clearDirty(gameKey: stream.key, markedUpTo: scannedAt),
+            "the end of the dirty mark of \(stream.key)")
+        markSuccess(
+            targetId: targetId, gameKey: stream.key, manifest: previous ?? header,
+            scannedAt: scannedAt)
     }
 }

@@ -77,9 +77,10 @@ final class SnapshotEngineTests: XCTestCase {
     }
 
     private func makeEngine(
-        _ target: FakeBackupTarget, observer: (any BackupRunObserver)? = nil
+        _ target: FakeBackupTarget, observer: (any BackupRunObserver)? = nil,
+        stateURL: URL? = nil
     ) throws -> SnapshotEngine {
-        let store = try BackupStateStore(url: nil)
+        let store = try BackupStateStore(url: stateURL)
         let clock = self.clock!
         return SnapshotEngine(
             provider: target,
@@ -533,6 +534,47 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(entry?.detectionSource, .runtimeWatch)
     }
 
+    private func assertARunWithNoChangeCountsAsASuccess(
+        touch: (URL) throws -> Void, file: StaticString = #filePath, line: UInt = #line
+    ) async throws {
+        let root = try makeGameTree(gameName)
+        let stateURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: stateURL) }
+        let engine = try makeEngine(makeTarget(), stateURL: stateURL)
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        clock.advance(3 * 86_400)
+        try touch(root)
+        let player = try BackupStateStore(url: stateURL)
+        try player.markDirty(gameKey: key(gameName), reason: "play session", at: clock.now)
+        player.close()
+        let scannedAt = clock.now
+        let next = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(next.stream(key(gameName))?.outcome, .noChange, file: file, line: line)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        let staleness = try store.staleness(targetId: targetId, gameKey: key(gameName))
+        let lastSuccessAt = try XCTUnwrap(staleness?.lastSuccessAt, file: file, line: line)
+        XCTAssertEqual(
+            lastSuccessAt.timeIntervalSince1970, scannedAt.timeIntervalSince1970, accuracy: 0.001,
+            file: file, line: line)
+        XCTAssertEqual(try store.dirtyGames(), [], file: file, line: line)
+    }
+
+    func testARunThatFindsNothingNewCountsAsASuccess() async throws {
+        try await assertARunWithNoChangeCountsAsASuccess { _ in }
+    }
+
+    func testARunThatReadsTheSameBytesAgainCountsAsASuccess() async throws {
+        try await assertARunWithNoChangeCountsAsASuccess { root in
+            try fm.setAttributes(
+                [.modificationDate: clock.now],
+                ofItemAtPath: root.appendingPathComponent("Game/save1.dat").path)
+        }
+    }
+
     func testANightlyRunEndsWithTheSweepThatIsDue() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
@@ -847,13 +889,7 @@ final class SnapshotEngineTests: XCTestCase {
         let stateURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(UUID().uuidString).sqlite")
         defer { try? FileManager.default.removeItem(at: stateURL) }
-        let clock = self.clock!
-        let engine = SnapshotEngine(
-            provider: target,
-            store: try BackupStateStore(url: stateURL),
-            localRoot: localRoot,
-            clock: FakeBackupClock(),
-            now: { clock.now })
+        let engine = try makeEngine(target, stateURL: stateURL)
 
         let result = await engine.run(request(games: [game(gameName)]))
 
@@ -1331,12 +1367,7 @@ final class SnapshotEngineTests: XCTestCase {
         let earlier = try BackupStateStore(url: stateURL)
         try earlier.recordTargetFailure(targetId: targetId, failure: .needsSignIn, at: clock.now)
         earlier.close()
-        let engine = SnapshotEngine(
-            provider: target,
-            store: try BackupStateStore(url: stateURL),
-            localRoot: localRoot,
-            clock: FakeBackupClock(),
-            now: { clock.now })
+        let engine = try makeEngine(target, stateURL: stateURL)
         let latch = TransferLatch(holdFrom: 1)
         await target.setLatch(latch)
 
