@@ -12,13 +12,17 @@ enum PixelGrid {
     /// empty, from the outer edge in. A pixel is part of the shape when
     /// its center is inside the corner's circle, with a bias of 0.3
     /// pixels to the outside: a 3-pixel corner then gives a 2-step
-    /// notch, and larger corners still read as round.
+    /// notch, and larger corners still read as round. The row test alone
+    /// is not symmetric across the diagonal at some sizes (4, 5, 9 and
+    /// up), so a pixel stays when the row test or its mirror keeps it.
     static func corner(_ count: Int) -> [Int] {
-        (0..<count).map { row in
-            let n = Double(count)
+        guard count > 1 else { return Array(repeating: 1, count: count) }
+        let n = Double(count)
+        let rows = (0..<count).map { row in
             let dy = n - Double(row) - 0.5
             return Int((n - (n * n - dy * dy).squareRoot() + 0.3).rounded())
         }
+        return rows.indices.map { row in min(rows[row], rows.count { $0 > row }) }
     }
 }
 
