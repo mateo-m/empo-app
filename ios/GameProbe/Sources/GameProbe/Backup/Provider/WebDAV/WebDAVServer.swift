@@ -83,9 +83,9 @@ public struct WebDAVServer: Codable, Equatable, Sendable {
         guard !base.isEmpty else {
             return found.hasPrefix("/") ? String(found.dropFirst()) : found
         }
-        guard found.hasPrefix(base) else { return nil }
-        let rest = found.dropFirst(base.count)
-        return rest.hasPrefix("/") ? String(rest.dropFirst()) : String(rest)
+        if found == base { return "" }
+        guard found.hasPrefix(base + "/") else { return nil }
+        return String(found.dropFirst(base.count + 1))
     }
 
     /// The objects of one multistatus answer, per 8.1.

@@ -391,6 +391,16 @@ final class WebDAVTests: XCTestCase {
         XCTAssertNil(nextcloud.relativePath(ofHref: "/somewhere/else/format.json"))
     }
 
+    func testAnHrefThatOnlyStartsWithTheBaseNameIsOutsideIt() {
+        let al = WebDAVServer(
+            address: URL(string: "https://cloud.example.com/remote.php/dav/files/al")!,
+            username: "al")
+        XCTAssertNil(al.relativePath(ofHref: "/remote.php/dav/files/alice/Empo/format.json"))
+        XCTAssertEqual(al.relativePath(ofHref: "/remote.php/dav/files/al/"), "")
+        XCTAssertEqual(
+            al.relativePath(ofHref: "/remote.php/dav/files/al/Empo/format.json"), "Empo/format.json")
+    }
+
     // MARK: - The flags of 8.3 and the add form of 13.7
 
     func testTheCapabilityFlagsReadAsSectionNineStates() {
