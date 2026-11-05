@@ -23,13 +23,10 @@ final class GameSaveWatch {
 
     static let shared = GameSaveWatch()
 
-    /// The joins of this app run, keyed by container folder name.
+    /// The joins of this app launch, keyed by container folder name.
     ///
-    /// A join has no store of its own. The manifest carries the
-    /// label per entry, per 3.6, so ticket 006 reads these paths
-    /// into the run that closes the session's stream, and the next
-    /// launch reads the joins of every earlier session back from the
-    /// last manifest. That keeps 6.3 true: the cache is never truth.
+    /// They live in memory only. A backup run reads the joins of
+    /// earlier launches back from the last manifest of its target.
     private var joinedPathsByGame: [String: Set<String>] = [:]
 
     /// The paths over the 50 MB limit that wait for an answer, per

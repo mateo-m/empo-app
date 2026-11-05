@@ -45,10 +45,9 @@ public struct RuntimeWatchResult: Equatable, Sendable {
 /// values at session end. `writtenPaths` is that comparison, and
 /// `GameSaveWatch` in the app target takes the two readings.
 ///
-/// A join has no store of its own. The manifest carries the label
-/// per entry, per 3.6, so the joins of every earlier session come
-/// back with the last manifest and the live session adds what it
-/// saw.
+/// A join has no store of its own. The manifest labels each joined
+/// entry, and a backup run reads the joins of earlier launches back
+/// from the last manifest of its target.
 public enum RuntimeWatch {
 
     /// A written file over this size stops the join and asks once,

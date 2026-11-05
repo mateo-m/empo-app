@@ -22,12 +22,11 @@ public struct GameBackupSetRequest: Sendable {
     public var rescuedSavesBuckets: [String: URL]
     /// The marks of 3.6, from `EmpoState/backup.json`.
     public var manualMarks: [String]
-    /// The paths the runtime watch joined, per 3.6.
+    /// The paths the runtime watch joined in this app launch.
     ///
-    /// A join has no store of its own. The manifest records the
-    /// label per entry, per 3.6, so the last manifest carries the
-    /// joins of every earlier session, and the live session adds
-    /// what it saw. That keeps 6.3 true: the cache is never truth.
+    /// A join has no store of its own. A backup run adds the joins
+    /// that the last manifest of its target labels, so a join stays
+    /// after a relaunch. Other callers see only this launch's joins.
     public var runtimeWatchPaths: [String]
 
     public init(

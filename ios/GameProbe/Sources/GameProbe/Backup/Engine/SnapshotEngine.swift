@@ -365,7 +365,8 @@ public actor SnapshotEngine {
                     kind: .preferences,
                     isOneOff: false,
                     isGame: false,
-                    targetId: targetId,
+                    previous: (try? store.lastUploadedManifest(
+                        targetId: targetId, gameKey: BackupStream.preferences.key))?.manifest,
                     scannedAt: scannedAt))
         }
         inputs += try order(context.request.games, targetId: targetId)
@@ -390,6 +391,15 @@ public actor SnapshotEngine {
         let scannedAt = now
         var setRequest = game.set
         if game.isOneOffFullSnapshot { setRequest.mode = .full }
+        let previous = (try? store.lastUploadedManifest(
+            targetId: targetId, gameKey: game.stream.key))?.manifest
+        // The app keeps its joins in memory for one launch only.
+        let earlierJoins = (previous?.entries ?? [])
+            .filter { $0.root == .container && $0.detectionSource == .runtimeWatch }
+            .map(\.path)
+        setRequest.runtimeWatchPaths = Array(
+            Set(setRequest.runtimeWatchPaths).union(earlierJoins)
+        ).sorted()
         let set = BackupSetResolver.resolve(setRequest, fm: fm)
         return input(
             stream: game.stream,
@@ -406,7 +416,7 @@ public actor SnapshotEngine {
             kind: PrunePlan.kind(hasLocalContainer: game.hasLocalContainer),
             isOneOff: game.isOneOffFullSnapshot,
             isGame: true,
-            targetId: targetId,
+            previous: previous,
             scannedAt: scannedAt)
     }
 
@@ -418,12 +428,10 @@ public actor SnapshotEngine {
         kind: StreamKind,
         isOneOff: Bool,
         isGame: Bool,
-        targetId: String,
+        previous: SnapshotManifest?,
         scannedAt: Date
     ) -> StreamInput {
-        let previous = (try? store.lastUploadedManifest(targetId: targetId, gameKey: stream.key))?
-            .manifest
-        return StreamInput(
+        StreamInput(
             stream: stream,
             source: source,
             header: header,

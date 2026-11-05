@@ -515,6 +515,24 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertFalse(left.contains(orphan))
     }
 
+    func testAJoinFromAnEarlierLaunchStaysInTheNextSnapshot() async throws {
+        let root = try makeGameTree(gameName)
+        try write("level 3", to: root.appendingPathComponent("Game/Data/progress.bin"))
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        var joined = game(gameName)
+        joined.set.runtimeWatchPaths = ["Game/Data/progress.bin"]
+        _ = await engine.run(request(games: [joined]))
+
+        clock.advance(3_600)
+        try changeTheSave(of: gameName, to: "slot one, after a relaunch")
+        let next = await engine.run(request(games: [game(gameName)]))
+
+        let entry = try manifestOfTheLastSnapshot(of: next, on: target).entries
+            .first { $0.path == "Game/Data/progress.bin" }
+        XCTAssertEqual(entry?.detectionSource, .runtimeWatch)
+    }
+
     func testANightlyRunEndsWithTheSweepThatIsDue() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
