@@ -71,22 +71,22 @@ struct PixelRect: InsettableShape {
             points.append(CGPoint(x: r.maxX - x, y: r.minY + CGFloat(row) * s))
             points.append(CGPoint(x: r.maxX - x, y: r.minY + CGFloat(row + 1) * s))
         }
-        if topTrailing.isEmpty { points.append(CGPoint(x: r.maxX, y: r.minY)) }
+        points.append(CGPoint(x: r.maxX, y: r.minY + CGFloat(topTrailing.count) * s))
+        points.append(CGPoint(x: r.maxX, y: r.maxY - CGFloat(bottomTrailing.count) * s))
         for (row, x) in bottomTrailing.enumerated().reversed() {
             points.append(CGPoint(x: r.maxX - x, y: r.maxY - CGFloat(row + 1) * s))
             points.append(CGPoint(x: r.maxX - x, y: r.maxY - CGFloat(row) * s))
         }
-        if bottomTrailing.isEmpty { points.append(CGPoint(x: r.maxX, y: r.maxY)) }
         for (row, x) in bottomLeading.enumerated() {
             points.append(CGPoint(x: r.minX + x, y: r.maxY - CGFloat(row) * s))
             points.append(CGPoint(x: r.minX + x, y: r.maxY - CGFloat(row + 1) * s))
         }
-        if bottomLeading.isEmpty { points.append(CGPoint(x: r.minX, y: r.maxY)) }
+        points.append(CGPoint(x: r.minX, y: r.maxY - CGFloat(bottomLeading.count) * s))
+        points.append(CGPoint(x: r.minX, y: r.minY + CGFloat(topLeading.count) * s))
         for (row, x) in topLeading.enumerated().reversed() {
             points.append(CGPoint(x: r.minX + x, y: r.minY + CGFloat(row + 1) * s))
             points.append(CGPoint(x: r.minX + x, y: r.minY + CGFloat(row) * s))
         }
-        if topLeading.isEmpty { points.append(CGPoint(x: r.minX, y: r.minY)) }
 
         var path = Path()
         path.addLines(points)
