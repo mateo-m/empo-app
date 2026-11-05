@@ -142,7 +142,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     private func prepareGame() {
-        core.setLauncherIdentity("empo", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
+        core.setLauncherIdentity("empo", AppInfo.version)
         core.setCABundlePath(launch.caBundlePath)
         core.setDebugLogPath(launch.debugLogPath)
         for setting in launch.settings {

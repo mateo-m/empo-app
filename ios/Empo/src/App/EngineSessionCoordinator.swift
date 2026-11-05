@@ -103,8 +103,7 @@ final class EngineSessionCoordinator {
 
         // Game scripts see `$userAgent = "empo"`, `$empo = true`, and
         // `$userAgentVersion`, alongside the engine's JoiPlay-compat `$joiplay`.
-        gamecore_setLauncherIdentity(
-            "empo", Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
+        gamecore_setLauncherIdentity("empo", AppInfo.version)
         pushCABundlePath()
         AppSettings.shared.pushToCore()
         AppWindow.pushSafeAreaInsets()
