@@ -518,6 +518,16 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(bucket.canonicalPath(key: "Empo/format.json"), "/Empo/format.json")
     }
 
+    func testABucketNameWithADotGoesInThePath() {
+        // The AWS wildcard certificate covers one label, so
+        // `my.saves.s3.amazonaws.com` fails TLS.
+        let bucket = S3Bucket(
+            address: URL(string: "https://s3.eu-west-1.amazonaws.com")!, region: "eu-west-1",
+            name: "my.saves", usesPathStyle: false)
+        XCTAssertEqual(bucket.host, "s3.eu-west-1.amazonaws.com")
+        XCTAssertEqual(bucket.canonicalPath(key: "Empo/format.json"), "/my.saves/Empo/format.json")
+    }
+
     func testAnAddressWithItsOwnPathKeepsIt() {
         let bucket = S3Bucket(
             address: URL(string: "https://example.com/s3/")!, region: "us-east-1",

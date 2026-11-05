@@ -48,9 +48,14 @@ public struct S3Bucket: Codable, Equatable, Sendable {
     /// the bucket rides the path.
     public var host: String? {
         guard let host = address.host, !host.isEmpty else { return nil }
-        guard !usesPathStyle, !name.isEmpty else { return host }
+        guard !namesBucketInPath, !name.isEmpty else { return host }
         return "\(name).\(host)"
     }
+
+    /// The AWS wildcard certificate matches one label, so a bucket
+    /// name with a dot fails TLS in the host.
+    /// https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
+    private var namesBucketInPath: Bool { usesPathStyle || name.contains(".") }
 
     public var scheme: String? { address.scheme?.lowercased() }
 
@@ -86,7 +91,7 @@ public struct S3Bucket: Codable, Equatable, Sendable {
     /// path the engine hands over.
     public func canonicalPath(key: String) -> String {
         var parts = basePath
-        if usesPathStyle, !name.isEmpty {
+        if namesBucketInPath, !name.isEmpty {
             parts += "/" + S3SigV4.uriEncode(name)
         }
         let trimmed = key.hasPrefix("/") ? String(key.dropFirst()) : key
