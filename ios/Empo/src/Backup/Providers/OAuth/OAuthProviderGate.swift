@@ -63,7 +63,7 @@ extension OAuthProviderGate {
         let store = OAuthTokenStore(
             targetId: targetId,
             service: OAuthTokenStore.Service(
-                tokenEndpoint: service.tokenEndpoint, clientId: service.clientId),
+                kind: Self.kind, tokenEndpoint: service.tokenEndpoint, clientId: service.clientId),
             tokens: tokens)
         stores[targetId] = store
         return store

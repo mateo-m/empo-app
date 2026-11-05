@@ -8,13 +8,14 @@ import GameProbe
 /// to the Keychain, and hands the same token to every caller that
 /// waits, so four transfers in flight make one refresh and not four.
 ///
-/// A refresh the service refuses is the auth loss of 8.10. The store
-/// throws `authExpired`, and the effect of 8.4 moves the target to
-/// needs-sign-in and stops the run.
+/// A refresh token the service calls dead makes the store throw
+/// `authExpired`, which moves the target to needs-sign-in and stops
+/// the run. An outage or a throttle does not.
 actor OAuthTokenStore {
 
     /// What one service needs to refresh a token.
     struct Service: Sendable {
+        let kind: BackupProviderKind
         let tokenEndpoint: URL
         let clientId: String
     }
@@ -88,7 +89,7 @@ actor OAuthTokenStore {
 
     private static func exchange(
         refreshToken: String, service: Service
-    ) async throws -> OAuthTokens {
+    ) async throws(BackupProviderError) -> OAuthTokens {
         var request = URLRequest(url: service.tokenEndpoint)
         request.httpMethod = "POST"
         request.setValue(
@@ -100,17 +101,17 @@ actor OAuthTokenStore {
                 "client_id": service.clientId,
             ]).utf8)
 
-        let (data, response) = try await BackupAPISession.shared.answer(for: request)
-        guard let http = response as? HTTPURLResponse else { throw BackupProviderError.offline }
-        guard http.statusCode == 200 else {
-            // The service refused the refresh. Only a new sign-in
-            // fixes that, per 8.10.
-            throw BackupProviderError.authExpired
+        let answer = try await BackupAPISession.shared.send(request)
+        guard answer.status == 200 else {
+            throw OAuthRefresh.error(
+                kind: service.kind, status: answer.status, body: answer.body,
+                retryAfterHeader: answer.retryAfterHeader)
         }
-        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        // A captive portal answers 200 with its own page and no token.
+        guard let root = try? JSONSerialization.jsonObject(with: answer.body) as? [String: Any],
             let access = root["access_token"] as? String
         else {
-            throw BackupProviderError.authExpired
+            throw BackupProviderError.offline
         }
         let lifetime = (root["expires_in"] as? NSNumber)?.doubleValue
         return OAuthTokens(
