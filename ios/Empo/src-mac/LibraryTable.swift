@@ -23,7 +23,7 @@ struct LibraryTable: View {
                     .overlay {
                         if game.status == .invalid {
                             Color.black.opacity(Scrim.light)
-                                .clipShape(.rect(cornerRadius: Radius.xs))
+                                .clipShape(.pixelRect(cornerRadius: Radius.xs))
                         }
                     }
                     Text(game.title)
@@ -32,8 +32,7 @@ struct LibraryTable: View {
                         InvalidGameBadge()
                     }
                     if game.isImporting {
-                        ProgressView(value: game.importProgress)
-                            .progressViewStyle(.linear)
+                        PixelProgressBar(value: game.importProgress)
                             .frame(maxWidth: 80)
                     }
                 }

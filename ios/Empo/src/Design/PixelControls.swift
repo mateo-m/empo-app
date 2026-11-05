@@ -97,6 +97,26 @@ struct PixelToggleStyle: ToggleStyle {
     }
 }
 
+/// A progress bar drawn with pixel corners, with the track of
+/// `PixelSlider`.
+struct PixelProgressBar: View {
+    let value: Double
+
+    var body: some View {
+        PixelRect.pixelCapsule
+            .fill(Color(.systemFill))
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    PixelRect.pixelCapsule
+                        .fill(Color.brand)
+                        .frame(width: proxy.size.width * min(max(value, 0), 1))
+                }
+            }
+            .frame(height: PixelGrid.step * 2)
+            .accessibilityRepresentation { ProgressView(value: value) }
+    }
+}
+
 /// A slider drawn with pixel corners: a 2-pixel track and a pixel knob.
 struct PixelSlider: View {
     @Binding var value: Double

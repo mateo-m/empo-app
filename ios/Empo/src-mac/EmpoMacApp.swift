@@ -21,6 +21,7 @@ struct EmpoMacApp: App {
                 .frame(minWidth: 720, minHeight: 480)
                 .environment(\.appSettings, settings)
                 .environment(\.gameLibrary, GameLibrary.shared)
+                .toggleStyle(PixelToggleStyle())
         }
         .defaultSize(width: 1080, height: 720)
         .commands {
@@ -34,6 +35,7 @@ struct EmpoMacApp: App {
             if let gameID {
                 GameSettingsWindow(gameID: gameID)
                     .environment(\.appSettings, settings)
+                    .toggleStyle(PixelToggleStyle())
             }
         }
         .defaultSize(width: 520, height: 640)
@@ -59,6 +61,7 @@ struct EmpoMacApp: App {
         Settings {
             MacSettingsView()
                 .environment(\.appSettings, settings)
+                .toggleStyle(PixelToggleStyle())
         }
     }
 }
