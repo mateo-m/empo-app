@@ -182,6 +182,69 @@ final class PermissionCheckTests: XCTestCase {
         XCTAssertTrue(
             PermissionCheck.makeProbePath(root: "").hasPrefix("Empo/permission-check-"))
     }
+
+    // MARK: - The local probe file
+
+    func testTwoChecksStageTheirProbeUnderDifferentLocalNames() async {
+        // Two checks share one staging folder. A shared name lets the
+        // first one to finish delete the file the other still uploads.
+        let target = RecordingTarget()
+        let scratch = tempRoot.appendingPathComponent("scratch", isDirectory: true)
+        _ = await PermissionCheck.run(on: target, scratchDirectory: scratch)
+        _ = await PermissionCheck.run(on: target, scratchDirectory: scratch)
+
+        let files = await target.localFiles
+        XCTAssertEqual(files.count, 2)
+        XCTAssertNotEqual(files.first, files.last)
+    }
+
+    func testALocalWriteThatFailsForAnotherReasonDoesNotSayTheDeviceIsFull() async throws {
+        // A plain file where the staging folder should be makes the
+        // folder creation fail with "file exists".
+        let blocked = tempRoot.appendingPathComponent("blocked")
+        try Data().write(to: blocked)
+
+        let result = await PermissionCheck.run(on: makeTarget(), scratchDirectory: blocked)
+
+        XCTAssertEqual(result.failedStep, .write)
+        XCTAssertEqual(result.failure, .rejected(message: PermissionCheck.localWriteFailedMessage))
+    }
+
+    func testOnlyANoSpaceErrorReadsAsAFullDevice() {
+        XCTAssertTrue(NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC)).isOutOfSpace)
+        XCTAssertTrue(CocoaError(.fileWriteOutOfSpace).isOutOfSpace)
+        XCTAssertFalse(NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES)).isOutOfSpace)
+        XCTAssertFalse(CocoaError(.fileWriteNoPermission).isOutOfSpace)
+    }
+}
+
+private actor RecordingTarget: BackupProvider {
+
+    nonisolated let capabilities = TargetCapabilities()
+    private(set) var localFiles: [URL] = []
+    private var paths: Set<String> = []
+
+    func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
+        paths.filter { $0.hasPrefix(prefix) }
+            .map { RemoteObject(path: $0, sizeBytes: 0, modifiedAt: nil) }
+    }
+
+    func put(localFile: URL, path: String) async throws(BackupProviderError) {
+        localFiles.append(localFile)
+        paths.insert(path)
+    }
+
+    func confirm(path: String) async throws(BackupProviderError) -> PutConfirmation { .confirmed }
+
+    func get(path: String, localFile: URL) async throws(BackupProviderError) {
+        throw .notFound
+    }
+
+    func delete(paths: [String]) async throws(BackupProviderError) {
+        self.paths.subtract(paths)
+    }
+
+    func quota() async throws(BackupProviderError) -> QuotaReading? { nil }
 }
 
 /// A provider that takes a write and keeps nothing. It is the one

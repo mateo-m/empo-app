@@ -830,21 +830,6 @@ extension GameLibrary {
         }
     }
 
-    /// True when `error` is the Foundation / POSIX flavor of "disk
-    /// full". Covers both `NSFileWriteOutOfSpaceError` (from
-    /// FileManager writes) and `ENOSPC` (from libc-level calls that
-    /// libarchive bubbles up as NSError).
-    nonisolated static func isOutOfSpace(_ error: Error) -> Bool {
-        let ns = error as NSError
-        if ns.domain == NSCocoaErrorDomain && ns.code == NSFileWriteOutOfSpaceError {
-            return true
-        }
-        if ns.domain == NSPOSIXErrorDomain && ns.code == Int(ENOSPC) {
-            return true
-        }
-        return false
-    }
-
     nonisolated func isImportCancelled(_ id: String) -> Bool {
         cancelledImports.withLock { $0.contains(id) }
     }
@@ -1390,7 +1375,7 @@ extension GameLibrary {
                             GameContainer.normalizeImportedGamePermissions(at: container.gameURL)
                         }
                     } catch {
-                        let surfaced: Error = Self.isOutOfSpace(error) ? ImportError.outOfSpace : error
+                        let surfaced: Error = error.isOutOfSpace ? ImportError.outOfSpace : error
                         failSelection(sel, surfaced)
                         continue
                     }
@@ -1458,7 +1443,7 @@ extension GameLibrary {
                 failAllActive(ImportCancelled())
                 await finishBatch(failures)
             } catch {
-                let surfaced: Error = Self.isOutOfSpace(error) ? ImportError.outOfSpace : error
+                let surfaced: Error = error.isOutOfSpace ? ImportError.outOfSpace : error
                 failAllActive(surfaced)
                 await finishBatch(failures)
             }

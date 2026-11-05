@@ -100,6 +100,9 @@ public enum PermissionCheck {
     /// leftover from a failed delete says what it is.
     public static let probeContents = Data("empo permission check".utf8)
 
+    public static let localWriteFailedMessage =
+        "Empo couldn't save a test file on this device. Try again."
+
     /// A probe path under the fixed root of 8.7.
     ///
     /// The root belongs in the path, because a provider takes a whole
@@ -131,17 +134,18 @@ public enum PermissionCheck {
         }
 
         // Step 1: write the probe.
-        let probeFile = scratchDirectory.appendingPathComponent("permission-check")
+        let probeFile = scratchDirectory.appendingPathComponent(
+            "permission-check-\(UUID().uuidString)")
         do {
             try FileManager.default.createDirectory(
                 at: scratchDirectory, withIntermediateDirectories: true)
             try probeContents.write(to: probeFile, options: .atomic)
         } catch {
+            let message =
+                error.isOutOfSpace
+                ? "This device is full. Free up space, then try again." : localWriteFailedMessage
             steps.append(
-                PermissionCheckStepResult(
-                    step: .write,
-                    outcome: .failed(
-                        .rejected(message: "This device is full. Free up space, then try again."))))
+                PermissionCheckStepResult(step: .write, outcome: .failed(.rejected(message: message))))
             return skipRest()
         }
         defer { try? FileManager.default.removeItem(at: probeFile) }
