@@ -259,6 +259,10 @@ private struct SizeLimitPicker: View {
     @State private var isCustom = false
     @State private var typed = ""
 
+    private static let gigabytes = FloatingPointFormatStyle<Double>.number.grouping(.never)
+        .precision(.fractionLength(0...1))
+    private var typedGigabytes: Double? { try? Double(typed, format: Self.gigabytes) }
+
     private enum Choice: Hashable {
         case off
         case preset(Int64)
@@ -278,11 +282,11 @@ private struct SizeLimitPicker: View {
                 TextField("Size in GB", text: $typed)
                     .keyboardType(.decimalPad)
                 Button("Set") {
-                    guard let gigabytes = Double(typed), gigabytes > 0 else { return }
+                    guard let gigabytes = typedGigabytes, gigabytes > 0 else { return }
                     set(Int64(gigabytes * 1_073_741_824))
                     isCustom = false
                 }
-                .disabled(Double(typed) == nil)
+                .disabled(typedGigabytes == nil)
             }
         }
     }
@@ -309,7 +313,7 @@ private struct SizeLimitPicker: View {
                     isCustom = false
                     set(value)
                 case .custom:
-                    typed = bytes.map { String(format: "%.1f", Double($0) / 1_073_741_824) } ?? ""
+                    typed = bytes.map { (Double($0) / 1_073_741_824).formatted(Self.gigabytes) } ?? ""
                     isCustom = true
                 }
             })
