@@ -284,11 +284,14 @@ struct ScreenRegionChips: View {
     /// across the screen.
     var avoiding: [CGRect] = []
 
+    private static let chipSpacing: CGFloat = 30
+
     private var firstChipY: CGFloat {
         let chipHalfHeight: CGFloat = 12
+        let stackHeight = showsReset && onToggleOverlay != nil ? Self.chipSpacing : 0
         var y = rect.minY + 44
         for frame in avoiding.sorted(by: { $0.minY < $1.minY })
-        where frame.minY < y + chipHalfHeight && frame.maxY > y - chipHalfHeight {
+        where frame.minY < y + stackHeight + chipHalfHeight && frame.maxY > y - chipHalfHeight {
             y = frame.maxY + Spacing.xs + chipHalfHeight
         }
         return y
@@ -338,7 +341,7 @@ struct ScreenRegionChips: View {
                     .foregroundStyle(overlayOn ? Color.brand : .white)
                     .glassEffect(.regular.interactive(), in: .pixelCapsule)
                 }
-                .position(x: rect.midX, y: firstChipY + (showsReset ? 30 : 0))
+                .position(x: rect.midX, y: firstChipY + (showsReset ? Self.chipSpacing : 0))
                 .accessibilityLabel("Controls over game")
                 .accessibilityValue(
                     overlayOn
