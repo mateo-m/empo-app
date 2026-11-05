@@ -121,25 +121,28 @@ final class DeflateStream {
         buffer.deallocate()
     }
 
-    /// The output this chunk produced, which may be empty.
-    func push(_ chunk: Data) -> Data? {
-        process(chunk, flags: 0)
+    struct Failure: Error {}
+
+    /// Hands `sink` the output of this chunk, one buffer at a time, so
+    /// a reader can stop a stream that inflates past what it expects.
+    func push(_ chunk: Data, into sink: (Data) throws -> Void) throws {
+        try process(chunk, flags: 0, into: sink)
     }
 
-    /// The output left after the last chunk. The stream is done
-    /// after this call.
-    func finish() -> Data? {
+    /// Hands `sink` the output left after the last chunk. The stream
+    /// is done after this call.
+    func finish(into sink: (Data) throws -> Void) throws {
         defer {
             compression_stream_destroy(stream)
             closed = true
         }
-        return process(Data(), flags: Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
+        try process(Data(), flags: Int32(COMPRESSION_STREAM_FINALIZE.rawValue), into: sink)
     }
 
-    private func process(_ chunk: Data, flags: Int32) -> Data? {
-        var out = Data()
-        var failed = false
-        chunk.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+    private func process(
+        _ chunk: Data, flags: Int32, into sink: (Data) throws -> Void
+    ) throws {
+        try chunk.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
             stream.pointee.src_ptr =
                 raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
                 ?? UnsafePointer(buffer)
@@ -148,17 +151,13 @@ final class DeflateStream {
                 stream.pointee.dst_ptr = buffer
                 stream.pointee.dst_size = bufferSize
                 let status = compression_stream_process(stream, flags)
-                guard status != COMPRESSION_STATUS_ERROR else {
-                    failed = true
-                    return
-                }
+                guard status != COMPRESSION_STATUS_ERROR else { throw Failure() }
                 let produced = bufferSize - stream.pointee.dst_size
-                if produced > 0 { out.append(buffer, count: produced) }
+                if produced > 0 { try sink(Data(bytes: buffer, count: produced)) }
                 if status == COMPRESSION_STATUS_END { return }
                 if stream.pointee.src_size == 0 && produced == 0 { return }
             } while true
         }
-        return failed ? nil : out
     }
 }
 

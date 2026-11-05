@@ -80,4 +80,146 @@ final class PackageZipTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Hostile bytes
+
+    /// A ZIP the real writer made, with one field of the central
+    /// record of `path` then overwritten.
+    private func zip(
+        _ files: [(String, Data)], patching path: String, at field: Int, with bytes: [UInt8]
+    ) throws -> URL {
+        let url = root.appendingPathComponent(UUID().uuidString + ".zip")
+        let writer = try ZipWriter(creating: url)
+        for (name, data) in files { try writer.add(data: data, at: name) }
+        try writer.finish()
+
+        var raw = try Data(contentsOf: url)
+        let name = Data(path.utf8)
+        var index = 0
+        while index + 46 <= raw.count {
+            if raw.u32(index) == 0x0201_4B50,
+                raw.subdata(in: (index + 46)..<(index + 46 + name.count)) == name
+            {
+                raw.replaceSubrange((index + field)..<(index + field + bytes.count), with: bytes)
+                try raw.write(to: url)
+                return url
+            }
+            index += 1
+        }
+        throw ZipReader.Failure.notAZip
+    }
+
+    private func le32(_ value: UInt32) -> [UInt8] {
+        (0..<4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) }
+    }
+
+    func testAZip64CountPastWhatTheDirectoryHoldsIsRefused() throws {
+        for count in [UInt64.max, UInt64(Int.max), 1_000_000] {
+            let url = root.appendingPathComponent("count.zip")
+            try zip64EndRecords(count: count).write(to: url)
+            XCTAssertThrowsError(try ZipReader(reading: url)) {
+                XCTAssertEqual($0 as? ZipReader.Failure, .truncated)
+            }
+        }
+    }
+
+    /// An empty central directory with ZIP64 end records that claim
+    /// `count` entries.
+    private func zip64EndRecords(count: UInt64) -> Data {
+        var file = Data()
+        file.append(le32: 0x0606_4B50)
+        file.append(le64: 44)
+        file.append(le16: 45)
+        file.append(le16: 45)
+        file.append(le32: 0)
+        file.append(le32: 0)
+        file.append(le64: Int64(bitPattern: count))
+        file.append(le64: Int64(bitPattern: count))
+        file.append(le64: 0)
+        file.append(le64: 0)
+        file.append(le32: 0x0706_4B50)
+        file.append(le32: 0)
+        file.append(le64: 0)
+        file.append(le32: 1)
+        file.append(le32: 0x0605_4B50)
+        file.append(le16: 0)
+        file.append(le16: 0)
+        file.append(le16: 0xFFFF)
+        file.append(le16: 0xFFFF)
+        file.append(le32: 0xFFFF_FFFF)
+        file.append(le32: 0xFFFF_FFFF)
+        file.append(le16: 0)
+        return file
+    }
+
+    /// The directory says 100 bytes, and the body inflates to 8 MB.
+    func testAnEntryThatInflatesPastItsDeclaredSizeStopsThere() throws {
+        let url = try zip(
+            [("bomb.bin", Data(count: 8 * 1_024 * 1_024))],
+            patching: "bomb.bin", at: 24, with: le32(100))
+        let reader = try ZipReader(reading: url)
+        defer { reader.close() }
+        let entry = try XCTUnwrap(reader.entry(at: "bomb.bin"))
+        XCTAssertTrue(entry.isDeflated)
+
+        let out = root.appendingPathComponent("bomb.out")
+        XCTAssertThrowsError(try reader.extract(entry, to: out)) {
+            XCTAssertEqual($0 as? ZipReader.Failure, .wrongSize("bomb.bin"))
+        }
+        let written = try fm.attributesOfItem(atPath: out.path)[.size] as? Int ?? 0
+        XCTAssertLessThanOrEqual(written, 100)
+        XCTAssertThrowsError(try reader.data(of: entry)) {
+            XCTAssertEqual($0 as? ZipReader.Failure, .wrongSize("bomb.bin"))
+        }
+    }
+
+    func testAStoredEntryLongerThanItsDeclaredSizeStopsThere() throws {
+        let url = try zip(
+            [("big.png", Data(repeating: 9, count: 4_096))],
+            patching: "big.png", at: 24, with: le32(100))
+        let reader = try ZipReader(reading: url)
+        defer { reader.close() }
+        let entry = try XCTUnwrap(reader.entry(at: "big.png"))
+        XCTAssertFalse(entry.isDeflated)
+
+        let out = root.appendingPathComponent("big.out")
+        XCTAssertThrowsError(try reader.extract(entry, to: out)) {
+            XCTAssertEqual($0 as? ZipReader.Failure, .wrongSize("big.png"))
+        }
+        let written = try fm.attributesOfItem(atPath: out.path)[.size] as? Int ?? 0
+        XCTAssertLessThanOrEqual(written, 100)
+    }
+
+    func testAnEntryShorterThanItsDeclaredSizeIsRefused() throws {
+        let url = try zip(
+            [("save.bin", Data(repeating: 4, count: 1_000))],
+            patching: "save.bin", at: 24, with: le32(2_000))
+        let reader = try ZipReader(reading: url)
+        defer { reader.close() }
+        let entry = try XCTUnwrap(reader.entry(at: "save.bin"))
+        XCTAssertThrowsError(try reader.data(of: entry)) {
+            XCTAssertEqual($0 as? ZipReader.Failure, .wrongSize("save.bin"))
+        }
+    }
+
+    /// Method 12 is bzip2, which this reader does not inflate.
+    func testAnUnknownCompressionMethodIsRefused() throws {
+        let url = try zip(
+            [("save.bin", Data(repeating: 4, count: 1_000))],
+            patching: "save.bin", at: 10, with: [12, 0])
+        XCTAssertThrowsError(try ZipReader(reading: url)) {
+            XCTAssertEqual($0 as? ZipReader.Failure, .unsupportedMethod("save.bin"))
+        }
+    }
+
+    func testAManifestPastTheSizeLimitIsRefusedUnread() throws {
+        let manifest = try PackageManifest(exportedAt: Date(), sourceDevice: "iPad").jsonData()
+        let url = try zip(
+            [(PackageLayout.manifestPath, manifest)],
+            patching: PackageLayout.manifestPath, at: 24,
+            with: le32(UInt32(PackageValidation.manifestSizeLimit + 1)))
+        XCTAssertThrowsError(try PackageSource(zip: url, packageId: "p1")) {
+            XCTAssertEqual($0 as? PackageRejection, .unreadableManifest)
+        }
+    }
 }

@@ -57,6 +57,10 @@ public enum PackageValidation {
     /// The two files every package carries beside the data.
     static let ownFiles: Set<String> = [PackageLayout.manifestPath, PackageLayout.readmePath]
 
+    /// A manifest entry runs about 300 bytes, so this holds some
+    /// 200,000 files and keeps a hostile one from filling memory.
+    static let manifestSizeLimit: Int64 = 64 * 1_024 * 1_024
+
     /// Reads the manifest of a package, or says why it is not one.
     public static func manifest(ofZip entries: [ZipEntry], data: Data?) throws -> PackageManifest {
         guard entries.contains(where: { $0.path == PackageLayout.manifestPath }),

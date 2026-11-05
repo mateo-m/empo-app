@@ -52,7 +52,13 @@ public actor PackageSource: BackupProvider {
             throw PackageRejection.noManifest
         }
         let entries = reader.entries
-        let data = reader.entry(at: PackageLayout.manifestPath).flatMap { try? reader.data(of: $0) }
+        let manifestEntry = reader.entry(at: PackageLayout.manifestPath)
+        if let manifestEntry,
+            manifestEntry.uncompressedSize > PackageValidation.manifestSizeLimit
+        {
+            throw PackageRejection.unreadableManifest
+        }
+        let data = manifestEntry.flatMap { try? reader.data(of: $0) }
         let manifest = try PackageValidation.manifest(ofZip: entries, data: data)
         do {
             try PackageValidation.check(manifest, against: entries)

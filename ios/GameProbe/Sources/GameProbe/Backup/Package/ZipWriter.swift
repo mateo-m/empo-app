@@ -377,7 +377,9 @@ private struct DeflateBody {
     mutating func push(_ chunk: Data) throws -> Data {
         guard isDeflating else { return chunk }
         #if canImport(Compression)
-        guard let out = stream?.push(chunk) else { throw ZipFailure.compressionFailed("") }
+        guard let stream else { throw ZipFailure.compressionFailed("") }
+        var out = Data()
+        try stream.push(chunk) { out.append($0) }
         return out
         #else
         buffered.append(chunk)
@@ -388,7 +390,9 @@ private struct DeflateBody {
     mutating func finish() throws -> Data {
         guard isDeflating else { return Data() }
         #if canImport(Compression)
-        guard let out = stream?.finish() else { throw ZipFailure.compressionFailed("") }
+        guard let stream else { throw ZipFailure.compressionFailed("") }
+        var out = Data()
+        try stream.finish { out.append($0) }
         return out
         #else
         guard let out = RawDeflate.deflate(buffered) else {

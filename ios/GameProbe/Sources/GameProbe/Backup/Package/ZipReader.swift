@@ -6,6 +6,7 @@ public struct ZipEntry: Equatable, Sendable {
     public var uncompressedSize: Int64
     public var compressedSize: Int64
     public var crc: UInt32
+    /// Stored otherwise. The reader refuses every other method.
     public var isDeflated: Bool
     public var headerOffset: Int64
     /// The Unix mode says a link, so nothing extracts it, per 12.6.
@@ -27,6 +28,8 @@ public final class ZipReader {
         case unreadableEntry(String)
         case checksumMismatch(String)
         case cannotWrite(String)
+        case wrongSize(String)
+        case unsupportedMethod(String)
     }
 
     private let handle: FileHandle
@@ -66,7 +69,7 @@ public final class ZipReader {
         let tail = try read(at: length - window, count: Int(window))
         guard let end = lastIndex(of: 0x0605_4B50, in: tail) else { throw Failure.notAZip }
 
-        var count = Int(tail.u16(end + 10))
+        var count = UInt64(tail.u16(end + 10))
         var directoryOffset = Int64(tail.u32(end + 16))
         let locator = lastIndex(of: 0x0706_4B50, in: tail)
 
@@ -74,13 +77,19 @@ public final class ZipReader {
             let record = Int64(bitPattern: tail.u64(locator + 8))
             let head = try read(at: record, count: 56)
             guard head.count == 56, head.u32(0) == 0x0606_4B50 else { throw Failure.truncated }
-            count = Int(head.u64(32))
+            count = head.u64(32)
             directoryOffset = Int64(bitPattern: head.u64(48))
         }
+        // Each record takes at least 46 bytes, so a count the rest of
+        // the file cannot hold is a lie.
+        guard (0...length).contains(directoryOffset),
+            let records = Int(exactly: count),
+            records <= (length - directoryOffset) / 46
+        else { throw Failure.truncated }
 
         var out: [ZipEntry] = []
         var cursor = directoryOffset
-        for _ in 0..<count {
+        for _ in 0..<records {
             let head = try read(at: cursor, count: 46)
             guard head.count == 46, head.u32(0) == 0x0201_4B50 else { throw Failure.truncated }
 
@@ -91,12 +100,14 @@ public final class ZipReader {
             guard fields.count == nameLength + extraLength else { throw Failure.truncated }
 
             let name = String(decoding: fields.prefix(nameLength), as: UTF8.self)
+            let method = head.u16(10)
+            guard method == 0 || method == 8 else { throw Failure.unsupportedMethod(name) }
             var entry = ZipEntry(
                 path: name,
                 uncompressedSize: Int64(head.u32(24)),
                 compressedSize: Int64(head.u32(20)),
                 crc: head.u32(16),
-                isDeflated: head.u16(10) == 8,
+                isDeflated: method == 8,
                 headerOffset: Int64(head.u32(42)),
                 isSymbolicLink: Self.isALink(madeBy: head.u16(4), attributes: head.u32(38)))
             apply(
@@ -149,17 +160,16 @@ public final class ZipReader {
 
     // MARK: - Reading one entry
 
+    /// The whole entry in memory. The caller caps `uncompressedSize`
+    /// first, because the read stops only there.
     public func data(of entry: ZipEntry) throws -> Data {
-        let body = try readTheBody(of: entry)
-        let out = entry.isDeflated ? try inflate(body, entry: entry) : body
-        guard RawDeflate.crc32(out) == entry.crc else {
-            throw Failure.checksumMismatch(entry.path)
-        }
+        var out = Data()
+        try stream(entry) { out.append($0) }
         return out
     }
 
-    /// Writes one entry to a file. A stored entry copies in chunks,
-    /// so a multi-gigabyte asset never enters memory.
+    /// Writes one entry to a file, one chunk at a time, so a
+    /// multi-gigabyte asset never enters memory.
     public func extract(_ entry: ZipEntry, to url: URL) throws {
         let fm = FileManager.default
         try? fm.createDirectory(
@@ -168,88 +178,77 @@ public final class ZipReader {
         guard fm.createFile(atPath: url.path, contents: nil),
             let out = try? FileHandle(forWritingTo: url)
         else {
-            throw Failure.unreadableEntry(entry.path)
+            throw Failure.cannotWrite(entry.path)
         }
         defer { try? out.close() }
+        try stream(entry) { bytes in
+            do {
+                try out.write(contentsOf: bytes)
+            } catch {
+                throw Failure.cannotWrite(entry.path)
+            }
+        }
+    }
+
+    /// Hands `sink` the bytes of one entry and checks them against the
+    /// directory. It stops at the first byte past `uncompressedSize`,
+    /// so a body that inflates without end never reaches the sink.
+    private func stream(_ entry: ZipEntry, into sink: (Data) throws -> Void) throws {
+        var produced: Int64 = 0
+        var crc: UInt32 = 0
+        let emit = { (bytes: Data) throws in
+            produced += Int64(bytes.count)
+            guard produced <= entry.uncompressedSize else {
+                throw Failure.wrongSize(entry.path)
+            }
+            crc = RawDeflate.crc32(bytes, seed: crc)
+            try sink(bytes)
+        }
 
         if entry.isDeflated {
-            // A compressed entry inflates through the stream, which
-            // holds one block at a time.
-            try inflateToFile(entry, out: out)
-            return
+            try inflate(entry, into: emit)
+        } else {
+            try readTheBody(of: entry, into: emit)
         }
-
-        var start = try bodyOffset(of: entry)
-        var left = entry.compressedSize
-        var crc: UInt32 = 0
-        let chunk = Int64(1_024 * 1_024)
-        while left > 0 {
-            try drainingAutoreleased {
-                let take = Int(min(chunk, left))
-                let bytes = try read(at: start, count: take)
-                guard bytes.count == take else { throw Failure.truncated }
-                crc = RawDeflate.crc32(bytes, seed: crc)
-                try write(bytes, to: out, entry: entry)
-                start += Int64(take)
-                left -= Int64(take)
-            }
-        }
+        guard produced == entry.uncompressedSize else { throw Failure.wrongSize(entry.path) }
         guard crc == entry.crc else { throw Failure.checksumMismatch(entry.path) }
     }
 
-    private func inflateToFile(_ entry: ZipEntry, out: FileHandle) throws {
+    private func inflate(_ entry: ZipEntry, into emit: (Data) throws -> Void) throws {
         #if canImport(Compression)
-        guard let stream = DeflateStream.decoder() else {
+        guard let decoder = DeflateStream.decoder() else {
             throw Failure.unreadableEntry(entry.path)
         }
-        var start = try bodyOffset(of: entry)
-        var left = entry.compressedSize
-        var crc: UInt32 = 0
-        let chunk = Int64(1_024 * 1_024)
-        while left > 0 {
-            try drainingAutoreleased {
-                let take = Int(min(chunk, left))
-                let bytes = try read(at: start, count: take)
-                guard bytes.count == take else { throw Failure.truncated }
-                guard let produced = stream.push(bytes) else {
-                    throw Failure.unreadableEntry(entry.path)
-                }
-                crc = RawDeflate.crc32(produced, seed: crc)
-                try write(produced, to: out, entry: entry)
-                start += Int64(take)
-                left -= Int64(take)
-            }
-        }
-        guard let tail = stream.finish() else { throw Failure.unreadableEntry(entry.path) }
-        crc = RawDeflate.crc32(tail, seed: crc)
-        try write(tail, to: out, entry: entry)
-        guard crc == entry.crc else { throw Failure.checksumMismatch(entry.path) }
-        #else
-        try write(data(of: entry), to: out, entry: entry)
-        #endif
-    }
-
-    private func inflate(_ body: Data, entry: ZipEntry) throws -> Data {
-        #if canImport(Compression)
-        guard let stream = DeflateStream.decoder(),
-            let head = stream.push(body), let tail = stream.finish()
-        else {
+        do {
+            try readTheBody(of: entry) { try decoder.push($0, into: emit) }
+            try decoder.finish(into: emit)
+        } catch is DeflateStream.Failure {
             throw Failure.unreadableEntry(entry.path)
         }
-        return head + tail
         #else
+        var body = Data()
+        try readTheBody(of: entry) { body.append($0) }
         guard let out = try? RawDeflate.inflate(body) else {
             throw Failure.unreadableEntry(entry.path)
         }
-        return out
+        try emit(out)
         #endif
     }
 
-    private func readTheBody(of entry: ZipEntry) throws -> Data {
-        let start = try bodyOffset(of: entry)
-        let bytes = try read(at: start, count: Int(entry.compressedSize))
-        guard bytes.count == Int(entry.compressedSize) else { throw Failure.truncated }
-        return bytes
+    private func readTheBody(of entry: ZipEntry, into sink: (Data) throws -> Void) throws {
+        var start = try bodyOffset(of: entry)
+        var left = entry.compressedSize
+        let chunk = Int64(1_024 * 1_024)
+        while left > 0 {
+            try drainingAutoreleased {
+                let take = Int(min(chunk, left))
+                let bytes = try read(at: start, count: take)
+                guard bytes.count == take else { throw Failure.truncated }
+                try sink(bytes)
+                start += Int64(take)
+                left -= Int64(take)
+            }
+        }
     }
 
     /// The local header repeats the name and the extra field with
@@ -269,15 +268,7 @@ public final class ZipReader {
     private func read(at offset: Int64, count: Int) throws -> Data {
         guard offset >= 0, count > 0, offset < length else { return Data() }
         try handle.seek(toOffset: UInt64(offset))
-        return try handle.read(upToCount: count) ?? Data()
-    }
-
-    private func write(_ data: Data, to out: FileHandle, entry: ZipEntry) throws {
-        do {
-            try out.write(contentsOf: data)
-        } catch {
-            throw Failure.cannotWrite(entry.path)
-        }
+        return try handle.read(upToCount: Int(min(Int64(count), length - offset))) ?? Data()
     }
 
     private func lastIndex(of signature: UInt32, in data: Data) -> Int? {
