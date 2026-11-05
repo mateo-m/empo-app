@@ -92,6 +92,14 @@ struct ResumeQuestionAsk: Identifiable {
             BackupTargets.load().first { $0.id == record.targetId }?.displayName ?? "this location"
     }
 
+    @MainActor
+    func markAsked() {
+        switch side {
+        case .backupRun: BackupScheduler.shared.markResumeAsked()
+        case .restore: RestoreCoordinator.shared.markResumeAsked()
+        }
+    }
+
     /// Applies one answer by its place in `labels`.
     @MainActor
     func answer(_ index: Int) {
@@ -145,6 +153,7 @@ struct ResumeQuestionSheet: View {
             }
             .transition(.sheetStep)
         }
+        .onAppear { ask.markAsked() }
         .onDisappear {
             guard !answered else { return }
             ask.answer(1)

@@ -28,6 +28,7 @@ struct GameLibraryView: View {
     /// banner of 7.1 both open.
     @State private var showsBackups = false
     @State private var resumeAsk: ResumeQuestionAsk?
+    @State private var launchPrompts = LaunchPrompts()
     @State private var settingsScrollTarget: SettingsSection?
     @State private var errorMessage: String?
     @State private var errorTitle = String(localized: "Couldn't delete this game")
@@ -249,6 +250,13 @@ struct GameLibraryView: View {
         // for a moment. Only the first active look is the launch.
         Self.tookTheResumeQuestion = true
         resumeAsk = ResumeQuestionAsk.pending()
+        if resumeAsk != nil { launchPrompts.wait(.resumeQuestion) }
+    }
+
+    private var resumeAskBinding: Binding<ResumeQuestionAsk?> {
+        Binding(
+            get: { launchPrompts.showing == .resumeQuestion ? resumeAsk : nil },
+            set: { resumeAsk = $0 })
     }
 
     @MainActor private static var tookTheResumeQuestion = false
@@ -259,9 +267,11 @@ struct GameLibraryView: View {
                 NavigationStack { BackupsScreen() }
                     .tint(.brand)
             }
-            .sheet(item: $resumeAsk) { ask in
-                ResumeQuestionSheet(ask: ask)
-            }
+            .sheet(
+                item: resumeAskBinding,
+                onDismiss: { launchPrompts.done(.resumeQuestion) },
+                content: { ask in ResumeQuestionSheet(ask: ask) }
+            )
             .modifier(
                 BulkDeleteAlert(
                     isPresented: $showBulkDeleteConfirm,
@@ -277,14 +287,16 @@ struct GameLibraryView: View {
                 )
             )
             .modifier(
-                DuplicateGamesNotice(names: $duplicateNoticeNames, active: splashDismissed)
+                DuplicateGamesNotice(
+                    names: $duplicateNoticeNames, prompts: launchPrompts, active: splashDismissed)
             )
-            .modifier(PackageImportPresentation(active: splashDismissed))
+            .modifier(PackageImportPresentation(prompts: launchPrompts, active: splashDismissed))
             .modifier(
-                SaveRecoveryPresentation(games: library.games, active: splashDismissed)
+                SaveRecoveryPresentation(
+                    games: library.games, prompts: launchPrompts, active: splashDismissed)
             )
             .modifier(
-                WhatsNewPresentation(active: splashDismissed) { section in
+                WhatsNewPresentation(prompts: launchPrompts, active: splashDismissed) { section in
                     settingsScrollTarget = section
                     showSettings = true
                 }
@@ -1373,13 +1385,14 @@ private struct BulkDeleteAlert: ViewModifier {
 /// `BulkDeleteAlert`.
 private struct DuplicateGamesNotice: ViewModifier {
     @Binding var names: [String]
+    let prompts: LaunchPrompts
     /// False while the splash is still up. One-time surfaces wait
     /// for it (see `SaveRecoveryPresentation.active`).
     var active: Bool = true
 
     private var isPresented: Binding<Bool> {
         Binding(
-            get: { active && !names.isEmpty },
+            get: { active && prompts.showing == .duplicateGames && !names.isEmpty },
             set: { presented in
                 if !presented { acknowledge() }
             }
@@ -1401,17 +1414,22 @@ private struct DuplicateGamesNotice: ViewModifier {
     private func acknowledge() {
         GameContainerMigration.clearPendingDuplicateNotice()
         names = []
+        prompts.done(.duplicateGames)
     }
 
     func body(content: Content) -> some View {
-        content.alert(
-            "Empo moved your duplicate games",
-            isPresented: isPresented
-        ) {
-            Button("Got it", action: acknowledge)
-        } message: {
-            Text(message)
-        }
+        content
+            .onChange(of: names.isEmpty, initial: true) { _, empty in
+                if !empty { prompts.wait(.duplicateGames) }
+            }
+            .alert(
+                "Empo moved your duplicate games",
+                isPresented: isPresented
+            ) {
+                Button("Got it", action: acknowledge)
+            } message: {
+                Text(message)
+            }
     }
 }
 

@@ -253,16 +253,18 @@ final class BackupScheduler {
 
     /// The run the process did not survive, or `nil` when the last
     /// launch left nothing to ask about.
-    ///
-    /// The record is marked asked here, when the sheet shows. A kill
-    /// with the sheet open runs no `onDisappear`, so marking on the
-    /// answer let the same interruption ask at the next launch too.
     func pendingResume() -> BackupIntentRecord? {
         guard let store else { return nil }
         let record = try? store.intent(kind: .interruptedRun)
         guard BackupResumeQuestion.asks(record) else { return nil }
-        try? store.markIntentAsked(kind: .interruptedRun)
         return record
+    }
+
+    /// Marked when the sheet shows. A kill with the sheet open runs no
+    /// `onDisappear`, so marking on the answer let the same
+    /// interruption ask at the next launch too.
+    func markResumeAsked() {
+        try? store?.markIntentAsked(kind: .interruptedRun)
     }
 
     /// Applies one answer to the resume question.

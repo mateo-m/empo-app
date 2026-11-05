@@ -34,25 +34,37 @@ final class PackageInbox {
 /// Shows the import sheet for a package Files opened.
 struct PackageImportPresentation: ViewModifier {
 
+    let prompts: LaunchPrompts
     /// False while the splash is up. The sheet waits for it.
     var active: Bool = true
     @State private var inbox = PackageInbox.shared
 
     private var pending: Binding<PickedPackage?> {
         Binding(
-            get: { active ? inbox.pending : nil },
+            get: { active && prompts.showing == .packageImport ? inbox.pending : nil },
             set: { inbox.pending = $0 })
     }
 
     func body(content: Content) -> some View {
-        content.sheet(item: pending) { picked in
-            // Import is closed while a game runs, per 7.6.
-            if PackageDoors.opens(gameIsPlaying: BackupDeviceConditions.isSessionLive) {
-                PackageImportSheet(picked: picked.url)
-            } else {
-                PackageDoorClosedSheet()
+        content
+            .onChange(of: inbox.pending, initial: true) { _, picked in
+                if picked != nil { prompts.wait(.packageImport) }
             }
-        }
+            .sheet(item: pending, onDismiss: dismissed) { picked in
+                // Import is closed while a game runs, per 7.6.
+                if PackageDoors.opens(gameIsPlaying: BackupDeviceConditions.isSessionLive) {
+                    PackageImportSheet(picked: picked.url)
+                } else {
+                    PackageDoorClosedSheet()
+                }
+            }
+    }
+
+    /// A package Files opened while the sheet was up swaps the sheet,
+    /// and this still runs for the old one.
+    private func dismissed() {
+        prompts.done(.packageImport)
+        if inbox.pending != nil { prompts.wait(.packageImport) }
     }
 }
 

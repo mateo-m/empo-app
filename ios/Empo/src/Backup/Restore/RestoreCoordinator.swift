@@ -287,10 +287,15 @@ final class RestoreCoordinator {
         // one level, not two.
         let record = try? store.intent(kind: .interruptedRestore)
         guard RestoreResumeQuestion.asks(record) else { return nil }
-        // Marked asked at show time. A kill with the sheet open runs
-        // no `onDisappear`, so the answer is too late to mark it.
-        try? store.markIntentAsked(kind: .interruptedRestore)
         return record
+    }
+
+    /// Marked when the sheet shows. A kill with the sheet open runs no
+    /// `onDisappear`, so the answer is too late to mark it.
+    func markResumeAsked() {
+        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
+        defer { store.close() }
+        try? store.markIntentAsked(kind: .interruptedRestore)
     }
 
     /// Continues the restore the record names, with the same scope

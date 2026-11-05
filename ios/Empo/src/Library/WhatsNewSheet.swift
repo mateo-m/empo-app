@@ -45,15 +45,12 @@ struct WhatsNewItem: Decodable {
 /// read. A new install marks it as read when the user acknowledges
 /// the disclaimer, so only updated installs see it.
 struct WhatsNewPresentation: ViewModifier {
+    let prompts: LaunchPrompts
     /// False while the splash is still up.
     var active: Bool = true
     let onOpenSettings: (SettingsSection) -> Void
 
     @Environment(\.appSettings) private var settings
-    /// True when another one-time notice waits at launch. The news
-    /// then waits for the next launch, because SwiftUI shows only
-    /// one of two presentations that start together.
-    @State private var otherNoticePending = true
     /// Read once, because the dismissal marks every item as read
     /// while the sheet still animates out.
     @State private var items: [WhatsNewItem] = []
@@ -63,7 +60,7 @@ struct WhatsNewPresentation: ViewModifier {
 
     private var isPresented: Binding<Bool> {
         Binding(
-            get: { active && !otherNoticePending && settings.needsWhatsNew },
+            get: { active && prompts.showing == .whatsNew && settings.needsWhatsNew },
             set: { presented in
                 if !presented { settings.acknowledgeWhatsNew() }
             }
@@ -74,13 +71,12 @@ struct WhatsNewPresentation: ViewModifier {
         content
             .task {
                 items = WhatsNew.items(after: settings.whatsNewSeenVersion)
-                otherNoticePending =
-                    !DataDirectory.pendingSaveRecoveries().isEmpty
-                    || !GameContainerMigration.pendingDuplicateNoticeNames().isEmpty
+                if settings.needsWhatsNew { prompts.wait(.whatsNew) }
             }
             .sheet(
                 isPresented: isPresented,
                 onDismiss: {
+                    prompts.done(.whatsNew)
                     if let settingsToOpen { onOpenSettings(settingsToOpen) }
                     settingsToOpen = nil
                 },
