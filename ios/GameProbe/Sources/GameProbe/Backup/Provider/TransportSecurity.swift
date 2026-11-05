@@ -62,28 +62,34 @@ public enum TransportSecurity {
         -1206,  // NSURLErrorClientCertificateRequired
     ]
 
-    /// The URL loading codes of a request that got no answer, which a
-    /// later pass may get. -1003 and -1006 are a host name that does
-    /// not resolve. The add form must stop on them at once, because
-    /// the background session retries them for days.
-    private static let noAnswerErrorCodes: Set<Int> = [
-        -1009,  // NSURLErrorNotConnectedToInternet
-        -1005,  // NSURLErrorNetworkConnectionLost
-        -1001,  // NSURLErrorTimedOut
-        -1004,  // NSURLErrorCannotConnectToHost
-        -1003,  // NSURLErrorCannotFindHost
-        -1006,  // NSURLErrorDNSLookupFailed
-        -1020,  // NSURLErrorDataNotAllowed
-        -1018,  // NSURLErrorInternationalRoamingOff
-    ]
+    /// What an address that URL loading cannot use earns.
+    public static let unusableAddressMessage =
+        "Empo can't use that address. Check it, then try again."
 
-    /// The error kind of 8.4 for a request that got no HTTP answer.
-    public static func transportError(urlErrorCode code: Int, description: String)
-        -> BackupProviderError
-    {
-        if noAnswerErrorCodes.contains(code) { return .offline }
-        return certificateError(urlErrorCode: code, description: description)
-            ?? .rejected(message: description)
+    /// The URL loading codes that no later pass fixes, because the
+    /// address itself is wrong: bad URL, unsupported URL, and the
+    /// App Transport Security refusal.
+    private static let unusableAddressErrorCodes: Set<Int> = [-1000, -1002, -1022]
+
+    /// The error kind for a request that got no HTTP answer.
+    ///
+    /// Every other URL loading code is retried on the next pass. The
+    /// system text stays off the screen, because it is raw English
+    /// such as "The network connection was lost.".
+    public static func transportError(_ error: Error) -> BackupProviderError {
+        let error = error as NSError
+        // `NSURLErrorDomain` is spelled out because the name lives in
+        // `FoundationNetworking` on Linux.
+        guard error.domain == "NSURLErrorDomain" else { return .offline }
+        if let certificate = certificateError(
+            urlErrorCode: error.code, description: error.localizedDescription)
+        {
+            return certificate
+        }
+        if unusableAddressErrorCodes.contains(error.code) {
+            return .rejected(message: unusableAddressMessage)
+        }
+        return .offline
     }
 
     /// Whether this URL loading code is a certificate failure.

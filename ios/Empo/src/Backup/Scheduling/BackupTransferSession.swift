@@ -357,14 +357,9 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
             lock.lock()
             let gaveUp = pending[task.taskIdentifier]?.gaveUp ?? false
             lock.unlock()
-            let failure = error as NSError
             finish(
                 taskIdentifier: task.taskIdentifier,
-                with: .failure(
-                    gaveUp
-                        ? .offline
-                        : TransportSecurity.transportError(
-                            urlErrorCode: failure.code, description: failure.localizedDescription)))
+                with: .failure(gaveUp ? .offline : TransportSecurity.transportError(error)))
             return
         }
         guard let http else {

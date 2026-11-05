@@ -431,16 +431,40 @@ final class S3Tests: XCTestCase {
         // -1003 is a host name that does not exist, as a typo in the
         // address gives. -1006 is a DNS server that does not answer.
         for code in [-1003, -1006, -1009, -1001, -1004] {
-            XCTAssertEqual(
-                TransportSecurity.transportError(urlErrorCode: code, description: "no answer"),
-                .offline, "code \(code)")
+            XCTAssertEqual(TransportSecurity.transportError(urlError(code)), .offline, "code \(code)")
         }
         XCTAssertEqual(
-            TransportSecurity.transportError(urlErrorCode: -1202, description: "Untrusted."),
+            TransportSecurity.transportError(urlError(-1202, "Untrusted.")),
             .rejected(message: "Untrusted. " + TransportSecurity.systemTrustMessage))
-        XCTAssertEqual(
-            TransportSecurity.transportError(urlErrorCode: -1011, description: "Bad answer."),
-            .rejected(message: "Bad answer."))
+    }
+
+    func testABrokenAnswerOrALostBackgroundSessionIsRetriedWithoutSystemText() {
+        // -997 is a background session the system dropped, -1011 a bad
+        // server answer, -1017 an answer that does not parse.
+        for code in [-997, -1011, -1017, -1015, -1016, -999] {
+            XCTAssertEqual(
+                TransportSecurity.transportError(urlError(code, "System words.")), .offline,
+                "code \(code)")
+        }
+    }
+
+    func testAnAddressURLLoadingCannotUseIsRejectedWithEmposOwnLine() {
+        for code in [-1000, -1002, -1022] {
+            XCTAssertEqual(
+                TransportSecurity.transportError(urlError(code, "System words.")),
+                .rejected(message: TransportSecurity.unusableAddressMessage), "code \(code)")
+        }
+    }
+
+    func testACodeFromAnotherDomainIsNotReadAsAURLLoadingCode() {
+        let posix = NSError(domain: NSPOSIXErrorDomain, code: -1202)
+        XCTAssertEqual(TransportSecurity.transportError(posix), .offline)
+    }
+
+    private func urlError(_ code: Int, _ text: String = "no answer") -> NSError {
+        NSError(
+            domain: "NSURLErrorDomain", code: code,
+            userInfo: [NSLocalizedDescriptionKey: text])
     }
 
     // MARK: - 8. The capability flags of 8.3 and the table of 9.7

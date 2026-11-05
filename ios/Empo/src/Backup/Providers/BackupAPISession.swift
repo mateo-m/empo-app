@@ -54,9 +54,7 @@ final class BackupAPISession: Sendable {
         } catch let error as BackupProviderError {
             throw error
         } catch {
-            let error = error as NSError
-            throw TransportSecurity.transportError(
-                urlErrorCode: error.code, description: error.localizedDescription)
+            throw TransportSecurity.transportError(error)
         }
     }
 }
