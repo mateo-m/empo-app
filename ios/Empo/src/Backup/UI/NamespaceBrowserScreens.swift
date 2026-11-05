@@ -37,8 +37,8 @@ struct NamespaceGamesScreen: View {
     }
 
     private var list: some View {
-        List {
-            ReadFirst(value: contents?.games) { sections in
+        ReadFirst(value: contents?.games) { sections in
+            List {
                 if sections.isEmpty {
                     Text(RestoreNotices.emptyTargetLine)
                         .foregroundStyle(.secondary)

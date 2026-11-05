@@ -32,8 +32,8 @@ struct BackupsScreen: View {
     @State private var looksForAGroup = false
 
     var body: some View {
-        List {
-            ReadFirst(value: model.items) { items in
+        ReadFirst(value: model.items) { items in
+            List {
                 if items.isEmpty {
                     emptyState
                     fileSection

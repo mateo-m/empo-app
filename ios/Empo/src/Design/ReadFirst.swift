@@ -14,6 +14,8 @@ struct ReadFirst<Value, Content: View>: View {
             content(value)
         } else {
             ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemGroupedBackground))
         }
     }
 }

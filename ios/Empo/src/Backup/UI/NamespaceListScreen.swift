@@ -44,8 +44,8 @@ struct NamespaceListScreen: View {
     }
 
     private var list: some View {
-        List {
-            ReadFirst(value: rows) { rows in
+        ReadFirst(value: rows) { rows in
+            List {
                 ForEach(rows, id: \.namespaceId) { row in
                     Section {
                         NavigationLink {
