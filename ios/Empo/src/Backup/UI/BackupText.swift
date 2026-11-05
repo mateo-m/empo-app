@@ -38,9 +38,9 @@ enum BackupText {
 
     /// "4 March to 2 August 2026", for the delete sheet of 13.9.
     static func range(from first: Date, to last: Date) -> String {
-        let start = first.formatted(.dateTime.day().month(.wide))
         let end = last.formatted(.dateTime.day().month(.wide).year())
-        return start == end ? end : "\(start) to \(end)"
+        guard !Calendar.current.isDate(first, inSameDayAs: last) else { return end }
+        return "\(first.formatted(.dateTime.day().month(.wide))) to \(end)"
     }
 
     static func date(_ date: Date) -> String {
