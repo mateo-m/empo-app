@@ -15,6 +15,7 @@ final class DropboxGate: OAuthProviderGate {
     static let noTokenLine = "sign in to Dropbox to use this location"
 
     var stores: [String: OAuthTokenStore] = [:]
+    var targets: [String: DropboxTarget] = [:]
 
     private init() {}
 

@@ -69,7 +69,9 @@ public enum GoogleDrive {
     public static let pageSize = 1000
 
     /// The URL of one `files.list` page.
-    public static func filesListURL(query: String, pageToken: String? = nil) -> URL? {
+    public static func filesListURL(
+        query: String, pageToken: String? = nil, orderBy: String? = nil
+    ) -> URL? {
         var components = URLComponents(string: filesEndpoint)
         var items = [
             URLQueryItem(name: "q", value: query),
@@ -80,8 +82,15 @@ public enum GoogleDrive {
         if let pageToken, !pageToken.isEmpty {
             items.append(URLQueryItem(name: "pageToken", value: pageToken))
         }
+        if let orderBy { items.append(URLQueryItem(name: "orderBy", value: orderBy)) }
         components?.queryItems = items
         return components?.url
+    }
+
+    /// The `Empo Backups` folders, oldest first. Drive lets two
+    /// devices create one each, and every device keeps the oldest.
+    public static func rootFolderListURL() -> URL? {
+        filesListURL(query: rootFolderQuery(), orderBy: "createdTime")
     }
 
     /// The URL that creates one folder or reads one file's metadata.

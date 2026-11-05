@@ -17,6 +17,7 @@ final class GoogleDriveGate: OAuthProviderGate {
     static let noTokenLine = "sign in to Google Drive to use this location"
 
     var stores: [String: OAuthTokenStore] = [:]
+    var targets: [String: GoogleDriveTarget] = [:]
 
     private init() {}
 

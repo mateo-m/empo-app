@@ -381,6 +381,15 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertFalse(query.contains("in parents"))
     }
 
+    func testTheRootFolderLookupNamesTheOldestFolderFirst() throws {
+        // Two devices that create at the same moment make two folders.
+        // Both must then pick the same one.
+        let url = try XCTUnwrap(GoogleDrive.rootFolderListURL())
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        XCTAssertEqual(items.first { $0.name == "orderBy" }?.value, "createdTime")
+        XCTAssertEqual(items.first { $0.name == "q" }?.value, GoogleDrive.rootFolderQuery())
+    }
+
     func testAListURLCarriesTheQueryTheFieldsAndThePageToken() {
         let url = GoogleDrive.filesListURL(query: "a = 'b'", pageToken: "tok")
         let text = url?.absoluteString ?? ""

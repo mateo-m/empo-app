@@ -27,8 +27,9 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     /// before it answers, so a committed path is durable, per 8.5.
     private var committed: Set<String> = []
 
-    /// The id of the `Empo Backups` folder of 9.3.
-    private var rootFolder: String?
+    /// The lookup of the `Empo Backups` folder. Every caller awaits the
+    /// same one, so two calls cannot each create a folder.
+    private var rootFolder: Task<String, any Error>?
 
     /// The Drive id of each path this process has seen. An update
     /// needs it, because a create with a name Drive already holds
@@ -130,23 +131,26 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
 
     // MARK: - The root folder
 
-    /// The id of the `Empo Backups` folder, per 9.3. It creates the
-    /// folder on the first call that finds none.
+    /// The id of the `Empo Backups` folder. It creates the folder on
+    /// the first call that finds none.
     ///
     /// Under `drive.file` the query answers only files this OAuth
     /// client created, so it names no parent. The user may have moved
     /// the folder somewhere else in their Drive, and it still counts.
     private func rootFolderId() async throws(BackupProviderError) -> String {
-        if let rootFolder { return rootFolder }
-
-        guard let listURL = GoogleDrive.filesListURL(query: GoogleDrive.rootFolderQuery()) else {
-            throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
+        let lookup = rootFolder ?? Task { try await self.findOrCreateRootFolder() }
+        rootFolder = lookup
+        do {
+            return try await lookup.value
+        } catch {
+            rootFolder = nil
+            throw error as? BackupProviderError ?? .offline
         }
-        let found = try await api(URLRequest(url: listURL))
-        try check(found)
-        if let id = GoogleDrive.fileId(inBody: found.body) {
+    }
+
+    private func findOrCreateRootFolder() async throws(BackupProviderError) -> String {
+        if let id = try await oldestRootFolder() {
             BackupLog.line("GoogleDriveTarget", "the grant already holds the folder \(id)")
-            rootFolder = id
             return id
         }
 
@@ -170,8 +174,27 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
             throw BackupProviderError.rejected(
                 message: "Google Drive made no \(GoogleDrive.rootFolderName) folder")
         }
-        rootFolder = id
-        return id
+
+        // Another device may have created one at the same moment.
+        // Every device keeps the oldest, and this one drops its own
+        // empty folder when it lost.
+        guard let oldest = try await oldestRootFolder(), oldest != id else { return id }
+        BackupLog.line("GoogleDriveTarget", "an older folder \(oldest) exists, so it drops \(id)")
+        if let url = GoogleDrive.filesURL(id: id) {
+            var delete = URLRequest(url: url)
+            delete.httpMethod = "DELETE"
+            _ = try? await api(delete)
+        }
+        return oldest
+    }
+
+    private func oldestRootFolder() async throws(BackupProviderError) -> String? {
+        guard let url = GoogleDrive.rootFolderListURL() else {
+            throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
+        }
+        let found = try await api(URLRequest(url: url))
+        try check(found)
+        return GoogleDrive.fileId(inBody: found.body)
     }
 
     // MARK: - files.list

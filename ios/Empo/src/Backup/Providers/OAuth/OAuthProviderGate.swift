@@ -32,6 +32,9 @@ protocol OAuthProviderGate: AnyObject {
     /// One store per target, so four transfers in flight share one
     /// refresh instead of making four.
     var stores: [String: OAuthTokenStore] { get set }
+    /// One target per id, so its caches, such as the Drive folder id,
+    /// live as long as the process.
+    var targets: [String: Target] { get set }
 
     static func makeTarget(tokens: OAuthTokenStore) -> Target
 }
@@ -51,8 +54,11 @@ extension OAuthProviderGate {
     /// The provider one descriptor opens, or `nil` where it cannot.
     func target(for descriptor: TargetDescriptor) -> Target? {
         guard descriptor.provider == Self.kind, Self.service != nil else { return nil }
+        if let existing = targets[descriptor.id] { return existing }
         guard let store = store(for: descriptor.id) else { return nil }
-        return Self.makeTarget(tokens: store)
+        let target = Self.makeTarget(tokens: store)
+        targets[descriptor.id] = target
+        return target
     }
 
     func store(for targetId: String) -> OAuthTokenStore? {
@@ -87,6 +93,9 @@ extension OAuthProviderGate {
         else {
             return false
         }
+        // The sign-in may name another account, whose folders the old
+        // target's caches do not hold.
+        targets[targetId] = nil
         if let store = stores[targetId] {
             try await store.replace(with: tokens)
         } else {
@@ -100,5 +109,6 @@ extension OAuthProviderGate {
     /// secret, per 8.8, and this drops what the process still holds.
     func forget(targetId: String) {
         stores[targetId] = nil
+        targets[targetId] = nil
     }
 }
