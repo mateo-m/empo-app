@@ -186,13 +186,33 @@ struct PixelSlider: View {
         .onChange(of: dragging) { _, active in
             if !active { endEditing() }
         }
+        .focusable()
+        .onKeyPress(.leftArrow) {
+            commit(value - keyStep)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            commit(value + keyStep)
+            return .handled
+        }
         .accessibilityRepresentation {
+            let binding = Binding(get: { value }, set: commit)
             if let step {
-                Slider(value: $value, in: range, step: step)
+                Slider(value: binding, in: range, step: step)
             } else {
-                Slider(value: $value, in: range)
+                Slider(value: binding, in: range)
             }
         }
+    }
+
+    private var keyStep: Double { step ?? (range.upperBound - range.lowerBound) / 20 }
+
+    private func commit(_ next: Double) {
+        let snapped = snap(next)
+        guard snapped != value else { return }
+        onEditingChanged(true)
+        value = snapped
+        onEditingChanged(false)
     }
 
     private func endEditing() {
@@ -202,10 +222,15 @@ struct PixelSlider: View {
     }
 
     private func set(fraction: Double) {
-        var next = range.lowerBound + min(max(fraction, 0), 1) * (range.upperBound - range.lowerBound)
+        let next = snap(range.lowerBound + fraction * (range.upperBound - range.lowerBound))
+        if next != value { value = next }
+    }
+
+    private func snap(_ raw: Double) -> Double {
+        var next = min(max(raw, range.lowerBound), range.upperBound)
         if let step {
             next = range.lowerBound + ((next - range.lowerBound) / step).rounded() * step
         }
-        if next != value { value = next }
+        return next
     }
 }
