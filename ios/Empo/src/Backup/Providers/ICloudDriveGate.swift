@@ -1,3 +1,4 @@
+import CloudKit
 import Foundation
 import GameProbe
 
@@ -52,16 +53,28 @@ final class ICloudDriveGate {
         }.value
 
         let answer = ICloudDrive.availability(
-            hasIdentityToken: hasIdentityToken, containerURL: containerURL)
+            hasIdentityToken: hasIdentityToken, containerURL: containerURL,
+            hasAppleAccount: hasIdentityToken ? nil : await Self.hasAppleAccount())
         cache.record(answer)
         self.containerURL = containerURL
         return answer
     }
 
+    /// CloudKit stops the app with a trap, which nothing can catch,
+    /// when the signature has no CloudKit entitlement. Tools that
+    /// re-sign a sideloaded build remove it.
+    private static func hasAppleAccount() async -> Bool? {
+        guard SignedEntitlements.allowCloudKit(in: ICloudDrive.containerIdentifier) else {
+            return nil
+        }
+        // A CloudKit error says nothing about the account. Keep the
+        // iCloud Drive line, which the app showed before this check.
+        let container = CKContainer(identifier: ICloudDrive.containerIdentifier)
+        guard let status = try? await container.accountStatus() else { return true }
+        return status != .noAccount
+    }
+
     /// The target, or `nil` where the gate is closed.
-    ///
-    /// The add flow of 13.7 hides the iCloud entry on `nil`, and a
-    /// configured target keeps its row and reads the line of 9.1.
     func target() async -> ICloudDriveTarget? {
         guard await availability().isReady, let containerURL else { return nil }
         let watch = watch ?? ICloudUploadWatch()

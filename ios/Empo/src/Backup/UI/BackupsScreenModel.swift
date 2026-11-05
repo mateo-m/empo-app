@@ -89,7 +89,7 @@ final class BackupsScreenModel {
     // MARK: - Reading
 
     func refresh() async {
-        iCloudReach = await Self.reach()
+        iCloudReach = await ICloudDriveGate.shared.availability().reach
         let descriptors = BackupTargets.load()
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []
@@ -143,14 +143,6 @@ final class BackupsScreenModel {
             run.outcome == .success && active.contains(run.targetId)
         }?.finishedAt.map(BackupText.day)
         await readTheNotificationPermission()
-    }
-
-    private static func reach() async -> TargetReach {
-        switch await ICloudDriveGate.shared.availability() {
-        case .ready: return .open
-        case .notSignedIn: return .accountOff
-        case .noContainer: return .notInThisBuild
-        }
     }
 
     private static func lastSuccess(of targetId: String, in runs: [BackupRunRecord]) -> String? {

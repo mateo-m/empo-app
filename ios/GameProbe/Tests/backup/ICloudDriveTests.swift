@@ -24,16 +24,30 @@ final class ICloudDriveTests: XCTestCase {
             hasIdentityToken: true, containerURL: container)
 
         XCTAssertEqual(availability, .ready)
-        XCTAssertTrue(ICloudDrive.showsInAddFlow(availability))
     }
 
-    func testANilIdentityTokenClosesTheGate() {
+    func testANilIdentityTokenWithNoAppleAccountReadsSignedOut() {
         let availability = ICloudDrive.availability(
-            hasIdentityToken: false, containerURL: container)
+            hasIdentityToken: false, containerURL: container, hasAppleAccount: false)
 
-        XCTAssertEqual(availability, .notSignedIn)
+        XCTAssertEqual(availability, .signedOut)
         XCTAssertFalse(availability.isReady)
-        XCTAssertFalse(ICloudDrive.showsInAddFlow(availability))
+    }
+
+    func testANilIdentityTokenWithAnAppleAccountReadsICloudDriveOff() {
+        let availability = ICloudDrive.availability(
+            hasIdentityToken: false, containerURL: nil, hasAppleAccount: true)
+
+        XCTAssertEqual(availability, .iCloudDriveOff)
+    }
+
+    func testANilIdentityTokenThatCloudKitCannotExplainReadsNoContainer() {
+        // A build without the CloudKit entitlement has no iCloud
+        // container either.
+        let availability = ICloudDrive.availability(
+            hasIdentityToken: false, containerURL: nil, hasAppleAccount: nil)
+
+        XCTAssertEqual(availability, .noContainer)
     }
 
     func testANilContainerURLClosesTheGate() {
@@ -41,16 +55,6 @@ final class ICloudDriveTests: XCTestCase {
             hasIdentityToken: true, containerURL: nil)
 
         XCTAssertEqual(availability, .noContainer)
-        XCTAssertFalse(ICloudDrive.showsInAddFlow(availability))
-    }
-
-    func testTwoNilReadsCloseTheGate() {
-        // The token is read first, so it names the cause.
-        let availability = ICloudDrive.availability(
-            hasIdentityToken: false, containerURL: nil)
-
-        XCTAssertEqual(availability, .notSignedIn)
-        XCTAssertFalse(ICloudDrive.showsInAddFlow(availability))
     }
 
     func testTheContainerStringCarriesNoTeamId() {
@@ -79,7 +83,7 @@ final class ICloudDriveTests: XCTestCase {
         // The user signed out of iCloud.
         cache.identityDidChange()
         XCTAssertNil(cache.value)
-        cache.record(.notSignedIn)
+        cache.record(.signedOut)
 
         guard let availability = cache.value else {
             return XCTFail("the reprobe left no answer")
@@ -98,7 +102,7 @@ final class ICloudDriveTests: XCTestCase {
     func testSigningBackInMakesTheTargetUsableAgainWithNoReAdd() {
         let descriptor = target()
         var cache = ICloudProbeCache()
-        cache.record(.notSignedIn)
+        cache.record(.signedOut)
         cache.identityDidChange()
         cache.record(.ready)
 

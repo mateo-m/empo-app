@@ -2,9 +2,6 @@ import GameProbe
 import SwiftUI
 
 /// The service list of SPEC 13.7.
-///
-/// The iCloud entry follows the runtime gate of 9.1: hidden while the
-/// probe answers nil, greyed when the build cannot open it.
 struct AddTargetSheet: View {
 
     let iCloudReach: TargetReach
@@ -15,25 +12,19 @@ struct AddTargetSheet: View {
     @State private var isWorking = false
     @State private var failure: String?
 
-    private var services: [BackupProviderKind] {
-        BackupTargetAdd.offeredServices(iCloudReach: iCloudReach)
-    }
-
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    serviceRows(services.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
+                    serviceRows(
+                        BackupTargetAdd.services.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
                 } header: {
                     Text("Accounts")
                 } footer: {
-                    Text(
-                        isGreyed(.iCloudDrive)
-                            ? "Sign in with an account you already have. This version of Empo can't use iCloud Drive."
-                            : "Sign in with an account you already have.")
+                    Text("Sign in with an account you already have.")
                 }
                 Section {
-                    serviceRows(services.filter(BackupTargetAdd.signsInThroughTheForm))
+                    serviceRows(BackupTargetAdd.services.filter(BackupTargetAdd.signsInThroughTheForm))
                 } header: {
                     Text("Servers and storage")
                 } footer: {
@@ -87,23 +78,26 @@ struct AddTargetSheet: View {
             AccountAvatar(photo: nil, provider: service, size: 32)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(service.serviceName).foregroundStyle(.primary)
-                if let examples = examples(of: service) {
-                    Text(examples).font(.footnote).foregroundStyle(.secondary)
+                if let note = note(on: service) {
+                    Text(note).font(.footnote).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func examples(of service: BackupProviderKind) -> String? {
-        switch service {
-        case .s3: return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
-        case .webdav: return "Nextcloud, ownCloud, Synology, Koofr"
-        case .iCloudDrive, .dropbox, .googleDrive, .sftp: return nil
+    private func note(on service: BackupProviderKind) -> String? {
+        switch (service, iCloudReach) {
+        case (.s3, _): return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
+        case (.webdav, _): return "Nextcloud, ownCloud, Synology, Koofr"
+        case (.iCloudDrive, .signedOut): return "Sign in to iCloud in Settings to use it."
+        case (.iCloudDrive, .iCloudDriveOff): return "Turn on iCloud Drive for Empo in Settings."
+        case (.iCloudDrive, .notInThisBuild): return "Not available in this version of Empo."
+        case (.iCloudDrive, .open), (.dropbox, _), (.googleDrive, _), (.sftp, _): return nil
         }
     }
 
     private func isGreyed(_ service: BackupProviderKind) -> Bool {
-        service == .iCloudDrive && iCloudReach == .notInThisBuild
+        service == .iCloudDrive && iCloudReach != .open
     }
 
     private func start(_ service: BackupProviderKind) {
