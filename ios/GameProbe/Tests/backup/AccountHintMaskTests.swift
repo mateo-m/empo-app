@@ -6,11 +6,11 @@ final class AccountHintMaskTests: XCTestCase {
 
     func testAnEmailKeepsOnlyTheFirstLettersOfEachPart() {
         XCTAssertEqual(
-            AccountHintMask.masked("me.mateomeana@gmail.com", provider: .googleDrive),
-            "me••••@gm••••.c••••")
+            AccountHintMask.masked("jo.walker@gmail.com", provider: .googleDrive),
+            "jo••••@gm••••.c••••")
         XCTAssertEqual(
-            AccountHintMask.masked("itsgrid@protonmail.com", provider: .dropbox),
-            "it••••@pr••••.c••••")
+            AccountHintMask.masked("sam@protonmail.com", provider: .dropbox),
+            "sa••••@pr••••.c••••")
         XCTAssertEqual(
             AccountHintMask.masked("ana@mail.example.co.uk", provider: .dropbox),
             "a••••@ma••••.ex••••.c••••.u••••")
