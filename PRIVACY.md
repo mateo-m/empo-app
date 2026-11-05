@@ -1,6 +1,8 @@
-Empo runs on your iPhone, iPad, or Mac. There is no Empo account and no Empo server.
+Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
+server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
+Empo Plus.
 
-Last update: 1 November 2026.
+Last update: 5 November 2026.
 
 ## What Empo collects
 
@@ -12,7 +14,7 @@ backup if you turn iCloud backup on. That is an Apple feature, and Empo does not
 
 ## What leaves the device
 
-Empo makes two kinds of network request.
+Empo makes the network requests below. Each one goes only where this section says.
 
 The version of Empo from GitHub checks for updates. It reads the latest release
 of the Empo repository from `api.github.com`. GitHub sees the request and the IP
@@ -21,8 +23,26 @@ address it came from. The App Store version does not make this request.
 A certificate refresh reads `cacert.pem` from `curl.se`. Games need it for HTTPS.
 The curl project sees the request and the IP address it came from.
 
-Empo sends none of these to a server that Empo owns, because there is no such
-server.
+Backups go to the locations that you add on the Backups screen: iCloud Drive,
+Dropbox, Google Drive, S3 storage, or a WebDAV server. Empo sends your save
+files and settings straight from the device to that location. You sign in to
+Dropbox and Google Drive on their own pages, and Empo keeps the sign-in in the
+Keychain of the device.
+
+## Empo Plus and Patreon
+
+When you sign in with Patreon for Empo Plus, Patreon sends Empo's server a code.
+The server uses the code to read two facts from Patreon: your Patreon user ID,
+and whether you have a paid membership of Empo on Patreon. It does not read your
+name, your email address, or your payment details.
+
+The server sends back a signed note of these two facts and a locked copy of the
+Patreon sign-in. The device keeps both in its Keychain. Every few days, the device
+sends the locked copy back to the server to get a new note. The server keeps no
+copy of any of this. Cloudflare runs the server, and it sees each request and
+the IP address it came from.
+
+Sign out of Patreon in Settings > Empo Plus to delete both from the device.
 
 ## Games that go online
 
@@ -47,6 +67,7 @@ such a game can find other players. Empo itself does not use the local network.
 ## Children
 
 Empo is not directed at children under 13 and collects no data from anybody.
+Empo's server reads only the Patreon facts above, and only when you sign in.
 
 ## Changes
 
