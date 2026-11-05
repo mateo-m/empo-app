@@ -116,17 +116,39 @@ public struct RestoreScan: Sendable {
         try await read(paths.deviceFile).flatMap { try? DeviceRecord.decode(json: $0) }
     }
 
+    /// How many manifests one scan reads at the same time. Each read
+    /// is one round trip, about half a second on Dropbox, so one at a
+    /// time made a list of 100 backups wait a minute. More than the
+    /// gate's limit only queue inside the provider.
+    public static let readsAtOnce = TransferGate.maxInFlight
+
     private func rows(
         under prefix: String,
         paths: BackupNamespacePaths,
         deviceName: String,
         localMarkers: [String: SnapshotManifest.VersionMarker]
     ) async throws -> [SnapshotRow] {
+        let found = try await provider.list(prefix: prefix).compactMap { object in
+            BackupNamespacePaths.snapshotId(ofManifestPath: object.path).map {
+                (path: object.path, snapshotId: $0)
+            }
+        }
+        let manifests = try await withThrowingTaskGroup(of: (Int, SnapshotManifest?).self) { group in
+            var read = [SnapshotManifest?](repeating: nil, count: found.count)
+            for (index, item) in found.enumerated() {
+                if index >= Self.readsAtOnce, let (done, manifest) = try await group.next() {
+                    read[done] = manifest
+                }
+                group.addTask { (index, try await manifest(at: item.path)) }
+            }
+            for try await (done, manifest) in group { read[done] = manifest }
+            return read
+        }
+
         var rows: [SnapshotRow] = []
-        for object in try await provider.list(prefix: prefix) {
-            guard let snapshotId = BackupNamespacePaths.snapshotId(ofManifestPath: object.path),
-                let manifest = try await manifest(at: object.path)
-            else { continue }
+        for (item, manifest) in zip(found, manifests) {
+            guard let manifest else { continue }
+            let snapshotId = item.snapshotId
             rows.append(
                 SnapshotRow(
                     manifest: manifest,

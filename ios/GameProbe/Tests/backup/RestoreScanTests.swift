@@ -60,6 +60,20 @@ final class RestoreScanTests: XCTestCase {
         RestoreScan(provider: target, descriptor: descriptor)
     }
 
+    // MARK: - Speed
+
+    func testTheScanReadsTheManifestsSideBySide() async throws {
+        try seed(namespace: "ns1", deviceName: "iPad", games: ["Quest"], snapshotsEach: 12)
+        let slow = SlowTarget(wrapping: target)
+
+        let namespaces = try await RestoreScan(provider: slow, descriptor: descriptor).namespaces()
+
+        XCTAssertEqual(namespaces.first?.gameRows.count, 12)
+        let mostAtOnce = await slow.mostAtOnce
+        XCTAssertGreaterThan(mostAtOnce, 1, "the scan read one manifest at a time")
+        XCTAssertLessThanOrEqual(mostAtOnce, RestoreScan.readsAtOnce)
+    }
+
     // MARK: - The door of one game, per 11.3
 
     func testOneGameReadsNoManifestOfAnotherGame() async throws {
@@ -139,4 +153,42 @@ final class RestoreScanTests: XCTestCase {
         XCTAssertNil(scanned.deviceId)
         XCTAssertEqual(scanned.gameRows.first?.deviceName, "ns9")
     }
+}
+
+/// A target where each read takes a moment, so reads that overlap
+/// show in `mostAtOnce`.
+private actor SlowTarget: BackupProvider {
+
+    let inner: FakeBackupTarget
+    nonisolated let capabilities = TargetCapabilities()
+    private var running = 0
+    private(set) var mostAtOnce = 0
+
+    init(wrapping inner: FakeBackupTarget) { self.inner = inner }
+
+    func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
+        try await inner.list(prefix: prefix)
+    }
+
+    func put(localFile: URL, path: String) async throws(BackupProviderError) {
+        try await inner.put(localFile: localFile, path: path)
+    }
+
+    func confirm(path: String) async throws(BackupProviderError) -> PutConfirmation {
+        try await inner.confirm(path: path)
+    }
+
+    func get(path: String, localFile: URL) async throws(BackupProviderError) {
+        running += 1
+        mostAtOnce = max(mostAtOnce, running)
+        try? await Task.sleep(for: .milliseconds(20))
+        running -= 1
+        try await inner.get(path: path, localFile: localFile)
+    }
+
+    func delete(paths: [String]) async throws(BackupProviderError) {
+        try await inner.delete(paths: paths)
+    }
+
+    func quota() async throws(BackupProviderError) -> QuotaReading? { nil }
 }
