@@ -49,7 +49,14 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
 
     func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
         try await gate.request { () async throws(BackupProviderError) -> [RemoteObject] in
-            try await self.everyPage(under: prefix)
+            do throws(BackupProviderError) {
+                return try await self.lookingUpAgainOnNotFound(path: nil) {
+                    () async throws(BackupProviderError) -> [RemoteObject] in
+                    try await self.everyPage(under: prefix)
+                }
+            } catch .notFound {
+                return []
+            }
         }
     }
 
@@ -60,11 +67,13 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
-            switch GoogleDrive.uploadPlan(forFileOfSize: size) {
-            case .simple:
-                try await self.uploadWhole(localFile, to: path)
-            case .resumable:
-                try await self.uploadResumable(localFile, to: path, size: size)
+            try await self.lookingUpAgainOnNotFound(path: path) { () async throws(BackupProviderError) in
+                switch GoogleDrive.uploadPlan(forFileOfSize: size) {
+                case .simple:
+                    try await self.uploadWhole(localFile, to: path)
+                case .resumable:
+                    try await self.uploadResumable(localFile, to: path, size: size)
+                }
             }
         }
         committed.insert(path)
@@ -87,24 +96,28 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
 
     func get(path: String, localFile: URL) async throws(BackupProviderError) {
         try await gate.transfer { () async throws(BackupProviderError) in
-            guard let id = try await self.identifier(forPath: path) else {
-                throw BackupProviderError.notFound
+            try await self.lookingUpAgainOnNotFound(path: path) { () async throws(BackupProviderError) in
+                guard let id = try await self.identifier(forPath: path) else {
+                    throw BackupProviderError.notFound
+                }
+                guard let url = GoogleDrive.filesURL(id: id, alt: "media") else {
+                    throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
+                }
+                let answer = try await self.tokens.send(URLRequest(url: url)) {
+                    request throws(BackupProviderError) in
+                    try await BackupTransferSession.shared.download(request, to: localFile, path: path)
+                }
+                try await self.check(answer)
             }
-            guard let url = GoogleDrive.filesURL(id: id, alt: "media") else {
-                throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
-            }
-            let answer = try await self.tokens.send(URLRequest(url: url)) {
-                request throws(BackupProviderError) in
-                try await BackupTransferSession.shared.download(request, to: localFile, path: path)
-            }
-            try await self.check(answer)
         }
     }
 
     func delete(paths: [String]) async throws(BackupProviderError) {
         for path in paths {
             try await gate.request { () async throws(BackupProviderError) in
-                try await self.deleteOne(path)
+                try await self.lookingUpAgainOnNotFound(path: path) { () async throws(BackupProviderError) in
+                    try await self.deleteOne(path)
+                }
             }
         }
     }
@@ -210,14 +223,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
                 throw BackupProviderError.rejected(message: "Empo built no Google Drive URL")
             }
             let answer = try await api(URLRequest(url: url))
-            guard answer.isSuccess else {
-                // A folder that is not there holds no object, and 8.1
-                // says an empty answer, not an error.
-                let error = mapped(answer)
-                if error == .notFound { return [] }
-                throw error
-            }
-            throttleAttempt = 1
+            try check(answer)
             guard let page = GoogleDrive.page(fromBody: answer.body) else {
                 throw BackupProviderError.rejected(
                     message: "Google Drive sent a reply Empo can't read")
@@ -472,6 +478,23 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     }
 
     // MARK: - The requests
+
+    /// Drive answers 404 for an id that someone deleted outside Empo,
+    /// such as the `Empo Backups` folder removed in the Drive web app.
+    /// The cached ids then name nothing, so it drops them and runs the
+    /// call once more with fresh lookups.
+    private func lookingUpAgainOnNotFound<T>(
+        path: String?, _ call: () async throws(BackupProviderError) -> T
+    ) async throws(BackupProviderError) -> T {
+        do throws(BackupProviderError) {
+            return try await call()
+        } catch .notFound {
+            BackupLog.line("GoogleDriveTarget", "Drive answered 404, so it looks up the ids again")
+            if let path { identifiers[path] = nil }
+            rootFolder = nil
+            return try await call()
+        }
+    }
 
     private func api(_ request: URLRequest) async throws(BackupProviderError) -> HTTPAnswer {
         try await tokens.send(request) { request throws(BackupProviderError) in
