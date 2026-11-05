@@ -15,7 +15,7 @@ GAMECORE_VOID(setEngineTerminatedCallback, (gamecore_EngineTerminatedCallback cb
 GAMECORE_VOID(setGameRectChangedCallback, (gamecore_GameRectChangedCallback cb, void *userdata),
               (cb, userdata))
 GAMECORE_VOID(injectKeyEvent, (int scancode, int pressed), (scancode, pressed))
-GAMECORE_VOID(setLauncherIdentity, (const char *name), (name))
+GAMECORE_VOID(setLauncherIdentity, (const char *name, const char *version), (name, version))
 GAMECORE_VOID(setCABundlePath, (const char *path), (path))
 GAMECORE_VOID(setTextInputModeCallback, (gamecore_TextInputModeCallback cb, void *userdata), (cb, userdata))
 GAMECORE_VOID(pushTextInput, (const char *utf8), (utf8))
