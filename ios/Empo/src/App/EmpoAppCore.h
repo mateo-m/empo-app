@@ -45,6 +45,13 @@ int EmpoCoreIsOpen(void);
 // GameProcessClient.m implements this.
 int EmpoGameProcessIsOpen(void);
 
+// Lets silent mode mute the game, in the process that plays
+// it. Call it after the game opens, and again when the setting changes.
+void EmpoCoreSetRespectsSilentMode(bool respects);
+
+// GameProcessClient.m implements this.
+void EmpoGameProcessSetRespectsSilentMode(bool respects);
+
 // Calls gamecore_killSession on the core the app opened, then lets
 // EmpoCoreOpen open a different one.
 void EmpoCoreKillSession(void);

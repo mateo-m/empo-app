@@ -19,6 +19,7 @@ enum DefaultsKey {
     static let maxLogFiles = "maxLogFiles"
     static let interfaceHaptics = "interfaceHaptics"
     static let controllerHaptics = "controllerHaptics"
+    static let respectsSilentMode = "respectsSilentMode"
     static let caBundleLastRefresh = "caBundleLastRefresh"
     /// `GameRunner.rawValue`. String.
     static let rubyGameRunner = "rubyGameRunner"

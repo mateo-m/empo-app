@@ -494,6 +494,10 @@ int EmpoGameProcessIsOpen(void) {
     return open;
 }
 
+void EmpoGameProcessSetRespectsSilentMode(bool respects) {
+    send(^(id<EmpoGameProcess> process) { [process setRespectsSilentMode:respects]; });
+}
+
 // MARK: - GameCore.h
 
 // AppCoreForwarders.c sends each gamecore_* call here while games run

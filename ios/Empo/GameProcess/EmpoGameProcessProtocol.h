@@ -52,6 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setFastForwardMultiplier:(int)multiplier;
 - (void)resetSessionState;
 - (void)setDebugLogPath:(nullable NSString *)path;
+- (void)setRespectsSilentMode:(BOOL)respects;
 
 // The answers of the gamecore_* getters. The keys are in
 // EmpoGameProcessStatus* below.
