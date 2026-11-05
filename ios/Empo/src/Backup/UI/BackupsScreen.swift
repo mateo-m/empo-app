@@ -36,6 +36,7 @@ struct BackupsScreen: View {
             ReadFirst(value: model.items) { items in
                 if items.isEmpty {
                     emptyState
+                    fileSection
                 } else {
                     statusSection
                     writerQuestions

@@ -27,6 +27,7 @@ struct BackupSheet: View {
                     leftoversSection
                 } else {
                     noTargetSection
+                    Section { exportButton }
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -175,13 +176,17 @@ struct BackupSheet: View {
             }
             .disabled(!model.locks.canRestore)
 
-            Button("Export backup") { exports = true }
-                .disabled(!model.locks.canExport)
+            exportButton
         } footer: {
             if let footer = model.locks.footer {
                 Text(footer)
             }
         }
+    }
+
+    private var exportButton: some View {
+        Button("Export backup") { exports = true }
+            .disabled(!model.locks.canExport)
     }
 
     // MARK: - "Left over from a restore", per 11.12
