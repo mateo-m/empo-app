@@ -37,13 +37,13 @@ struct NamespaceGamesScreen: View {
     }
 
     private var list: some View {
-        ReadFirst(value: contents?.games) { sections in
+        ReadFirst(value: contents) { contents in
             List {
-                if sections.isEmpty {
+                if contents.games.isEmpty, contents.preferences.isEmpty {
                     Text(RestoreNotices.emptyTargetLine)
                         .foregroundStyle(.secondary)
                 }
-                ForEach(sections) { section in
+                ForEach(contents.games) { section in
                     NavigationLink {
                         SnapshotListScreen(
                             gameName: section.name,
