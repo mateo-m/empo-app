@@ -279,16 +279,16 @@ struct ScreenRegionChips: View {
     var onToggleOverlay: (() -> Void)?
     /// Edit-toolbar frames in the same space as `rect`. When the game
     /// fills the top of the screen, the toolbar sits on it, and the
-    /// chips move down below it.
+    /// chips move down below it. The chips have the width of their
+    /// text, so any frame in the chip's row counts, wherever it is
+    /// across the screen.
     var avoiding: [CGRect] = []
 
     private var firstChipY: CGFloat {
         let chipHalfHeight: CGFloat = 12
         var y = rect.minY + 44
         for frame in avoiding.sorted(by: { $0.minY < $1.minY })
-        where frame.minX < rect.midX && frame.maxX > rect.midX
-            && frame.minY < y + chipHalfHeight && frame.maxY > y - chipHalfHeight
-        {
+        where frame.minY < y + chipHalfHeight && frame.maxY > y - chipHalfHeight {
             y = frame.maxY + Spacing.xs + chipHalfHeight
         }
         return y
