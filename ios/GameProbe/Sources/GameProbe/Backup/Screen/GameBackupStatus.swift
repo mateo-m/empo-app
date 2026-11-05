@@ -186,12 +186,12 @@ public enum GameBackupStatusRules {
         return GameBackupStatus(state: .healthy, targetLabel: label(enabled))
     }
 
-    /// The date the healthy line names. A paused target never wins a
-    /// state, so its date cannot stand beside the name of another.
+    /// The date the healthy line names: the enabled target furthest
+    /// behind. A paused target never wins a state, so its date cannot
+    /// stand beside the name of another.
     public static func lastSuccessAt(of targets: [GameTargetState]) -> Date? {
-        targets.filter { !$0.isPaused }.compactMap(\.lastSuccessAt).max()
+        targets.filter { !$0.isPaused }.compactMap(\.lastSuccessAt).min()
     }
-
 
     /// A cause that is not the clock and not the policy is a
     /// failure, per 13.16.
