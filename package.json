@@ -14,14 +14,14 @@
     "controls:schema": "bun tools/generate-controls-schema.ts"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
+    "@types/bun": "^1.4.4",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "blume": "^1.5.1",
     "bun-plugin-tailwind": "^0.1.2",
-    "lefthook": "2.1.9",
-    "markdownlint-cli": "0.48.0",
-    "oxfmt": "0.55.0",
+    "lefthook": "2.2.2",
+    "markdownlint-cli": "0.50.0",
+    "oxfmt": "0.75.0",
     "tailwindcss": "^4.3.3"
   }
 }
