@@ -132,7 +132,9 @@ struct GameMidiSoundSetRow: View {
         MidiSoundSetPicker(
             soundSet: .game(state.container),
             appSettingLabel: appSettingLabel,
-            description: Text("Default uses the sound set from Settings."),
+            description: state.gameOwnMidiSoundFont == nil
+                ? Text("Default uses the sound set from Settings.")
+                : Text("Default uses the game's own sound set."),
             choice: choice,
             imported: $state.gameMidiSoundSet,
             isCopying: $state.isImportingSoundSet,
@@ -162,9 +164,10 @@ struct GameMidiSoundSetRow: View {
     }
 
     private var appSettingLabel: Text {
-        let name = MidiSoundSet.app.current?.deletingPathExtension().lastPathComponent
+        let file = state.gameOwnMidiSoundFont.map { URL(fileURLWithPath: $0) } ?? MidiSoundSet.app.current
+        let name = file?.deletingPathExtension().lastPathComponent
         return Text(
             "Default (\(name ?? String(localized: "Built-in")))",
-            comment: "Picker option. The placeholder is the sound set in the app settings.")
+            comment: "Picker option. The placeholder is the sound set that the game plays by default.")
     }
 }

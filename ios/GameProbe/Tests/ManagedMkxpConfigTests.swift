@@ -54,29 +54,23 @@ final class ManagedMkxpConfigTests: XCTestCase {
             ManagedMkxpConfig.overlayJSONString(
                 gameDirectory: gameDir,
                 stateDirectory: stateDir,
-                midiSoundFont: .fallback("/SoundFonts/gm.sf2")
+                midiSoundFont: "/SoundFonts/gm.sf2"
             )
         )
         let payload = try parseOverlayJSON(json)
         XCTAssertEqual(payload["midiSoundFont"] as? String, "/SoundFonts/gm.sf2")
     }
 
-    func testOverlayStringKeepsTheSoundFontOfTheGame() throws {
+    func testGameDefaultsReadTheSoundFontOfTheGame() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
-        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        XCTAssertNil(ManagedMkxpConfig.readGameDefaults(from: gameDir).midiSoundFont)
 
         try """
             { "midiSoundFont": "Audio/BGM/GMGSx.sf2" }
             """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
-        let json = ManagedMkxpConfig.overlayJSONString(
-            gameDirectory: gameDir,
-            stateDirectory: stateDir,
-            midiSoundFont: .fallback("/SoundFonts/gm.sf2")
-        )
-        XCTAssertNil(json)
+        XCTAssertEqual(ManagedMkxpConfig.readGameDefaults(from: gameDir).midiSoundFont, "Audio/BGM/GMGSx.sf2")
     }
 
     func testOverlayStringReplacesTheSoundFontOfTheGame() throws {
@@ -94,7 +88,7 @@ final class ManagedMkxpConfigTests: XCTestCase {
                 ManagedMkxpConfig.overlayJSONString(
                     gameDirectory: gameDir,
                     stateDirectory: stateDir,
-                    midiSoundFont: .replacement(path)
+                    midiSoundFont: path
                 )
             )
             let payload = try parseOverlayJSON(json)

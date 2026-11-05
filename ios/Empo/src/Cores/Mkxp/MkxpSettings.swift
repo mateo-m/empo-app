@@ -56,15 +56,19 @@ struct MkxpSettings: GameSettingsGroup {
     var joiplayCompatEnabled: Bool { joiplayCompat ?? false }
     var networkAccessEnabled: Bool { networkEnabled ?? true }
 
-    /// nil leaves the sound font to the game, or to the engine's built-in set.
-    func midiSoundFont(for container: GameContainer) -> ManagedMkxpConfig.MidiSoundFont? {
+    /// The sound font that replaces the game's own. An empty path is the
+    /// engine's built-in set, and nil leaves the sound font to the game.
+    func midiSoundFont(for container: GameContainer) -> String? {
         if midiSoundSet == .builtIn {
-            return .replacement("")
+            return ""
         }
         if midiSoundSet == .imported, let file = MidiSoundSet.game(container).current {
-            return .replacement(file.path)
+            return file.path
         }
-        return MidiSoundSet.app.current.map { .fallback($0.path) }
+        if ManagedMkxpConfig.readGameDefaults(from: container.gameURL).midiSoundFont != nil {
+            return nil
+        }
+        return MidiSoundSet.app.current?.path
     }
 }
 
@@ -77,7 +81,7 @@ enum GameMidiSoundSet: String, Codable {
 struct MkxpLaunchedSettings: CoreLaunchedSettings {
     let settings: MkxpSettings
     let engine: MkxpEngineSettings
-    let midiSoundFont: ManagedMkxpConfig.MidiSoundFont?
+    let midiSoundFont: String?
     let midiSoundFontFile: Int?
 
     init(container: GameContainer) {
@@ -89,13 +93,8 @@ struct MkxpLaunchedSettings: CoreLaunchedSettings {
 
     /// An import of a file with the same name keeps the path, but the
     /// new file has a different file number.
-    static func fileNumber(of font: ManagedMkxpConfig.MidiSoundFont?) -> Int? {
-        switch font {
-        case .fallback(let path), .replacement(let path):
-            (try? FileManager.default.attributesOfItem(atPath: path))?[.systemFileNumber] as? Int
-        case nil:
-            nil
-        }
+    static func fileNumber(of path: String?) -> Int? {
+        path.flatMap { (try? FileManager.default.attributesOfItem(atPath: $0))?[.systemFileNumber] as? Int }
     }
 
     func restartRequiredChanges(to current: any CoreSettings) -> [String] {
@@ -124,6 +123,8 @@ final class MkxpSettingsState: CoreSettings {
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
     var isImportingSoundSet = false
+    /// The sound font that the game's `mkxp.json` names. Default plays it, not the app's set.
+    let gameOwnMidiSoundFont: String?
 
     @ObservationIgnored let container: GameContainer
 
@@ -137,9 +138,10 @@ final class MkxpSettingsState: CoreSettings {
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
         self.gameMidiSoundSet = MidiSoundSet.game(container).current
+        self.gameOwnMidiSoundFont = ManagedMkxpConfig.readGameDefaults(from: container.gameURL).midiSoundFont
     }
 
-    var midiSoundFont: ManagedMkxpConfig.MidiSoundFont? { settings.midiSoundFont(for: container) }
+    var midiSoundFont: String? { settings.midiSoundFont(for: container) }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
 

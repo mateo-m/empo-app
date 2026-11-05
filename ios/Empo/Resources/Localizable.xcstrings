@@ -41779,7 +41779,7 @@
       }
     },
     "Default (%@)" : {
-      "comment" : "Picker option. The placeholder is the sound set in the app settings.",
+      "comment" : "Picker option. The placeholder is the sound set that the game plays by default.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -41833,6 +41833,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "默认（%@）"
+          }
+        }
+      }
+    },
+    "Default uses the game's own sound set." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard verwendet das eigene Soundset des Spiels."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Por defecto usa el banco de sonidos propio del juego."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Par défaut utilise la banque de sons propre au jeu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Predefinito usa il banco suoni del gioco."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルトではゲーム独自のMIDI音源を使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본은 게임 자체 사운드 세트를 사용해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Padrão usa o banco de sons do próprio jogo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "По умолчанию используется собственный набор звуков игры."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认使用游戏自带的音色库。"
           }
         }
       }

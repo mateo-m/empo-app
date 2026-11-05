@@ -51,6 +51,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
     public var pathCache: Bool?
     public var fontScale: Double?
     public var solidFonts: Bool?
+    public var midiSoundFont: String?
 
     public init(
         smoothScaling: Bool? = nil,
@@ -61,7 +62,8 @@ public struct MkxpGameDefaults: Equatable, Sendable {
         vsync: Bool? = nil,
         pathCache: Bool? = nil,
         fontScale: Double? = nil,
-        solidFonts: Bool? = nil
+        solidFonts: Bool? = nil,
+        midiSoundFont: String? = nil
     ) {
         self.smoothScaling = smoothScaling
         self.fixedAspectRatio = fixedAspectRatio
@@ -72,6 +74,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
         self.pathCache = pathCache
         self.fontScale = fontScale
         self.solidFonts = solidFonts
+        self.midiSoundFont = midiSoundFont
     }
 
     public func defines(_ field: MkxpEngineField) -> Bool {
@@ -320,28 +323,22 @@ public enum ManagedMkxpConfig {
             vsync: values.vsync,
             pathCache: values.pathCache,
             fontScale: values.fontScale,
-            solidFonts: values.solidFonts
+            solidFonts: values.solidFonts,
+            midiSoundFont: nonEmptyString(config["midiSoundFont"])
         )
     }
 
     // MARK: - Overlay string for engine bridge
 
-    public enum MidiSoundFont: Equatable, Sendable {
-        /// Used only when the game's `mkxp.json` names no sound font.
-        case fallback(String)
-        /// Replaces the sound font of the game. An empty path makes the
-        /// engine load its built-in set.
-        case replacement(String)
-    }
-
     /// The JSON object string that the mkxp core takes as its `configOverlay` setting,
     /// or nil when there is nothing to send (no overlay keys, and no
-    /// host normalization patches apply).
+    /// host normalization patches apply). `midiSoundFont` replaces the
+    /// sound font of the game, and an empty path loads the engine's built-in set.
     public static func overlayJSONString(
         gameDirectory: URL,
         stateDirectory: URL,
         overrides: MkxpEngineValues = MkxpEngineValues(),
-        midiSoundFont: MidiSoundFont? = nil,
+        midiSoundFont: String? = nil,
         onUnparseableOverlay: ((String) -> Void)? = nil
     ) -> String? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
@@ -388,13 +385,8 @@ public enum ManagedMkxpConfig {
             patches["defScreenH"] = 0
         }
 
-        switch midiSoundFont {
-        case .replacement(let path):
-            patches["midiSoundFont"] = path
-        case .fallback(let path) where (base?["midiSoundFont"] as? String ?? "").isEmpty:
-            patches["midiSoundFont"] = path
-        case .fallback, nil:
-            break
+        if let midiSoundFont {
+            patches["midiSoundFont"] = midiSoundFont
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {
