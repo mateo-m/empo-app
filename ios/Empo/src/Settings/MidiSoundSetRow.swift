@@ -5,6 +5,7 @@ import SwiftUI
 
 struct MidiSoundSetRow: View {
     @State private var imported = MidiSoundSet.app.current
+    @State private var isCopying = false
 
     var body: some View {
         // Under RootView's `.fontDesign(.rounded)`, only `Font.monospaced()` stays fixed-width.
@@ -17,6 +18,7 @@ struct MidiSoundSetRow: View {
             ),
             choice: imported == nil ? .builtIn : .imported,
             imported: $imported,
+            isCopying: $isCopying,
             pick: { _ in }
         )
     }
@@ -38,12 +40,12 @@ struct MidiSoundSetPicker: View {
     let description: Text
     let choice: Choice
     @Binding var imported: URL?
+    @Binding var isCopying: Bool
     let pick: (Choice) -> Void
 
     @State private var isImporting = false
     @State private var formatFailed = false
     @State private var copyFailure: String?
-    @State private var isCopying = false
 
     private var selection: Binding<Option> {
         Binding {

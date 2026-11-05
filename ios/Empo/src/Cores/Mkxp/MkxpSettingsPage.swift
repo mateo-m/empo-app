@@ -135,15 +135,20 @@ struct GameMidiSoundSetRow: View {
             description: Text("Default uses the sound set from Settings."),
             choice: choice,
             imported: $state.gameMidiSoundSet,
+            isCopying: $state.isImportingSoundSet,
             pick: { choice in
-                state.settings.midiSoundSet =
+                let value: GameMidiSoundSet? =
                     switch choice {
                     case .appSetting: nil
                     case .builtIn: .builtIn
                     case .imported: .imported
                     }
-                // An import can end after the page closed and stopped its onChange.
-                state.save()
+                state.settings.midiSoundSet = value
+                // An import can end after the page closed, and the page can open again with a new state
+                // in the meantime. So save only this field, on top of the settings on disk.
+                var saved = MkxpSettings.load(from: state.container.empoStateURL)
+                saved.midiSoundSet = value
+                saved.save(to: state.container.empoStateURL)
             }
         )
     }

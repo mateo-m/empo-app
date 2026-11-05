@@ -123,6 +123,7 @@ final class MkxpSettingsState: CoreSettings {
     let isPokemonEssentials: Bool
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
+    var isImportingSoundSet = false
 
     @ObservationIgnored let container: GameContainer
 
@@ -141,6 +142,8 @@ final class MkxpSettingsState: CoreSettings {
     var midiSoundFont: ManagedMkxpConfig.MidiSoundFont? { settings.midiSoundFont(for: container) }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
+
+    var isBusy: Bool { isImportingSoundSet }
 
     func save() {
         settings.save(to: container.empoStateURL)
