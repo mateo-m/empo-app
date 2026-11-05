@@ -17,7 +17,7 @@ struct BackupModeAsk: Identifiable {
 /// sits under them as a standalone sheet, per 3.7.
 struct FirstBackupAskSheet: View {
 
-    let model: BackupSheetModel
+    @State var model: BackupSheetModel
     let ask: BackupThresholdAsk
 
     @Environment(\.dismiss) private var dismiss
