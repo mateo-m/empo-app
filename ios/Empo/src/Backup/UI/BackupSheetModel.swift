@@ -86,12 +86,13 @@ final class BackupSheetModel {
         let intent = GameBackupIntent.load(from: container.empoStateURL)
         let full = await resolve(.full)
         let slim = await resolve(.slim)
+        let leftovers = await Self.leftovers(inside: container.url)
         // A later read started meanwhile and holds newer marks.
         guard read == readsOfTheFiles else { return }
         fullBytes = full.totalSize
         slimBytes = slim.totalSize
         editor = SaveFileEditorModel.from(slim, manualMarks: intent.manualMarks)
-        leftovers = RestoreLeftovers.inside(container.url)
+        self.leftovers = leftovers
     }
 
     private var readsOfTheFiles = 0
@@ -198,17 +199,22 @@ final class BackupSheetModel {
 
     // MARK: - The leftovers of 11.12
 
-    func deleteTheTrees() {
-        for url in leftovers.trees {
-            try? FileManager.default.removeItem(at: url)
-        }
-        leftovers = RestoreLeftovers.inside(container.url)
+    func deleteTheTrees() async {
+        leftovers = await Self.leftovers(inside: container.url, deleting: leftovers.trees)
     }
 
-    func deleteTheFiles() {
-        for url in leftovers.files {
+    func deleteTheFiles() async {
+        leftovers = await Self.leftovers(inside: container.url, deleting: leftovers.files)
+    }
+
+    /// Deletes `urls`, then walks the container again. A replaced game
+    /// folder can hold gigabytes, so both run off the main actor.
+    nonisolated private static func leftovers(
+        inside container: URL, deleting urls: [URL] = []
+    ) async -> GameLeftovers {
+        for url in urls {
             try? FileManager.default.removeItem(at: url)
         }
-        leftovers = RestoreLeftovers.inside(container.url)
+        return RestoreLeftovers.inside(container)
     }
 }
