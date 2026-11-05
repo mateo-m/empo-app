@@ -23,6 +23,7 @@ final class BackupBadges {
     /// no game reached the mark.
     private(set) var banner: LibraryStaleBanner?
     private(set) var bannerTargetLabel: String?
+    private(set) var clocks: [GameFreshness] = []
 
     /// The state one card draws. A game that is backed up and
     /// current gets none, which is invariant 9.
@@ -50,6 +51,7 @@ final class BackupBadges {
         guard !descriptors.isEmpty else {
             badgesByGameId = [:]
             banner = nil
+            clocks = []
             return
         }
 
@@ -72,6 +74,7 @@ final class BackupBadges {
         }
 
         badgesByGameId = badges
+        self.clocks = clocks
         banner = Staleness.libraryBanner(clocks)
         bannerTargetLabel = banner?.targetId.flatMap { id in
             descriptors.first { $0.id == id }?.displayName

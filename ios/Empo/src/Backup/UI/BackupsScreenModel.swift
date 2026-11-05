@@ -66,7 +66,12 @@ final class BackupsScreenModel {
     /// What the model's own readers use. Nothing inside waits for a
     /// screen, so an empty read before the first refresh is right.
     private var targets: [BackupTargetItem] { items ?? [] }
-    private(set) var status: BackupsScreenStatus?
+    private var facts: [TargetRowFacts] = []
+    private var lastSuccessText: String?
+    var status: BackupsScreenStatus? {
+        BackupsScreenStatusRules.status(
+            of: facts, games: BackupBadges.shared.clocks, lastSuccessText: lastSuccessText)
+    }
     private(set) var history: [BackupRunRecord] = []
     private(set) var adoptBanners: [AdoptBannerItem] = []
     private(set) var writerQuestions: [WriterQuestionItem] = []
@@ -129,11 +134,10 @@ final class BackupsScreenModel {
         // A paused location leaves the line, so its date cannot stand
         // for the locations that still run.
         let active = Set(descriptors.filter { !$0.isPaused }.map(\.id))
-        self.status = BackupsScreenStatusRules.status(
-            of: facts,
-            lastSuccessText: runs.first { run in
-                run.outcome == .success && active.contains(run.targetId)
-            }?.finishedAt.map(BackupText.day))
+        self.facts = facts
+        lastSuccessText = runs.first { run in
+            run.outcome == .success && active.contains(run.targetId)
+        }?.finishedAt.map(BackupText.day)
         await readTheNotificationPermission()
     }
 

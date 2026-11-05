@@ -171,6 +171,54 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertEqual(status?.detail, "No backup yet at Homelab")
     }
 
+    /// Waiting for Wi-Fi is no target failure, so the row stays
+    /// current while the games go weeks without a backup.
+    func testGamesWithNoBackupForWeeksKeepTheCardFromCallingItDone() {
+        let targets = [
+            TargetRowFacts(
+                descriptor: target(id: "a", label: "Dropbox"), lastSuccessText: "3 weeks ago"),
+            TargetRowFacts(
+                descriptor: target(id: "b", label: "Homelab"), lastSuccessText: "3 weeks ago"),
+        ]
+        let since = failedAt.addingTimeInterval(-22 * 86_400)
+        let games = [
+            GameFreshness(gameKey: "g1"),
+            GameFreshness(
+                gameKey: "g2", level: .stale, targetId: "a", cause: .waitingForWiFi,
+                unprotectedSince: since.addingTimeInterval(86_400)),
+            GameFreshness(
+                gameKey: "g3", level: .banner, targetId: "b", cause: .waitingForWiFi,
+                unprotectedSince: since),
+        ]
+        let status = BackupsScreenStatusRules.status(
+            of: targets, games: games, lastSuccessText: "on 4 March")
+        XCTAssertEqual(status?.line, "2 games not backed up")
+        XCTAssertEqual(status?.detail, "Empo is waiting for Wi-Fi.")
+        XCTAssertEqual(status?.targetId, "b")
+        XCTAssertEqual(status?.isHealthy, false)
+
+        let one = BackupsScreenStatusRules.status(
+            of: targets, games: [games[1]], lastSuccessText: "on 4 March")
+        XCTAssertEqual(one?.line, "1 game not backed up")
+
+        let fresh = BackupsScreenStatusRules.status(
+            of: targets, games: [games[0]], lastSuccessText: "on 4 March")
+        XCTAssertEqual(fresh?.line, "All games backed up")
+    }
+
+    func testATargetProblemOutranksLateGames() {
+        let targets = [
+            TargetRowFacts(descriptor: target(id: "a", label: "Dropbox"), failure: .needsSignIn)
+        ]
+        let games = [
+            GameFreshness(
+                gameKey: "g1", level: .banner, targetId: "a", cause: .needsSignIn,
+                unprotectedSince: failedAt)
+        ]
+        let status = BackupsScreenStatusRules.status(of: targets, games: games)
+        XCTAssertEqual(status?.line, "Check Dropbox")
+    }
+
     func testAScreenWithNoTargetCarriesNoStatusLine() {
         XCTAssertNil(BackupsScreenStatusRules.status(of: []))
     }

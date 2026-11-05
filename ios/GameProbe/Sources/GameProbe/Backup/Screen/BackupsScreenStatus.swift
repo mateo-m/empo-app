@@ -31,18 +31,14 @@ public enum BackupsScreenStatusRules {
     public static let healthyLine = "All games backed up"
     public static let readyLine = "Ready to back up"
 
-    /// The status, or `nil` where no target exists. A screen with
-    /// no target shows the empty state of 13.14 instead.
+    /// The status, or `nil` where no target exists.
     ///
-    /// A paused target leaves the computation, because it left the
-    /// promise of 7.1. Two targets in the same state break the tie
-    /// on the target id, so the card names the same one on every
-    /// refresh.
-    ///
-    /// `lastSuccessText` carries the newest run across the targets
-    /// in the words the caller formatted, such as "today".
+    /// A paused target leaves the computation. Two targets in the
+    /// same state break the tie on the target id. `lastSuccessText`
+    /// is the newest run in the caller's words, such as "today".
     public static func status(
-        of targets: [TargetRowFacts], lastSuccessText: String? = nil
+        of targets: [TargetRowFacts], games: [GameFreshness] = [],
+        lastSuccessText: String? = nil
     ) -> BackupsScreenStatus? {
         guard !targets.isEmpty else { return nil }
         let rows = targets.map(TargetRowRules.row)
@@ -63,6 +59,14 @@ public enum BackupsScreenStatusRules {
             return BackupsScreenStatus(
                 line: "Check \(worst.title)", detail: worst.stateLine,
                 targetId: worst.targetId, isHealthy: false)
+        }
+        if let late = Staleness.worstGame(of: games) {
+            let count = games.filter { $0.level != .fresh }.count
+            let label = rows.first { $0.targetId == late.targetId }?.title
+            return BackupsScreenStatus(
+                line: count == 1 ? "1 game not backed up" : "\(count) games not backed up",
+                detail: (late.cause ?? .waitingForARun).line(targetLabel: label),
+                targetId: late.targetId, isHealthy: false)
         }
         let backedUp = Set(targets.filter { $0.lastSuccessText != nil }.map(\.descriptor.id))
         let notYet = enabled.filter { !backedUp.contains($0.targetId) }

@@ -276,19 +276,22 @@ public enum Staleness {
     /// cause of the worst game and carries that cause's action.
     public static func libraryBanner(_ games: [GameFreshness]) -> LibraryStaleBanner? {
         let late = games.filter { $0.level == .banner }
-        guard !late.isEmpty else { return nil }
-        let worst =
-            late.min { left, right in
-                let leftSince = left.unprotectedSince ?? .distantFuture
-                let rightSince = right.unprotectedSince ?? .distantFuture
-                if leftSince != rightSince { return leftSince < rightSince }
-                return left.gameKey < right.gameKey
-            } ?? late[0]
+        guard let worst = worstGame(of: late) else { return nil }
         let cause = worst.cause ?? .waitingForARun
         return LibraryStaleBanner(
             cause: cause,
             action: cause.action,
             targetId: worst.targetId,
             gameCount: late.count)
+    }
+
+    public static func worstGame(of games: [GameFreshness]) -> GameFreshness? {
+        games.filter { $0.level != .fresh }.min { left, right in
+            if left.level != right.level { return left.level > right.level }
+            let leftSince = left.unprotectedSince ?? .distantFuture
+            let rightSince = right.unprotectedSince ?? .distantFuture
+            if leftSince != rightSince { return leftSince < rightSince }
+            return left.gameKey < right.gameKey
+        }
     }
 }
