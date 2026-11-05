@@ -48,10 +48,9 @@ if empo_at_least?(0, 11, 0)
 end
 ```
 
-When Empo cannot read its own version, `$userAgentVersion` is
-`"unknown"`. Versions of Empo before the global existed do not set it,
-so it is `nil`. The example above reads both as a version lower than
-all others.
+Versions of Empo before the global existed do not set it, so it is
+`nil`. The example above reads `nil` as a version lower than all
+others.
 
 Do not read the version out of `$userAgent`. Other scripts use
 `$userAgent` as a name, so it stays the name only.
