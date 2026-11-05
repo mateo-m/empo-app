@@ -10,7 +10,8 @@ struct MidiSoundSetRow: View {
 
     @State private var current = MidiSoundSet.current
     @State private var isImporting = false
-    @State private var importFailed = false
+    @State private var formatFailed = false
+    @State private var copyFailure: String?
     @State private var isCopying = false
 
     private var choice: Binding<Choice> {
@@ -61,14 +62,27 @@ struct MidiSoundSetRow: View {
                 importSoundSet(url)
             case .failure(let error):
                 NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
-                importFailed = true
+                copyFailure = error.localizedDescription
             }
         }
         #endif
-        .alert("Can't use this file", isPresented: $importFailed) {
+        .alert("Can't use this file", isPresented: $formatFailed) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Pick a SoundFont (.sf2) or a DLS file (.dls).")
+        }
+        .alert(
+            "Couldn't import the sound set",
+            isPresented: Binding {
+                copyFailure != nil
+            } set: {
+                if !$0 { copyFailure = nil }
+            },
+            presenting: copyFailure
+        ) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { message in
+            Text(message)
         }
     }
 
@@ -77,9 +91,11 @@ struct MidiSoundSetRow: View {
         Task {
             do {
                 try await Task.detached { try MidiSoundSet.replace(with: url) }.value
+            } catch MidiSoundSet.ImportError.notASoundSet {
+                formatFailed = true
             } catch {
                 NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
-                importFailed = true
+                copyFailure = error.localizedDescription
             }
             current = MidiSoundSet.current
             isCopying = false

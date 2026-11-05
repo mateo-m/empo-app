@@ -61,6 +61,10 @@ enum MidiSoundSet {
         guard let header = try? handle.read(upToCount: 34), header.count >= 12,
             header.subdata(in: 0..<4) == Data("RIFF".utf8)
         else { return false }
+        // A copy that stopped early is shorter than the size in its RIFF header.
+        let riffSize = header.subdata(in: 4..<8).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
+        guard let fileSize = try? handle.seekToEnd(), UInt64(UInt32(littleEndian: riffSize)) + 8 <= fileSize
+        else { return false }
         let form = header.subdata(in: 8..<12)
         if form == Data("DLS ".utf8) { return true }
         // A SoundFont starts with the LIST INFO chunk, and `ifil` comes first in it.
