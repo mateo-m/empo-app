@@ -155,6 +155,7 @@ final class SnapshotEngineTests: XCTestCase {
 
     private func request(
         games: [BackupRunGame],
+        trigger: BackupTrigger = .manual,
         preferences: LibraryBackupSetRequest? = nil,
         writerResolution: WriterClaimResolution? = nil,
         splitNamespaceId: String? = nil,
@@ -164,6 +165,7 @@ final class SnapshotEngineTests: XCTestCase {
         target.capBytes = capBytes
         return BackupRunRequest(
             runId: UUID().uuidString,
+            trigger: trigger,
             descriptor: target,
             namespaceId: namespaceId,
             deviceId: deviceId,
@@ -511,6 +513,27 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(left.count, 5)
         XCTAssertTrue(left.contains(young))
         XCTAssertFalse(left.contains(orphan))
+    }
+
+    func testANightlyRunEndsWithTheSweepThatIsDue() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        _ = await engine.run(request(games: [game(gameName)]))
+        let orphan = paths.blobPath(
+            hash: String(repeating: "b", count: 64),
+            fanOutWidth: FormatDescriptor.version1FanOutWidth)
+        try target.seed(path: orphan, contents: Data("orphan".utf8))
+        clock.advance(8 * 86_400)
+
+        _ = await engine.run(request(games: [game(gameName)], trigger: .sessionEndOrBackground))
+        XCTAssertTrue(blobPaths(target).contains(orphan))
+
+        let nightly = await engine.run(request(games: [game(gameName)], trigger: .nightly))
+
+        XCTAssertEqual(nightly.outcome, .success)
+        XCTAssertFalse(blobPaths(target).contains(orphan))
+        XCTAssertEqual(blobPaths(target).count, 4)
     }
 
     func testTheSweepStaysQueuedWhileTheTargetReportsRoomToSpare() async throws {

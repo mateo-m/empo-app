@@ -49,7 +49,7 @@ public actor SnapshotEngine {
     /// Where the engine writes what it could not save. The state
     /// database is a cache and a failed write never stops a run,
     /// but it must not pass in silence either.
-    private let note: @Sendable (String) -> Void
+    let note: @Sendable (String) -> Void
     let fm = FileManager.default
 
     public init(
@@ -126,6 +126,7 @@ public actor SnapshotEngine {
             try await openNamespace(context)
             try await applyPendingDeletions(context)
             try await runStreams(context)
+            await sweepWhenDue(context)
             try await readTheSpaceLeft(context)
         } catch let stop as BackupRunStop {
             return finish(context, startedAt: startedAt, stop: Task.isCancelled ? .paused : stop)

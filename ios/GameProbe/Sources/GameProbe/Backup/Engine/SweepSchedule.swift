@@ -2,8 +2,8 @@ import Foundation
 
 /// When the mark-and-sweep of SPEC 5.11 may run.
 ///
-/// The engine owns the sweep's rules. Ticket 007 owns the trigger
-/// that calls it. Two rules live here:
+/// The engine owns the sweep's rules, and `BackupTriggerPlan.runsSweep`
+/// picks the runs that take it. Two rules live here:
 ///
 /// - An interrupted sweep is safe by construction, because it
 ///   deletes blobs and never manifests, so it resumes on the next

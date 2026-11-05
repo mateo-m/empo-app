@@ -58,7 +58,8 @@ final class BackupPass: BackupRunning {
                 continue
             }
 
-            let result = await run(descriptor, provider: provider, games: games)
+            let result = await run(
+                descriptor, provider: provider, games: games, trigger: trigger)
             guard !Task.isCancelled else {
                 // A pause. The target row and the notices stay as
                 // they were, because the run proved nothing.
@@ -102,7 +103,8 @@ final class BackupPass: BackupRunning {
     // MARK: - One target
 
     private func run(
-        _ descriptor: TargetDescriptor, provider: some BackupProvider, games: [BackupRunGame]
+        _ descriptor: TargetDescriptor, provider: some BackupProvider, games: [BackupRunGame],
+        trigger: BackupTrigger
     ) async -> BackupRunResult? {
         let namespaceId: String
         let store: BackupStateStore
@@ -121,6 +123,7 @@ final class BackupPass: BackupRunning {
         let answer = conflicts.answer(for: descriptor.id)
         let request = BackupRunRequest(
             runId: UUID().uuidString,
+            trigger: trigger,
             descriptor: descriptor,
             namespaceId: namespaceId,
             deviceId: BackupDevice.id,

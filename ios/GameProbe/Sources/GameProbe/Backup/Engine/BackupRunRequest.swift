@@ -52,6 +52,8 @@ public struct BackupRunGame: Sendable {
 public struct BackupRunRequest: Sendable {
 
     public var runId: String
+    /// A run the trigger allows to sweep ends with the sweep.
+    public var trigger: BackupTrigger
     public var descriptor: TargetDescriptor
     public var namespaceId: String
     public var deviceId: String
@@ -77,6 +79,7 @@ public struct BackupRunRequest: Sendable {
 
     public init(
         runId: String,
+        trigger: BackupTrigger,
         descriptor: TargetDescriptor,
         namespaceId: String,
         deviceId: String,
@@ -91,6 +94,7 @@ public struct BackupRunRequest: Sendable {
         syncGroupId: String? = nil
     ) {
         self.runId = runId
+        self.trigger = trigger
         self.descriptor = descriptor
         self.namespaceId = namespaceId
         self.deviceId = deviceId

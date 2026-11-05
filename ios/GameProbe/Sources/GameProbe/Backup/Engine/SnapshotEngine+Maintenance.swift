@@ -126,27 +126,41 @@ extension SnapshotEngine {
     // MARK: - The sweep, per 5.11
 
     /// Runs the mark-and-sweep when the schedule of 5.11 allows it.
-    ///
-    /// Ticket 007 owns when this is called. The rules are here.
     public func sweep(_ request: SweepRequest) async throws -> SweepResult {
-        let targetId = request.descriptor.id
-        let reading =
-            provider.capabilities.canQueryQuota ? try? await provider.quota() : nil
-        let decision = SweepSchedule.decide(
-            lastSweepAt: try? store.lastSweep(targetId: targetId),
-            now: now,
-            reading: reading,
-            capBytes: request.descriptor.capBytes,
-            storedBytes: storedBytes(targetId: targetId))
-
+        let decision = await sweepDecision(for: request.descriptor)
         let runs = request.force || decision == .run || decision == .runOverdue
         guard runs else { return SweepResult(decision: decision) }
 
         let paths = BackupNamespacePaths(
             root: request.descriptor.root, namespaceId: request.namespaceId)
         let deleted = try await sweepNamespace(
-            paths: paths, deviceId: request.deviceId, targetId: targetId)
+            paths: paths, deviceId: request.deviceId, targetId: request.descriptor.id)
         return SweepResult(decision: decision, deletedPaths: deleted)
+    }
+
+    /// The end of a run whose trigger may take the sweep. A sweep
+    /// that fails leaves the run as it was and waits for the next.
+    func sweepWhenDue(_ context: RunContext) async {
+        let request = context.request
+        let decision = await sweepDecision(for: request.descriptor)
+        guard BackupTriggerPlan.runsSweep(request.trigger, decision: decision) else { return }
+        do {
+            try await sweepNamespace(
+                paths: context.paths, deviceId: request.deviceId, targetId: request.descriptor.id)
+        } catch {
+            note("the sweep of \(request.descriptor.id) stopped: \(error)")
+        }
+    }
+
+    private func sweepDecision(for descriptor: TargetDescriptor) async -> SweepSchedule.Decision {
+        let reading =
+            provider.capabilities.canQueryQuota ? try? await provider.quota() : nil
+        return SweepSchedule.decide(
+            lastSweepAt: try? store.lastSweep(targetId: descriptor.id),
+            now: now,
+            reading: reading,
+            capBytes: descriptor.capBytes,
+            storedBytes: storedBytes(targetId: descriptor.id))
     }
 
     /// Mark from every manifest in the namespace, then delete every
