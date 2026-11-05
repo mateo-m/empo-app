@@ -10,7 +10,7 @@
 void EmpoConfigureAudioSession(bool respectsSilentMode) {
     AVAudioSession *session = [AVAudioSession sharedInstance];
 
-    // The Ring/Silent switch mutes Ambient and does not mute Playback.
+    // Silent mode mutes Ambient and does not mute Playback.
     NSError *categoryError = nil;
     [session setCategory:respectsSilentMode ? AVAudioSessionCategoryAmbient : AVAudioSessionCategoryPlayback
              withOptions:AVAudioSessionCategoryOptionMixWithOthers

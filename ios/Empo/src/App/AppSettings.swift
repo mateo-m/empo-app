@@ -210,14 +210,12 @@ class AppSettings {
         didSet { UserDefaults.standard.set(controllerHaptics, forKey: DefaultsKey.controllerHaptics) }
     }
 
-    #if os(iOS)
     var respectsSilentMode: Bool {
         didSet {
             UserDefaults.standard.set(respectsSilentMode, forKey: DefaultsKey.respectsSilentMode)
-            pushToCore()
+            pushSilentModeToCore()
         }
     }
-    #endif
 
     var titlePosition: TitlePosition {
         didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: DefaultsKey.titlePosition) }
@@ -330,9 +328,7 @@ class AppSettings {
         // Haptics default to on. UserDefaults.bool returns false for unset keys.
         self.interfaceHaptics = ud.object(forKey: DefaultsKey.interfaceHaptics) as? Bool ?? true
         self.controllerHaptics = ud.object(forKey: DefaultsKey.controllerHaptics) as? Bool ?? true
-        #if os(iOS)
         self.respectsSilentMode = ud.bool(forKey: DefaultsKey.respectsSilentMode)
-        #endif
         let raw = ud.string(forKey: DefaultsKey.titlePosition) ?? TitlePosition.inside.rawValue
         self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
         let modeRaw = ud.string(forKey: DefaultsKey.libraryDisplayMode) ?? LibraryDisplayMode.grid.rawValue
@@ -396,10 +392,16 @@ class AppSettings {
     func pushToCore() {
         #if os(iOS)
         guard EmpoCoreIsOpen() != 0 else { return }
-        EmpoCoreSetRespectsSilentMode(respectsSilentMode)
         gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
         gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        #endif
+    }
+
+    func pushSilentModeToCore() {
+        #if os(iOS)
+        guard EmpoCoreIsOpen() != 0 else { return }
+        EmpoCoreSetRespectsSilentMode(respectsSilentMode)
         #endif
     }
 }

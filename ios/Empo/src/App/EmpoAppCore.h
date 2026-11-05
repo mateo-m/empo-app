@@ -45,7 +45,7 @@ int EmpoCoreIsOpen(void);
 // GameProcessClient.m implements this.
 int EmpoGameProcessIsOpen(void);
 
-// Lets the Ring/Silent switch mute the game, in the process that plays
+// Lets silent mode mute the game, in the process that plays
 // it. Call it after the game opens, and again when the setting changes.
 void EmpoCoreSetRespectsSilentMode(bool respects);
 
