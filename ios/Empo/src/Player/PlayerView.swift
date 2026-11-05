@@ -695,7 +695,7 @@ struct PlayerView: View {
             .padding(.horizontal, Spacing.lg)
             .padding(.vertical, Spacing.md)
             .background(Color.black.opacity(Scrim.heavy))
-            .clipShape(Capsule())
+            .clipShape(.pixelCapsule)
             .chromeHitRegion(hitRegionKey)
             .padding(.bottom, safeArea.bottom + Spacing.md)
         }
@@ -711,19 +711,17 @@ struct PlayerView: View {
             controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let radii = ControlsZone.cornerRadii(safeArea: safeArea)
 
-        UnevenRoundedRectangle(
-            topLeadingRadius: radii.top,
-            bottomLeadingRadius: radii.bottom,
-            bottomTrailingRadius: radii.bottom,
-            topTrailingRadius: radii.top
+        PixelRect(
+            cornerRadii: RectangleCornerRadii(
+                topLeading: radii.top, bottomLeading: radii.bottom, bottomTrailing: radii.bottom,
+                topTrailing: radii.top)
         )
         .strokeBorder(Color.white.opacity(Alpha.border), lineWidth: 1.5)
         .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: radii.top,
-                bottomLeadingRadius: radii.bottom,
-                bottomTrailingRadius: radii.bottom,
-                topTrailingRadius: radii.top
+            PixelRect(
+                cornerRadii: RectangleCornerRadii(
+                    topLeading: radii.top, bottomLeading: radii.bottom, bottomTrailing: radii.bottom,
+                    topTrailing: radii.top)
             )
             .fill(Color.black.opacity(Scrim.medium))
         )

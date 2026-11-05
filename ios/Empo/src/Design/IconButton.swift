@@ -74,7 +74,7 @@ struct IconButton: View {
             .frame(width: size.points, height: size.points)
             .background {
                 if style == .outline {
-                    Circle().strokeBorder(.quaternary.opacity(0.5), lineWidth: 1)
+                    PixelRect.pixelCapsule.strokeBorder(.quaternary.opacity(0.5), lineWidth: 1)
                 }
             }
             .modifier(IconGlassModifier(style: style, hasAction: action != nil))
@@ -92,12 +92,12 @@ private struct IconGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         switch style {
         case .primary:
-            content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
+            content.glassEffect(.regular.tint(.brand).interactive(), in: .pixelCapsule)
         case .secondary:
             content.glassEffect(
-                .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
+                .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .pixelCapsule)
         case .outline:
-            content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
+            content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .pixelCapsule)
         }
     }
 }

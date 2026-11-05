@@ -121,7 +121,7 @@ struct ImportButton: View {
                 }
             }
             .overlay {
-                Capsule()
+                PixelRect.pixelCapsule
                     .fill(
                         LinearGradient(
                             stops: [
@@ -213,14 +213,14 @@ struct ImportButton: View {
             width: collapsed ? AppSize.toolbarButton : nil,
             height: collapsed ? AppSize.toolbarButton : nil
         )
-        .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+        .glassEffect(.regular.tint(.brand).interactive(), in: .pixelCapsule)
         .darkGlass()
     }
 
     @ViewBuilder
     private var importButtonIcon: some View {
         if phase.showsSpinner {
-            SpinnerRing(progress: 0, size: 18, lineWidth: 2)
+            SpinnerRing(progress: 0, size: 18)
         } else {
             Image(systemName: "plus")
         }

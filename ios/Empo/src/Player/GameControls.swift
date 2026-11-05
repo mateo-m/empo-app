@@ -142,18 +142,18 @@ struct CircularControlButton<Face: View>: View {
             // Opaque backing under glass, for the same reason as the
             // D-pad: with the game view embedded in AppWindow, Liquid
             // Glass otherwise samples the Metal layer on device.
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(Color.black)
 
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular.interactive(), in: .pixelCapsule)
 
             // Press highlight matching the D-pad arm gradient
             // (white 0.28 at the rim → clear toward the center).
             // Latched toggles keep it lit so the state is visible
             // without a label.
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(
                     RadialGradient(
                         colors: [.white.opacity(0), .white.opacity(0.28)],
@@ -357,12 +357,6 @@ struct DPad: View {
     ///   0.1  = barely rounded (sharp, mechanical)
     private let cornerFraction: CGFloat = 0.25
 
-    /// Inner-corner fillet radius, as a fraction of armWidth. Rounds
-    /// the four notches between the arms so the plus-to-square
-    /// transitions don't feel sharp. Matches cornerFraction, so a
-    /// notch curves exactly as much as an arm tip.
-    private let innerCornerFraction: CGFloat = 0.25
-
     var body: some View {
         MovementTouchHost(size: size, editing: editing, style: .dpad) { state in
             visual(active: state.active)
@@ -372,8 +366,7 @@ struct DPad: View {
     private func visual(active: DPadTouchReducer.DirectionSet) -> some View {
         let plus = DPadPlusShape(
             armFraction: armFraction,
-            cornerFraction: cornerFraction,
-            innerCornerFraction: innerCornerFraction
+            cornerFraction: cornerFraction
         )
         let pressed = !active.isEmpty
 
@@ -405,7 +398,7 @@ struct DPad: View {
                     let radii = DPadArmGeometry.cornerRadii(
                         direction: dir, size: size, armFraction: armFraction,
                         cornerFraction: cornerFraction)
-                    UnevenRoundedRectangle(cornerRadii: radii)
+                    PixelRect(cornerRadii: radii)
                         .fill(
                             LinearGradient(
                                 colors: [.white.opacity(0.28), .white.opacity(0)],
@@ -428,7 +421,7 @@ struct DPad: View {
                     .offset(dir.glyphOffset(size: size, armFraction: armFraction))
             }
 
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(.white.opacity(0.5))
                 .frame(width: size * 0.16, height: size * 0.16)
         }
@@ -493,12 +486,12 @@ struct Joystick: View {
         return ZStack {
             // Opaque backing under glass, same rationale as the
             // D-pad: Liquid Glass samples the Metal layer otherwise.
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(Color.black)
 
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
+                .glassEffect(.regular.interactive(), in: .pixelCapsule)
 
             // Direction chevrons on the base ring. The active one
             // brightens, same visual language as the D-pad's arms.
@@ -511,11 +504,11 @@ struct Joystick: View {
 
             // Thumb nub.
             ZStack {
-                Circle()
+                PixelRect.pixelCapsule
                     .fill(Color.black)
-                Circle()
+                PixelRect.pixelCapsule
                     .fill(.white.opacity(pressed ? 0.35 : 0.2))
-                Circle()
+                PixelRect.pixelCapsule
                     .strokeBorder(.white.opacity(0.5), lineWidth: 1.5)
             }
             .frame(width: nubSize, height: nubSize)
@@ -609,133 +602,26 @@ extension DPadDirection {
 
 // MARK: - D-pad decorative shapes
 
-/// Rounded plus silhouette that forms the D-pad's base. Built as a
-/// single closed polygon (no overlapping sub-paths), so there are no
-/// internal seams where two rectangles used to meet. `cornerFraction`
-/// rounds the 8 outer corners. `innerCornerFraction` fillets the 4
-/// inner corners (the notches between arms) with a concave arc for a
-/// friendlier silhouette.
-///
-/// `armFraction` is the width of each arm as a fraction of the
-/// bounding box. 0.3 - 0.4 gives a balanced "plus" feel. Below that
-/// it starts to look spindly. Above that the arms merge into a
-/// square-with-notches look.
+/// The plus that forms the D-pad's base: a vertical and a horizontal
+/// pixel bar, joined into one path so the glass has no seam where the
+/// bars cross.
 private struct DPadPlusShape: Shape {
     let armFraction: CGFloat
     let cornerFraction: CGFloat
-    let innerCornerFraction: CGFloat
 
     func path(in rect: CGRect) -> Path {
         let armW = rect.width * armFraction
         let armH = rect.height * armFraction
-        let cornerR = min(armW * cornerFraction, armW / 2, armH / 2)
-        let hInset = (rect.height - armH) / 2  // y of horizontal bar top
-        let vInset = (rect.width - armW) / 2  // x of vertical bar left
-        // The inner fillet must not exceed half the length of the
-        // arm's inner side or half the vInset/hInset (distance from
-        // center-square edge to the outer boundary).
-        let innerR = min(
-            armW * innerCornerFraction,
-            vInset / 2,
-            hInset / 2,
-            armW / 2,
-            armH / 2
-        )
-        let w = rect.width
-        let h = rect.height
-
-        // Walk the plus clockwise from the top of the top arm.
-        // 8 outer arm-tip corners (rounded convex) and 4 inner
-        // notches (rounded concave with addQuadCurve).
-        var p = Path()
-        // Top arm, top-left corner (rounded convex).
-        p.move(to: CGPoint(x: vInset, y: cornerR))
-        p.addQuadCurve(
-            to: CGPoint(x: vInset + cornerR, y: 0),
-            control: CGPoint(x: vInset, y: 0)
-        )
-        // Top edge to top-right corner of top arm.
-        p.addLine(to: CGPoint(x: vInset + armW - cornerR, y: 0))
-        p.addQuadCurve(
-            to: CGPoint(x: vInset + armW, y: cornerR),
-            control: CGPoint(x: vInset + armW, y: 0)
-        )
-        // Right edge of top arm, down to the inner notch
-        // (stop innerR short).
-        p.addLine(to: CGPoint(x: vInset + armW, y: hInset - innerR))
-        // INNER notch (top-right): concave fillet into the right arm.
-        p.addQuadCurve(
-            to: CGPoint(x: vInset + armW + innerR, y: hInset),
-            control: CGPoint(x: vInset + armW, y: hInset)
-        )
-        // Top edge of right arm, to outer corner.
-        p.addLine(to: CGPoint(x: w - cornerR, y: hInset))
-        p.addQuadCurve(
-            to: CGPoint(x: w, y: hInset + cornerR),
-            control: CGPoint(x: w, y: hInset)
-        )
-        // Right edge down to bottom-right outer corner.
-        p.addLine(to: CGPoint(x: w, y: hInset + armH - cornerR))
-        p.addQuadCurve(
-            to: CGPoint(x: w - cornerR, y: hInset + armH),
-            control: CGPoint(x: w, y: hInset + armH)
-        )
-        // Bottom edge of right arm, to inner notch.
-        p.addLine(to: CGPoint(x: vInset + armW + innerR, y: hInset + armH))
-        // INNER notch (bottom-right).
-        p.addQuadCurve(
-            to: CGPoint(x: vInset + armW, y: hInset + armH + innerR),
-            control: CGPoint(x: vInset + armW, y: hInset + armH)
-        )
-        // Right edge of bottom arm, to outer corner.
-        p.addLine(to: CGPoint(x: vInset + armW, y: h - cornerR))
-        p.addQuadCurve(
-            to: CGPoint(x: vInset + armW - cornerR, y: h),
-            control: CGPoint(x: vInset + armW, y: h)
-        )
-        // Bottom edge to outer corner of bottom arm.
-        p.addLine(to: CGPoint(x: vInset + cornerR, y: h))
-        p.addQuadCurve(
-            to: CGPoint(x: vInset, y: h - cornerR),
-            control: CGPoint(x: vInset, y: h)
-        )
-        // Left edge of bottom arm, to inner notch.
-        p.addLine(to: CGPoint(x: vInset, y: hInset + armH + innerR))
-        // INNER notch (bottom-left).
-        p.addQuadCurve(
-            to: CGPoint(x: vInset - innerR, y: hInset + armH),
-            control: CGPoint(x: vInset, y: hInset + armH)
-        )
-        // Bottom edge of left arm.
-        p.addLine(to: CGPoint(x: cornerR, y: hInset + armH))
-        p.addQuadCurve(
-            to: CGPoint(x: 0, y: hInset + armH - cornerR),
-            control: CGPoint(x: 0, y: hInset + armH)
-        )
-        // Left edge up.
-        p.addLine(to: CGPoint(x: 0, y: hInset + cornerR))
-        p.addQuadCurve(
-            to: CGPoint(x: cornerR, y: hInset),
-            control: CGPoint(x: 0, y: hInset)
-        )
-        // Top edge of left arm, to inner notch.
-        p.addLine(to: CGPoint(x: vInset - innerR, y: hInset))
-        // INNER notch (top-left).
-        p.addQuadCurve(
-            to: CGPoint(x: vInset, y: hInset - innerR),
-            control: CGPoint(x: vInset, y: hInset)
-        )
-        // Close back to starting point.
-        p.closeSubpath()
-        return p
+        let tip = PixelRect(cornerRadius: min(armW, armH) * cornerFraction)
+        let vertical = CGRect(x: rect.midX - armW / 2, y: rect.minY, width: armW, height: rect.height)
+        let horizontal = CGRect(x: rect.minX, y: rect.midY - armH / 2, width: rect.width, height: armH)
+        return tip.path(in: vertical).union(tip.path(in: horizontal))
     }
 }
 
 /// Layout math for one arm of the D-pad plus. Shared by the highlight
 /// views so frame + corner radii stay in sync with `DPadPlusShape`.
 private enum DPadArmGeometry {
-    static let innerCornerRatio: CGFloat = 0.5
-
     static func frame(
         direction: DPadDirection, size: CGFloat, armFraction: CGFloat
     ) -> CGRect {
@@ -762,7 +648,7 @@ private enum DPadArmGeometry {
     ) -> RectangleCornerRadii {
         let armW = size * armFraction
         let outerR = min(armW * cornerFraction, armW / 2)
-        let innerR = outerR * innerCornerRatio
+        let innerR: CGFloat = 0
         switch direction {
         case .up:
             return RectangleCornerRadii(

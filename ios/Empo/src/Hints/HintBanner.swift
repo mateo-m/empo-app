@@ -45,7 +45,7 @@ struct HintBanner: View {
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.lg)
         .background(Color.brand.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
+        .clipShape(PixelRect(cornerRadius: Radius.md))
         .sheet(isPresented: $showDetail) {
             if let description = hint.description {
                 HintDetailSheet(

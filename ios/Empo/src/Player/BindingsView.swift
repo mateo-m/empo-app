@@ -50,12 +50,10 @@ struct BindingsView: View {
         let saved = self.saved
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Applies to", selection: $scope) {
-                    ForEach(BindingsCatalog.Scope.allCases, id: \.self) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .pickerStyle(.segmented)
+                PixelSegmentedPicker(
+                    "Applies to", selection: $scope,
+                    options: BindingsCatalog.Scope.allCases.map { ($0, $0.title) }
+                )
                 .padding(.horizontal, Spacing.lg)
                 .padding(.vertical, Spacing.md)
 

@@ -136,7 +136,7 @@ struct GameArtworkView: View {
         if let size {
             view
                 .frame(width: size, height: size)
-                .clipShape(.rect(cornerRadius: cornerRadius))
+                .clipShape(.pixelRect(cornerRadius: cornerRadius))
         } else {
             view
         }

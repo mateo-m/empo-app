@@ -36,7 +36,7 @@ struct LibrarySearchBar: View {
             }
             .padding(.horizontal, Spacing.lg)
             .frame(height: searchBarHeight)
-            .glassEffect(.regular.interactive(), in: .capsule)
+            .glassEffect(.regular.interactive(), in: .pixelCapsule)
 
             if showsActions {
                 LibrarySortButton(showSortSheet: $showSortSheet)

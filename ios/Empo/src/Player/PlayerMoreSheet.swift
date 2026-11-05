@@ -106,7 +106,7 @@ struct PlayerMoreSheet: View {
                 // bottom sheet. The grouping still reads as a unit
                 // because of the inter-row dividers and the gap
                 // between this card and the pause card below.
-                .clipShape(.rect(cornerRadius: Radius.md))
+                .clipShape(.pixelRect(cornerRadius: Radius.md))
 
                 // Pause takes the user back to the library and the
                 // game stays suspended. The row names the running
@@ -132,7 +132,7 @@ struct PlayerMoreSheet: View {
                         }
                     )
                 }
-                .clipShape(.rect(cornerRadius: Radius.md))
+                .clipShape(.pixelRect(cornerRadius: Radius.md))
                 .alert(quitQuestion, isPresented: $confirmQuit) {
                     Button("Cancel", role: .cancel) {}
                     Button("Quit", role: .destructive) {

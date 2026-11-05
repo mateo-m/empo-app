@@ -479,11 +479,10 @@ struct LayoutProfileEditorView: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            Picker("Orientation", selection: $editingOrientation) {
-                Text("Portrait").tag(ControlsOrientation.portrait)
-                Text("Landscape").tag(ControlsOrientation.landscape)
-            }
-            .pickerStyle(.segmented)
+            PixelSegmentedPicker(
+                "Orientation", selection: $editingOrientation,
+                options: [(.portrait, "Portrait"), (.landscape, "Landscape")]
+            )
             .padding(.horizontal, Spacing.xl)
             .onChange(of: editingOrientation) { _, new in
                 layout.editorSave()
@@ -738,7 +737,7 @@ struct EditorCanvasShell<UnderControls: View>: View {
             forcedOverlay: forcedOverlay)
 
         return ZStack {
-            RoundedRectangle(cornerRadius: Radius.sm)
+            PixelRect(cornerRadius: Radius.sm)
                 .fill(Color.black)
 
             // Game-picture placeholder.
@@ -772,7 +771,7 @@ struct EditorCanvasShell<UnderControls: View>: View {
             }
             .allowsHitTesting(hitTesting)
         }
-        .clipShape(RoundedRectangle(cornerRadius: Radius.sm))
+        .clipShape(PixelRect(cornerRadius: Radius.sm))
     }
 }
 
@@ -805,11 +804,10 @@ struct BuiltinLayoutViewerView: View {
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            Picker("Orientation", selection: $orientation) {
-                Text("Portrait").tag(ControlsOrientation.portrait)
-                Text("Landscape").tag(ControlsOrientation.landscape)
-            }
-            .pickerStyle(.segmented)
+            PixelSegmentedPicker(
+                "Orientation", selection: $orientation,
+                options: [(.portrait, "Portrait"), (.landscape, "Landscape")]
+            )
             .padding(.horizontal, Spacing.xl)
             .onChange(of: orientation) { _, new in
                 layout.setOrientation(new)

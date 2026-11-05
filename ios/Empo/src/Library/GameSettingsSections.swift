@@ -41,7 +41,7 @@ struct GameplaySettingsSection: View {
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
-                    Slider(
+                    PixelSlider(
                         value: Binding(
                             get: { Double(model.effectiveSpeedMultiplier) },
                             set: { model.settings.speedMultiplier = Int($0) }

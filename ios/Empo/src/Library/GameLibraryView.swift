@@ -994,7 +994,7 @@ struct GameLibraryView: View {
     private func selectionBadge(for gameId: String) -> some View {
         let selected = selectedIDs.contains(gameId)
         ZStack {
-            Circle()
+            PixelRect.pixelCapsule
                 .fill(selected ? Color.brand : Color.black.opacity(0.4))
                 .frame(width: 24, height: 24)
             if selected {
@@ -1002,7 +1002,7 @@ struct GameLibraryView: View {
                     .font(.system(size: 12, weight: .bold))
                     .foregroundStyle(.white)
             } else {
-                Circle()
+                PixelRect.pixelCapsule
                     .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
                     .frame(width: 24, height: 24)
             }

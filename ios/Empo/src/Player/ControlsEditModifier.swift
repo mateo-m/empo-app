@@ -192,7 +192,7 @@ struct ControlOpacitySection: View {
             // adjust-panel idiom, so the exact slider value stays
             // visible while you drag.
             HStack {
-                Slider(
+                PixelSlider(
                     value: Binding(get: { opacity }, set: onChange),
                     in: 0.2...1.0
                 ) { editing in
@@ -424,11 +424,9 @@ struct DPadEditSheet: View {
                     // Applies to the ACTIVE orientation only, same
                     // scope as size and opacity (and the same
                     // single-orientation undo snapshot).
-                    Picker("Style", selection: styleBinding) {
-                        Text("D-pad").tag(MovementStyle.dpad)
-                        Text("Joystick").tag(MovementStyle.stick)
-                    }
-                    .pickerStyle(.segmented)
+                    PixelSegmentedPicker(
+                        "Style", selection: styleBinding,
+                        options: [(.dpad, "D-pad"), (.stick, "Joystick")])
                 }
 
                 ControlSizeSection(
