@@ -81,17 +81,17 @@ public enum WebDAV {
     /// copies.
     public static let temporaryPrefix = ".empo-partial-"
 
-    /// The temp name one path stages under, per 9.5.
+    /// The temp name one put stages under.
     ///
-    /// The name comes from the path and carries no random part. A
-    /// `PUT` that failed leaves bytes behind, and the next attempt at
-    /// the same path writes over the same name. A random name would
-    /// leave one file per failed attempt, and the sweep of 5.11
-    /// deletes a blob and never a name it cannot read.
-    public static func temporaryPath(for path: String) -> String {
+    /// The random part keeps two devices that write the same path,
+    /// such as `writer.json`, off each other's bytes. A failed put
+    /// deletes its own temp file, so only a put cut short by the end
+    /// of the process leaves one behind.
+    public static func temporaryPath(for path: String, stagingID: UUID) -> String {
         let collection = collectionPath(ofPath: path)
         let name = lastSegment(ofPath: path)
-        return BackupNamespacePaths.join(collection, temporaryPrefix + name)
+        return BackupNamespacePaths.join(
+            collection, temporaryPrefix + stagingID.uuidString + "-" + name)
     }
 
     /// Whether this path is a staged upload and not an object.
@@ -119,8 +119,8 @@ public enum WebDAV {
     /// The engine has no `move` operation and it never renames a
     /// remote object, per 8.1. This rename lives inside `put`, where
     /// the engine cannot see it.
-    public static func putSteps(path: String) -> [PutStep] {
-        let temporary = temporaryPath(for: path)
+    public static func putSteps(path: String, stagingID: UUID = UUID()) -> [PutStep] {
+        let temporary = temporaryPath(for: path, stagingID: stagingID)
         return [.stage(path: temporary), .commit(from: temporary, to: path)]
     }
 

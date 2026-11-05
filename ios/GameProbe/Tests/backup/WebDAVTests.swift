@@ -298,36 +298,22 @@ final class WebDAVTests: XCTestCase {
 
     func testThePutStagesUnderATempNameAndCommitsWithAMove() {
         let path = "Empo/devices/n1/blobs/ab/abcdef"
-        let steps = WebDAV.putSteps(path: path)
+        let id = UUID(uuidString: "6F1C0E52-7A57-4C33-9E0A-2B9A3D2D9C11")!
+        let staged = "Empo/devices/n1/blobs/ab/.empo-partial-\(id.uuidString)-abcdef"
         XCTAssertEqual(
-            steps,
-            [
-                .stage(path: "Empo/devices/n1/blobs/ab/.empo-partial-abcdef"),
-                .commit(from: "Empo/devices/n1/blobs/ab/.empo-partial-abcdef", to: path),
-            ])
+            WebDAV.putSteps(path: path, stagingID: id),
+            [.stage(path: staged), .commit(from: staged, to: path)])
 
-        // Nothing before the commit names the path, so the path holds
-        // the old content until the MOVE answers, per 8.2.
-        for step in steps.dropLast() {
-            guard case .stage(let staged) = step else { return XCTFail("the first step stages") }
-            XCTAssertNotEqual(staged, path)
-        }
         // The temp name is a sibling, so the MOVE stays inside one
         // collection and the server renames.
-        XCTAssertEqual(
-            WebDAV.collectionPath(ofPath: WebDAV.temporaryPath(for: path)),
-            WebDAV.collectionPath(ofPath: path))
+        XCTAssertEqual(WebDAV.collectionPath(ofPath: staged), WebDAV.collectionPath(ofPath: path))
+        XCTAssertTrue(WebDAV.isTemporaryPath(staged))
+        XCTAssertFalse(WebDAV.isTemporaryPath(path))
     }
 
-    func testAnInterruptedPutStartsAgainUnderTheSameTempName() {
-        // The RFC states no resumable mode, per 9.5. So the second
-        // attempt writes over the first one's bytes and the path is
-        // untouched either way.
-        let path = "Empo/format.json"
-        XCTAssertEqual(WebDAV.putSteps(path: path), WebDAV.putSteps(path: path))
-        XCTAssertEqual(WebDAV.temporaryPath(for: path), "Empo/.empo-partial-format.json")
-        XCTAssertTrue(WebDAV.isTemporaryPath(WebDAV.temporaryPath(for: path)))
-        XCTAssertFalse(WebDAV.isTemporaryPath(path))
+    func testTwoDevicesPuttingTheSamePathStageUnderDifferentNames() {
+        let path = "Empo/writer.json"
+        XCTAssertNotEqual(WebDAV.putSteps(path: path), WebDAV.putSteps(path: path))
     }
 
     // MARK: - The collections, per test 8

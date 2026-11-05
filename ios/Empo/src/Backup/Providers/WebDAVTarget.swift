@@ -202,12 +202,8 @@ actor WebDAVTarget: BackupProvider {
 
     // MARK: - The put of 9.5
 
-    /// The temp name, then the `MOVE` that commits it, per 9.5 and
-    /// 8.2.
-    ///
-    /// The path holds the old content until the `MOVE` answers. A
-    /// `PUT` that dies part way leaves bytes under the temp name
-    /// alone, and the next attempt writes over them from zero.
+    /// The temp name, then the `MOVE` that commits it. The path holds
+    /// the old content until the `MOVE` answers.
     private func stageAndCommit(
         _ localFile: URL, to path: String
     ) async throws(BackupProviderError) {
@@ -224,9 +220,8 @@ actor WebDAVTarget: BackupProvider {
                 }
             }
         } catch {
-            // The bytes under the temp name are of no use to anybody
-            // now. A later attempt writes over them, and this saves
-            // the room in the meantime.
+            // Each put stages under a new temp name, so no later
+            // attempt writes over this one.
             if let staged { await discard(staged) }
             throw error
         }
