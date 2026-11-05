@@ -616,7 +616,8 @@ struct PlayerView: View {
                         layout.recordScreenEdit(.region(toggled))
                     }
                     ScreenRegionApplier.preview(toggled, isPortrait: isPortrait)
-                }
+                },
+                avoiding: layout.editChromeFrames
             )
         }
         .ignoresSafeArea()

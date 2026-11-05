@@ -277,6 +277,22 @@ struct ScreenRegionChips: View {
     /// editor's mock canvas has no controls zone to flip).
     var overlayOn: Bool = false
     var onToggleOverlay: (() -> Void)?
+    /// Edit-toolbar frames in the same space as `rect`. When the game
+    /// fills the top of the screen, the toolbar sits on it, and the
+    /// chips move down below it.
+    var avoiding: [CGRect] = []
+
+    private var firstChipY: CGFloat {
+        let chipHalfHeight: CGFloat = 12
+        var y = rect.minY + 44
+        for frame in avoiding.sorted(by: { $0.minY < $1.minY })
+        where frame.minX < rect.midX && frame.maxX > rect.midX
+            && frame.minY < y + chipHalfHeight && frame.maxY > y - chipHalfHeight
+        {
+            y = frame.maxY + Spacing.xs + chipHalfHeight
+        }
+        return y
+    }
 
     var body: some View {
         ZStack {
@@ -303,7 +319,7 @@ struct ScreenRegionChips: View {
                 // Top area, below the "Screen" label: the bottom
                 // corner belongs to the resize grabber, and at the
                 // minimum region size a bottom chip would overlap it.
-                .position(x: rect.midX, y: rect.minY + 44)
+                .position(x: rect.midX, y: firstChipY)
                 .accessibilityLabel("Reset screen to automatic placement")
             }
 
@@ -322,7 +338,7 @@ struct ScreenRegionChips: View {
                     .foregroundStyle(overlayOn ? Color.brand : .white)
                     .glassEffect(.regular.interactive(), in: .pixelCapsule)
                 }
-                .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
+                .position(x: rect.midX, y: firstChipY + (showsReset ? 30 : 0))
                 .accessibilityLabel("Controls over game")
                 .accessibilityValue(
                     overlayOn
