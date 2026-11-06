@@ -42,7 +42,6 @@ final class FormatDescriptorTests: XCTestCase {
 
         XCTAssertEqual(access, .readWrite)
         XCTAssertTrue(access.allowsWrite)
-        XCTAssertTrue(access.allowsPrune)
     }
 
     func testANewerTargetIsReadOnly() throws {
@@ -51,7 +50,6 @@ final class FormatDescriptorTests: XCTestCase {
 
         XCTAssertEqual(access, .readOnly(.newerFormatVersion(2)))
         XCTAssertFalse(access.allowsWrite)
-        XCTAssertFalse(access.allowsPrune)
     }
 
     /// A device that cannot parse `format.json` treats the whole
@@ -62,7 +60,6 @@ final class FormatDescriptorTests: XCTestCase {
 
         XCTAssertEqual(access, .readOnly(.unreadableFormat))
         XCTAssertFalse(access.allowsWrite)
-        XCTAssertFalse(access.allowsPrune)
     }
 
     func testATargetWithNoFormatFileIsReadOnly() {

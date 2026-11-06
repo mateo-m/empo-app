@@ -131,13 +131,6 @@ public enum BackupTriggerPlan {
         trigger == .nightly
     }
 
-    /// Whether this trigger may submit a `BGContinuedProcessingTask`.
-    /// Apple forbids it for automatic work, so only the manual
-    /// button may.
-    public static func usesContinuedProcessing(_ trigger: BackupTrigger) -> Bool {
-        trigger == .manual
-    }
-
     /// The title the continued-processing task and its Live Activity
     /// carry: the game name, or "Empo backups" for the library-wide
     /// press.

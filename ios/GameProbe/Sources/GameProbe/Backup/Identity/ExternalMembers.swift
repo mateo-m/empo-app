@@ -49,42 +49,4 @@ public enum ExternalMembers {
 
     // MARK: - A path that moved
 
-    /// Where a game's shared data directory is now, and where it was.
-    public struct SharedDataHistory: Equatable, Sendable {
-        /// The path the newest snapshot recorded.
-        public var current: String?
-        /// The paths earlier snapshots recorded, newest first, each
-        /// one once.
-        public var previous: [String]
-
-        public init(current: String? = nil, previous: [String] = []) {
-            self.current = current
-            self.previous = previous
-        }
-    }
-
-    /// The shared data directory across a game's snapshots, oldest
-    /// snapshot first. `<snapshotId>` sorts by name, per 5.2, so the
-    /// caller sorts on the id.
-    ///
-    /// A path that moves between two snapshots is an ordinary event,
-    /// per 4.5. Empo records the new path, keeps the old data in the
-    /// game's history, offers the newest on restore, and alerts
-    /// nobody. Empo cannot tell a legitimate move from a stranded
-    /// directory, and an alert on every mkxp.json edit teaches the
-    /// user to dismiss it.
-    public static func sharedDataHistory(
-        ofSnapshotsOldestFirst manifests: [SnapshotManifest]
-    ) -> SharedDataHistory {
-        var seen: [String] = []
-        for manifest in manifests {
-            guard let path = manifest.sharedDataDirectory else { continue }
-            seen.removeAll { $0 == path }
-            seen.append(path)
-        }
-        guard let current = seen.last else { return SharedDataHistory() }
-        return SharedDataHistory(
-            current: current,
-            previous: Array(seen.dropLast().reversed()))
-    }
 }

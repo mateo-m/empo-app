@@ -125,30 +125,6 @@ public enum ResourcePolicy {
         state <= .fair
     }
 
-    /// Whether the transfer daemon keeps the uploads it already
-    /// holds.
-    ///
-    /// Yes, under every condition of 7.5. They live in the
-    /// background session, and stopping them throws away bytes
-    /// already spent. A user pause is the one thing that cancels
-    /// them, and a user pause cancels the whole run, per 6.5.
-    public static func keepsUploadsInFlight(_ conditions: BackupConditions) -> Bool {
-        true
-    }
-
-    /// Whether the run asks about cellular before it starts.
-    ///
-    /// A manual run on cellular asks once, states the size, and does
-    /// not change the stored setting. The ask covers the whole run,
-    /// later games in the queue included. An automatic run never
-    /// asks: it waits, and the stale line reads "waiting for Wi-Fi".
-    public static func asksAboutCellular(
-        policy: NetworkPolicy, isManual: Bool, isOnCellular: Bool, alreadyAskedThisRun: Bool
-    ) -> Bool {
-        guard isManual, isOnCellular, !policy.backsUpOverCellular else { return false }
-        return !alreadyAskedThisRun
-    }
-
     /// The cause a game carries while the network policy holds the
     /// run, per 7.1. The clock runs anyway.
     public static func blockedCause(

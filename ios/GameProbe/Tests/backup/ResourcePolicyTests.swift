@@ -76,20 +76,6 @@ final class ResourcePolicyTests: XCTestCase {
         XCTAssertFalse(ResourcePolicy.resumesStagingAfterHeat(.critical))
     }
 
-    func testUploadsInFlightKeepRunningThroughEveryCondition() {
-        for session in [true, false] {
-            for lowPower in [true, false] {
-                for state in DeviceThermalState.allCases {
-                    XCTAssertTrue(
-                        ResourcePolicy.keepsUploadsInFlight(
-                            BackupConditions(
-                                isSessionLive: session, isLowPowerMode: lowPower,
-                                thermalState: state)))
-                }
-            }
-        }
-    }
-
     // MARK: - Network
 
     func testWiFiOnlyIsTheDefault() {
@@ -110,32 +96,6 @@ final class ResourcePolicyTests: XCTestCase {
                 NetworkPolicy(backsUpOverCellular: backsUpOverCellular)
                     .allowsConstrainedNetworkAccess)
         }
-    }
-
-    func testAManualRunOnCellularAsksOnce() {
-        let policy = NetworkPolicy()
-        XCTAssertTrue(
-            ResourcePolicy.asksAboutCellular(
-                policy: policy, isManual: true, isOnCellular: true,
-                alreadyAskedThisRun: false))
-        XCTAssertFalse(
-            ResourcePolicy.asksAboutCellular(
-                policy: policy, isManual: true, isOnCellular: true,
-                alreadyAskedThisRun: true))
-    }
-
-    func testAnAutomaticRunOnCellularNeverAsks() {
-        XCTAssertFalse(
-            ResourcePolicy.asksAboutCellular(
-                policy: NetworkPolicy(), isManual: false, isOnCellular: true,
-                alreadyAskedThisRun: false))
-    }
-
-    func testNothingAsksWhenTheCellularSwitchIsAlreadyOn() {
-        XCTAssertFalse(
-            ResourcePolicy.asksAboutCellular(
-                policy: NetworkPolicy(backsUpOverCellular: true), isManual: true,
-                isOnCellular: true, alreadyAskedThisRun: false))
     }
 
     func testACellularWaitBecomesTheStaleCause() {

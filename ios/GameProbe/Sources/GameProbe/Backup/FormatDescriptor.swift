@@ -22,7 +22,6 @@ public enum FormatAccess: Equatable, Sendable {
 
     public var allowsWrite: Bool { self == .readWrite }
 
-    public var allowsPrune: Bool { self == .readWrite }
 }
 
 /// `Empo/format.json`, per SPEC 5.1 and 5.16.

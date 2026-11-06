@@ -67,10 +67,6 @@ public struct BackupRunPlan: Equatable, Sendable {
         plannedByStream.values.reduce(0, +)
     }
 
-    public var bytesLeft: Int64 {
-        max(0, plannedBytes - confirmedBytes)
-    }
-
     /// A run with nothing to upload never shows the pill, per 13.2.
     public var hasUploads: Bool { endedBytes + plannedBytes > 0 }
 

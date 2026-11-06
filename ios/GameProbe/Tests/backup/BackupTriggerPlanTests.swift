@@ -81,14 +81,6 @@ final class BackupTriggerPlanTests: XCTestCase {
 
     // MARK: - The mechanisms each trigger may use
 
-    func testOnlyTheManualButtonUsesContinuedProcessing() {
-        for trigger in BackupTrigger.allCases {
-            XCTAssertEqual(
-                BackupTriggerPlan.usesContinuedProcessing(trigger), trigger == .manual,
-                "\(trigger.rawValue)")
-        }
-    }
-
     func testOnlyTheNightlyTaskRequiresExternalPower() {
         for trigger in BackupTrigger.allCases {
             XCTAssertEqual(

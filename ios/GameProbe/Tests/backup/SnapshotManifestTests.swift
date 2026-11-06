@@ -200,7 +200,6 @@ final class SnapshotManifestTests: XCTestCase {
         XCTAssertEqual(manifest.formatVersion, 2)
         XCTAssertEqual(manifest.access, .readOnly(.newerFormatVersion(2)))
         XCTAssertFalse(manifest.access.allowsWrite)
-        XCTAssertFalse(manifest.access.allowsPrune)
         // It still lists what it can parse.
         XCTAssertEqual(manifest.entries.count, 4)
     }
@@ -211,6 +210,5 @@ final class SnapshotManifestTests: XCTestCase {
 
         XCTAssertEqual(manifest.access, .readWrite)
         XCTAssertTrue(manifest.access.allowsWrite)
-        XCTAssertTrue(manifest.access.allowsPrune)
     }
 }

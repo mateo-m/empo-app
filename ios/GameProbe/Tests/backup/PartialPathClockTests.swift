@@ -31,7 +31,6 @@ final class PartialPathClockTests: XCTestCase {
             entry(path: "Game/Save01.rvdata2", partial: false, detectionSource: .classifier),
             entry(path: "Game/game.log", partial: false),
         ]
-        XCTAssertTrue(PartialPathClock.resetsClock(entries: entries))
         XCTAssertEqual(PartialPathClock.savePartials(in: entries), [])
     }
 
@@ -41,7 +40,7 @@ final class PartialPathClockTests: XCTestCase {
                 entry(path: "Game/Save01.rvdata2", partial: true, detectionSource: source)
             ]
             XCTAssertFalse(
-                PartialPathClock.resetsClock(entries: entries),
+                PartialPathClock.savePartials(in: entries).isEmpty,
                 "a partial \(source.rawValue) match must leave the clock running")
         }
     }
@@ -53,17 +52,17 @@ final class PartialPathClockTests: XCTestCase {
             entry(path: "Game/game.log", partial: true),
             entry(path: "Game/Save01.rvdata2", partial: false, detectionSource: .classifier),
         ]
-        XCTAssertTrue(PartialPathClock.resetsClock(entries: entries))
+        XCTAssertTrue(PartialPathClock.savePartials(in: entries).isEmpty)
     }
 
     func testAPartialSharedDataMemberLeavesTheClockRunning() {
         let entries = [entry(root: .sharedData, path: "Save/file.rxdata", partial: true)]
-        XCTAssertFalse(PartialPathClock.resetsClock(entries: entries))
+        XCTAssertFalse(PartialPathClock.savePartials(in: entries).isEmpty)
     }
 
     func testAPartialAlwaysInMemberLeavesTheClockRunning() {
         let entries = [entry(path: "EmpoState/backup.json", partial: true)]
-        XCTAssertFalse(PartialPathClock.resetsClock(entries: entries))
+        XCTAssertFalse(PartialPathClock.savePartials(in: entries).isEmpty)
     }
 
     // MARK: - The cause line

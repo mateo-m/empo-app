@@ -140,7 +140,6 @@ public enum PreferenceKeys {
     /// opened since the migration shipped may still hold one.
     public static let controlsLayoutPrefix = "controlsLayout."
     public static let controllerMapPrefix = "controllerMap."
-    public static let gameScopedPrefixes = [controlsLayoutPrefix, controllerMapPrefix]
 
     public static func names(inClass wanted: PreferenceClass) -> Set<String> {
         Set(all.filter { $0.backupClass == wanted }.map(\.name))
@@ -149,15 +148,6 @@ public enum PreferenceKeys {
     public static func classOf(_ key: String) -> PreferenceClass? {
         if key.hasPrefix(hintDismissedPrefix) { return .portable }
         return all.first { $0.name == key }?.backupClass
-    }
-
-    /// Whether the key names one game, per 10.2.
-    ///
-    /// `controllerMap.global` is not game-scoped, and it is the one
-    /// key of that family that travels.
-    public static func isGameScoped(_ key: String) -> Bool {
-        guard classOf(key) == nil else { return false }
-        return gameScopedPrefixes.contains { key.hasPrefix($0) }
     }
 }
 

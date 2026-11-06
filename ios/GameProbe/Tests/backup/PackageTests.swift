@@ -301,12 +301,6 @@ final class PackageTests: XCTestCase {
         XCTAssertEqual(
             Set(document.values.keys),
             ["theme", "hint.dismissed.controls", "controllerMap.global"])
-        for key in document.values.keys {
-            XCTAssertFalse(PreferenceKeys.isGameScoped(key), key)
-        }
-        XCTAssertTrue(PreferenceKeys.isGameScoped("controlsLayout.Quest"))
-        XCTAssertTrue(PreferenceKeys.isGameScoped("controllerMap.Quest"))
-        XCTAssertFalse(PreferenceKeys.isGameScoped("controllerMap.global"))
     }
 
     // MARK: - 6. Every rejection, before any write

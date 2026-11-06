@@ -67,7 +67,6 @@ final class RunProgressTests: XCTestCase {
         // that changed mid-run, and it joins the next snapshot.
         plan.plan(streamKey: gameKey, bytes: 9_000)
         XCTAssertEqual(plan.plannedBytes, 2_000)
-        XCTAssertEqual(plan.bytesLeft, 1_500)
 
         // A second stream carries its own frozen part.
         plan.plan(streamKey: "other", bytes: 1_000)

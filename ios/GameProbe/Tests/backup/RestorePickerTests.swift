@@ -341,7 +341,6 @@ final class RestorePickerTests: XCTestCase {
         let newer = row(0, formatVersion: FormatDescriptor.currentVersion + 1)
 
         XCTAssertFalse(newer.access.allowsWrite)
-        XCTAssertFalse(newer.access.allowsPrune)
         XCTAssertTrue(RestoreNotices.showsNewerEmpoLine(newer.access))
         XCTAssertEqual(
             RestorePicker.rows([newer], of: GameIdentity(folderName: "Quest")).count, 1)

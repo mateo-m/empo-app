@@ -109,7 +109,7 @@ final class ExternalMembersTests: XCTestCase {
 
     // MARK: - A path that moved, per 4.5
 
-    func testAPathThatMovedIsRecordedAndNothingWarns() {
+    func testAPathThatMovedWarnsNobody() {
         func snapshot(_ path: String) -> SnapshotManifest {
             SnapshotManifest(
                 mode: .full,
@@ -120,46 +120,13 @@ final class ExternalMembersTests: XCTestCase {
         let older = snapshot("Data/kikiyama/yumenikki")
         let newer = snapshot("Data/kikiyama/yumenikki 2")
 
-        let history = ExternalMembers.sharedDataHistory(
-            ofSnapshotsOldestFirst: [older, newer])
-
-        // The newest path is what a restore offers. The old data
-        // stays in the game's history.
-        XCTAssertEqual(history.current, "Data/kikiyama/yumenikki 2")
-        XCTAssertEqual(history.previous, ["Data/kikiyama/yumenikki"])
-
-        // A move alerts nobody, and it warns nobody: the marker is
+        // A move warns nobody: the marker is
         // what 4.4 warns on, and the tree did not change.
         XCTAssertFalse(
             VersionMarkerBuilder.warnsBeforeRestore(
                 mode: .full,
                 snapshot: newer.versionMarker,
                 local: older.versionMarker))
-    }
-
-    func testAPathThatCameBackIsCurrentAgain() {
-        func snapshot(_ path: String) -> SnapshotManifest {
-            SnapshotManifest(
-                mode: .slim, containerFolderName: "Fixture Quest", sharedDataDirectory: path)
-        }
-
-        let history = ExternalMembers.sharedDataHistory(
-            ofSnapshotsOldestFirst: [
-                snapshot("Data/one"), snapshot("Data/two"), snapshot("Data/one"),
-            ])
-
-        XCTAssertEqual(history.current, "Data/one")
-        XCTAssertEqual(history.previous, ["Data/two"])
-    }
-
-    func testAGameWithNoSharedPathHasNoHistory() {
-        let history = ExternalMembers.sharedDataHistory(
-            ofSnapshotsOldestFirst: [
-                SnapshotManifest(mode: .slim, containerFolderName: "Fixture Quest")
-            ])
-
-        XCTAssertNil(history.current)
-        XCTAssertTrue(history.previous.isEmpty)
     }
 
     // MARK: - The Rescued Saves buckets, per 4.5

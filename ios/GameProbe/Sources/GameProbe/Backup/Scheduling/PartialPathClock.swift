@@ -27,11 +27,6 @@ public enum PartialPathClock {
             .sorted()
     }
 
-    /// Whether the snapshot resets the clock.
-    public static func resetsClock(entries: [SnapshotManifest.Entry]) -> Bool {
-        savePartials(in: entries).isEmpty
-    }
-
     /// Counts one run's save partials into the tally.
     ///
     /// The count is consecutive, so a path the run no longer reports

@@ -71,18 +71,10 @@ final class PreferenceSyncTests: XCTestCase {
         ]
         let values = PreferenceExport.portableValues(of: defaults)
         XCTAssertEqual(Set(values.keys), ["theme", "controllerMap.global"])
-        for key in values.keys {
-            XCTAssertFalse(PreferenceKeys.isGameScoped(key), key)
-        }
 
         let document = try PreferenceExport.decode(
             json: try PreferenceExport.document(of: defaults, at: stamp))
         XCTAssertEqual(Set(document.values.keys), ["theme", "controllerMap.global"])
-    }
-
-    func testTheGlobalControllerMapIsNotGameScoped() {
-        XCTAssertTrue(PreferenceKeys.isGameScoped("controllerMap.abc"))
-        XCTAssertFalse(PreferenceKeys.isGameScoped("controllerMap.global"))
     }
 
     // MARK: - 10.4

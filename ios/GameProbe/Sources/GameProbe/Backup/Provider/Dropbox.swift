@@ -13,13 +13,6 @@ import Foundation
 /// six endpoints.
 public enum Dropbox {
 
-    /// What the user sees in their Dropbox, per 9.2.
-    ///
-    /// App-folder access scopes every API path to this folder, so
-    /// Empo never sends the name. The target descriptor carries an
-    /// empty root and the layout of 5.1 starts at `Empo/` inside it.
-    public static let displayRoot = "/Apps/Empo"
-
     /// The root the descriptor carries, per 8.7. It is empty because
     /// the app folder is already the root the token can reach.
     public static let root = ""

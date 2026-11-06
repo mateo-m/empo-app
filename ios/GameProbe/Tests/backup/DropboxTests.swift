@@ -271,7 +271,6 @@ final class DropboxTests: XCTestCase {
 
     func testTheDescriptorRootIsEmptyBecauseTheAppFolderIsTheRoot() {
         XCTAssertEqual(Dropbox.root, "")
-        XCTAssertEqual(Dropbox.displayRoot, "/Apps/Empo")
         XCTAssertEqual(
             BackupNamespacePaths(root: Dropbox.root, namespaceId: "n").empoPrefix, "Empo")
     }
