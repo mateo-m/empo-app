@@ -404,9 +404,11 @@ final class RestoreCoordinator {
         let sharedData: URL? =
             if isPreferences {
                 nil
-            } else if let container {
-                DataDirectory.resolve(for: container, core: GameCores.core(forGameAt: container.gameURL))
+            } else if let container, let core = GameCores.core(forGameAt: container.gameURL) {
+                DataDirectory.resolve(for: container, core: core)
             } else {
+                // A fresh-install restore makes the container with an empty
+                // game, so only the snapshot knows the folder.
                 manifest.sharedDataDirectory.flatMap {
                     ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
                 }
