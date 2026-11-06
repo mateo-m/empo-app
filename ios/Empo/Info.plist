@@ -115,7 +115,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo to use as custom game artwork or banner.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Empo finds nearby players on your network so you can play local multiplayer games.</string>
+	<string>Empo uses your network to find nearby players and to back up to your own server.</string>
 	<key>NSUbiquitousContainers</key>
 	<dict>
 		<key>iCloud.sh.mateo.empo</key>

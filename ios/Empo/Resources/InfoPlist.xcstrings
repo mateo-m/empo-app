@@ -140,61 +140,61 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo findet Spieler in deinem Netzwerk, damit du lokale Mehrspielerspiele spielen kannst."
+            "value" : "Empo nutzt dein Netzwerk, um Spieler in der Nähe zu finden und Backups auf deinem eigenen Server zu speichern."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Empo finds nearby players on your network so you can play local multiplayer games."
+            "value" : "Empo uses your network to find nearby players and to back up to your own server."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo busca jugadores cercanos en tu red para que puedas jugar partidas multijugador locales."
+            "value" : "Empo usa tu red para buscar jugadores cercanos y guardar copias de seguridad en tu propio servidor."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo trouve les joueurs à proximité sur ton réseau pour que tu puisses jouer en multijoueur local."
+            "value" : "Empo utilise ton réseau pour trouver des joueurs à proximité et sauvegarder sur ton propre serveur."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo trova i giocatori vicini sulla tua rete, così puoi giocare in multiplayer locale."
+            "value" : "Empo usa la tua rete per trovare giocatori vicini e fare il backup sul tuo server."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ローカルマルチプレイで遊べるように、Empoはネットワーク上の近くのプレイヤーを探します。"
+            "value" : "Empoはネットワークを使って、近くのプレイヤーを探したり、自分のサーバーにバックアップしたりします。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "로컬 멀티플레이를 할 수 있도록 Empo가 네트워크에서 근처 플레이어를 찾아요."
+            "value" : "Empo가 네트워크를 사용해 근처 플레이어를 찾고 내 서버에 백업해요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "O Empo encontra jogadores por perto na sua rede para você jogar multiplayer local."
+            "value" : "O Empo usa sua rede para encontrar jogadores por perto e fazer backup no seu próprio servidor."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo ищет игроков поблизости в вашей сети, чтобы вы могли играть в локальный мультиплеер."
+            "value" : "Empo использует вашу сеть, чтобы находить игроков поблизости и сохранять резервные копии на вашем сервере."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo 会在你的网络中查找附近的玩家，让你可以玩本地多人游戏。"
+            "value" : "Empo 会使用你的网络查找附近的玩家，并备份到你自己的服务器。"
           }
         }
       }

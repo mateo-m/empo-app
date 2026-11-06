@@ -2,7 +2,7 @@ Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
 Empo Plus.
 
-Last update: 5 November 2026.
+Last update: 6 November 2026.
 
 ## What Empo collects
 
@@ -73,13 +73,15 @@ Empo links the CoreBluetooth framework because SDL2 uses it to find game
 controllers. Empo reads no Bluetooth data.
 
 Some games have local multiplayer. iOS asks for local network permission before
-such a game can find other players. Empo itself does not use the local network.
+such a game can find other players. Empo also uses the local network when you add
+a backup location that is on your own network, such as a WebDAV server at home.
 
 ## Children
 
-Empo is not directed at children under 13 and collects no data from anybody.
-Empo's server reads only the Patreon facts above, and keeps only the locked
-Patreon sign-in.
+Empo is not directed at children under 13. Empo's server reads only the Patreon
+facts above. It keeps only the locked Patreon sign-in, the public part of each
+device key, the time of the last request from each device, and the list of
+signed-in devices.
 
 ## Changes
 
