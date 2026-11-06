@@ -141,9 +141,7 @@ struct BackupSheet: View {
             row("Stored remotely", BackupText.bytes(model.storedBytes))
         } footer: {
             Text(
-                "Empo asks about games over "
-                    + "\(BackupText.bytes(BackupThreshold.defaultBytes)). "
-                    + "If you switch to saves and settings only, Empo keeps the whole-game "
+                "If you switch to saves and settings only, Empo keeps the whole-game "
                     + "backups it already made until they're old enough to delete."
             )
         }
@@ -236,7 +234,7 @@ struct BackupSheet: View {
     private var noTargetSection: some View {
         Section {
             VStack(alignment: .leading, spacing: Spacing.lg) {
-                Text("Empo backs up no game yet, because no backup location is set up.")
+                Text("Your games aren't backed up yet.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 NavigationLink("Set up backups") { BackupsScreen() }
