@@ -40,7 +40,7 @@ enum LayoutProfilesManager {
 
     // MARK: - Default profile
 
-    private static let defaultKey = "layoutProfiles.default"
+    private static let defaultKey = DefaultsKey.layoutProfilesDefault
 
     /// A dangling name resolves as unset.
     static var defaultProfileName: String? {
@@ -70,6 +70,7 @@ enum LayoutProfilesManager {
     static func renameProfile(from oldName: String, to newName: String) -> Bool {
         let wasDefault = defaultProfileName == oldName
         guard store.renameProfile(from: oldName, to: newName) else { return false }
+        SyncStore.profileWasRenamed(from: oldName, to: newName)
         if wasDefault {
             defaultProfileName = newName
         }
@@ -86,6 +87,7 @@ enum LayoutProfilesManager {
     static func deleteProfile(_ name: String) -> Bool {
         let wasDefault = defaultProfileName == name
         guard store.deleteProfile(name) else { return false }
+        SyncStore.profileWasDeleted(name)
         if wasDefault {
             defaultProfileName = nil
         }

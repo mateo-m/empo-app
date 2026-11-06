@@ -64,3 +64,16 @@ opt_in_rules:
 analyzer_rules: []
 
 reporter: "github-actions-logging"
+
+custom_rules:
+  # SPEC 10.1: every UserDefaults key carries a backup class, and a
+  # key with no class must not ship. A class comes from
+  # `PreferenceKeys` in GameProbe, where `swift test` reads the
+  # table. A raw string here would skip that table, so it fails the
+  # lint.
+  preference_class_required:
+    included: ".*/App/DefaultsKey\\.swift"
+    name: "Preference class required"
+    regex: 'static let [a-zA-Z]+ *= *"'
+    message: "Name the key in PreferenceKeys with its backup class, per SPEC 10.1."
+    severity: error

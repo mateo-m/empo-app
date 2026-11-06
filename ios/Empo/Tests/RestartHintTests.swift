@@ -39,6 +39,21 @@ final class RestartHintTests: XCTestCase {
         XCTAssertEqual(String(localized: reopened), "Restart this game to apply: Smooth scaling.")
     }
 
+    func testClosingTheSettingsAfterARestoreKeepsTheRestoredSettings() {
+        let game = GameEntry(id: "game", container: container, title: "Game", artworkPath: nil)
+        let model = GameSettingsModel(game: game)
+        model.settings.smoothScaling = true
+        model.save()
+
+        var restored = GameSettings()
+        restored.smoothScaling = false
+        restored.save(to: container.empoStateURL)
+        model.reload()
+        model.save()
+
+        XCTAssertEqual(GameSettings.load(from: container.empoStateURL).smoothScaling, false)
+    }
+
     func testCoreSettingsCompareWithTheSettingsAtLaunch() {
         let launched = MkxpLaunchedSettings(container: container)
         let edited = MkxpSettingsState(container: container)

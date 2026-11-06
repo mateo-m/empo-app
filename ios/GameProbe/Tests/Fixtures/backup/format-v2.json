@@ -1,0 +1,6 @@
+{
+  "formatVersion": 2,
+  "hashFunction": "blake3-keyed",
+  "blobNaming": "hash-hex",
+  "fanOutWidth": 3
+}

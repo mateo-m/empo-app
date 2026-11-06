@@ -85,7 +85,7 @@ struct SettingsView: View {
 
                     Section {
                         SettingsNavigationRow(
-                            title: "Layout profiles",
+                            title: Text("Layout profiles"),
                             description:
                                 "Create and edit saved layouts for the on-screen controls and the game screen."
                         ) {
@@ -113,6 +113,24 @@ struct SettingsView: View {
                         MidiSoundSetRow()
                     } header: {
                         Text("Music")
+                    }
+
+                    Section {
+                        SettingsNavigationRow(
+                            title: Text("Backups"),
+                            description:
+                                "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."
+                        ) {
+                            BackupsScreen()
+                        }
+                        SettingsNavigationRow(
+                            title: Text("Empo \(plusWord)"),
+                            description:
+                                "Back up to Dropbox, Google Drive, and your own server."
+                        ) {
+                            PlusScreen()
+                        }
+                        .plusShine()
                     }
 
                     Section {
@@ -958,8 +976,7 @@ private struct BuildInfoSheet: View {
     var body: some View {
         StandardSheet(
             title: "Build info",
-            chromeAllowance: AppSize.libraryHeader,
-            trailingButton: .done { dismiss() }
+            barAction: SheetBarAction("Close") { dismiss() }
         ) {
             SheetCard {
                 ForEach(Array(rows.enumerated()), id: \.offset) { index, row in

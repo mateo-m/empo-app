@@ -305,7 +305,9 @@ class AppSettings {
 
     #if os(iOS)
     var needsWhatsNew: Bool {
-        whatsNewSeenVersion < WhatsNew.version
+        // Accepting the disclaimer marks the news read, so a prompt
+        // that waits behind the disclaimer would never open or finish.
+        !needsDisclaimer && whatsNewSeenVersion < WhatsNew.version
     }
 
     func acknowledgeWhatsNew() {
@@ -314,35 +316,122 @@ class AppSettings {
     #endif
 
     private init() {
-        let ud = UserDefaults.standard
-        let themeRaw = ud.string(forKey: DefaultsKey.theme) ?? AppTheme.auto.rawValue
-        self.theme = AppTheme(rawValue: themeRaw) ?? .auto
-        self.diagnosticsOverlay = ud.bool(forKey: DefaultsKey.debugMode)
-        self.showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
-        self.showTouchZone = ud.bool(forKey: DefaultsKey.showTouchZone)
-        self.viewportBoundsColor = Self.loadViewportBoundsColor()
-        self.debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
-        let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)
-        self.maxLogFiles = storedMax > 0 ? storedMax : 20
-        self.cleanupInvalidGames = ud.bool(forKey: DefaultsKey.cleanupInvalidGames)
-        // Haptics default to on. UserDefaults.bool returns false for unset keys.
-        self.interfaceHaptics = ud.object(forKey: DefaultsKey.interfaceHaptics) as? Bool ?? true
-        self.controllerHaptics = ud.object(forKey: DefaultsKey.controllerHaptics) as? Bool ?? true
-        self.respectsSilentMode = ud.bool(forKey: DefaultsKey.respectsSilentMode)
-        let raw = ud.string(forKey: DefaultsKey.titlePosition) ?? TitlePosition.inside.rawValue
-        self.titlePosition = TitlePosition(rawValue: raw) ?? .inside
-        let modeRaw = ud.string(forKey: DefaultsKey.libraryDisplayMode) ?? LibraryDisplayMode.grid.rawValue
-        self.libraryDisplayMode = LibraryDisplayMode(rawValue: modeRaw) ?? .grid
-        self.showContinuePlaying = ud.object(forKey: DefaultsKey.showContinuePlaying) as? Bool ?? true
-        let sortRaw = ud.string(forKey: DefaultsKey.librarySortOption) ?? LibrarySortOption.titleAZ.rawValue
-        self.librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
-        self.rubyGameRunner =
-            GameRunner(rawValue: ud.string(forKey: DefaultsKey.rubyGameRunner) ?? "") ?? .app
-        self.disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
-        self.whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
+        let stored = Stored(UserDefaults.standard)
+        self.theme = stored.theme
+        self.diagnosticsOverlay = stored.diagnosticsOverlay
+        self.showViewportBounds = stored.showViewportBounds
+        self.showTouchZone = stored.showTouchZone
+        self.viewportBoundsColor = stored.viewportBoundsColor
+        self.debugLogs = stored.debugLogs
+        self.maxLogFiles = stored.maxLogFiles
+        self.cleanupInvalidGames = stored.cleanupInvalidGames
+        self.interfaceHaptics = stored.interfaceHaptics
+        self.controllerHaptics = stored.controllerHaptics
+        self.respectsSilentMode = stored.respectsSilentMode
+        self.titlePosition = stored.titlePosition
+        self.libraryDisplayMode = stored.libraryDisplayMode
+        self.showContinuePlaying = stored.showContinuePlaying
+        self.librarySortOption = stored.librarySortOption
+        self.rubyGameRunner = stored.rubyGameRunner
+        self.disclaimerAcknowledgedVersion = stored.disclaimerAcknowledgedVersion
+        self.whatsNewSeenVersion = stored.whatsNewSeenVersion
         #if os(macOS)
-        self.quitClosesGamesWithoutAsking = ud.bool(forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+        self.quitClosesGamesWithoutAsking = stored.quitClosesGamesWithoutAsking
         #endif
+        // A settings restore and a sync pass write UserDefaults
+        // directly.
+        NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { AppSettings.shared.reload() }
+        }
+    }
+
+    /// Each `didSet` writes UserDefaults, and that write posts the
+    /// change notification again, so only a changed value is set.
+    private func reload() {
+        let stored = Stored(UserDefaults.standard)
+        func update<Value: Equatable>(_ path: ReferenceWritableKeyPath<AppSettings, Value>, _ value: Value) {
+            if self[keyPath: path] != value { self[keyPath: path] = value }
+        }
+        update(\.theme, stored.theme)
+        update(\.diagnosticsOverlay, stored.diagnosticsOverlay)
+        update(\.showViewportBounds, stored.showViewportBounds)
+        update(\.showTouchZone, stored.showTouchZone)
+        update(\.viewportBoundsColor, stored.viewportBoundsColor)
+        update(\.debugLogs, stored.debugLogs)
+        update(\.maxLogFiles, stored.maxLogFiles)
+        update(\.cleanupInvalidGames, stored.cleanupInvalidGames)
+        update(\.interfaceHaptics, stored.interfaceHaptics)
+        update(\.controllerHaptics, stored.controllerHaptics)
+        update(\.respectsSilentMode, stored.respectsSilentMode)
+        update(\.titlePosition, stored.titlePosition)
+        update(\.libraryDisplayMode, stored.libraryDisplayMode)
+        update(\.showContinuePlaying, stored.showContinuePlaying)
+        update(\.librarySortOption, stored.librarySortOption)
+        update(\.rubyGameRunner, stored.rubyGameRunner)
+        update(\.disclaimerAcknowledgedVersion, stored.disclaimerAcknowledgedVersion)
+        update(\.whatsNewSeenVersion, stored.whatsNewSeenVersion)
+        #if os(macOS)
+        update(\.quitClosesGamesWithoutAsking, stored.quitClosesGamesWithoutAsking)
+        #endif
+    }
+
+    @MainActor
+    private struct Stored {
+        let theme: AppTheme
+        let diagnosticsOverlay: Bool
+        let showViewportBounds: Bool
+        let showTouchZone: Bool
+        let viewportBoundsColor: Color
+        let debugLogs: Bool
+        let maxLogFiles: Int
+        let cleanupInvalidGames: Bool
+        let interfaceHaptics: Bool
+        let controllerHaptics: Bool
+        let respectsSilentMode: Bool
+        let titlePosition: TitlePosition
+        let libraryDisplayMode: LibraryDisplayMode
+        let showContinuePlaying: Bool
+        let librarySortOption: LibrarySortOption
+        let rubyGameRunner: GameRunner
+        let disclaimerAcknowledgedVersion: Int
+        let whatsNewSeenVersion: Int
+        #if os(macOS)
+        let quitClosesGamesWithoutAsking: Bool
+        #endif
+
+        init(_ ud: UserDefaults) {
+            let themeRaw = ud.string(forKey: DefaultsKey.theme) ?? AppTheme.auto.rawValue
+            theme = AppTheme(rawValue: themeRaw) ?? .auto
+            diagnosticsOverlay = ud.bool(forKey: DefaultsKey.debugMode)
+            showViewportBounds = ud.bool(forKey: DefaultsKey.showViewportBounds)
+            showTouchZone = ud.bool(forKey: DefaultsKey.showTouchZone)
+            viewportBoundsColor = AppSettings.loadViewportBoundsColor()
+            debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
+            let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)
+            maxLogFiles = storedMax > 0 ? storedMax : 20
+            cleanupInvalidGames = ud.bool(forKey: DefaultsKey.cleanupInvalidGames)
+            // Haptics default to on. UserDefaults.bool returns false for unset keys.
+            interfaceHaptics = ud.object(forKey: DefaultsKey.interfaceHaptics) as? Bool ?? true
+            controllerHaptics = ud.object(forKey: DefaultsKey.controllerHaptics) as? Bool ?? true
+            respectsSilentMode = ud.bool(forKey: DefaultsKey.respectsSilentMode)
+            let raw = ud.string(forKey: DefaultsKey.titlePosition) ?? TitlePosition.inside.rawValue
+            titlePosition = TitlePosition(rawValue: raw) ?? .inside
+            let modeRaw =
+                ud.string(forKey: DefaultsKey.libraryDisplayMode) ?? LibraryDisplayMode.grid.rawValue
+            libraryDisplayMode = LibraryDisplayMode(rawValue: modeRaw) ?? .grid
+            showContinuePlaying = ud.object(forKey: DefaultsKey.showContinuePlaying) as? Bool ?? true
+            let sortRaw =
+                ud.string(forKey: DefaultsKey.librarySortOption) ?? LibrarySortOption.titleAZ.rawValue
+            librarySortOption = LibrarySortOption(rawValue: sortRaw) ?? .titleAZ
+            rubyGameRunner = GameRunner(rawValue: ud.string(forKey: DefaultsKey.rubyGameRunner) ?? "") ?? .app
+            disclaimerAcknowledgedVersion = ud.integer(forKey: DefaultsKey.disclaimerAcknowledgedVersion)
+            whatsNewSeenVersion = ud.integer(forKey: DefaultsKey.whatsNewSeenVersion)
+            #if os(macOS)
+            quitClosesGamesWithoutAsking = ud.bool(forKey: DefaultsKey.quitClosesGamesWithoutAsking)
+            #endif
+        }
     }
 
     private static let defaultViewportBoundsColor = Color(

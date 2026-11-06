@@ -14,6 +14,7 @@ import SwiftUI
 struct SaveRecoveryPresentation: ViewModifier {
     /// Loaded library entries, for artwork matching.
     let games: [GameEntry]
+    let prompts: LaunchPrompts
     /// False while the splash is still up. One-time surfaces wait
     /// for the splash: a sheet sliding over the splash animation
     /// is noise, and the user must see the library the sheet
@@ -27,7 +28,7 @@ struct SaveRecoveryPresentation: ViewModifier {
     /// is one-time, like the duplicate-games notice.
     private var isPresented: Binding<Bool> {
         Binding(
-            get: { active && !records.isEmpty },
+            get: { active && prompts.showing == .saveRecovery && !records.isEmpty },
             set: { presented in
                 if !presented {
                     DataDirectory.clearPendingSaveRecoveries()
@@ -58,14 +59,21 @@ struct SaveRecoveryPresentation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .task { records = DataDirectory.pendingSaveRecoveries() }
-            .sheet(isPresented: isPresented) {
-                SaveRecoverySheet(
-                    isPresented: isPresented,
-                    records: records,
-                    artworkPaths: artworkPaths
-                )
+            .task {
+                records = DataDirectory.pendingSaveRecoveries()
+                if !records.isEmpty { prompts.wait(.saveRecovery) }
             }
+            .sheet(
+                isPresented: isPresented,
+                onDismiss: { prompts.done(.saveRecovery) },
+                content: {
+                    SaveRecoverySheet(
+                        isPresented: isPresented,
+                        records: records,
+                        artworkPaths: artworkPaths
+                    )
+                }
+            )
     }
 }
 

@@ -1,0 +1,48 @@
+{
+  "identifier" : "6B1F0A52-3C1E-4E0B-9C59-2A3F6D8E1C11",
+  "nonRenewingSubscriptions" : [],
+  "products" : [],
+  "settings" : {
+    "_applicationInternalID" : "",
+    "_developerTeamID" : "",
+    "_failTransactionsEnabled" : false,
+    "_locale" : "en_US",
+    "_storefront" : "FRA",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "A7C2E3D4-5B6F-4A1B-8C9D-0E1F2A3B4C5D",
+      "localizations" : [],
+      "name" : "Empo Plus",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "4.49",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "4D3C2B1A-0F9E-4D8C-B7A6-5E4D3C2B1A0F",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Back up to Dropbox, Google Drive, and your own server.",
+              "displayName" : "Empo Plus",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "sh.mateo.empo.plus.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Empo Plus monthly",
+          "subscriptionGroupID" : "A7C2E3D4-5B6F-4A1B-8C9D-0E1F2A3B4C5D",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

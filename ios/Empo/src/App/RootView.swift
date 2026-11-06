@@ -96,6 +96,9 @@ struct RootView: View {
         }
         .fontDesign(.rounded)
         .tint(.brand)
+        .onChange(of: splashDismissed, initial: true) { _, dismissed in
+            if dismissed { BackupLaunchGate.shared.open() }
+        }
         .onChange(of: appState.phase) { _, phase in
             if phase == .playing {
                 // GameLoadingView flips the phase inside a spring of
@@ -135,6 +138,12 @@ struct RootView: View {
         }
         .task {
             await appState.checkForUpdatesIfStale()
+        }
+        .task {
+            await EmpoPlus.shared.renew()
+        }
+        .task {
+            await PlusStore.shared.refresh()
         }
         .task {
             if appState.pendingCrashRecovery {
@@ -228,6 +237,8 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) {
             _ in
+            Task { await EmpoPlus.shared.renew() }
+            Task { await PlusStore.shared.refresh() }
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
                 // Re-create the crash marker, so the next launch still

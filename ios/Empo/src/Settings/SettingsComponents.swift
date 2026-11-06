@@ -26,7 +26,7 @@ struct SettingsToggle: View {
 }
 
 struct SettingsNavigationRow<Destination: View>: View {
-    let title: LocalizedStringResource
+    let title: Text
     let description: LocalizedStringResource
     @ViewBuilder let destination: () -> Destination
 
@@ -35,7 +35,7 @@ struct SettingsNavigationRow<Destination: View>: View {
             destination()
         } label: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(title)
+                title
                 SettingsDescription(Text(description))
             }
             .padding(.vertical, Spacing.xxs)

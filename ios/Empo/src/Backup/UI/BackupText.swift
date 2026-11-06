@@ -1,0 +1,63 @@
+import Foundation
+import GameProbe
+
+/// The words the pure rules of GameProbe take as strings.
+///
+/// The rules stay free of a locale so their tests stay repeatable,
+/// so the formatting lives here, next to the screens that show it.
+enum BackupText {
+
+    static func bytes(_ count: Int64) -> String {
+        bytesFormatter.string(fromByteCount: count)
+    }
+
+    static func backups(_ count: Int, bytes: Int64?) -> String {
+        guard let bytes else { return NamespaceListRules.backups(count) }
+        return "\(NamespaceListRules.backups(count)), \(Self.bytes(bytes))"
+    }
+
+    // The formatter writes 0 as "Zero KB" unless nonnumeric words are off.
+    private static let bytesFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        formatter.allowsNonnumericFormatting = false
+        return formatter
+    }()
+
+    static func time(_ date: Date) -> String {
+        date.formatted(date: .omitted, time: .shortened)
+    }
+
+    /// "at 14:03", "yesterday at 14:03", or "on 3 Nov at 14:03", for
+    /// the unreachable line of 13.5.
+    static func when(_ date: Date) -> String {
+        let clock = date.formatted(date: .omitted, time: .shortened)
+        if Calendar.current.isDateInToday(date) { return String(localized: "at \(clock)") }
+        if Calendar.current.isDateInYesterday(date) { return String(localized: "yesterday at \(clock)") }
+        return String(localized: "on \(date.formatted(.dateTime.day().month(.abbreviated))) at \(clock)")
+    }
+
+    /// "2 minutes ago", for the row of a working target.
+    static func ago(_ date: Date) -> String {
+        let style = Date.RelativeFormatStyle(presentation: .named)
+        return date.formatted(style)
+    }
+
+    /// "today" or "on 4 March", for the status line of 13.4.
+    static func day(_ date: Date) -> String {
+        Calendar.current.isDateInToday(date)
+            ? String(localized: "today")
+            : String(localized: "on \(date.formatted(.dateTime.day().month(.wide)))")
+    }
+
+    /// "4 March to 2 August 2026", for the delete sheet of 13.9.
+    static func range(from first: Date, to last: Date) -> String {
+        let end = last.formatted(.dateTime.day().month(.wide).year())
+        guard !Calendar.current.isDate(first, inSameDayAs: last) else { return end }
+        return "\(first.formatted(.dateTime.day().month(.wide))) to \(end)"
+    }
+
+    static func date(_ date: Date) -> String {
+        date.formatted(.dateTime.day().month(.abbreviated).year())
+    }
+}

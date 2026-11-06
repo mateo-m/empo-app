@@ -1,0 +1,4 @@
+.cloudflare/
+.wrangler/
+node_modules/
+dist/

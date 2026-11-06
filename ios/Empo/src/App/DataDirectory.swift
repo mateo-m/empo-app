@@ -226,7 +226,7 @@ enum DataDirectory {
 
     /// Parent of all shared data directories. `Documents/Data/`.
     static let sharedRootURL: URL =
-        documentsRootURL.appendingPathComponent("Data", isDirectory: true)
+        documentsRootURL.appendingPathComponent(ExternalMembers.sharedRootName, isDirectory: true)
 
     /// Parent of the portable-save rescue buckets.
     /// `Documents/Rescued Saves/`. Portable saves must NOT go into

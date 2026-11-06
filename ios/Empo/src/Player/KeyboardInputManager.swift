@@ -195,7 +195,7 @@ final class KeyboardInputManager {
             }
         } else {
             if let action = pressedKeyAction.removeValue(forKey: source) {
-                actionHandler?(action, false)
+                _ = actionHandler?(action, false)
                 return
             }
             guard let scancode = pressedKeyScancode.removeValue(forKey: source) else { return }
@@ -213,7 +213,7 @@ final class KeyboardInputManager {
         pressedKeyScancode.removeAll()
 
         for action in pressedKeyAction.values {
-            actionHandler?(action, false)
+            _ = actionHandler?(action, false)
         }
         pressedKeyAction.removeAll()
     }
