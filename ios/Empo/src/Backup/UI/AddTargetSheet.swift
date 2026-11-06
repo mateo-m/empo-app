@@ -5,6 +5,7 @@ import SwiftUI
 struct AddTargetSheet: View {
 
     let iCloudReach: TargetReach
+    let hasICloudDrive: Bool
     let added: (TargetDescriptor, PermissionCheckResult) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -90,6 +91,7 @@ struct AddTargetSheet: View {
     }
 
     private func note(on service: BackupProviderKind) -> String? {
+        if service == .iCloudDrive, hasICloudDrive { return "Already added." }
         switch (service, iCloudReach) {
         case (.s3, _): return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
         case (.webdav, _): return "Nextcloud, ownCloud, Synology, Koofr"
@@ -101,7 +103,7 @@ struct AddTargetSheet: View {
     }
 
     private func isGreyed(_ service: BackupProviderKind) -> Bool {
-        service == .iCloudDrive && iCloudReach != .open
+        service == .iCloudDrive && (iCloudReach != .open || hasICloudDrive)
     }
 
     private func start(_ service: BackupProviderKind) {

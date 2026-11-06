@@ -12,6 +12,7 @@ struct BackupsScreen: View {
     @State private var showsAddSheet = false
     @State private var signingIn: BackupTargetItem?
     @State private var showsPlus = false
+    @State private var signInFailure: String?
     /// SwiftUI drops a sheet asked for while another one is up, and
     /// keeps its flag set, so no later sheet opens either. The next
     /// one waits here until `onDismiss` of the one that is up.
@@ -64,6 +65,7 @@ struct BackupsScreen: View {
         .task { readTheUnsavedPackage() }
         .refreshable { await model.refresh() }
         .sheet(isPresented: $showsPlus) { PlusSheet() }
+        .signInFailureAlert($signInFailure)
         .onChange(of: EmpoPlus.shared.hasPlus) { Task { await model.refresh() } }
         .sheet(isPresented: $exports) {
             PackageExportSheet(source: .library)
@@ -84,14 +86,20 @@ struct BackupsScreen: View {
             }
         )
         .sheet(isPresented: $showsAddSheet) {
-            AddTargetSheet(iCloudReach: model.iCloudReach) { descriptor, result in
+            AddTargetSheet(
+                iCloudReach: model.iCloudReach,
+                hasICloudDrive: (model.items ?? []).contains { $0.descriptor.provider == .iCloudDrive }
+            ) { descriptor, result in
                 show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
                 Task {
                     await model.refresh()
                     let asksAboutNotifications = model.asksAboutNotifications()
                     if result.allowsAdd {
                         if let scan = await model.freshInstall(after: descriptor) {
-                            show(.freshInstall(FreshInstallItem(descriptor: descriptor, scan: scan)))
+                            show(
+                                .freshInstall(
+                                    FreshInstallItem(
+                                        model: FreshInstallModel(descriptor: descriptor, scan: scan))))
                         } else {
                             await model.readTheAdoptBanners(of: descriptor.id)
                         }
@@ -114,8 +122,13 @@ struct BackupsScreen: View {
                 case .permission(let outcome):
                     PermissionCheckSheet(target: outcome.target, result: outcome.result)
                 case .freshInstall(let item):
-                    FreshInstallSheet(
-                        model: FreshInstallModel(descriptor: item.descriptor, scan: item.scan))
+                    FreshInstallSheet(model: item.model)
+                        .onDisappear {
+                            // A cancel before the confirm tap leaves the
+                            // question of 11.5 open, so the banner asks it.
+                            guard !item.model.hasAnsweredTheAdopt else { return }
+                            Task { await model.readTheAdoptBanners(of: item.model.descriptor.id) }
+                        }
                 case .notificationAsk:
                     NotificationAskSheet { answer in
                         Task { await model.answerTheNotificationSheet(answer) }
@@ -322,7 +335,11 @@ struct BackupsScreen: View {
             if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
                 signingIn = item
             } else {
-                if let outcome = await model.signInAgain(item) { show(.permission(outcome)) }
+                switch await model.signInAgain(item) {
+                case .checked(let outcome): show(.permission(outcome))
+                case .failed(let line): signInFailure = line
+                case nil: break
+                }
             }
         case .tryAgain:
             model.backUpNow()
@@ -468,4 +485,18 @@ private enum AddedTargetSheet: Identifiable, Comparable {
 
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
     static func < (lhs: Self, rhs: Self) -> Bool { lhs.rank < rhs.rank }
+}
+
+extension View {
+    func signInFailureAlert(_ line: Binding<String?>) -> some View {
+        alert(
+            "Couldn't sign in",
+            isPresented: Binding(
+                get: { line.wrappedValue != nil }, set: { if !$0 { line.wrappedValue = nil } })
+        ) {
+            Button("OK") { line.wrappedValue = nil }
+        } message: {
+            Text(line.wrappedValue ?? "")
+        }
+    }
 }

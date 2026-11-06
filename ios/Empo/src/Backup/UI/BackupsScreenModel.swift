@@ -186,14 +186,29 @@ final class BackupsScreenModel {
 
     // MARK: - Writing
 
-    /// Runs the sign-in of 13.7 again and returns the sheet that
-    /// shows what the check found, or `nil` where the sign-in itself
-    /// did not finish.
-    func signInAgain(_ item: BackupTargetItem) async -> PermissionCheckOutcomeSheet? {
+    enum SignInAgain {
+        case checked(PermissionCheckOutcomeSheet)
+        case failed(String)
+    }
+
+    private(set) var isSigningIn = false
+
+    /// Runs the sign-in of 13.7 again, or returns `nil` when the user
+    /// closed the browser or a sign-in already runs.
+    func signInAgain(_ item: BackupTargetItem) async -> SignInAgain? {
+        guard !isSigningIn else { return nil }
+        isSigningIn = true
+        defer { isSigningIn = false }
         let outcome = await BackupTargetAdd.signInAgain(item.descriptor)
         await refresh()
-        guard case .checked(let descriptor, let result) = outcome else { return nil }
-        return PermissionCheckOutcomeSheet(target: descriptor, result: result)
+        switch outcome {
+        case .checked(let descriptor, let result):
+            return .checked(PermissionCheckOutcomeSheet(target: descriptor, result: result))
+        case .failed(let line):
+            return .failed(line)
+        case .cancelled:
+            return nil
+        }
     }
 
     func setPaused(_ isPaused: Bool, targetId: String) async {

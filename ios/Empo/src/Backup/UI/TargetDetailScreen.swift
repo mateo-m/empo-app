@@ -16,6 +16,7 @@ struct TargetDetailScreen: View {
     @State private var showsEveryGame = false
     @State private var showsRemoveSheet = false
     @State private var signInOutcome: PermissionCheckOutcomeSheet?
+    @State private var signInFailure: String?
     @State private var signsInThroughTheForm = false
     @State private var showsPlus = false
     @State private var gameNames: [String: String] = [:]
@@ -40,6 +41,7 @@ struct TargetDetailScreen: View {
         }
         .navigationTitle(item?.descriptor.displayName ?? "")
         .sheet(isPresented: $showsPlus) { PlusSheet() }
+        .signInFailureAlert($signInFailure)
         .navigationBarTitleDisplayMode(.inline)
         .task { gameNames = BackupGameNames().namesByGameKey() }
         .sheet(isPresented: $showsRemoveSheet, onDismiss: leaveIfRemoved) {
@@ -102,9 +104,16 @@ struct TargetDetailScreen: View {
                         if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
                             signsInThroughTheForm = true
                         } else {
-                            Task { signInOutcome = await model.signInAgain(item) }
+                            Task {
+                                switch await model.signInAgain(item) {
+                                case .checked(let outcome): signInOutcome = outcome
+                                case .failed(let line): signInFailure = line
+                                case nil: break
+                                }
+                            }
                         }
                     }
+                    .disabled(model.isSigningIn)
                 case .resume:
                     Button("Resume backups") { Task { await model.setPaused(false, targetId: targetId) } }
                 case .tryAgain:

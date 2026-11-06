@@ -20,6 +20,7 @@ final class FreshInstallModel {
     private(set) var isStopped = false
 
     private let adoptableNamespaceIds: [String]
+    private(set) var hasAnsweredTheAdopt = false
 
     init(descriptor: TargetDescriptor, scan: FreshInstallScan) {
         self.descriptor = descriptor
@@ -57,6 +58,7 @@ final class FreshInstallModel {
     var asksToAdopt: Bool { !adoptableNamespaceIds.isEmpty }
 
     func answerTheAdopt(_ answer: AdoptQuestion.Answer) {
+        hasAnsweredTheAdopt = true
         guard answer == .adopt, let first = adoptableNamespaceIds.first else { return }
         try? BackupKeychain.adoptNamespaceId(first)
     }
@@ -328,8 +330,7 @@ struct FreshInstallSheet: View {
 /// What the Backups screen holds while the permission sheet of the
 /// added target is still open.
 struct FreshInstallItem: Identifiable {
-    let descriptor: TargetDescriptor
-    let scan: FreshInstallScan
+    let model: FreshInstallModel
 
-    var id: String { descriptor.id }
+    var id: String { model.descriptor.id }
 }
