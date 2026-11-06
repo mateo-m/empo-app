@@ -7,7 +7,8 @@ final class LocalNetworkRuleTests: XCTestCase {
     func testPrivateAddressesAndBonjourNamesAskThePermission() {
         for host in [
             "192.168.0.40", "10.0.0.2", "172.16.5.9", "172.31.255.1", "169.254.3.3",
-            "my-mac.local", "fe80::1", "fd12:3456::1", "[fe80::1]",
+            "my-mac.local", "fe80::1", "fd12:3456::1", "[fe80::1]", "fe90::1", "febf::1",
+            "FC00::1",
         ] {
             XCTAssertTrue(LocalNetworkRule.asksThePermission(host: host), host)
         }
@@ -16,7 +17,8 @@ final class LocalNetworkRuleTests: XCTestCase {
     func testPublicNamesAndTheLoopbackDoNot() {
         for host in [
             "dav.example.com", "s3.eu-west-1.amazonaws.com", "8.8.8.8", "172.32.0.1",
-            "localhost", "127.0.0.1", "fdisk.example.com",
+            "localhost", "127.0.0.1", "fdisk.example.com", "fec0::1", "fe7f::1", "fe8::1",
+            "2001:db8::1",
         ] {
             XCTAssertFalse(LocalNetworkRule.asksThePermission(host: host), host)
         }

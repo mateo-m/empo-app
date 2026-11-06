@@ -7,8 +7,12 @@ public enum LocalNetworkRule {
     public static func asksThePermission(host: String) -> Bool {
         let host = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
         if host.hasSuffix(".local") { return true }
-        if host.hasPrefix("fe80:") || host.hasPrefix("fc") || host.hasPrefix("fd") {
-            return host.contains(":")
+        if host.contains(":") {
+            guard let first = host.split(separator: ":").first, first.count == 4,
+                let hextet = UInt16(first, radix: 16)
+            else { return false }
+            // fe80::/10 is link-local, fc00::/7 is unique local.
+            return hextet & 0xffc0 == 0xfe80 || hextet & 0xfe00 == 0xfc00
         }
         let octets = host.split(separator: ".").compactMap { Int($0) }
         guard octets.count == 4 else { return false }
