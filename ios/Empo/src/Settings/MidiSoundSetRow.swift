@@ -11,7 +11,7 @@ struct MidiSoundSetRow: View {
         let fileName = Text(verbatim: "gm.dls").font(.footnote.monospaced())
         MidiSoundSetPicker(
             soundSet: .app,
-            appSettingLabel: nil,
+            defaultName: nil,
             description: Text(
                 "Plays music in older games. For the Windows sound, import \(fileName) from a Windows PC."
             ),
@@ -33,8 +33,8 @@ struct MidiSoundSetPicker: View {
     }
 
     let soundSet: MidiSoundSet
-    /// The option that follows the app settings. nil hides it.
-    let appSettingLabel: Text?
+    /// The name of the set that "Default" plays. nil hides "Default".
+    let defaultName: String?
     let description: Text
     let choice: Choice
     @Binding var imported: URL?
@@ -43,6 +43,42 @@ struct MidiSoundSetPicker: View {
     @State private var isImporting = false
     @State private var formatFailed = false
     @State private var copyFailure: String?
+
+    @ViewBuilder private var menuItems: some View {
+        if let defaultName {
+            item(.appSetting, "Default", subtitle: defaultName)
+        }
+        item(.builtIn, "Built-in", subtitle: MidiSoundSet.builtInName)
+        if let imported {
+            item(.imported, "\(imported.deletingPathExtension().lastPathComponent)", subtitle: nil)
+        }
+        Divider()
+        Button("Import Sound Set…") { selection.wrappedValue = .importNew }
+    }
+
+    private var currentTitle: LocalizedStringKey {
+        switch choice {
+        case .appSetting: "Default"
+        case .builtIn: "Built-in"
+        case .imported: "\(imported?.deletingPathExtension().lastPathComponent ?? "")"
+        }
+    }
+
+    // A menu shows the second Text of a toggle as a dimmed line under the first.
+    private func item(_ option: Choice, _ title: LocalizedStringKey, subtitle: String?) -> some View {
+        Toggle(
+            isOn: Binding {
+                choice == option
+            } set: { _ in
+                selection.wrappedValue = .choice(option)
+            }
+        ) {
+            Text(title)
+            if let subtitle {
+                Text(subtitle)
+            }
+        }
+    }
 
     private var isCopying: Bool { MidiSoundSetCopies.shared.isCopying(into: soundSet) }
 
@@ -64,17 +100,31 @@ struct MidiSoundSetPicker: View {
     }
 
     var body: some View {
-        SettingsPicker(title: "MIDI sound set", selection: selection, description: description) {
-            if let appSettingLabel {
-                appSettingLabel.tag(Option.choice(.appSetting))
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            #if os(iOS)
+            Menu {
+                menuItems
+            } label: {
+                HStack {
+                    Text("MIDI sound set").foregroundStyle(Color.primary)
+                    Spacer()
+                    Text(currentTitle)
+                    Image(systemName: "chevron.up.chevron.down").imageScale(.small)
+                }
             }
-            Text("Built-in").tag(Option.choice(.builtIn))
-            if let imported {
-                Text(imported.deletingPathExtension().lastPathComponent).tag(Option.choice(.imported))
+            #else
+            LabeledContent("MIDI sound set") {
+                Menu {
+                    menuItems
+                } label: {
+                    Text(currentTitle)
+                }
+                .fixedSize()
             }
-            Divider()
-            Text("Import Sound Set…").tag(Option.importNew)
+            #endif
+            SettingsDescription(description)
         }
+        .padding(.vertical, Spacing.xxs)
         .disabled(isCopying)
         // The copy can end after this sheet closed and opened again.
         .onChange(of: MidiSoundSetCopies.shared.finishedCopies(into: soundSet)) {

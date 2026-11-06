@@ -50,6 +50,19 @@ struct MidiSoundSet {
             folderURL: container.empoStateURL.appendingPathComponent("SoundFonts", isDirectory: true))
     }
 
+    /// The file name of the sound set that the engine ships.
+    static let builtInName: String? = {
+        guard
+            let framework = Bundle.main.privateFrameworksURL.flatMap({
+                Bundle(url: $0.appendingPathComponent("MkxpCore.framework"))
+            }),
+            let folder = framework.url(
+                forResource: "SoundFonts", withExtension: nil, subdirectory: "Assets.bundle")
+        else { return nil }
+        return MidiSoundSet(folderURL: folder).current?.deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "-", with: " ")
+    }()
+
     let folderURL: URL
 
     private static let extensions = ["sf2", "dls"]
