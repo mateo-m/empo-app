@@ -288,11 +288,14 @@ extension SnapshotEngine {
                     paths: ids.map { paths.manifestPath(stream: stream, snapshotId: $0) })
             }
             forget(request.gameKey, targetId: targetId, snapshotIds: ids)
-            let swept = try await sweepNamespace(
-                paths: paths, deviceId: request.deviceId, targetId: targetId)
             save(
                 try store.clearPendingDeletion(targetId: targetId, gameKey: request.gameKey),
                 "the end of the pending deletion of \(request.gameKey)")
+            // The manifests are gone, so a failed sweep leaves only
+            // blobs that no manifest names. The sweep of a later run
+            // takes them.
+            let swept = (try? await sweepNamespace(
+                paths: paths, deviceId: request.deviceId, targetId: targetId)) ?? []
             return .deleted(snapshotIds: ids, sweptPaths: swept)
         } catch {
             // The local delete always proceeds. The choice becomes a
