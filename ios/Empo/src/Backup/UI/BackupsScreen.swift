@@ -360,7 +360,7 @@ struct BackupsScreen: View {
             SettingsPicker(
                 title: "Keep old backups",
                 selection: $retention,
-                description: LocalizedStringResource(String.LocalizationValue(retention.line))
+                description: Text(verbatim: retention.line)
             ) {
                 ForEach(RetentionPreset.allCases, id: \.self) { preset in
                     Text(preset.label).tag(preset)

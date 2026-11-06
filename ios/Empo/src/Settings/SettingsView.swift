@@ -34,7 +34,7 @@ struct SettingsView: View {
                         SettingsPicker(
                             title: "Theme",
                             selection: $settings.theme,
-                            description: "System follows your device's appearance setting."
+                            description: Text("System follows your device's appearance setting.")
                         ) {
                             ForEach(AppTheme.allCases, id: \.self) { theme in
                                 Text(theme.label).tag(theme)
@@ -44,7 +44,7 @@ struct SettingsView: View {
                         SettingsPicker(
                             title: "Layout",
                             selection: $settings.libraryDisplayMode,
-                            description: "Show games as a grid of cards or a compact list."
+                            description: Text("Show games as a grid of cards or a compact list.")
                         ) {
                             ForEach(LibraryDisplayMode.allCases, id: \.self) { mode in
                                 Text(mode.label).tag(mode)
@@ -58,7 +58,7 @@ struct SettingsView: View {
                             SettingsPicker(
                                 title: "Title position",
                                 selection: $settings.titlePosition,
-                                description: "Where game titles show up on your library cards."
+                                description: Text("Where game titles show up on your library cards.")
                             ) {
                                 ForEach(TitlePosition.allCases, id: \.self) { position in
                                     Text(position.label).tag(position)
@@ -107,6 +107,12 @@ struct SettingsView: View {
                         )
                     } header: {
                         Text("Gameplay")
+                    }
+
+                    Section {
+                        MidiSoundSetRow()
+                    } header: {
+                        Text("Music")
                     }
 
                     Section {
@@ -213,9 +219,8 @@ struct SettingsView: View {
                                 Stepper(
                                     "Keep last \(settings.maxLogFiles) logs per game",
                                     value: $settings.maxLogFiles, in: 5...100, step: 5)
-                                Text("\(AppInfo.name) deletes older logs each time you start a game.")
-                                    .font(.footnote)
-                                    .foregroundStyle(.secondary)
+                                SettingsDescription(
+                                    Text("\(AppInfo.name) deletes older logs each time you start a game."))
                             }
                             .padding(.vertical, Spacing.xxs)
                         }

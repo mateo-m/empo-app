@@ -51,6 +51,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
     public var pathCache: Bool?
     public var fontScale: Double?
     public var solidFonts: Bool?
+    public var midiSoundFont: String?
 
     public init(
         smoothScaling: Bool? = nil,
@@ -61,7 +62,8 @@ public struct MkxpGameDefaults: Equatable, Sendable {
         vsync: Bool? = nil,
         pathCache: Bool? = nil,
         fontScale: Double? = nil,
-        solidFonts: Bool? = nil
+        solidFonts: Bool? = nil,
+        midiSoundFont: String? = nil
     ) {
         self.smoothScaling = smoothScaling
         self.fixedAspectRatio = fixedAspectRatio
@@ -72,6 +74,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
         self.pathCache = pathCache
         self.fontScale = fontScale
         self.solidFonts = solidFonts
+        self.midiSoundFont = midiSoundFont
     }
 
     public func defines(_ field: MkxpEngineField) -> Bool {
@@ -320,19 +323,59 @@ public enum ManagedMkxpConfig {
             vsync: values.vsync,
             pathCache: values.pathCache,
             fontScale: values.fontScale,
-            solidFonts: values.solidFonts
+            solidFonts: values.solidFonts,
+            midiSoundFont: nonEmptyString(config["midiSoundFont"])
         )
+    }
+
+    /// The sound font that `mkxp.json` names, when the game ships it. Some games name a file
+    /// that they do not ship. A game made on Windows can name it with backslashes.
+    public static func namedSoundFont(in gameDirectory: URL) -> URL? {
+        guard let named = readGameDefaults(from: gameDirectory).midiSoundFont else { return nil }
+        let url = gameDirectory.appendingPathComponent(named.replacingOccurrences(of: "\\", with: "/"))
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// The .sf2 and .dls files in the game folder. Some games ship one for Windows players that
+    /// `mkxp.json` does not name.
+    public static func shippedSoundFonts(in gameDirectory: URL) -> ShippedSoundFonts {
+        // The date of a folder is read before the walk lists it, so a later change shows.
+        var folders = ["": ShippedSoundFonts.modificationDate(of: gameDirectory) ?? .distantPast]
+        guard
+            let items = FileManager.default.enumerator(
+                at: gameDirectory, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles])
+        else { return ShippedSoundFonts(files: [], folders: folders) }
+        let base = gameDirectory.standardizedFileURL.pathComponents.count
+        var files: [[String]] = []
+        for case let url as URL in items {
+            let path = Array(url.standardizedFileURL.pathComponents.dropFirst(base))
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+            if values?.isDirectory == true {
+                folders[path.joined(separator: "/")] = values?.contentModificationDate ?? .distantPast
+            } else if ["sf2", "dls"].contains(url.pathExtension.lowercased()) {
+                files.append(path)
+            }
+        }
+        let sorted = files.sorted {
+            $0.count != $1.count
+                ? $0.count < $1.count
+                : $0.joined(separator: "/").localizedStandardCompare($1.joined(separator: "/")) == .orderedAscending
+        }
+        return ShippedSoundFonts(files: sorted.map { $0.joined(separator: "/") }, folders: folders)
     }
 
     // MARK: - Overlay string for engine bridge
 
     /// The JSON object string that the mkxp core takes as its `configOverlay` setting,
     /// or nil when there is nothing to send (no overlay keys, and no
-    /// host normalization patches apply).
+    /// host normalization patches apply). `midiSoundFont` replaces the
+    /// sound font of the game, and an empty path loads the engine's built-in set.
     public static func overlayJSONString(
         gameDirectory: URL,
         stateDirectory: URL,
         overrides: MkxpEngineValues = MkxpEngineValues(),
+        midiSoundFont: String? = nil,
         onUnparseableOverlay: ((String) -> Void)? = nil
     ) -> String? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
@@ -377,6 +420,10 @@ public enum ManagedMkxpConfig {
             // that case, neutralize both keys as a safe default.
             patches["defScreenW"] = 0
             patches["defScreenH"] = 0
+        }
+
+        if let midiSoundFont {
+            patches["midiSoundFont"] = midiSoundFont
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {
@@ -725,5 +772,21 @@ public enum ManagedMkxpConfig {
         } catch {
             return false
         }
+    }
+}
+
+public struct ShippedSoundFonts: Codable, Equatable, Sendable {
+    /// Relative to the game folder, the shallowest first, then by name.
+    public var files: [String]
+    /// The date of each folder that the walk read, by its path relative to the game folder.
+    public var folders: [String: Date]
+
+    public static func modificationDate(of url: URL) -> Date? {
+        // On Apple platforms, a URL keeps the resource values that it read once.
+        var url = url
+        #if canImport(Darwin)
+        url.removeAllCachedResourceValues()
+        #endif
+        return (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 }

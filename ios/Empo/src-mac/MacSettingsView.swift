@@ -34,6 +34,9 @@ private struct GeneralSettings: View {
                     description: "When you quit \(AppInfo.name) with games open, ask first."
                 )
             }
+            Section {
+                MidiSoundSetRow()
+            }
         }
         .formStyle(.grouped)
         .scrollDisabled(true)

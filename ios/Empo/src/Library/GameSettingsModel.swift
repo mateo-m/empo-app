@@ -10,6 +10,8 @@ import SwiftUI
 @MainActor
 protocol CoreSettings: AnyObject {
     var hasCustomizations: Bool { get }
+    /// A reset now would race with work that writes the settings.
+    var isBusy: Bool { get }
     func save()
     func reset()
 }
