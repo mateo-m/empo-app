@@ -121,18 +121,9 @@ struct GameSettingsView: View {
     @ViewBuilder private var backupSection: some View {
         if let backupModel {
             Section {
-                Button {
+                SettingsValueButton(title: "Backup", value: backupModel.line) {
                     model.save()
                     showBackupSheet = true
-                } label: {
-                    HStack {
-                        Text("Backup")
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text(backupModel.line)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
                 }
                 .sheet(isPresented: $showBackupSheet, onDismiss: model.reload) {
                     BackupSheet(model: backupModel)

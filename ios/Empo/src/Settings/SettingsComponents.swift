@@ -25,6 +25,27 @@ struct SettingsToggle: View {
     }
 }
 
+struct SettingsValueButton: View {
+    let title: LocalizedStringResource
+    let value: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(value)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        // `.primary` and `.secondary` inside a button label resolve
+        // against the button's tint, so the brand tint colors both.
+        .tint(.primary)
+    }
+}
+
 struct SettingsNavigationRow<Destination: View>: View {
     let title: Text
     let description: LocalizedStringResource
