@@ -305,7 +305,9 @@ class AppSettings {
 
     #if os(iOS)
     var needsWhatsNew: Bool {
-        whatsNewSeenVersion < WhatsNew.version
+        // Accepting the disclaimer marks the news read, so a prompt
+        // that waits behind the disclaimer would never open or finish.
+        !needsDisclaimer && whatsNewSeenVersion < WhatsNew.version
     }
 
     func acknowledgeWhatsNew() {
