@@ -154,7 +154,12 @@ final class BackupsScreenModel {
     // MARK: - "Back up now", per 13.11
 
     var canBackUpNow: Bool {
-        targets.contains { !$0.descriptor.isPaused }
+        targets.contains {
+            switch $0.row.state {
+            case .cannotOpen, .placeholder, .paused, .needsPlus: false
+            default: true
+            }
+        }
     }
 
     func backUpNow() {
