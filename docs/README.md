@@ -15,6 +15,7 @@ Start with the [project README](../README.md) for what Empo is and how to build 
 | [`importing-games.mdx`](importing-games.mdx) | The accepted file types, and what happens to an installed game.    |
 | [`playing.mdx`](playing.mdx)                 | The library, the touch controls, controllers, and game settings.   |
 | [`saves.mdx`](saves.mdx)                     | Where saves live, what updates and deletes do, moving saves.       |
+| [`plus.mdx`](plus.mdx)                       | What Empo Plus adds, how to join on Patreon, and what stays free.  |
 | [`troubleshooting.mdx`](troubleshooting.mdx) | Frequent problems and their fixes.                                 |
 | [`faq.mdx`](faq.mdx)                         | Short answers before you install.                                  |
 | `community.mdx`                              | Generated from [`SUPPORT.md`](../SUPPORT.md) by `tools/root-pages.ts` at build time. Not checked in. |
