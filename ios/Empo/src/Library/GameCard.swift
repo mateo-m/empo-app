@@ -143,8 +143,10 @@ struct GameCard: View {
             kind: .resolve(
                 status: game.status, progress: game.importProgress, paused: isPaused,
                 backup: BackupBadges.shared.badge(of: game.id),
-                backupProgress: BackupRunMonitor.shared.plan.fraction(
-                    ofStream: BackupKeys.gameKey(containerFolderName: game.id))),
+                backupProgress: {
+                    BackupRunMonitor.shared.plan.fraction(
+                        ofStream: BackupKeys.gameKey(containerFolderName: game.id))
+                }),
             onStopImport: onStopImport,
             size: 36
         )
@@ -218,8 +220,10 @@ struct GameListRow: View {
                 kind: .resolve(
                     status: game.status, progress: game.importProgress, paused: isPaused,
                     backup: BackupBadges.shared.badge(of: game.id),
-                    backupProgress: BackupRunMonitor.shared.plan.fraction(
-                        ofStream: BackupKeys.gameKey(containerFolderName: game.id))),
+                    backupProgress: {
+                        BackupRunMonitor.shared.plan.fraction(
+                            ofStream: BackupKeys.gameKey(containerFolderName: game.id))
+                    }),
                 onStopImport: onStopImport
             )
         }
@@ -458,7 +462,7 @@ extension GameStatusIndicator.Kind {
         progress: Double,
         paused: Bool,
         backup: GameBackupBadge = .none,
-        backupProgress: Double? = nil
+        backupProgress: () -> Double? = { nil }
     ) -> Self {
         switch status {
         case .importing: return .importing(progress: progress)
@@ -470,7 +474,9 @@ extension GameStatusIndicator.Kind {
         // player is one tap from the game.
         if paused { return .paused }
         switch backup {
-        case .uploading: return .backingUp(progress: backupProgress)
+        // Only an uploading card reads the run plan, so a byte tick
+        // redraws that card and not the whole library.
+        case .uploading: return .backingUp(progress: backupProgress())
         case .paused: return .backupMark(.paused)
         case .failed: return .backupMark(.failed)
         case .stale: return .backupMark(.stale)
