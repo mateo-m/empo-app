@@ -112,8 +112,12 @@ public final class SyncEngine {
             mine.controllerBindings[$0] == nil
         }
         if publishes, !isNew {
-            try? document.write(held.overlaid(
-                with: mine, removingPreferences: removed, removingBindings: removedBindings))
+            do {
+                try document.write(held.overlaid(
+                    with: mine, removingPreferences: removed, removingBindings: removedBindings))
+            } catch {
+                return .failed("the local change could not be written: \(error)")
+            }
         }
 
         var seen: [SeenCopy] = []
