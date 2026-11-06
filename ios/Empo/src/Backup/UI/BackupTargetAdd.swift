@@ -151,7 +151,7 @@ enum BackupTargetAdd {
         switch service {
         case .s3: return s3Bucket(form: form)?.url(key: folder)?.absoluteString
         case .webdav: return webdavServer(form: form)?.url(path: folder)?.absoluteString
-        case .iCloudDrive, .dropbox, .googleDrive, .sftp: return nil
+        case .iCloudDrive, .dropbox, .googleDrive: return nil
         }
     }
 
@@ -196,7 +196,7 @@ enum BackupTargetAdd {
     /// form again, per 8.8, with the secret left out.
     static func signsInThroughTheForm(_ kind: BackupProviderKind) -> Bool {
         switch kind {
-        case .s3, .webdav, .sftp: return true
+        case .s3, .webdav: return true
         case .iCloudDrive, .dropbox, .googleDrive: return false
         }
     }
@@ -226,7 +226,7 @@ enum BackupTargetAdd {
                 values["accessKeyId"] = connection.credentials.accessKeyId
                 values["usesPathStyle"] = connection.bucket.usesPathStyle ? "true" : "false"
             }
-        case .iCloudDrive, .dropbox, .googleDrive, .sftp:
+        case .iCloudDrive, .dropbox, .googleDrive:
             break
         }
         return values
@@ -261,7 +261,7 @@ enum BackupTargetAdd {
                 return .failed(openFailedLine)
             }
             return await check(target, provider: provider)
-        case .s3, .webdav, .sftp:
+        case .s3, .webdav:
             return .failed("Enter the password for this location again.")
         }
     }

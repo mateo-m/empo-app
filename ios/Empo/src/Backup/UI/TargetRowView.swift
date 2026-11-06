@@ -10,7 +10,6 @@ extension BackupProviderKind {
         case .googleDrive: return "externaldrive"
         case .s3: return "cylinder.split.1x2"
         case .webdav: return "server.rack"
-        case .sftp: return "lock.shield"
         }
     }
 
@@ -20,7 +19,7 @@ extension BackupProviderKind {
         case .iCloudDrive: return "ICloudMark"
         case .dropbox: return "DropboxMark"
         case .googleDrive: return "GoogleDriveMark"
-        case .s3, .webdav, .sftp: return nil
+        case .s3, .webdav: return nil
         }
     }
 }

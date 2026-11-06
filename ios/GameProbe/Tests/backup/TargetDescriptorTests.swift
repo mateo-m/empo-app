@@ -138,9 +138,21 @@ final class TargetDescriptorTests: XCTestCase {
     }
 
     func testEveryV1ProviderHasAName() {
-        XCTAssertEqual(BackupProviderKind.allCases.count, 6)
         XCTAssertEqual(
             Set(BackupProviderKind.allCases.map(\.rawValue)),
-            ["icloud-drive", "dropbox", "google-drive", "s3", "webdav", "sftp"])
+            ["icloud-drive", "dropbox", "google-drive", "s3", "webdav"])
+    }
+
+    func testATargetOnAServiceThisBuildDoesNotKnowIsSkipped() throws {
+        let file = Data(
+            #"""
+            {"version":1,"targets":[
+            {"id":"a","provider":"sftp","label":"Old","root":"","isPaused":false},
+            {"id":"b","provider":"dropbox","label":"Dropbox","root":"","isPaused":false}]}
+            """#.utf8)
+
+        let read = try TargetDescriptorFile.decode(json: file)
+
+        XCTAssertEqual(read.targets.map(\.id), ["b"])
     }
 }

@@ -98,7 +98,7 @@ struct AddTargetSheet: View {
         case (.iCloudDrive, .signedOut): return "Sign in to iCloud in Settings to use it."
         case (.iCloudDrive, .iCloudDriveOff): return "Turn on iCloud Drive for Empo in Settings."
         case (.iCloudDrive, .notInThisBuild): return "Not available in this version of Empo."
-        case (.iCloudDrive, .open), (.dropbox, _), (.googleDrive, _), (.sftp, _): return nil
+        case (.iCloudDrive, .open), (.dropbox, _), (.googleDrive, _): return nil
         }
     }
 
@@ -109,7 +109,7 @@ struct AddTargetSheet: View {
     private func start(_ service: BackupProviderKind) {
         failure = nil
         switch service {
-        case .s3, .webdav, .sftp:
+        case .s3, .webdav:
             typing = service
         case .iCloudDrive, .dropbox, .googleDrive:
             Task { await signIn(service) }

@@ -10,7 +10,6 @@ public enum BackupProviderKind: String, Codable, CaseIterable, Equatable, Sendab
     case googleDrive = "google-drive"
     case s3 = "s3"
     case webdav = "webdav"
-    case sftp = "sftp"
 }
 
 /// The signed-in account of an OAuth service.
@@ -148,6 +147,27 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
         return try encoder.encode(self)
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        targets = try container.decode([StoredTarget].self, forKey: .targets).compactMap(\.target)
+    }
+
+    /// `BackupTargets.load` in the app reads a file that fails to
+    /// decode as no targets, and its next write then drops them all.
+    /// So a target whose service this build does not know is skipped,
+    /// and the rest still read.
+    private struct StoredTarget: Decodable {
+        let target: TargetDescriptor?
+
+        init(from decoder: Decoder) throws {
+            let kind = try decoder.container(keyedBy: Key.self).decode(String.self, forKey: .provider)
+            target = BackupProviderKind(rawValue: kind) == nil ? nil : try TargetDescriptor(from: decoder)
+        }
+
+        private enum Key: String, CodingKey { case provider }
     }
 
     public static func decode(json data: Data) throws -> TargetDescriptorFile {

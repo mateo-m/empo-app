@@ -15,7 +15,7 @@ public enum FreshInstallHints {
     /// and 13.7.
     public static func isSelfHosted(_ provider: BackupProviderKind) -> Bool {
         switch provider {
-        case .s3, .webdav, .sftp: return true
+        case .s3, .webdav: return true
         case .iCloudDrive, .dropbox, .googleDrive: return false
         }
     }

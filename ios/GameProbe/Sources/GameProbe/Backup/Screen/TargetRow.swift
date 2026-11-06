@@ -11,7 +11,6 @@ extension BackupProviderKind {
         case .googleDrive: return "Google Drive"
         case .s3: return "S3 storage"
         case .webdav: return "WebDAV server"
-        case .sftp: return "SFTP server"
         }
     }
 

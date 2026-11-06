@@ -11,7 +11,7 @@ extension BackupProviderError {
             switch provider {
             case .s3:
                 return "The access key or the secret key is wrong. Check both and try again."
-            case .webdav, .sftp:
+            case .webdav:
                 return "The user name or the password is wrong. Check both and try again."
             case .iCloudDrive:
                 return "Sign in to iCloud in the Settings app, then try again."
@@ -22,7 +22,7 @@ extension BackupProviderError {
             switch provider {
             case .s3:
                 return "This key can't write to the bucket. Give it the rights to read, write, and delete files."
-            case .webdav, .sftp:
+            case .webdav:
                 return "This account can't write to that folder. Check its rights on the server."
             case .iCloudDrive:
                 return "Empo can't write to iCloud Drive. Turn on iCloud Drive for Empo in the Settings app."
@@ -33,7 +33,7 @@ extension BackupProviderError {
             return "\(service) is full. Make space, then try again."
         case .offline:
             switch provider {
-            case .s3, .webdav, .sftp:
+            case .s3, .webdav:
                 return "Empo couldn't reach this address. Check it and your connection, then try again."
             case .iCloudDrive, .dropbox, .googleDrive:
                 return "Empo couldn't reach \(service). Check your connection, then try again."
@@ -46,7 +46,7 @@ extension BackupProviderError {
             switch provider {
             case .s3:
                 return "Empo couldn't find the bucket. Check its name and region."
-            case .webdav, .sftp:
+            case .webdav:
                 return "Empo couldn't find that folder on the server. Check the address."
             case .iCloudDrive, .dropbox, .googleDrive:
                 return "Empo couldn't find its folder on \(service). Try again."

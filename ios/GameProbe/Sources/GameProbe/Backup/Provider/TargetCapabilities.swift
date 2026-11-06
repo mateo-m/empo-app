@@ -7,17 +7,17 @@ public struct TargetCapabilities: Equatable, Sendable {
 
     /// Whether this target answers a space query. The add-time
     /// permission check of 8.7 sets it per target, not per provider,
-    /// because WebDAV and SFTP answer only on some servers, per 9.7.
+    /// because WebDAV answers only on some servers, per 9.7.
     public var canQueryQuota: Bool
 
     /// Whether `list` reports an object's own modified time. The
-    /// sweep of 5.11 needs it. All six v1 providers report it. A
+    /// sweep of 5.11 needs it. All five v1 providers report it. A
     /// later provider that does not gets the manual reclaim action
     /// of section 13 in place of an automatic sweep.
     public var reportsObjectAge: Bool
 
-    /// Whether the target can hand a transfer to the system. False
-    /// for SFTP alone in v1, and 8.9 covers what such a target does.
+    /// Whether the target can hand a transfer to the system. 8.9
+    /// covers what a target that cannot does.
     public var supportsBackgroundTransfer: Bool
 
     /// The largest single file the target takes, or `nil` where the

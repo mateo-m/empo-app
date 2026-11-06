@@ -70,10 +70,6 @@ enum BackupTargets {
             return S3Gate.shared.target(for: target)
         case .webdav:
             return WebDAVGate.shared.target(for: target)
-        case .sftp:
-            // Out of v1, per ticket 013. The service list offers no
-            // SFTP row, so no descriptor carries this kind.
-            return nil
         }
     }
 
@@ -102,7 +98,7 @@ enum BackupTargets {
             probePath: PermissionCheck.makeProbePath(root: target.root),
             scratchDirectory: BackupRoot.layout.staging)
         guard result.allowsAdd else { return result }
-        // WebDAV and SFTP answer the space query on some servers and
+        // WebDAV answers the space query on some servers and
         // not on others, so the check that just ran is what sets
         // `canQueryQuota` for this target, per 8.3 and 9.7.
         if target.provider == .webdav {

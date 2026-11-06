@@ -6,9 +6,8 @@ import Foundation
 /// v1 rides system trust and nothing else. A plain `http` address is
 /// refused before a request leaves the device, and a certificate the
 /// system does not trust fails with one stated line. S3 is the first
-/// target that needs these rules. WebDAV and SFTP take the same ones
-/// in tickets 012 and 013, which is why they live here and not in
-/// `S3`.
+/// target that needs these rules. WebDAV takes the same ones in
+/// ticket 012, which is why they live here and not in `S3`.
 public enum TransportSecurity {
 
     /// What a plain `http` address earns, per 8.11.
