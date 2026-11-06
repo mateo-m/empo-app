@@ -15,17 +15,19 @@ concurrency:
   group: dependency-updates
   cancel-in-progress: false
 
+# GitHub holds the pull_request runs of a pull request that
+# GITHUB_TOKEN makes until a person approves them, so
+# EMPO_RELEASE_TOKEN makes every write. It needs Contents and Pull
+# requests write on this repository.
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
 
 jobs:
   pins:
     name: Update the pins
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
       REPO: ${{ github.repository }}
       BRANCH: deps/update-pins
       TITLE: "build(deps): update the core and ANGLE pins"
@@ -68,7 +70,6 @@ jobs:
           if git fetch --depth=1 origin "$BRANCH" 2>/dev/null &&
               git diff --quiet FETCH_HEAD -- "${pins[@]}"; then
               echo "$BRANCH already has these pins"
-              head=$(git rev-parse FETCH_HEAD)
           else
               base=$(git rev-parse HEAD)
               if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null; then
@@ -79,7 +80,7 @@ jobs:
               # The rules ask for a signed commit on every branch. GitHub
               # signs a commit that this API makes, but not one that git
               # pushes.
-              head=$(for f in "${files[@]}"; do
+              for f in "${files[@]}"; do
                   jq -n --arg path "$f" --arg contents "$(base64 -w0 "$f")" '{$path, $contents}'
               done | jq -s \
                   --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' \
@@ -89,7 +90,7 @@ jobs:
                       expectedHeadOid: $head,
                       message: {$headline},
                       fileChanges: {additions: .}}}}' |
-                  gh api graphql --input - --jq .data.createCommitOnBranch.commit.oid)
+                  gh api graphql --input - --jq .data.createCommitOnBranch.commit.oid
           fi
 
           body="because new core or ANGLE releases are out"$'\n\n'"- ${changes//$'\n'/$'\n'- }"
@@ -97,13 +98,5 @@ jobs:
               gh pr edit "$pr" --title "$TITLE" --body "$body"
           else
               gh pr create --base main --head "$BRANCH" --title "$TITLE" --body "$body"
-          fi
-
-          # GitHub starts no pull_request run for a push or a pull request
-          # that GITHUB_TOKEN makes. A workflow_dispatch run is the
-          # exception, and its checks count for the pull request.
-          ran=$(gh run list --workflow ci.yml --branch "$BRANCH" --commit "$head" --json databaseId --jq '.[0].databaseId // empty')
-          if [ -z "$ran" ]; then
-              gh workflow run ci.yml --ref "$BRANCH"
           fi
           exit "$status"
