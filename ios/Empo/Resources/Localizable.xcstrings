@@ -17872,7 +17872,7 @@
       }
     },
     "Imported" : {
-      "comment" : "Where a MIDI sound set comes from. Read by VoiceOver.",
+      "comment" : "Where a MIDI sound set comes from. Read by VoiceOver, and the title of the menu part with imported sound sets.",
       "localizations" : {
         "de" : {
           "stringUnit" : {

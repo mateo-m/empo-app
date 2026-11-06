@@ -42,7 +42,12 @@ struct MidiSoundSetPicker: View {
             switch self {
             case .game:
                 Text("From the game", comment: "Where a MIDI sound set comes from. Read by VoiceOver.")
-            case .imported: Text("Imported", comment: "Where a MIDI sound set comes from. Read by VoiceOver.")
+            case .imported:
+                Text(
+                    "Imported",
+                    comment:
+                        "Where a MIDI sound set comes from. Read by VoiceOver, and the title of the menu part with imported sound sets."
+                )
             case .bundled:
                 Text("Comes with Empo", comment: "Where a MIDI sound set comes from. Read by VoiceOver.")
             }
@@ -72,17 +77,24 @@ struct MidiSoundSetPicker: View {
     @State private var copyFailure: String?
 
     @ViewBuilder private var menuItems: some View {
+        // On iOS, a menu drops the accessibility label of an item in a Section.
         if let defaultSet {
             item(.appSetting, "Default", subtitle: defaultSet.name, source: defaultSet.source)
+            Divider()
         }
         item(.builtIn, "Built-in", subtitle: MidiSoundSet.builtInName, source: .bundled)
         if let imported {
-            item(
-                .imported, "\(imported.deletingPathExtension().lastPathComponent)", subtitle: nil,
-                source: .imported)
+            Section {
+                item(
+                    .imported, "\(imported.deletingPathExtension().lastPathComponent)", subtitle: nil,
+                    source: nil)
+            } header: {
+                Source.imported.name
+            }
         }
-        Divider()
-        Button("Import Sound Set…") { selection.wrappedValue = .importNew }
+        Section {
+            Button("Import Sound Set…") { selection.wrappedValue = .importNew }
+        }
     }
 
     private var currentTitle: LocalizedStringKey {
@@ -98,8 +110,9 @@ struct MidiSoundSetPicker: View {
     // item has a second line, so the icon goes inside the title. An icon there
     // that is shorter than the text, such as `gamecontroller` at body size,
     // makes macOS drop the second line too.
+    // An item without a source sits under a section title that names it.
     private func item(
-        _ option: Choice, _ title: LocalizedStringKey, subtitle: String?, source: Source
+        _ option: Choice, _ title: LocalizedStringKey, subtitle: String?, source: Source?
     ) -> some View {
         Toggle(
             isOn: Binding {
@@ -108,24 +121,30 @@ struct MidiSoundSetPicker: View {
                 selection.wrappedValue = .choice(option)
             }
         ) {
-            #if os(iOS)
-            Text(title)
+            #if os(macOS)
+            if let source {
+                Text(
+                    "\(Text(title))  \(Text(Image(systemName: source.symbol)).font(.title3).foregroundStyle(.secondary))"
+                )
+            } else {
+                Text(title)
+            }
             #else
-            Text(
-                "\(Text(title))  \(Text(Image(systemName: source.symbol)).font(.title3).foregroundStyle(.secondary))"
-            )
+            Text(title)
             #endif
             if let subtitle {
                 Text(subtitle)
             }
             #if os(iOS)
-            Image(systemName: source.symbol)
+            if let source {
+                Image(systemName: source.symbol)
+            }
             #endif
         }
         // A menu item drops the label of its icon.
         .accessibilityLabel(
-            subtitle.map { Text("\(Text(title)), \($0), \(source.name)") }
-                ?? Text("\(Text(title)), \(source.name)"))
+            [subtitle.map { Text($0) }, source?.name].compactMap(\.self)
+                .reduce(Text(title)) { Text("\($0), \($1)") })
     }
 
     private var isCopying: Bool { MidiSoundSetCopies.shared.isCopying(into: soundSet) }
