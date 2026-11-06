@@ -13,14 +13,8 @@ repository tells which uses are permitted.
 ## Empo Plus
 
 Empo Plus adds backups to Dropbox, Google Drive, S3 storage, and a WebDAV
-server. iCloud Drive backups and every restore stay free. You get Empo Plus in
-one of two ways:
-
-- A paid membership of Empo on Patreon. Patreon's terms cover the payment.
-- A subscription on the App Store. Apple bills it to your Apple Account each
-  month until you cancel. Cancel at least 24 hours before the renewal date in
-  Settings > your name > Subscriptions. Apple's terms cover the payment and any
-  refund.
+server. iCloud Drive backups and every restore stay free. You get Empo Plus
+with a paid membership of Empo on Patreon. Patreon's terms cover the payment.
 
 Empo Plus works on up to 3 devices for each Patreon account. When Plus ends,
 backups to the Plus places stop. Restore from them stays free.
