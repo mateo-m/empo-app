@@ -91,8 +91,9 @@ enum Jgp {
 
     private static func containedFile(_ relativePath: String, in root: URL) -> URL? {
         guard !relativePath.isEmpty else { return nil }
-        let base = root.standardizedFileURL.path
-        let url = root.appendingPathComponent(relativePath).standardizedFileURL
+        // Folder probing reads the icon before the import removes links.
+        let base = root.resolvingSymlinksInPath().path
+        let url = root.appendingPathComponent(relativePath).resolvingSymlinksInPath()
         guard url.path.hasPrefix(base + "/"),
             (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
         else { return nil }

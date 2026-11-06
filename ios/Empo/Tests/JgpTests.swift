@@ -49,4 +49,18 @@ final class JgpTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: outside.path))
     }
 
+    func testIconThroughALinkOutOfTheGameIsNotRead() throws {
+        let outside = scratch.appendingPathComponent("other-game", isDirectory: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        try Data([4, 5, 6]).write(to: outside.appendingPathComponent("icon.png"))
+        try FileManager.default.createSymbolicLink(
+            at: game.appendingPathComponent("assets"), withDestinationURL: outside)
+        try writeManifest(icon: "assets/icon.png")
+
+        let bundle = try GameImporter.preprocessJgp(at: game)
+
+        XCTAssertNil(bundle.iconData)
+        XCTAssertNil(bundle.iconURL)
+    }
+
 }
