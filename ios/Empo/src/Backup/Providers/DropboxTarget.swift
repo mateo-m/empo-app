@@ -228,7 +228,13 @@ actor DropboxTarget: BackupProvider, AccountReading {
             }
 
             if answer.isSuccess {
-                if sessionId == nil { sessionId = Self.sessionId(inBody: answer.body) }
+                if sessionId == nil {
+                    guard let opened = Self.sessionId(inBody: answer.body) else {
+                        throw BackupProviderError.rejected(
+                            message: "Dropbox opened no upload session")
+                    }
+                    sessionId = opened
+                }
                 offset = chunk.endOffset
                 left.removeFirst()
                 if let sessionId {
