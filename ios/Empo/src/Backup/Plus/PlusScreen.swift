@@ -21,8 +21,8 @@ struct PlusScreen: View {
                 PlusOrbit(isMember: plus.hasPlus).padding(.top, Spacing.lg)
                 headline.padding(.horizontal, Spacing._3xl)
                 places
-                if sellsSubscription && !store.isSubscribed && stage.offersSubscription {
-                    subscriptionTerms
+                if offersSubscription {
+                    quiet("Restore purchase") { Task { await restore() } }
                 }
             }
             .padding(.bottom, Spacing._3xl)
@@ -87,7 +87,7 @@ struct PlusScreen: View {
                 }
             }
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: Radius.lg))
-            Text("Restore is always free, also after a membership ends.")
+            Text("Restoring your saves stays free, also after Plus ends.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, Spacing.xl)
@@ -118,7 +118,7 @@ struct PlusScreen: View {
     }
 
     private var buttons: some View {
-        VStack(spacing: Spacing.lg) {
+        VStack(spacing: Spacing.md) {
             switch stage {
             case .join:
                 if UpdateChecker.isSideloadBuild {
@@ -126,7 +126,12 @@ struct PlusScreen: View {
                     secondary("Already a member? Sign in") { Task { await signIn() } }
                 } else {
                     subscribe
-                    primary("Sign in with Patreon") { Task { await signIn() } }
+                    Button {
+                        Task { await signIn() }
+                    } label: {
+                        Text("Sign in with Patreon").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.secondary)
                 }
             case .notYet:
                 if UpdateChecker.isSideloadBuild {
@@ -157,6 +162,7 @@ struct PlusScreen: View {
             if tooManyDevices {
                 secondary("Sign out other devices") { Task { await signIn(replace: true) } }
             }
+            if offersSubscription { subscriptionTerms }
         }
         .disabled(isWorking)
     }
@@ -167,21 +173,27 @@ struct PlusScreen: View {
         }
     }
 
-    // App Review asks for the renewal terms, both links, and a restore
-    // button on the screen that sells the subscription.
+    private var offersSubscription: Bool {
+        sellsSubscription && !store.isSubscribed && stage.offersSubscription
+    }
+
+    // App Review asks for the renewal terms and both links next to the
+    // purchase button.
     private var subscriptionTerms: some View {
-        VStack(spacing: Spacing.sm) {
-            Text("Renews every month until you cancel.")
-            HStack(spacing: Spacing.xl) {
-                Button("Restore purchase") { Task { await restore() } }
-                Link("Terms", destination: EmpoLink.terms)
-                Link("Privacy", destination: EmpoLink.privacy)
-            }
-            .foregroundStyle(.brand)
-        }
-        .font(.footnote)
+        Text(
+            AttributedString(localized: "Renews every month until you cancel.") + " "
+                + link("Terms", to: EmpoLink.terms) + " · " + link("Privacy", to: EmpoLink.privacy)
+        )
+        .font(.caption)
         .foregroundStyle(.secondary)
-        .disabled(isWorking)
+        .tint(.brand)
+        .multilineTextAlignment(.center)
+    }
+
+    private func link(_ title: String.LocalizationValue, to url: URL) -> AttributedString {
+        var text = AttributedString(localized: title)
+        text.link = url
+        return text
     }
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
