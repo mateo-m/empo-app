@@ -68,11 +68,28 @@ final class EmpoPlus {
             // Patreon sends `access_denied` when the user presses Deny.
             switch error {
             case "server": throw .server
-            case "too_many_devices": throw .tooManyDevices
             default: throw .cancelled
             }
         }
-        guard let pass = value("pass"), let renewal = value("renewal"),
+        guard let code = value("code") else { throw .server }
+        try await finish(code: code)
+    }
+
+    private struct Finish: Encodable {
+        let code: String
+        let signature: String
+    }
+
+    private func finish(code: String) async throws(SignInFailure) {
+        guard let signature = try? PlusDeviceKey.sign("finish \(code)") else { throw .server }
+        let request = Self.post("finish", Finish(code: code, signature: signature))
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+            let status = (response as? HTTPURLResponse)?.statusCode
+        else { throw .server }
+        if status == 409 { throw .tooManyDevices }
+        guard status == 200,
+            let issued = try? JSONDecoder().decode([String: String].self, from: data),
+            let pass = issued["pass"], let renewal = issued["renewal"],
             keep(pass: pass, renewal: renewal)
         else { throw .server }
     }
@@ -111,12 +128,15 @@ final class EmpoPlus {
     /// of the last call, so a copied call can't run again.
     private static func signed(_ action: String, renewal: String) -> URLRequest? {
         let time = Int64(Date.now.timeIntervalSince1970 * 1000)
-        guard let signature = try? PlusDeviceKey.sign(action, time: time) else { return nil }
+        guard let signature = try? PlusDeviceKey.sign("\(action) \(time)") else { return nil }
+        return post(action, Signed(renewal: renewal, time: time, signature: signature))
+    }
+
+    private static func post(_ action: String, _ body: some Encodable) -> URLRequest {
         var request = URLRequest(url: api.appending(path: "patreon/\(action)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try? JSONEncoder().encode(
-            Signed(renewal: renewal, time: time, signature: signature))
+        request.httpBody = try? JSONEncoder().encode(body)
         return request
     }
 

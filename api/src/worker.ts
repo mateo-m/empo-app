@@ -6,7 +6,7 @@ import { parseMembership } from "./membership";
 import { fromBase64, signPass, toBase64Url } from "./pass";
 import { type Env, patreon, token, userAgent } from "./patreon";
 import { newRenewal, renewalKeys } from "./renewal";
-import { callSession, type SessionRequest } from "./session";
+import { callSession, type Held, type SessionRequest } from "./session";
 
 export { PatreonMember } from "./member";
 export { PatreonSession } from "./session";
@@ -20,6 +20,7 @@ interface Trip {
 }
 
 const signed = t.Object({ renewal: t.String(), time: t.Number(), signature: t.String() });
+const finish = t.Object({ code: t.String(), signature: t.String() });
 
 // Workers pass the same bindings to every request of an isolate.
 let env: Env;
@@ -80,30 +81,20 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
           redirect_uri: callbackUrl(request),
         });
         const { pass, userId } = await issue(tokens.access_token);
-        const renewal = newRenewal();
-        const keys = (await renewalKeys(renewal))!;
-        // The session starts before the device list counts it. A session
-        // that has not started answers 404 to "alive", so a second sign-in
-        // at the same moment would not count this one.
-        const started = await callSession(env, keys.id, {
-          action: "start",
-          renewal,
+        const code = newRenewal();
+        const keys = (await renewalKeys(code))!;
+        const held = await callSession(env, keys.id, {
+          action: "hold",
+          code,
           refreshToken: tokens.refresh_token,
           device: trip.device,
-        });
-        if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
-        const added = await member(userId, {
-          action: "add",
-          device: await deviceId(trip.device),
-          session: keys.id,
+          userId,
+          pass,
           replace: trip.replace,
         });
-        if (!added.ok) await callSession(env, keys.id, { action: "evict" });
-        if (added.status === 409) return redirect(backToApp(trip.state, "too_many_devices"), 302);
-        if (!added.ok) throw new Error(`The device list did not answer: ${added.status}`);
+        if (!held.ok) throw new Error(`The sign-in was not kept: ${held.status}`);
         const back = new URL(backToApp(trip.state));
-        back.searchParams.set("pass", pass);
-        back.searchParams.set("renewal", renewal);
+        back.searchParams.set("code", code);
         return redirect(back.toString(), 302);
       } catch (error) {
         console.error(error);
@@ -111,8 +102,36 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
       }
     },
   )
+  .post("/patreon/finish", { body: finish }, async ({ body, status }) => {
+    const answer = await session(body.code, { ...body, action: "finish" });
+    if (answer.status === 401) return status(401, { error: "signed_out" });
+    if (!answer.ok) throw new Error(`The sign-in did not finish: ${answer.status}`);
+    const held = (await answer.json()) as Held & { device: string; refreshToken: string };
+    const renewal = newRenewal();
+    const keys = (await renewalKeys(renewal))!;
+    // The session starts before the device list counts it. A session
+    // that has not started answers 404 to "alive", so a second sign-in
+    // at the same moment would not count this one.
+    const started = await callSession(env, keys.id, {
+      action: "start",
+      renewal,
+      refreshToken: held.refreshToken,
+      device: held.device,
+    });
+    if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
+    const added = await member(held.userId, {
+      action: "add",
+      device: await deviceId(held.device),
+      session: keys.id,
+      replace: held.replace,
+    });
+    if (!added.ok) await callSession(env, keys.id, { action: "evict" });
+    if (added.status === 409) return status(409, { error: "too_many_devices" });
+    if (!added.ok) throw new Error(`The device list did not answer: ${added.status}`);
+    return { pass: held.pass, renewal };
+  })
   .post("/patreon/renew", { body: signed }, async ({ body, status }) => {
-    const answer = await session(body.renewal, { action: "renew", ...body });
+    const answer = await session(body.renewal, { ...body, action: "renew" });
     if (answer.status === 401) return status(401, { error: "signed_out" });
     if (answer.status === 409) return status(409, { error: "old_time" });
     if (!answer.ok) throw new Error(`The session did not renew: ${answer.status}`);
@@ -120,7 +139,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     return { pass: (await issue(accessToken)).pass };
   })
   .post("/patreon/sign-out", { body: signed }, async ({ body }) => {
-    const answer = await session(body.renewal, { action: "sign-out", ...body });
+    const answer = await session(body.renewal, { ...body, action: "sign-out" });
     return new Response(null, { status: answer.status });
   });
 

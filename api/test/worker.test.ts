@@ -163,12 +163,20 @@ class Device {
   }
 
   async sign(action: string, renewal: string, time = ++this.time) {
+    return { renewal, time, signature: await this.signature(`${action} ${time}`) };
+  }
+
+  async signFinish(code: string) {
+    return { code, signature: await this.signature(`finish ${code}`) };
+  }
+
+  private async signature(message: string) {
     const signature = await crypto.subtle.sign(
       { name: "ECDSA", hash: "SHA-256" },
       this.keys.privateKey,
-      new TextEncoder().encode(`${action} ${time}`),
+      new TextEncoder().encode(message),
     );
-    return { renewal, time, signature: Buffer.from(signature).toString("base64url") };
+    return Buffer.from(signature).toString("base64url");
   }
 }
 
@@ -224,10 +232,16 @@ describe("routes", () => {
     return location;
   }
 
-  async function signIn(device = phone, replace = false): Promise<{ pass: string; renewal: string }> {
+  async function finish(device = phone, replace = false): Promise<Response> {
     const location = await callback(device, replace);
     expect(location.searchParams.get("error")).toBeNull();
-    return { pass: location.searchParams.get("pass")!, renewal: location.searchParams.get("renewal")! };
+    return post("/patreon/finish", await device.signFinish(location.searchParams.get("code")!));
+  }
+
+  async function signIn(device = phone, replace = false): Promise<{ pass: string; renewal: string }> {
+    const answer = await finish(device, replace);
+    expect(answer.status).toBe(200);
+    return (await answer.json()) as { pass: string; renewal: string };
   }
 
   function post(path: string, body: object) {
@@ -251,7 +265,10 @@ describe("routes", () => {
   }
 
   test("the server stores the Patreon token sealed, and never the renewal", async () => {
-    const { renewal } = await signIn();
+    const code = (await callback(phone)).searchParams.get("code")!;
+    expect(stored()).not.toContain("refresh-1");
+    expect(stored()).not.toContain(code);
+    const { renewal } = (await (await post("/patreon/finish", await phone.signFinish(code))).json()) as { renewal: string };
     expect(stored()).not.toContain("refresh-1");
     expect(stored()).not.toContain(renewal);
     expect([...sessions.keys()]).not.toContain(renewal);
@@ -332,7 +349,7 @@ describe("routes", () => {
 
   test("a session that nobody renews deletes itself", async () => {
     const { renewal } = await signIn();
-    const state = [...sessions.values()][0]!;
+    const state = [...sessions.values()].find((session) => session.values.size > 0)!;
     expect(state.alarm).toBeGreaterThan(Date.now() + 89 * 24 * 60 * 60 * 1000);
     await new PatreonSession(state, env).alarm();
     expect(stored()).toBe("[]");
@@ -343,15 +360,18 @@ describe("routes", () => {
     const devices = [phone, ...(await Promise.all([1, 2, 3].map(() => Device.make())))];
     const renewals = [];
     for (const device of devices.slice(0, deviceLimit)) renewals.push((await signIn(device)).renewal);
-    expect((await callback(devices[3]!)).searchParams.get("error")).toBe("too_many_devices");
+    const code = (await callback(devices[3]!)).searchParams.get("code")!;
+    const call = await devices[3]!.signFinish(code);
+    expect((await post("/patreon/finish", call)).status).toBe(409);
+    expect((await post("/patreon/finish", call)).status).toBe(401);
     expect([...sessions.values()].filter((state) => state.values.size > 0).length).toBe(deviceLimit);
     for (const [index, renewal] of renewals.entries()) expect((await renew(renewal, devices[index])).status).toBe(200);
   });
 
   test("sign-ins at the same moment still stop at 3 devices", async () => {
     const devices = [phone, ...(await Promise.all([1, 2, 3].map(() => Device.make())))];
-    const locations = await Promise.all(devices.map((device) => callback(device)));
-    const refused = locations.filter((location) => location.searchParams.get("error") === "too_many_devices");
+    const answers = await Promise.all(devices.map((device) => finish(device)));
+    const refused = answers.filter((answer) => answer.status === 409);
     expect(refused.length).toBe(devices.length - deviceLimit);
     expect([...sessions.values()].filter((state) => state.values.size > 0).length).toBe(deviceLimit);
   });
@@ -363,7 +383,7 @@ describe("routes", () => {
     const last = await signIn(devices[3], true);
     for (const [index, renewal] of renewals.entries()) expect((await renew(renewal, devices[index])).status).toBe(401);
     expect((await renew(last.renewal, devices[3])).status).toBe(200);
-    expect((await callback(phone)).searchParams.get("error")).toBeNull();
+    expect((await finish(phone)).status).toBe(200);
   });
 
   test("a device that signs in again keeps one place and ends its old session", async () => {
@@ -381,7 +401,7 @@ describe("routes", () => {
     const renewals = [];
     for (const device of devices.slice(0, deviceLimit)) renewals.push((await signIn(device)).renewal);
     await post("/patreon/sign-out", await phone.sign("sign-out", renewals[0]!));
-    expect((await callback(devices[3]!)).searchParams.get("error")).toBeNull();
+    expect((await finish(devices[3]!)).status).toBe(200);
   });
 
   test("the device list deletes itself when no session is left", async () => {
@@ -390,6 +410,50 @@ describe("routes", () => {
     const state = [...members.values()][0]!;
     await new PatreonMember(state, env).alarm();
     expect(state.values.size).toBe(0);
+  });
+
+  test("a sign-in link made for another device signs out no device", async () => {
+    const devices = [phone, ...(await Promise.all([1, 2].map(() => Device.make())))];
+    const renewals = [];
+    for (const device of devices) renewals.push((await signIn(device)).renewal);
+    const attacker = await Device.make();
+    // The victim opens the link, so the code goes to the victim's app.
+    const location = await callback(attacker, true);
+    const code = location.searchParams.get("code")!;
+    expect(location.searchParams.get("pass")).toBeNull();
+    expect(location.searchParams.get("renewal")).toBeNull();
+    expect((await post("/patreon/finish", await phone.signFinish(code))).status).toBe(401);
+    for (const [index, renewal] of renewals.entries()) expect((await renew(renewal, devices[index])).status).toBe(200);
+  });
+
+  test("a sign-in finishes once, and only as a sign-in", async () => {
+    const location = await callback(phone);
+    const code = location.searchParams.get("code")!;
+    expect((await post("/patreon/renew", await phone.sign("renew", code))).status).toBe(401);
+    const other = (await callback(phone)).searchParams.get("code")!;
+    const call = await phone.signFinish(code);
+    expect((await post("/patreon/finish", { ...call, code: other })).status).toBe(401);
+    expect((await post("/patreon/finish", call)).status).toBe(200);
+    expect((await post("/patreon/finish", await phone.signFinish(code))).status).toBe(401);
+    const { renewal } = await signIn();
+    expect((await post("/patreon/finish", await phone.signFinish(renewal))).status).toBe(401);
+  });
+
+  test("many finishes of one sign-in at once keep one session", async () => {
+    const code = (await callback(phone)).searchParams.get("code")!;
+    const call = await phone.signFinish(code);
+    const answers = await Promise.all([1, 2, 3, 4, 5].map(() => post("/patreon/finish", call)));
+    expect(answers.map((answer) => answer.status).sort()).toEqual([200, 401, 401, 401, 401]);
+    expect([...sessions.values()].filter((state) => state.values.size > 0)).toHaveLength(1);
+  });
+
+  test("a sign-in that nobody finishes deletes itself after 10 minutes", async () => {
+    await callback(phone);
+    const state = [...sessions.values()][0]!;
+    expect(state.alarm).toBeGreaterThan(Date.now() + 9 * 60 * 1000);
+    expect(state.alarm).toBeLessThanOrEqual(Date.now() + 10 * 60 * 1000);
+    await new PatreonSession(state, env).alarm();
+    expect(stored()).toBe("[]");
   });
 
   test("a start without a device key goes back to the app", async () => {
