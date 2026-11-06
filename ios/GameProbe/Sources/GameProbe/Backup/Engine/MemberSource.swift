@@ -62,9 +62,9 @@ public struct MemberSource: Sendable {
     public func url(root: EntryRoot, path: String) -> URL? {
         switch root {
         case .container:
-            return container?.appendingPathComponent(path)
+            return Self.file(path, in: container)
         case .sharedData:
-            return sharedData?.appendingPathComponent(path)
+            return Self.file(path, in: sharedData)
         case .rescuedSaves:
             return bucketFile(path)
         case .preferences:
@@ -76,7 +76,25 @@ public struct MemberSource: Sendable {
     private func bucketFile(_ path: String) -> URL? {
         let parts = path.split(separator: "/", maxSplits: 1)
         guard parts.count == 2, let bucket = rescuedBuckets[String(parts[0])] else { return nil }
-        return bucket.appendingPathComponent(String(parts[1]))
+        return Self.file(String(parts[1]), in: bucket)
+    }
+
+    /// A game installed before the import removed links can still hold
+    /// one, and a restore write through it lands outside the root.
+    /// `resolvingSymlinksInPath` leaves a path that does not exist yet
+    /// unresolved, so this reads each part.
+    private static func file(_ path: String, in root: URL?) -> URL? {
+        guard var url = root, !isLink(url) else { return nil }
+        for part in path.split(separator: "/") {
+            guard part != ".." else { return nil }
+            url.appendPathComponent(String(part))
+            if isLink(url) { return nil }
+        }
+        return url
+    }
+
+    private static func isLink(_ url: URL) -> Bool {
+        (try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)) != nil
     }
 
     private func preferencesFile(_ path: String) -> URL? {
@@ -84,9 +102,9 @@ public struct MemberSource: Sendable {
         case .userDefaultsExport:
             return userDefaultsExport
         case .profile(let inside):
-            return profiles?.appendingPathComponent(inside)
+            return Self.file(inside, in: profiles)
         case .rescuedSavesBucket(let name, let inside):
-            return rescuedBuckets[name]?.appendingPathComponent(inside)
+            return Self.file(inside, in: rescuedBuckets[name])
         case nil:
             return nil
         }
