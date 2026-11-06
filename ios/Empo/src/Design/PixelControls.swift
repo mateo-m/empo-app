@@ -1,0 +1,239 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
+import SwiftUI
+
+/// A segmented control drawn with pixel corners. The brand knob slides
+/// to the selected segment.
+struct PixelSegmentedPicker<Value: Hashable>: View {
+    let title: LocalizedStringResource
+    @Binding var selection: Value
+    let options: [(value: Value, label: LocalizedStringResource)]
+
+    @Namespace private var knob
+
+    init(
+        _ title: LocalizedStringResource, selection: Binding<Value>,
+        options: [(value: Value, label: LocalizedStringResource)]
+    ) {
+        self.title = title
+        _selection = selection
+        self.options = options
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(options.indices, id: \.self) { index in
+                segment(options[index])
+            }
+        }
+        .padding(PixelGrid.step)
+        .background(Color(.tertiarySystemFill), in: .pixelRect(cornerRadius: Radius.sm))
+        .sensoryFeedback(.selection, trigger: selection) { _, _ in AppSettings.shared.interfaceHaptics }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(title))
+    }
+
+    private func segment(_ option: (value: Value, label: LocalizedStringResource)) -> some View {
+        let selected = option.value == selection
+        return Button {
+            withAnimation(Motion.standard) { selection = option.value }
+        } label: {
+            Text(option.label)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(selected ? Color.white : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 32)
+                .background {
+                    if selected {
+                        PixelRect(cornerRadius: Radius.sm)
+                            .fill(Color.brand)
+                            .matchedGeometryEffect(id: "knob", in: knob)
+                    }
+                }
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// An on and off switch drawn with pixel corners, the size of the
+/// system switch.
+struct PixelToggleStyle: ToggleStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        Button {
+            withAnimation(Motion.snappy) { configuration.isOn.toggle() }
+        } label: {
+            HStack {
+                configuration.label
+                Spacer(minLength: Spacing.md)
+                track(isOn: configuration.isOn)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .opacity(isEnabled ? 1 : Alpha.disabled)
+        .sensoryFeedback(.selection, trigger: configuration.isOn) { _, _ in
+            AppSettings.shared.interfaceHaptics
+        }
+        .accessibilityRepresentation {
+            Toggle(isOn: configuration.$isOn) { configuration.label }
+        }
+    }
+
+    private func track(isOn: Bool) -> some View {
+        PixelRect.pixelCapsule
+            .fill(isOn ? Color.brand : Color(.systemFill))
+            .frame(width: 51, height: 31)
+            .overlay(alignment: isOn ? .trailing : .leading) {
+                PixelRect.pixelCapsule
+                    .fill(.white)
+                    .padding(PixelGrid.step)
+                    .frame(width: 31, height: 31)
+                    .shadow(color: .black.opacity(Alpha.shadow), radius: 1, y: 1)
+            }
+    }
+}
+
+/// A progress bar drawn with pixel corners, with the track of
+/// `PixelSlider`.
+struct PixelProgressBar: View {
+    let value: Double
+
+    var body: some View {
+        PixelRect.pixelCapsule
+            .fill(Color(.systemFill))
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    PixelRect.pixelCapsule
+                        .fill(Color.brand)
+                        .frame(width: proxy.size.width * min(max(value, 0), 1))
+                }
+            }
+            .frame(height: PixelGrid.step * 2)
+            .accessibilityRepresentation { ProgressView(value: value) }
+    }
+}
+
+/// A slider drawn with pixel corners: a 2-pixel track and a pixel knob.
+struct PixelSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    var step: Double?
+    var onEditingChanged: (Bool) -> Void = { _ in }
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var editing = false
+    @State private var grabOffset: CGFloat = 0
+    @GestureState private var dragging = false
+
+    private let knob: CGFloat = PixelGrid.step * 9
+    private let track: CGFloat = PixelGrid.step * 2
+
+    init(
+        value: Binding<Double>, in range: ClosedRange<Double>, step: Double? = nil,
+        onEditingChanged: @escaping (Bool) -> Void = { _ in }
+    ) {
+        _value = value
+        self.range = range
+        self.step = step
+        self.onEditingChanged = onEditingChanged
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let travel = max(proxy.size.width - knob, 1)
+            let fraction = (value - range.lowerBound) / (range.upperBound - range.lowerBound)
+            let x = travel * min(max(fraction, 0), 1)
+            ZStack(alignment: .leading) {
+                PixelRect.pixelCapsule
+                    .fill(Color(.systemFill))
+                    .frame(height: track)
+                PixelRect.pixelCapsule
+                    .fill(Color.brand)
+                    .frame(width: x + knob / 2, height: track)
+                PixelRect.pixelCapsule
+                    .fill(.white)
+                    .frame(width: knob, height: knob)
+                    .shadow(color: .black.opacity(Alpha.shadow), radius: 2, y: 1)
+                    .offset(x: x)
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(.rect)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .updating($dragging) { _, state, _ in state = true }
+                    .onChanged { drag in
+                        if !editing {
+                            editing = true
+                            let fromCenter = drag.startLocation.x - (x + knob / 2)
+                            grabOffset = abs(fromCenter) <= knob / 2 ? fromCenter : 0
+                            onEditingChanged(true)
+                        }
+                        set(fraction: (drag.location.x - grabOffset - knob / 2) / travel)
+                    }
+                    .onEnded { _ in endEditing() }
+            )
+        }
+        .frame(height: 44)
+        .opacity(isEnabled ? 1 : Alpha.disabled)
+        .sensoryFeedback(.selection, trigger: value) { _, _ in
+            step != nil && AppSettings.shared.interfaceHaptics
+        }
+        // A drag that the system cancels does not call `onEnded`.
+        // The gesture state resets in that case too.
+        .onChange(of: dragging) { _, active in
+            if !active { endEditing() }
+        }
+        .focusable()
+        .onKeyPress(.leftArrow) {
+            commit(value - keyStep)
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            commit(value + keyStep)
+            return .handled
+        }
+        .accessibilityRepresentation {
+            let binding = Binding(get: { value }, set: commit)
+            if let step {
+                Slider(value: binding, in: range, step: step)
+            } else {
+                Slider(value: binding, in: range)
+            }
+        }
+    }
+
+    private var keyStep: Double { step ?? (range.upperBound - range.lowerBound) / 20 }
+
+    private func commit(_ next: Double) {
+        let snapped = snap(next)
+        guard snapped != value else { return }
+        onEditingChanged(true)
+        value = snapped
+        onEditingChanged(false)
+    }
+
+    private func endEditing() {
+        guard editing else { return }
+        editing = false
+        onEditingChanged(false)
+    }
+
+    private func set(fraction: Double) {
+        let next = snap(range.lowerBound + fraction * (range.upperBound - range.lowerBound))
+        if next != value { value = next }
+    }
+
+    private func snap(_ raw: Double) -> Double {
+        var next = min(max(raw, range.lowerBound), range.upperBound)
+        if let step {
+            next = range.lowerBound + ((next - range.lowerBound) / step).rounded() * step
+        }
+        return next
+    }
+}

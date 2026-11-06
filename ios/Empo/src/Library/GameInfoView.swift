@@ -159,7 +159,7 @@ struct GameInfoView: View {
                                 if let size = diskSize {
                                     Text(GameMetadata.formatDiskSize(size))
                                 } else {
-                                    ProgressView()
+                                    SpinnerRing(progress: 0, size: 18, tint: AnyShapeStyle(.secondary))
                                 }
                             }
 
@@ -538,7 +538,7 @@ private struct GroupedSection<Content: View>: View {
                 content
             }
             .background(Color(.secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.xl))
+            .clipShape(PixelRect(cornerRadius: Radius.xl))
             .padding(.horizontal, Spacing._2xl)
         }
         .padding(.top, Spacing._2xl)

@@ -239,8 +239,8 @@ struct ImportRootHintBanner: View {
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.lg)
         .background(Color.brand.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.md))
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Radius.md))
+        .clipShape(PixelRect(cornerRadius: Radius.md))
+        .background(.regularMaterial, in: PixelRect(cornerRadius: Radius.md))
     }
 }
 

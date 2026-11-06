@@ -125,15 +125,11 @@ struct GameHeroCard: View {
                         labelHeight = newHeight
                     }
                 }
-                .clipShape(.rect(cornerRadius: Radius.lg))
+                .clipShape(.pixelRect(cornerRadius: Radius.lg))
                 .matchedTransitionSource(
                     id: GameTapSource.hero.transitionID(for: game.id),
                     in: heroNamespace
-                ) { config in
-                    config
-                        .background(.black)
-                        .clipShape(.rect(cornerRadius: Radius.lg))
-                }
+                )
                 .cardShadow()
         }
         .buttonStyle(CardPressStyle())

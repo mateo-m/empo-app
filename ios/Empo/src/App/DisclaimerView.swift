@@ -95,7 +95,7 @@ private struct DisclaimerButtonStyle: ButtonStyle {
             .foregroundStyle(Color.brand)
             .padding(.horizontal, Spacing._2xl)
             .padding(.vertical, Spacing.lg)
-            .background(.white, in: Capsule())
+            .background(.white, in: .pixelCapsule)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(Motion.snappy, value: configuration.isPressed)
     }

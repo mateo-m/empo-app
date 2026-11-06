@@ -89,7 +89,7 @@ struct MkxpSettingsPage: View {
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 }
-                Slider(
+                PixelSlider(
                     value: Binding(
                         get: { state.effectiveFontScale },
                         set: { state.engine.fontScale = $0 }

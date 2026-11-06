@@ -110,17 +110,16 @@ private struct GameCard: View {
                             .font(.title)
                     }
                 }
-                .clipShape(.rect(cornerRadius: Radius.md))
+                .clipShape(.pixelRect(cornerRadius: Radius.md))
                 .overlay(alignment: .bottom) {
                     if game.isImporting {
-                        ProgressView(value: game.importProgress)
-                            .progressViewStyle(.linear)
+                        PixelProgressBar(value: game.importProgress)
                             .padding(Spacing.md)
                     }
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: Radius.md + 4)
-                        .strokeBorder(selectionStyle, lineWidth: 3)
+                    PixelRect(cornerRadius: Radius.md + 4)
+                        .strokeBorder(selectionStyle, lineWidth: PixelGrid.step)
                         .padding(-4)
                 }
                 .cardShadow()

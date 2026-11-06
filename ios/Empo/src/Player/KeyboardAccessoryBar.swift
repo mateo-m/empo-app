@@ -231,7 +231,7 @@ struct KeyboardAccessoryBar: View {
         ]
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+        let shape = PixelRect(cornerRadius: Radius.lg)
         let visible = Self.allKeys.filter { !keys.excluded.contains($0.scancode) }
 
         Group {
@@ -366,7 +366,7 @@ private struct AccessoryKeyButton: View {
     }
 
     private var cap: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+        let shape = PixelRect(cornerRadius: Radius.sm)
 
         return ZStack {
             // Opaque backing under glass, for the same reason as the

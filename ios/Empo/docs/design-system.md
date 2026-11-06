@@ -98,7 +98,13 @@ Corner radii:
 | `xl`    | 24     | Outer containers                         |
 | `sheet` | 56     | The modal sheet panel only               |
 
-Buttons, chips, and icon buttons are capsules or circles, never rounded rectangles.
+Every shape has pixel corners. A pixel is 3 pt (`PixelGrid.step`) in all controls, so a chip and a card show pixels of the same size. A corner of radius `r` is `r / 3` pixels, with the step pattern of a circle.
+
+- Use `.pixelRect(cornerRadius:)` or `PixelRect` with a radius token, not `.rect(cornerRadius:)` or `RoundedRectangle`.
+- Use `.pixelCapsule` for buttons, chips, and icon buttons, not `.capsule` or `.circle`.
+- Use `PixelSegmentedPicker` and `PixelSlider`, not the system segmented picker and `Slider`. `RootView` sets `PixelToggleStyle` for every `Toggle`.
+
+iOS draws some shapes itself, and they stay round: the sheet panel, the navigation bar, grouped lists, and the zoom transition of a game card. The zoom transition accepts only a rounded rectangle.
 
 Sizes:
 

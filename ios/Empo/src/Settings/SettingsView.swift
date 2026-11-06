@@ -168,7 +168,7 @@ struct SettingsView: View {
                                 HStack {
                                     Text("Fill color")
                                     Spacer()
-                                    RoundedRectangle(cornerRadius: Radius.xs)
+                                    PixelRect(cornerRadius: Radius.xs)
                                         .fill(settings.viewportBoundsColor)
                                         .frame(width: 24, height: 24)
                                 }
@@ -663,11 +663,11 @@ private struct BrandGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         if interactive {
             content
-                .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+                .glassEffect(.regular.tint(tint).interactive(), in: .pixelCapsule)
                 .darkGlass()
         } else {
             content
-                .glassEffect(.regular.tint(tint), in: .capsule)
+                .glassEffect(.regular.tint(tint), in: .pixelCapsule)
                 .darkGlass()
         }
     }
@@ -719,7 +719,7 @@ struct UpdateStatusBadge: View {
                 .padding(.horizontal, secondaryHorizontalPadding)
                 .padding(.vertical, secondaryVerticalPadding)
                 .background(background)
-                .clipShape(Capsule())
+                .clipShape(.pixelCapsule)
         }
     }
 
@@ -727,7 +727,7 @@ struct UpdateStatusBadge: View {
     private func dismissibleInteraction<Content: View>(_ content: Content) -> some View {
         if usesDismissiblePromoInteraction, let actionURL, let dismissAction {
             content
-                .contentShape(.capsule)
+                .contentShape(.pixelCapsule)
                 .gesture(promoDragGesture(url: actionURL, dismiss: dismissAction))
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint("Opens the release notes.")
@@ -1041,10 +1041,10 @@ private struct DevicePreview: View {
     var body: some View {
         ZStack {
             // Device bezel
-            RoundedRectangle(cornerRadius: cornerRadius)
+            PixelRect(cornerRadius: cornerRadius)
                 .fill(.secondary.opacity(0.15))
                 .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius)
+                    PixelRect(cornerRadius: cornerRadius)
                         .stroke(.secondary.opacity(Alpha.indicatorStroke), lineWidth: 1)
                 )
 
@@ -1053,13 +1053,13 @@ private struct DevicePreview: View {
             let screenW = deviceW - screenInset * 2
             let screenH = deviceH - screenInset * 2
 
-            RoundedRectangle(cornerRadius: cornerRadius - 3)
+            PixelRect(cornerRadius: cornerRadius - 3)
                 .fill(color)
                 .padding(screenInset)
 
             // Game viewport
             let gameRect = gameViewportRect(screenW: screenW, screenH: screenH)
-            RoundedRectangle(cornerRadius: 3)
+            PixelRect(cornerRadius: 3)
                 .fill(Color.black)
                 .frame(width: gameRect.width, height: gameRect.height)
                 .offset(x: gameRect.offsetX, y: gameRect.offsetY)
@@ -1074,22 +1074,18 @@ private struct DevicePreview: View {
         Group {
             if isLandscape {
                 // Notch on the left
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 4,
-                    topTrailingRadius: 4
+                PixelRect(
+                    cornerRadii: RectangleCornerRadii(
+                        topLeading: 0, bottomLeading: 0, bottomTrailing: 4, topTrailing: 4)
                 )
                 .fill(.secondary.opacity(Alpha.indicatorFill))
                 .frame(width: notchHeight, height: 20)
                 .offset(x: -(deviceW / 2 - notchHeight / 2))
             } else {
                 // Notch on top
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 0,
-                    bottomLeadingRadius: 4,
-                    bottomTrailingRadius: 4,
-                    topTrailingRadius: 0
+                PixelRect(
+                    cornerRadii: RectangleCornerRadii(
+                        topLeading: 0, bottomLeading: 4, bottomTrailing: 4, topTrailing: 0)
                 )
                 .fill(.secondary.opacity(Alpha.indicatorFill))
                 .frame(width: 28, height: notchHeight)

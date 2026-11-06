@@ -69,7 +69,7 @@ struct GameSettingsView: View {
                     HintBanner(hint: hint)
                         .background(
                             .regularMaterial,
-                            in: RoundedRectangle(cornerRadius: Radius.md)
+                            in: PixelRect(cornerRadius: Radius.md)
                         )
                         .padding(.horizontal, Spacing._2xl)
                         .padding(.vertical, Spacing.md)

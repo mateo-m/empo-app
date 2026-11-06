@@ -96,6 +96,7 @@ struct RootView: View {
         }
         .fontDesign(.rounded)
         .tint(.brand)
+        .toggleStyle(PixelToggleStyle())
         .onChange(of: appState.phase) { _, phase in
             if phase == .playing {
                 // GameLoadingView flips the phase inside a spring of

@@ -166,7 +166,7 @@ struct PlayerEditToolbar: View {
                 .lineLimit(1)
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
-                .glassEffect(.regular, in: .capsule)
+                .glassEffect(.regular, in: .pixelCapsule)
                 .onGeometryChange(
                     for: CGRect.self, of: { $0.frame(in: .global) },
                     action: {
@@ -262,7 +262,7 @@ struct PlayerEditToolbar: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.lg)
                     .frame(height: IconButtonSize.sm.points)
-                    .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
+                    .glassEffect(.regular.tint(.success).interactive(), in: .pixelCapsule)
             }
         }
         // Pin the glass to the dark variant, matching the play

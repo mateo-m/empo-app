@@ -277,6 +277,25 @@ struct ScreenRegionChips: View {
     /// editor's mock canvas has no controls zone to flip).
     var overlayOn: Bool = false
     var onToggleOverlay: (() -> Void)?
+    /// Edit-toolbar frames in the same space as `rect`. When the game
+    /// fills the top of the screen, the toolbar sits on it, and the
+    /// chips move down below it. The chips have the width of their
+    /// text, so any frame in the chip's row counts, wherever it is
+    /// across the screen.
+    var avoiding: [CGRect] = []
+
+    private static let chipSpacing: CGFloat = 30
+
+    private var firstChipY: CGFloat {
+        let chipHalfHeight: CGFloat = 12
+        let stackHeight = showsReset && onToggleOverlay != nil ? Self.chipSpacing : 0
+        var y = rect.minY + 44
+        for frame in avoiding.sorted(by: { $0.minY < $1.minY })
+        where frame.minY < y + stackHeight + chipHalfHeight && frame.maxY > y - chipHalfHeight {
+            y = frame.maxY + Spacing.xs + chipHalfHeight
+        }
+        return y
+    }
 
     var body: some View {
         ZStack {
@@ -285,7 +304,7 @@ struct ScreenRegionChips: View {
                 .foregroundStyle(Color.brand)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 2)
-                .glassEffect(.regular, in: .capsule)
+                .glassEffect(.regular, in: .pixelCapsule)
                 .position(x: rect.midX, y: rect.minY + 14)
                 .allowsHitTesting(false)
 
@@ -298,12 +317,12 @@ struct ScreenRegionChips: View {
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.xs)
                         .foregroundStyle(.white)
-                        .glassEffect(.regular.interactive(), in: .capsule)
+                        .glassEffect(.regular.interactive(), in: .pixelCapsule)
                 }
                 // Top area, below the "Screen" label: the bottom
                 // corner belongs to the resize grabber, and at the
                 // minimum region size a bottom chip would overlap it.
-                .position(x: rect.midX, y: rect.minY + 44)
+                .position(x: rect.midX, y: firstChipY)
                 .accessibilityLabel("Reset screen to automatic placement")
             }
 
@@ -320,9 +339,9 @@ struct ScreenRegionChips: View {
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
                     .foregroundStyle(overlayOn ? Color.brand : .white)
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .glassEffect(.regular.interactive(), in: .pixelCapsule)
                 }
-                .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
+                .position(x: rect.midX, y: firstChipY + (showsReset ? Self.chipSpacing : 0))
                 .accessibilityLabel("Controls over game")
                 .accessibilityValue(
                     overlayOn

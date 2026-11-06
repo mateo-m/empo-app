@@ -28,11 +28,7 @@ struct GameCard: View {
     @ViewBuilder
     private func heroSource<V: View>(_ view: V) -> some View {
         if let heroTransitionID, let heroNamespace {
-            view.matchedTransitionSource(id: heroTransitionID, in: heroNamespace) { config in
-                config
-                    .background(.black)
-                    .clipShape(.rect(cornerRadius: Radius.md))
-            }
+            view.matchedTransitionSource(id: heroTransitionID, in: heroNamespace)
         } else {
             view
         }
@@ -92,7 +88,7 @@ struct GameCard: View {
                 }
             }
             .overlay { centerOverlay }
-            .clipShape(.rect(cornerRadius: Radius.md))
+            .clipShape(.pixelRect(cornerRadius: Radius.md))
         // NOTE: cardShadow lives at the GameLibraryView callsite,
         // not here. Applied AFTER matchedTransitionSource so the
         // transition source's clip doesn't crop the shadow.
@@ -105,7 +101,7 @@ struct GameCard: View {
                     .aspectRatio(1, contentMode: .fit)
                     .overlay { artworkView }
                     .overlay { centerOverlay }
-                    .clipShape(.rect(cornerRadius: Radius.md))
+                    .clipShape(.pixelRect(cornerRadius: Radius.md))
             )
 
             VStack(spacing: Spacing.xxs) {
@@ -185,12 +181,7 @@ struct GameListRow: View {
                 onShimmerFinished: { game.justImported = false },
                 reloadToken: game.artworkRevision
             )
-            .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) {
-                config in
-                config
-                    .background(.black)
-                    .clipShape(.rect(cornerRadius: Radius.sm))
-            }
+            .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace)
             .cardShadow()
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -256,7 +247,6 @@ struct GameStatusIndicator: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private var ringSize: CGFloat { size * 0.82 }
-    private var lineWidth: CGFloat { size * 0.079 }
     private var stopSize: CGFloat { size * 0.28 }
     private var iconFont: Font {
         size >= 44 ? .title3 : .caption
@@ -296,15 +286,15 @@ struct GameStatusIndicator: View {
             // so the indicator auto-inverts against whatever's behind
             // it (library surface in list mode, artwork in grid mode).
             // CSS `mix-blend-mode: difference` equivalent.
-            SpinnerRing(
-                progress: progress,
-                size: ringSize,
-                lineWidth: lineWidth,
-                tint: AnyShapeStyle(Color.white),
-                trackOpacity: 0.2
-            )
-            .opacity(showsRing ? 1 : 0)
-            .scaleEffect(showsRing ? 1 : 0.5)
+            if showsRing {
+                SpinnerRing(
+                    progress: progress,
+                    size: ringSize,
+                    tint: AnyShapeStyle(Color.white),
+                    trackOpacity: 0.2
+                )
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+            }
 
             innerIcon
                 .transition(.blurReplace)
@@ -316,9 +306,9 @@ struct GameStatusIndicator: View {
         case .paused:
             // Inverted scheme tint so the paused badge reads stronger
             // than the ambient ready state.
-            core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
+            core.glassEffect(.regular.tint(pausedBackgroundTint), in: .pixelCapsule)
         case .ready, .invalid:
-            core.glassEffect(.regular, in: .circle)
+            core.glassEffect(.regular, in: .pixelCapsule)
         }
     }
 
@@ -331,7 +321,7 @@ struct GameStatusIndicator: View {
             } label: {
                 // White fill paired with the ring's `.blendMode(.difference)`
                 // wrap above. Inverts against whatever's behind.
-                RoundedRectangle(cornerRadius: 2.5)
+                PixelRect(cornerRadius: 2.5)
                     .fill(Color.white)
                     .frame(width: stopSize, height: stopSize)
             }

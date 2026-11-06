@@ -291,7 +291,7 @@ struct SheetCard<Content: View>: View {
             content
         }
         .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(.rect(cornerRadius: Radius.md))
+        .clipShape(.pixelRect(cornerRadius: Radius.md))
     }
 }
 

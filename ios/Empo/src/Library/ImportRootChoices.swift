@@ -28,7 +28,7 @@ struct ImportRootChoiceArtworkView: View {
             renderedArtwork
         }
         .frame(width: AppSize.listArtwork, height: AppSize.listArtwork)
-        .clipShape(.rect(cornerRadius: Radius.sm))
+        .clipShape(.pixelRect(cornerRadius: Radius.sm))
     }
 
     @ViewBuilder

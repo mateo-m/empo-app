@@ -220,7 +220,7 @@ struct PlayerControlsOverlay: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 2)
-                        .background(.black.opacity(0.6), in: Capsule())
+                        .background(.black.opacity(0.6), in: .pixelCapsule)
                         .fixedSize()
                         .offset(y: 14)
                         .allowsHitTesting(false)

@@ -129,10 +129,7 @@ struct GameLoadingView: View {
                         .multilineTextAlignment(.center)
                         .centeredMessageWidth()
 
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white)
-                        .scaleEffect(1.2)
+                    SpinnerRing(progress: 0, size: 30)
                         .accessibilityLabel("Loading game")
                 }
             }

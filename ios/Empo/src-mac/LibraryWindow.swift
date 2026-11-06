@@ -57,7 +57,7 @@ struct LibraryWindow: View {
     @ViewBuilder
     private var content: some View {
         if !model.library.initialScanCompleted {
-            ProgressView()
+            SpinnerRing(progress: 0, size: 30, tint: AnyShapeStyle(.secondary))
         } else if model.library.games.isEmpty && model.library.pendingImports.isEmpty {
             EmptyLibraryView { model.showsImporter = true }
         } else if model.games.isEmpty {
@@ -152,15 +152,15 @@ private struct EmptyLibraryView: View {
 
 private struct DropHighlight: View {
     var body: some View {
-        RoundedRectangle(cornerRadius: Radius.md)
-            .strokeBorder(.tint, lineWidth: 3)
-            .background(.tint.opacity(0.08), in: .rect(cornerRadius: Radius.md))
+        PixelRect(cornerRadius: Radius.md)
+            .strokeBorder(.tint, lineWidth: PixelGrid.step)
+            .background(.tint.opacity(0.08), in: .pixelRect(cornerRadius: Radius.md))
             .overlay {
                 Label("Drop to import", systemImage: "square.and.arrow.down")
                     .font(.title3.weight(.semibold))
                     .padding(.horizontal, Spacing.xl)
                     .padding(.vertical, Spacing.md)
-                    .background(.regularMaterial, in: .capsule)
+                    .background(.regularMaterial, in: .pixelCapsule)
             }
             .padding(Spacing.md)
             .allowsHitTesting(false)

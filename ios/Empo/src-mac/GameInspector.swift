@@ -49,7 +49,10 @@ private struct GameStatusView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             case .importing:
-                ProgressView(value: game.importProgress) { Text("Importing…") }
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Importing…")
+                    PixelProgressBar(value: game.importProgress)
+                }
             case .deleting:
                 Text("Deleting…").foregroundStyle(.secondary)
             case .ready:
@@ -156,7 +159,7 @@ private struct GameInfoForm: View {
                     if let diskSize {
                         Text(GameMetadata.formatDiskSize(diskSize))
                     } else {
-                        ProgressView().controlSize(.small)
+                        SpinnerRing(progress: 0, size: 15, tint: AnyShapeStyle(.secondary))
                     }
                 }
                 LabeledContent("Folder Name") {
