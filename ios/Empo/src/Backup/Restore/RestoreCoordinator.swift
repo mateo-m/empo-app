@@ -156,6 +156,9 @@ final class RestoreCoordinator {
         scope: RestoreScope,
         replacesTheTree: Bool
     ) async -> RestoreOutcome {
+        guard manifest.gameKey == row.identity.gameKey else {
+            return .failed(RestoreNotices.unreadableLine)
+        }
         let destination = Self.destination(for: container, manifest: manifest)
         let localFiles = await Self.localFiles(
             destination: destination, manifest: manifest, scope: scope)
@@ -400,19 +403,27 @@ final class RestoreCoordinator {
     static func destination(
         for container: GameContainer?, manifest: SnapshotManifest
     ) -> MemberSource {
-        var buckets: [String: URL] = [:]
-        for name in manifest.rescuedSavesBuckets {
-            buckets[name] = DataDirectory.rescuedSavesRootURL
-                .appendingPathComponent(name, isDirectory: true)
-        }
+        let isPreferences = manifest.gameKey == BackupStream.preferencesKey
+        let sharedData: URL? =
+            if isPreferences {
+                nil
+            } else if let container, let core = GameCores.core(forGameAt: container.gameURL) {
+                DataDirectory.resolve(for: container, core: core)
+            } else {
+                // A fresh-install restore makes the container with an empty
+                // game, so only the snapshot knows the folder.
+                manifest.sharedDataDirectory.flatMap {
+                    ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
+                }
+            }
         return MemberSource(
             container: container?.url,
-            sharedData: manifest.sharedDataDirectory.flatMap {
-                ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
-            },
-            rescuedBuckets: buckets,
-            profiles: LayoutProfilesManager.profilesRootURL,
-            userDefaultsExport: PreferenceRestore.restoredFile)
+            sharedData: sharedData,
+            rescuedBuckets: RescuedSaves.restorableBuckets(
+                named: manifest.rescuedSavesBuckets, in: DataDirectory.rescuedSavesRootURL,
+                folderName: isPreferences ? nil : container?.folderName ?? manifest.containerFolderName),
+            profiles: isPreferences ? LayoutProfilesManager.profilesRootURL : nil,
+            userDefaultsExport: isPreferences ? PreferenceRestore.restoredFile : nil)
     }
 
     /// Every local file the plan has to know about.

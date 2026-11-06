@@ -49,6 +49,9 @@ enum Jgp {
         let manifest: JgpManifest
         let configuration: JgpConfiguration?
         let iconData: Data?
+        /// The manifest icon, only when it resolves to a file inside
+        /// `gameRoot`.
+        let iconURL: URL?
         /// Directory containing the game itself (after removing JGP-specific files).
         let gameRoot: URL
     }
@@ -75,18 +78,26 @@ enum Jgp {
             return decodeWithComments(JgpConfiguration.self, from: raw)
         }()
 
-        let iconData: Data? = {
-            guard let iconPath = manifest.icon, !iconPath.isEmpty else { return nil }
-            let iconURL = root.appendingPathComponent(iconPath)
-            return try? Data(contentsOf: iconURL)
-        }()
+        let iconURL = manifest.icon.flatMap { containedFile($0, in: root) }
 
         return Bundle(
             manifest: manifest,
             configuration: configuration,
-            iconData: iconData,
+            iconData: iconURL.flatMap { try? Data(contentsOf: $0) },
+            iconURL: iconURL,
             gameRoot: root
         )
+    }
+
+    private static func containedFile(_ relativePath: String, in root: URL) -> URL? {
+        guard !relativePath.isEmpty else { return nil }
+        // Folder probing reads the icon before the import removes links.
+        let base = root.resolvingSymlinksInPath().path
+        let url = root.appendingPathComponent(relativePath).resolvingSymlinksInPath()
+        guard url.path.hasPrefix(base + "/"),
+            (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true
+        else { return nil }
+        return url
     }
 
     /// JGP uses the same `//` comment tolerance as mkxp.json. Strip comments

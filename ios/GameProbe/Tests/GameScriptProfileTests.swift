@@ -614,6 +614,38 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
     }
 
+    func testNegativeFloatLengthIsInconclusive() throws {
+        // An outer array of 1, an inner array of 3, then a float whose
+        // length prefix `ff 00` reads as -256. Data keeps 14 bytes or
+        // less inline, and an inline read before the start does not
+        // trap, so the padding makes the file long enough to crash.
+        let bytes = Data([0x04, 0x08, 0x5b, 0x06, 0x5b, 0x08, 0x66, 0xff, 0x00] + [UInt8](repeating: 0x30, count: 300))
+        for name in ["PluginScripts.rxdata", "Scripts.rxdata"] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(
+                at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            try bytes.write(to: dir.appendingPathComponent("Data/\(name)"))
+
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive, name)
+        }
+    }
+
+    func testDeeplyNestedArraysAreInconclusive() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let header: [UInt8] = [0x04, 0x08, 0x5b, 0x06, 0x5b, 0x08]
+        let nested = Array(repeating: [UInt8]([0x5b, 0x06]), count: 200_000).joined()
+        try Data(header + nested)
+            .write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
+    }
+
     func testModernPluginCodeOutranksLegacyLooseScripts() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

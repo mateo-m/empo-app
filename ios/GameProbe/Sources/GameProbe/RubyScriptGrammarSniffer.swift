@@ -781,21 +781,31 @@ private struct MarshalReader {
     /// Reads a Marshal string body without the leading tag byte:
     /// a length prefix, then that many bytes.
     private mutating func readRawString() -> Data? {
-        guard let len = readLong(), len >= 0, pos + len <= data.count else {
+        readCountedBytes().map { data.subdata(in: $0) }
+    }
+
+    /// Reads a length prefix and moves past that many bytes. A
+    /// negative length from the file would move the cursor back
+    /// before the buffer, and the next read would trap.
+    private mutating func readCountedBytes() -> Range<Int>? {
+        guard let len = readLong(), len >= 0, len <= data.count - pos else {
             return nil
         }
-        let bytes = data.subdata(in: pos..<(pos + len))
         pos += len
-        return bytes
+        return (pos - len)..<pos
     }
+
+    /// Real script archives nest 2 or 3 levels. A file of deeply nested
+    /// arrays would overflow the stack.
+    private static let maxDepth = 32
 
     /// Skips a complete Marshal value of any supported type. This
     /// discards fields we do not need (script id, title) and
     /// keeps the reader in sync with the byte stream. If the
     /// reader finds an unknown tag, it returns false. The result
     /// then becomes "inconclusive".
-    mutating func skipValue() -> Bool {
-        guard let tag = readByte() else { return false }
+    mutating func skipValue(depth: Int = 0) -> Bool {
+        guard depth < Self.maxDepth, let tag = readByte() else { return false }
         switch tag {
         case 0x30:  // '0' = nil
             return true
@@ -803,37 +813,28 @@ private struct MarshalReader {
             return true
         case 0x69:  // 'i' = integer
             return readLong() != nil
-        case 0x66:  // 'f' = float (string repr)
-            return readLong().map { len in
-                pos += len
-                return pos <= data.count
-            } ?? false
-        case 0x22, 0x3a:  // '"' string, ':' symbol
-            guard let len = readLong(), len >= 0, pos + len <= data.count else {
-                return false
-            }
-            pos += len
-            return true
+        case 0x66, 0x22, 0x3a:  // 'f' float (string repr), '"' string, ':' symbol
+            return readCountedBytes() != nil
         case 0x3b, 0x40:  // ';' symbol link, '@' object link
             return readLong() != nil
         case 0x49:  // 'I' = ivar wrapper
-            guard skipValue() else { return false }
+            guard skipValue(depth: depth + 1) else { return false }
             guard let n = readLong(), n >= 0 else { return false }
             for _ in 0..<n {
-                guard skipValue() else { return false }
-                guard skipValue() else { return false }
+                guard skipValue(depth: depth + 1) else { return false }
+                guard skipValue(depth: depth + 1) else { return false }
             }
             return true
         case 0x5b:  // '[' = array
             guard let n = readLong(), n >= 0 else { return false }
             for _ in 0..<n {
-                guard skipValue() else { return false }
+                guard skipValue(depth: depth + 1) else { return false }
             }
             return true
         case 0x7b:  // '{' = hash
             guard let n = readLong(), n >= 0 else { return false }
             for _ in 0..<(n * 2) {
-                guard skipValue() else { return false }
+                guard skipValue(depth: depth + 1) else { return false }
             }
             return true
         default:

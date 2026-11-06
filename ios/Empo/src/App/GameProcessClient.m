@@ -110,7 +110,7 @@ static void askForStatus(void) {
         os_unfair_lock_lock(&gLock);
         if ((__bridge void *)gConnection == token) {
             if (gStatusChanges == changes) {
-                gStatus = status;
+                gStatus = [status isKindOfClass:NSDictionary.class] ? status : nil;
             }
             gStatusAsked = NO;
         }
@@ -118,12 +118,14 @@ static void askForStatus(void) {
     }];
 }
 
-static id statusValue(NSString *key) {
+// The game process runs game code, so the reply can hold any class that
+// XPC decodes. A message such as intValue to the wrong class stops the app.
+static id statusValue(NSString *key, Class expected) {
     os_unfair_lock_lock(&gLock);
     askForStatus();
     id value = gStatus[key];
     os_unfair_lock_unlock(&gLock);
-    return value;
+    return [value isKindOfClass:expected] ? value : nil;
 }
 
 // Under the lock. A setter changes the value now, so a getter right
@@ -255,13 +257,18 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
 }
 
 - (void)pausedWithSnapshot:(NSData *)rgba width:(int)width height:(int)height {
+    // The app makes an image of width * height * 4 bytes from the
+    // snapshot, so it keeps only a snapshot whose size agrees.
+    const int maxSide = 16384;
+    BOOL whole = rgba != nil && width > 0 && height > 0 && width <= maxSide && height <= maxSide &&
+                 rgba.length == (NSUInteger)width * (NSUInteger)height * 4;
     __block gamecore_PausedCallback callback = NULL;
     __block void *userdata = NULL;
     fromSession(self.connection, ^{
         gPaused = YES;
-        gSnapshot = rgba;
-        gSnapshotWidth = width;
-        gSnapshotHeight = height;
+        gSnapshot = whole ? rgba : nil;
+        gSnapshotWidth = whole ? width : 0;
+        gSnapshotHeight = whole ? height : 0;
         callback = gPausedCallback;
         userdata = gPausedUserdata;
     });
@@ -470,7 +477,7 @@ static xpc_object_t lentMemory(void) {
 }
 
 + (uint64_t)memoryFootprint {
-    return [statusValue(EmpoGameProcessStatusMemoryFootprint) unsignedLongLongValue];
+    return [statusValue(EmpoGameProcessStatusMemoryFootprint, NSNumber.class) unsignedLongLongValue];
 }
 
 + (void)processLost {
@@ -520,7 +527,7 @@ int gameprocess_run_app(int argc, char **argv) {
 }
 
 int gameprocess_isGameReady(void) {
-    return [statusValue(EmpoGameProcessStatusGameReady) boolValue];
+    return [statusValue(EmpoGameProcessStatusGameReady, NSNumber.class) boolValue];
 }
 
 void gameprocess_setGamePath(const char *path) {
@@ -598,11 +605,13 @@ int gameprocess_isTextInputActive(void) {
 }
 
 double gameprocess_getAverageFPS(void) {
-    return [statusValue(EmpoGameProcessStatusAverageFPS) doubleValue];
+    double fps = [statusValue(EmpoGameProcessStatusAverageFPS, NSNumber.class) doubleValue];
+    // The overlay's Swift Int() traps on NaN, infinity, or a huge value.
+    return fps >= 0 && fps <= 1000 ? fps : 0;
 }
 
 int gameprocess_getTargetFPS(void) {
-    return [statusValue(EmpoGameProcessStatusTargetFPS) intValue];
+    return [statusValue(EmpoGameProcessStatusTargetFPS, NSNumber.class) intValue];
 }
 
 // The text stays valid until the next call, as GameCore.h says.
@@ -614,12 +623,12 @@ static const char *keepText(char **slot, NSString *text) {
 
 const char *gameprocess_getGameTitle(void) {
     static char *title;
-    return keepText(&title, statusValue(EmpoGameProcessStatusTitle));
+    return keepText(&title, statusValue(EmpoGameProcessStatusTitle, NSString.class));
 }
 
 const char *gameprocess_getDetails(void) {
     static char *details;
-    return keepText(&details, statusValue(EmpoGameProcessStatusDetails));
+    return keepText(&details, statusValue(EmpoGameProcessStatusDetails, NSString.class));
 }
 
 void gameprocess_setSafeAreaInsets(float top, float bottom, float left, float right) {
@@ -675,7 +684,7 @@ void gameprocess_setCheatsEnabled(bool enabled) {
 }
 
 bool gameprocess_getCheatsEnabled(void) {
-    return [statusValue(EmpoGameProcessStatusCheats) boolValue];
+    return [statusValue(EmpoGameProcessStatusCheats, NSNumber.class) boolValue];
 }
 
 void gameprocess_setGameControllerCaptureEnabled(bool enabled) {
@@ -778,7 +787,7 @@ void gameprocess_setFastForwardMultiplier(int multiplier) {
 }
 
 int gameprocess_getFastForwardMultiplier(void) {
-    NSNumber *multiplier = statusValue(EmpoGameProcessStatusFastForward);
+    NSNumber *multiplier = statusValue(EmpoGameProcessStatusFastForward, NSNumber.class);
     return multiplier != nil ? multiplier.intValue : 1;
 }
 
