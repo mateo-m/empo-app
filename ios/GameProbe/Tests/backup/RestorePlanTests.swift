@@ -209,15 +209,6 @@ final class RestorePlanTests: XCTestCase {
         XCTAssertNil(DisplacedCopy.originalName(ofDisplaced: "save.empo-displaced-x.bak"))
     }
 
-    /// Copies are unlimited and never deleted. Empo warns once when
-    /// a single file passes three, per 11.12.
-    func testTheCopyWarningFiresPastThreeCopies() {
-        let names = (1...4).map { DisplacedCopy.fileName(for: "save.rxdata", number: $0) }
-        XCTAssertEqual(DisplacedCopy.copyCount(of: "save.rxdata", among: names), 4)
-        XCTAssertFalse(DisplacedCopy.warnsAboutCopies(3))
-        XCTAssertTrue(DisplacedCopy.warnsAboutCopies(4))
-    }
-
     /// A file whose bytes already match costs nothing and leaves no
     /// copy behind.
     func testAMatchingLocalFileIsLeftAlone() {
@@ -342,9 +333,6 @@ final class RestorePlanTests: XCTestCase {
         let shortfall = RestoreSpaceCheck.shortfall(plan: plan, freeSpaceBytes: 500)
         XCTAssertEqual(shortfall?.neededBytes, 2_000)
         XCTAssertEqual(shortfall?.missingBytes, 1_500)
-        XCTAssertEqual(
-            RestoreSpaceCheck.refusalLine(missingSize: "2.1 GB", deviceName: "iPhone"),
-            "This restore needs 2.1 GB more space on this iPhone.")
     }
 
     func testARestoreThatFitsIsNotRefused() {

@@ -73,8 +73,6 @@ final class StagingBudgetTests: XCTestCase {
             freeSpaceBytes: 8 * megabyte)
 
         XCTAssertEqual(route, .notEnoughSpace)
-        XCTAssertEqual(
-            StagingBudget.notEnoughSpaceLine, "not enough space on this device")
     }
 
     // MARK: - The re-check after a copy, rule 2

@@ -264,7 +264,6 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertFalse(
             AdoptQuestion.fires(
                 recordedDeviceId: "device-1", thisDeviceId: "device-1", alreadyOwned: true))
-        XCTAssertEqual(AdoptQuestion.defaultAnswer, .adopt)
         XCTAssertEqual(AdoptQuestion.label(of: .adopt), "Continue")
         XCTAssertEqual(AdoptQuestion.label(of: .startFresh), "Start fresh")
     }

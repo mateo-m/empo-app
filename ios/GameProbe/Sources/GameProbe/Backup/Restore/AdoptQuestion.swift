@@ -14,15 +14,6 @@ import Foundation
 /// downstream may make one before the first write either.
 public enum AdoptQuestion {
 
-    /// Where the question shows.
-    public enum Place: Equatable, Sendable {
-        /// Inside the fresh-install flow, right before the progress
-        /// screen.
-        case freshInstall
-        /// As a banner on the Backups screen.
-        case backupsScreen
-    }
-
     public enum Answer: String, Codable, Sendable, CaseIterable, Equatable {
         /// Continue that namespace's history. The default.
         case adopt
@@ -31,9 +22,6 @@ public enum AdoptQuestion {
     }
 
     public static let question = "Empo found earlier backups from this device. Continue them?"
-
-    /// Continue is the default.
-    public static let defaultAnswer: Answer = .adopt
 
     public static func label(of answer: Answer) -> String {
         switch answer {

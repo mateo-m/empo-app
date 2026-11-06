@@ -89,23 +89,4 @@ public enum ProvenCoverage {
         }
         return decision
     }
-
-    // MARK: - The warning, and the escape of 5.15
-
-    /// Whether the replace warning offers the one-off full snapshot,
-    /// per 5.15.
-    ///
-    /// A full-mode game needs no offer, because its next readable
-    /// snapshot already covers the tree.
-    public static func offersOneOffFullSnapshot(mode: BackupMode) -> Bool {
-        mode != .full
-    }
-
-    /// The line the replace warning carries for a slim-mode game.
-    public static let slimReplaceLine =
-        "This game backs up its saves only, so the files it does not back up stay on this device "
-        + "after the replace. You can open them later."
-
-    /// The escape the warning offers.
-    public static let oneOffFullSnapshotLabel = "Back up all of this game's files first"
 }

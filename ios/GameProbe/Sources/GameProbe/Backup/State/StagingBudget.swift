@@ -95,10 +95,6 @@ public enum StagingBudget {
         return .staged
     }
 
-    /// The line the Backups screen shows when a game stops for space,
-    /// per rule 6.
-    public static let notEnoughSpaceLine = "not enough space on this device"
-
     /// What to do after a copy, given how many copies this path has
     /// already had.
     ///

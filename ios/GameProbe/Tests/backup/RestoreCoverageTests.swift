@@ -89,13 +89,6 @@ final class RestoreCoverageTests: XCTestCase {
         XCTAssertEqual(decision.keep, ["file-0", "file-1"])
     }
 
-    /// The escape of 5.15 is offered only where the mode leaves the
-    /// tree unproven.
-    func testTheOneOffFullSnapshotIsOfferedForASlimGameOnly() {
-        XCTAssertTrue(ProvenCoverage.offersOneOffFullSnapshot(mode: .slim))
-        XCTAssertFalse(ProvenCoverage.offersOneOffFullSnapshot(mode: .full))
-    }
-
     // MARK: - Staged blobs, per 11.9
 
     func testACompressedBlobPastTheCompressionLimitIsRefusedWhateverItsStatedSize() throws {

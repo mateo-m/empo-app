@@ -40,24 +40,4 @@ public enum RestoreSpaceCheck {
     public static func shortfall(plan: RestorePlan, freeSpaceBytes: Int64) -> Shortfall? {
         shortfall(neededBytes: plan.bytesNeeded, freeSpaceBytes: freeSpaceBytes)
     }
-
-    /// The line that refuses the restore, per 11.8.
-    ///
-    /// `missingSize` is the byte count already formatted, such as
-    /// "2.1 GB", and `deviceName` is what the device calls itself,
-    /// such as "iPhone". The model layer holds no formatter, the way
-    /// `QuotaCheck` holds none.
-    public static func refusalLine(missingSize: String, deviceName: String) -> String {
-        "This restore needs \(missingSize) more space on this \(deviceName)."
-    }
-
-    /// The line for a restore that ran out of room after it started.
-    ///
-    /// Everything already written stays, and the originals stay safe
-    /// as displaced copies.
-    public static func ranOutLine(missingSize: String) -> String {
-        "This restore stopped because the device ran out of space. It needed \(missingSize) more. "
-            + "The files already put back are still here, and your earlier files are still here "
-            + "as copies."
-    }
 }

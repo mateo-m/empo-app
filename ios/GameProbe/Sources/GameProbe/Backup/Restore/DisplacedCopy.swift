@@ -67,11 +67,6 @@ public enum DisplacedCopy {
 
     // MARK: - Reading a name back
 
-    /// Whether a name is a displaced copy of something.
-    public static func isDisplaced(_ name: String) -> Bool {
-        originalName(ofDisplaced: name) != nil
-    }
-
     /// The name the copy was displaced from, or `nil` when the name
     /// is not a displaced copy.
     public static func originalName(ofDisplaced name: String) -> String? {
@@ -92,23 +87,4 @@ public enum DisplacedCopy {
         let original = rest[..<range.lowerBound]
         return original.isEmpty ? nil : String(original)
     }
-
-    // MARK: - The warning of 11.12
-
-    /// How many displaced copies of one file the names hold.
-    public static func copyCount(of name: String, among names: [String]) -> Int {
-        names.filter { originalName(ofDisplaced: $0) == name }.count
-    }
-
-    /// Whether Empo warns about the copies of one file, per 11.12.
-    ///
-    /// Dropping the oldest copy by itself would be a silent delete of
-    /// user data, so the count only warns. Nothing here deletes.
-    public static func warnsAboutCopies(_ count: Int) -> Bool {
-        count > copyWarningCount
-    }
-
-    /// The line the warning carries.
-    public static let copyWarningLine =
-        "This file now has more than \(copyWarningCount) copies from earlier restores."
 }
