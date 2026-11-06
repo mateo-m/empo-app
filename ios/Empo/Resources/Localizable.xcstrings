@@ -24129,6 +24129,64 @@
         }
       }
     },
+    "Empo couldn't finish the sign-in. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte die Anmeldung nicht abschließen. Versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo terminar el inicio de sesión. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu terminer la connexion. Réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a completare l'accesso. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サインインを完了できませんでした。もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 로그인을 마치지 못했어요. 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu concluir o acesso. Tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось завершить вход. Попробуйте ещё раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法完成登录。请重试。"
+          }
+        }
+      }
+    },
     "Empo couldn't finish this. Reopen Empo and try again." : {
       "localizations" : {
         "de" : {

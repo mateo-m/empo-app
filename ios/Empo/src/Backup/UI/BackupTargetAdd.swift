@@ -60,7 +60,7 @@ enum BackupTargetAdd {
                     targetId: descriptor.id, presenting: screen)
             else { return .cancelled }
         } catch {
-            return .failed(error.localizedDescription)
+            return .failed(signInFailure(error, provider: .dropbox))
         }
         guard let provider = DropboxGate.shared.target(for: descriptor) else {
             return .failed(openFailedLine)
@@ -84,7 +84,7 @@ enum BackupTargetAdd {
                     targetId: descriptor.id, presenting: screen)
             else { return .cancelled }
         } catch {
-            return .failed(error.localizedDescription)
+            return .failed(signInFailure(error, provider: .googleDrive))
         }
         guard let provider = GoogleDriveGate.shared.target(for: descriptor) else {
             return .failed(openFailedLine)
@@ -255,7 +255,7 @@ enum BackupTargetAdd {
                         targetId: target.id, presenting: screen)
                 guard signedIn else { return .cancelled }
             } catch {
-                return .failed(error.localizedDescription)
+                return .failed(signInFailure(error, provider: target.provider))
             }
             guard let provider = await BackupTargets.provider(for: target) else {
                 return .failed(openFailedLine)
@@ -308,6 +308,14 @@ enum BackupTargetAdd {
         switch error {
         case .rejected(let message): return message
         default: return String(localized: "Empo can't use this address. Check it and try again.")
+        }
+    }
+
+    private static func signInFailure(_ error: Error, provider: BackupProviderKind) -> String {
+        switch error {
+        case let error as BackupProviderError: return error.line(for: provider)
+        case is BackupKeychain.Failure: return keychainFailedLine
+        default: return String(localized: "Empo couldn't finish the sign-in. Try again.")
         }
     }
 
