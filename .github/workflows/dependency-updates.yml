@@ -71,26 +71,35 @@ jobs:
               git diff --quiet FETCH_HEAD -- "${pins[@]}"; then
               echo "$BRANCH already has these pins"
           else
+              # GitHub closes a pull request whose branch it moves to main,
+              # so the commit goes on a scratch branch first.
               base=$(git rev-parse HEAD)
-              if git ls-remote --exit-code origin "refs/heads/$BRANCH" >/dev/null; then
-                  gh api -X PATCH "repos/$REPO/git/refs/heads/$BRANCH" -f sha="$base" -F force=true >/dev/null
-              else
-                  gh api "repos/$REPO/git/refs" -f ref="refs/heads/$BRANCH" -f sha="$base" >/dev/null
-              fi
+              scratch="$BRANCH-next"
+              move_ref() {
+                  if git ls-remote --exit-code origin "refs/heads/$1" >/dev/null; then
+                      gh api -X PATCH "repos/$REPO/git/refs/heads/$1" -f sha="$2" -F force=true >/dev/null
+                  else
+                      gh api "repos/$REPO/git/refs" -f ref="refs/heads/$1" -f sha="$2" >/dev/null
+                  fi
+              }
+              move_ref "$scratch" "$base"
               # The rules ask for a signed commit on every branch. GitHub
               # signs a commit that this API makes, but not one that git
               # pushes.
-              for f in "${files[@]}"; do
+              commit=$(for f in "${files[@]}"; do
                   jq -n --arg path "$f" --arg contents "$(base64 -w0 "$f")" '{$path, $contents}'
               done | jq -s \
                   --arg query 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }' \
-                  --arg repo "$REPO" --arg branch "$BRANCH" --arg head "$base" --arg headline "$TITLE" \
+                  --arg repo "$REPO" --arg branch "$scratch" --arg head "$base" --arg headline "$TITLE" \
                   '{$query, variables: {input: {
                       branch: {repositoryNameWithOwner: $repo, branchName: $branch},
                       expectedHeadOid: $head,
                       message: {$headline},
                       fileChanges: {additions: .}}}}' |
-                  gh api graphql --input - --jq .data.createCommitOnBranch.commit.oid
+                  gh api graphql --input - --jq .data.createCommitOnBranch.commit.oid)
+              move_ref "$BRANCH" "$commit"
+              gh api -X DELETE "repos/$REPO/git/refs/heads/$scratch"
+              echo "$commit"
           fi
 
           body="because new core or ANGLE releases are out"$'\n\n'"- ${changes//$'\n'/$'\n'- }"
