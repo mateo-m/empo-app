@@ -126,7 +126,7 @@ public struct WebDAVServer: Codable, Equatable, Sendable {
     public var refusal: BackupProviderError? {
         if let refusal = TransportSecurity.refusal(forAddress: address) { return refusal }
         if username.trimmingCharacters(in: .whitespaces).isEmpty {
-            return .rejected(message: "Type the user name of the server.")
+            return .rejected(message: screenText("Type the user name of the server."))
         }
         return nil
     }

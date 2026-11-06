@@ -412,7 +412,7 @@ public enum WebDAV {
         let xml = String(data: body, encoding: .utf8) ?? ""
         let said =
             DAVXML.value("message", in: xml) ?? DAVXML.value("responsedescription", in: xml) ?? ""
-        return .refusal(by: "The server", said: said)
+        return .refusal(by: screenText("The server"), said: said)
     }
 
     // MARK: - The add form of 13.7
@@ -425,22 +425,22 @@ public enum WebDAV {
     /// copy the S3 form carries.
     public static let addFormFields: [TargetFormField] = [
         TargetFormField(
-            name: "label", label: "Name", hint: "My server",
-            note: "The name Empo shows for this location.", group: "Name"),
+            name: "label", label: screenText("Name"), hint: screenText("My server"),
+            note: screenText("The name Empo shows for this location."), group: screenText("Name")),
         TargetFormField(
-            name: "address", label: "Address",
+            name: "address", label: screenText("Address"),
             hint: "https://cloud.example.com/remote.php/dav/files/you", kind: .address,
-            note: "The WebDAV address your server shows in its settings.", group: "Server"),
+            note: screenText("The WebDAV address your server shows in its settings."), group: screenText("Server")),
         TargetFormField(
-            name: "root", label: "Folder (optional)", hint: "backups", isRequired: false,
-            note: "Empo makes its own Empo folder in here. Leave it empty to make it at the address itself.",
-            group: "Server"),
+            name: "root", label: screenText("Folder (optional)"), hint: "backups", isRequired: false,
+            note: screenText("Empo makes its own Empo folder in here. Leave it empty to make it at the address itself."),
+            group: screenText("Server")),
         TargetFormField(
-            name: "username", label: "User name", hint: "you", kind: .userName,
-            group: "Sign-in"),
+            name: "username", label: screenText("User name"), hint: "you", kind: .userName,
+            group: screenText("Sign-in")),
         TargetFormField(
-            name: "password", label: "Password", kind: .password,
-            note: "If your server uses two-step sign-in, make an app password for Empo.",
-            group: "Sign-in"),
+            name: "password", label: screenText("Password"), kind: .password,
+            note: screenText("If your server uses two-step sign-in, make an app password for Empo."),
+            group: screenText("Sign-in")),
     ]
 }

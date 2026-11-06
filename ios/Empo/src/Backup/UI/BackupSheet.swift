@@ -137,12 +137,16 @@ struct BackupSheet: View {
             }
             .disabled(model.editor == nil)
 
-            row("In this backup", BackupText.bytes(model.mode == .slim ? model.slimBytes : model.fullBytes))
-            row("Stored remotely", BackupText.bytes(model.storedBytes))
+            row(
+                String(localized: "In this backup"),
+                BackupText.bytes(model.mode == .slim ? model.slimBytes : model.fullBytes))
+            row(String(localized: "Stored remotely"), BackupText.bytes(model.storedBytes))
         } footer: {
             Text(
-                "If you switch to saves and settings only, Empo keeps the whole-game "
-                    + "backups it already made until they're old enough to delete."
+                String(
+                    localized:
+                        "If you switch to saves and settings only, Empo keeps the whole-game backups it already made until they're old enough to delete."
+                )
             )
         }
     }
@@ -278,8 +282,10 @@ private struct ModePickerScreen: View {
                 }
             } footer: {
                 Text(
-                    "The whole game comes back on any device. Saves and settings only "
-                        + "needs the game files to be there already."
+                    String(
+                        localized:
+                            "The whole game comes back on any device. Saves and settings only needs the game files to be there already."
+                    )
                 )
             }
         }
@@ -328,8 +334,10 @@ private struct OversizedWriteAskSheet: View {
             }
         ) {
             SheetBodyText(
-                "The game wrote \(path), which is \(BackupText.bytes(sizeBytes)). "
-                    + "A file this large is usually part of the game and not a save.")
+                String(
+                    localized:
+                        "The game wrote \(path), which is \(BackupText.bytes(sizeBytes)). A file this large is usually part of the game and not a save."
+                ))
             SheetPrimaryButton("Back it up") {
                 answer(true)
                 dismiss()

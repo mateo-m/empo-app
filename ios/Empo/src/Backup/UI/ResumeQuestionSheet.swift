@@ -63,8 +63,8 @@ struct ResumeQuestionAsk: Identifiable {
 
     private var backupText: String {
         guard let id = record.snapshotId, let date = BackupKeys.timestamp(ofSnapshotId: id)
-        else { return "the backup on \(targetLabel)" }
-        return "the backup of " + date.formatted(date: .abbreviated, time: .shortened)
+        else { return String(localized: "the backup on \(targetLabel)") }
+        return String(localized: "the backup of \(date.formatted(date: .abbreviated, time: .shortened))")
     }
 
     /// The one record the next launch asks about, or `nil` when the
@@ -89,7 +89,8 @@ struct ResumeQuestionAsk: Identifiable {
         self.record = record
         gameName = BackupGameNames().name(ofGameKey: record.gameKey)
         targetLabel =
-            BackupTargets.load().first { $0.id == record.targetId }?.displayName ?? "this location"
+            BackupTargets.load().first { $0.id == record.targetId }?.displayName
+            ?? String(localized: "this location")
     }
 
     @MainActor

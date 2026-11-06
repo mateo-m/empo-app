@@ -32,9 +32,9 @@ enum BackupText {
     /// the unreachable line of 13.5.
     static func when(_ date: Date) -> String {
         let clock = date.formatted(date: .omitted, time: .shortened)
-        if Calendar.current.isDateInToday(date) { return "at \(clock)" }
-        if Calendar.current.isDateInYesterday(date) { return "yesterday at \(clock)" }
-        return "on \(date.formatted(.dateTime.day().month(.abbreviated))) at \(clock)"
+        if Calendar.current.isDateInToday(date) { return String(localized: "at \(clock)") }
+        if Calendar.current.isDateInYesterday(date) { return String(localized: "yesterday at \(clock)") }
+        return String(localized: "on \(date.formatted(.dateTime.day().month(.abbreviated))) at \(clock)")
     }
 
     /// "2 minutes ago", for the row of a working target.
@@ -46,7 +46,8 @@ enum BackupText {
     /// "today" or "on 4 March", for the status line of 13.4.
     static func day(_ date: Date) -> String {
         Calendar.current.isDateInToday(date)
-            ? "today" : "on " + date.formatted(.dateTime.day().month(.wide))
+            ? String(localized: "today")
+            : String(localized: "on \(date.formatted(.dateTime.day().month(.wide)))")
     }
 
     /// "4 March to 2 August 2026", for the delete sheet of 13.9.

@@ -163,7 +163,8 @@ final class RestoreCoordinator {
         // checks come after them. A game can launch meanwhile, and
         // another restore can start.
         guard running == nil else {
-            return .failed("Another restore is running. Wait for it to finish, then try again.")
+            return .failed(
+                String(localized: "Another restore is running. Wait for it to finish, then try again."))
         }
         guard !gameLaunches, !BackupDeviceConditions.isSessionLive else {
             return .stopped(.gameLaunched, RestoreResult())
@@ -188,7 +189,10 @@ final class RestoreCoordinator {
             store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
         } catch {
             return .failed(
-                "Empo couldn't open its records on this device. Close Empo, open it again, then try again.")
+                String(
+                    localized:
+                        "Empo couldn't open its records on this device. Close Empo, open it again, then try again."
+                ))
         }
 
         runningGameKey = container.map { BackupKeys.gameKey(containerFolderName: $0.folderName) }
@@ -239,7 +243,7 @@ final class RestoreCoordinator {
     }
 
     private static let settingsUnchangedLine =
-        "Empo restored the backup, but your settings didn't change. Try again."
+        String(localized: "Empo restored the backup, but your settings didn't change. Try again.")
 
     /// From the tap on a game until the session counts as live, no
     /// restore may start.
@@ -313,7 +317,7 @@ final class RestoreCoordinator {
         guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
             let provider = await BackupTargets.provider(for: descriptor),
             let snapshotId = record.snapshotId
-        else { return .failed("This location isn't set up on this device any more.") }
+        else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
 
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         guard let namespaces = try? await scan.namespaces(),
@@ -348,7 +352,7 @@ final class RestoreCoordinator {
             let snapshotId = record.snapshotId,
             let row = PackageSource.rows(of: source.manifest, packageId: packageId)
                 .first(where: { $0.snapshotId == snapshotId })
-        else { return .failed("The backup file isn't on this device any more.") }
+        else { return .failed(String(localized: "The backup file isn't on this device any more.")) }
 
         return await restore(
             row, into: GameIdentities.match(row.identity), package: source,

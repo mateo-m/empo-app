@@ -90,13 +90,14 @@ struct BackupHistoryScreen: View {
     }
 
     private static func line(of run: BackupRunRecord, target: String) -> String {
-        let games = run.gameCount == 1 ? "1 game" : "\(run.gameCount) games"
+        let games =
+            run.gameCount == 1 ? String(localized: "1 game") : String(localized: "\(run.gameCount) games")
         guard run.uploadedBytes > 0 else { return "\(target) · \(games)" }
         return "\(target) · \(games) · \(BackupText.bytes(run.uploadedBytes))"
     }
 
     private func label(of run: BackupRunRecord) -> String {
         model.items?.first { $0.id == run.targetId }?.descriptor.displayName
-            ?? "a removed location"
+            ?? String(localized: "a removed location")
     }
 }

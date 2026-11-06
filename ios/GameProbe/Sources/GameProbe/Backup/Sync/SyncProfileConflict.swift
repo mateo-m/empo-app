@@ -18,18 +18,19 @@ public enum SyncProfileConflict {
                 .replacingOccurrences(of: "\\", with: "-")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .prefix(maxDeviceNameLength))
-        let suffix = " from " + (device.isEmpty ? "another device" : device)
+        let origin = device.isEmpty ? screenText("another device") : device
+        let originLength = screenText("%@ from %@", "", origin).count
         let profile = profileName.precomposedStringWithCanonicalMapping
-            .prefix(LayoutProfileStore.maxNameLength - suffix.count)
+            .prefix(LayoutProfileStore.maxNameLength - originLength)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return profile + suffix
+        return screenText("%@ from %@", profile, origin)
     }
 
     private static let maxDeviceNameLength = 24
 
     /// The one short origin note the conflict profile carries.
     public static func originNote(deviceName: String) -> String {
-        "Empo kept this version from \(deviceName) after both devices changed the same control."
+        screenText("Empo kept this version from %@ after both devices changed the same control.", deviceName)
     }
 
     /// The losing version, rebuilt as an ordinary profile with its

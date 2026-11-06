@@ -70,8 +70,8 @@ struct PreferenceSnapshotListScreen: View {
                 Button(GameProbe.PreferenceRestore.undoLabel) {
                     line =
                         PreferenceRestore.undo()
-                        ? "Your earlier settings are back."
-                        : "Empo couldn't bring back your earlier settings. Try again."
+                        ? String(localized: "Your earlier settings are back.")
+                        : String(localized: "Empo couldn't bring back your earlier settings. Try again.")
                     hasUndo = PreferenceRestore.hasUndo()
                 }
                 .disabled(isRunning)
@@ -88,7 +88,7 @@ struct PreferenceSnapshotListScreen: View {
             isRunning = false
             hasUndo = PreferenceRestore.hasUndo()
             if case .finished = outcome {
-                line = "Your settings from this backup are back."
+                line = String(localized: "Your settings from this backup are back.")
             } else {
                 line = RestoreNotices.line(of: outcome)
             }

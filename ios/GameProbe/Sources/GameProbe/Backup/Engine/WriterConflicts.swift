@@ -95,23 +95,23 @@ public struct WriterConflicts: Codable, Equatable, Sendable {
 public enum WriterConflictQuestion {
 
     public static func line(deviceName: String, targetLabel: String) -> String {
-        "\(deviceName) also backs up to \(targetLabel). Where should new backups from this device go?"
+        screenText("%@ also backs up to %@. Where should new backups from this device go?", deviceName, targetLabel)
     }
 
     public static let note =
-        "Keep separate starts with a full upload. Both devices keep their history."
+        screenText("Keep separate starts with a full upload. Both devices keep their history.")
 
     public static let defaultResolution: WriterClaimResolution = .split
 
     public static func label(of resolution: WriterClaimResolution) -> String {
         switch resolution {
-        case .split: return "Keep separate"
-        case .takeOver: return "Take over"
+        case .split: return screenText("Keep separate")
+        case .takeOver: return screenText("Take over")
         }
     }
 
     /// The pill and the stale line while the question waits.
     public static func stopLine(targetLabel: String) -> String {
-        "Another device is using \(targetLabel). Answer on the Backups screen."
+        screenText("Another device is using %@. Answer on the Backups screen.", targetLabel)
     }
 }

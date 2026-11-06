@@ -33,13 +33,13 @@ public enum ProgressPill {
     public static func stopReason(of stop: BackupRunStop, targetLabel: String) -> String? {
         switch stop {
         case .offline:
-            return "Empo couldn't connect to \(targetLabel)."
+            return screenText("Empo couldn't connect to %@.", targetLabel)
         case .serverError:
-            return "\(targetLabel) had a server error."
+            return screenText("%@ had a server error.", targetLabel)
         case .throttled:
-            return "\(targetLabel) asked Empo to wait."
+            return screenText("%@ asked Empo to wait.", targetLabel)
         case .readOnlyFormat(.newerFormatVersion):
-            return "\(targetLabel) needs a newer version of Empo."
+            return screenText("%@ needs a newer version of Empo.", targetLabel)
         case .readOnlyFormat(.unreadableFormat), .needsSignIn, .blocked, .full, .quotaShortfall, .rejected, .writerConflict,
             .gameStarted, .paused:
             return nil
@@ -70,17 +70,17 @@ public enum ProgressPill {
     public static func line(_ phase: Phase, leftText: String? = nil) -> String {
         switch phase {
         case .checking(let gameName):
-            guard let gameName else { return "Checking for changes…" }
-            return "Checking \(gameName) for changes…"
+            guard let gameName else { return screenText("Checking for changes…") }
+            return screenText("Checking %@ for changes…", gameName)
         case .uploading(let gameName):
-            guard let leftText else { return "Backing up \(gameName)" }
-            return "Backing up \(gameName), about \(leftText) left"
+            guard let leftText else { return screenText("Backing up %@", gameName) }
+            return screenText("Backing up %@, about %@ left", gameName, leftText)
         case .paused(let reason):
-            return "Paused, \(reason)"
+            return screenText("Paused, %@", reason)
         case .stopped(let reason):
-            return "Backup stopped. \(reason)"
+            return screenText("Backup stopped. %@", reason)
         case .complete:
-            return "Backup complete"
+            return screenText("Backup complete")
         }
     }
 }

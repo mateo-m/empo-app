@@ -37,32 +37,32 @@ public enum VersionMarkerSheet {
 
         public var label: String {
             switch self {
-            case .savesAndSettingsOnly: return "Saves and settings only"
-            case .keepMyFiles: return "Keep my files"
-            case .useOnlyThisBackup: return "Use only this backup"
+            case .savesAndSettingsOnly: return screenText("Saves and settings only")
+            case .keepMyFiles: return screenText("Keep my files")
+            case .useOnlyThisBackup: return screenText("Use only this backup")
             }
         }
 
         public var detail: String {
             switch self {
             case .savesAndSettingsOnly:
-                return "Puts back your saves, settings, and control layouts. Touches nothing else."
+                return screenText("Puts back your saves, settings, and control layouts. Touches nothing else.")
             case .keepMyFiles:
-                return "Adds this backup's files beside yours. Removes nothing."
+                return screenText("Adds this backup's files beside yours. Removes nothing.")
             case .useOnlyThisBackup:
                 return
-                    "Moves the game files here aside, then puts this backup's files in their "
-                    + "place. The moved files stay in a folder you can open later."
+                    screenText("Moves the game files here aside, then puts this backup's files in their "
+                    + "place. The moved files stay in a folder you can open later.")
             }
         }
     }
 
-    public static let title = "Different game files"
+    public static let title = screenText("Different game files")
 
     public static func body(gameName: String) -> String {
-        "This backup holds different game files than \(gameName) has on this device. Mixing two "
+        screenText("This backup holds different game files than %@ has on this device. Mixing two "
             + "sets of game files can break the game.\n\nWhat should happen to the game files "
-            + "already here?"
+            + "already here?", gameName)
     }
 
     /// The order the actions appear in. Saves and settings only is

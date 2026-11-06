@@ -126,7 +126,7 @@ public actor RestoreEngine {
                 replaced = try moveTheTreeAside(tree)
                 result.replacedTreeName = replaced?.lastPathComponent
             } catch {
-                return .failed("Empo couldn't move the current game files aside. Nothing changed.")
+                return .failed(screenText("Empo couldn't move the current game files aside. Nothing changed."))
             }
         }
 

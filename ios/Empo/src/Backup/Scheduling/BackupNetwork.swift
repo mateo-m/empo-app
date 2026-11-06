@@ -47,9 +47,9 @@ enum BackupNetwork {
     }
 
     /// The line the UI shows while the system holds the tasks.
-    static let waitingLine = "waiting for Wi-Fi"
+    static let waitingLine = String(localized: "waiting for Wi-Fi")
 
-    static let lowDataModeLine = "Low Data Mode is on"
+    static let lowDataModeLine = String(localized: "Low Data Mode is on")
 
     /// Why the system holds the uploads right now, per 7.4, or `nil`
     /// while they move.

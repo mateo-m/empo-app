@@ -26,10 +26,10 @@ public struct BackupsScreenStatus: Equatable, Sendable {
 
 public enum BackupsScreenStatusRules {
 
-    public static let everythingPausedLine = "Backups paused"
-    public static let everythingPausedDetail = "Every location is paused"
-    public static let healthyLine = "All games backed up"
-    public static let readyLine = "Ready to back up"
+    public static let everythingPausedLine = screenText("Backups paused")
+    public static let everythingPausedDetail = screenText("Every location is paused")
+    public static let healthyLine = screenText("All games backed up")
+    public static let readyLine = screenText("Ready to back up")
 
     /// The status, or `nil` where no target exists.
     ///
@@ -57,14 +57,14 @@ public enum BackupsScreenStatusRules {
             } ?? enabled[0]
         guard worst.state == .current else {
             return BackupsScreenStatus(
-                line: "Check \(worst.title)", detail: worst.stateLine,
+                line: screenText("Check %@", worst.title), detail: worst.stateLine,
                 targetId: worst.targetId, isHealthy: false)
         }
         if let late = Staleness.worstGame(of: games) {
             let count = games.filter { $0.level != .fresh }.count
             let label = rows.first { $0.targetId == late.targetId }?.title
             return BackupsScreenStatus(
-                line: count == 1 ? "1 game not backed up" : "\(count) games not backed up",
+                line: count == 1 ? screenText("1 game not backed up") : screenText("%lld games not backed up", count),
                 detail: (late.cause ?? .waitingForARun).line(targetLabel: label),
                 targetId: late.targetId, isHealthy: false)
         }
@@ -73,12 +73,12 @@ public enum BackupsScreenStatusRules {
         guard notYet.isEmpty, let lastSuccessText else {
             let detail =
                 notYet.count == 1 && enabled.count > 1
-                ? "No backup yet at \(notYet[0].title)" : "No backup yet"
+                ? screenText("No backup yet at %@", notYet[0].title) : screenText("No backup yet")
             return BackupsScreenStatus(
                 line: readyLine, detail: detail, targetId: nil, isHealthy: true)
         }
         return BackupsScreenStatus(
-            line: healthyLine, detail: "Last backup \(lastSuccessText)",
+            line: healthyLine, detail: screenText("Last backup %@", lastSuccessText),
             targetId: nil, isHealthy: true)
     }
 }

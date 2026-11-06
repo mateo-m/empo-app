@@ -54,11 +54,11 @@ public enum QuotaCheck {
     public static func blockedLine(_ shortfall: Shortfall) -> String {
         let missing = ByteCountFormatter.string(
             fromByteCount: shortfall.missingBytes, countStyle: .file)
-        return "This location needs \(missing) more space for the next backup."
+        return screenText("This location needs %@ more space for the next backup.", missing)
     }
 
     /// The reason a target blocked by an upload error carries, when
     /// the prune of 5.14 freed too little.
     public static let prunedAndStillFullLine =
-        "This location is full. Free up space on it, or raise its storage limit."
+        screenText("This location is full. Free up space on it, or raise its storage limit.")
 }

@@ -105,7 +105,7 @@ final class FreshInstallModel {
         isDone = true
     }
 
-    static let rescuedSavesName = "Rescued Saves"
+    static let rescuedSavesName = String(localized: "Rescued Saves")
 
     func stop() async {
         isStopped = true

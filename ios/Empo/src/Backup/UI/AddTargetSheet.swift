@@ -91,13 +91,15 @@ struct AddTargetSheet: View {
     }
 
     private func note(on service: BackupProviderKind) -> String? {
-        if service == .iCloudDrive, hasICloudDrive { return "Already added." }
+        if service == .iCloudDrive, hasICloudDrive { return String(localized: "Already added.") }
         switch (service, iCloudReach) {
         case (.s3, _): return "Amazon S3, Cloudflare R2, Backblaze B2, MinIO"
         case (.webdav, _): return "Nextcloud, ownCloud, Synology, Koofr"
-        case (.iCloudDrive, .signedOut): return "Sign in to iCloud in Settings to use it."
-        case (.iCloudDrive, .iCloudDriveOff): return "Turn on iCloud Drive for Empo in Settings."
-        case (.iCloudDrive, .notInThisBuild): return "Not available in this version of Empo."
+        case (.iCloudDrive, .signedOut): return String(localized: "Sign in to iCloud in Settings to use it.")
+        case (.iCloudDrive, .iCloudDriveOff):
+            return String(localized: "Turn on iCloud Drive for Empo in Settings.")
+        case (.iCloudDrive, .notInThisBuild):
+            return String(localized: "Not available in this version of Empo.")
         case (.iCloudDrive, .open), (.dropbox, _), (.googleDrive, _): return nil
         }
     }
@@ -156,7 +158,7 @@ struct TargetFormScreen: View {
     let service: BackupProviderKind
     var values: [String: String] = [:]
     var lockedFields: Set<String> = []
-    var submitTitle = "Add"
+    var submitTitle: LocalizedStringKey = "Add"
     let submit: ([String: String]) async -> BackupTargetAdd.Outcome
     let done: (TargetDescriptor, PermissionCheckResult) -> Void
 
@@ -261,7 +263,8 @@ struct TargetFormScreen: View {
             done(descriptor, result)
         case .checked(_, let result):
             failure =
-                result.failureLine(for: service) ?? "Empo couldn't check this location. Try again."
+                result.failureLine(for: service)
+                ?? String(localized: "Empo couldn't check this location. Try again.")
         case .cancelled:
             failure = nil
         case .failed(let line):
@@ -272,7 +275,7 @@ struct TargetFormScreen: View {
     @ViewBuilder private func row(_ field: TargetFormField) -> some View {
         let locked = lockedFields.contains(field.name)
         let note =
-            locked ? "To change this, remove the location and add it again." : field.note
+            locked ? String(localized: "To change this, remove the location and add it again.") : field.note
         if field.kind == .toggle {
             Toggle(isOn: toggle(field)) {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {

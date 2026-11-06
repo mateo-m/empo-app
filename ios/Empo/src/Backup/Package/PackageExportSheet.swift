@@ -54,7 +54,7 @@ final class PackageExportModel {
             let plan = await source.plan()
             guard !Task.isCancelled else { return }
             guard !plan.streams.isEmpty else {
-                phase = .failed("This device holds nothing to export.")
+                phase = .failed(String(localized: "This device holds nothing to export."))
                 return
             }
             phase = .building
@@ -100,7 +100,7 @@ final class PackageExportModel {
         } catch PackageBuildFailure.cancelled {
             phase = .done
         } catch {
-            phase = .failed("Empo couldn't make this package. Try again.")
+            phase = .failed(String(localized: "Empo couldn't make this package. Try again."))
         }
     }
 
@@ -132,8 +132,10 @@ final class PackageExportModel {
     }
 
     var line: String {
-        "\(progress.fileCount) of \(progress.totalFileCount) files, "
-            + "\(BackupText.bytes(progress.bytes)) of \(BackupText.bytes(progress.totalBytes))"
+        let done = BackupText.bytes(progress.bytes)
+        let total = BackupText.bytes(progress.totalBytes)
+        return String(
+            localized: "\(progress.fileCount) of \(progress.totalFileCount) files, \(done) of \(total)")
     }
 
     private static var freeSpaceBytes: Int64 {

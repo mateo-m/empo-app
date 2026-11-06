@@ -64,7 +64,7 @@ public enum BackupTriggerPlan {
 
     /// The title of the Live Activity a manual press carries, per
     /// 7.3.
-    public static let libraryTaskTitle = "Empo backups"
+    public static let libraryTaskTitle = screenText("Empo backups")
 
     /// The games one trigger covers.
     ///

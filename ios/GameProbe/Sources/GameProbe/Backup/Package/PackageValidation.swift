@@ -28,31 +28,31 @@ public enum PackageRejection: Error, Equatable, Sendable {
     public var line: String {
         switch self {
         case .noManifest:
-            return "This ZIP file is not an Empo backup package."
+            return screenText("This ZIP file is not an Empo backup package.")
         case .unreadableManifest:
-            return "The package list of files does not read."
+            return screenText("The package list of files does not read.")
         case .futureVersion(let version):
-            return "A newer Empo wrote this package, version \(version). Update Empo to open it."
+            return screenText("A newer Empo wrote this package, version %lld. Update Empo to open it.", version)
         case .absolutePath(let path):
-            return "The package holds a full path: \(path)."
+            return screenText("The package holds a full path: %@.", path)
         case .parentTraversal(let path):
-            return "The package points outside itself: \(path)."
+            return screenText("The package points outside itself: %@.", path)
         case .link(let path):
-            return "The package holds a link: \(path)."
+            return screenText("The package holds a link: %@.", path)
         case .undeclaredFile(let path):
-            return "The package holds a file its list does not name: \(path)."
+            return screenText("The package holds a file its list does not name: %@.", path)
         case .missingFile(let path):
-            return "The package list names a file the package does not hold: \(path)."
+            return screenText("The package list names a file the package does not hold: %@.", path)
         case .duplicatePath(let path):
-            return "The package names one path twice: \(path)."
+            return screenText("The package names one path twice: %@.", path)
         case .wrongSize(let path):
-            return "A file is not the size the package states: \(path)."
+            return screenText("A file is not the size the package states: %@.", path)
         case .wrongHash(let path):
-            return "A file does not match the package hash: \(path)."
+            return screenText("A file does not match the package hash: %@.", path)
         case .unsupportedCompression(let path):
-            return "The package holds a file Empo can't unpack: \(path)."
+            return screenText("The package holds a file Empo can't unpack: %@.", path)
         case .unreadableFile(let path):
-            return "A file in the package does not read: \(path)."
+            return screenText("A file in the package does not read: %@.", path)
         }
     }
 }

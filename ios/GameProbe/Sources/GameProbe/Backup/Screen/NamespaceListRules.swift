@@ -64,14 +64,14 @@ public struct NamespaceDeleteConfirmation: Equatable, Sendable {
 public enum NamespaceListRules {
 
     public static let spaceLine =
-        "Empo deletes these backups from the location now. You can't undo this. Your other backups stay."
+        screenText("Empo deletes these backups from the location now. You can't undo this. Your other backups stay.")
 
     public static func title(of row: BackupNamespaceRow) -> String {
-        row.isEarlierSpace ? "This device, older backups" : row.deviceName
+        row.isEarlierSpace ? screenText("This device, older backups") : row.deviceName
     }
 
     public static func backups(_ count: Int) -> String {
-        count == 1 ? "1 backup" : "\(count) backups"
+        count == 1 ? screenText("1 backup") : screenText("%lld backups", count)
     }
 
     /// The namespace this device writes to is marked and carries no
@@ -93,11 +93,12 @@ public enum NamespaceListRules {
     ) -> NamespaceDeleteConfirmation? {
         guard canDelete(row) else { return nil }
         let snapshots = backups(row.snapshotCount)
-        let games = row.gameCount == 1 ? "1 game" : "\(row.gameCount) games"
+        let games = row.gameCount == 1 ? screenText("1 game") : screenText("%lld games", row.gameCount)
         return NamespaceDeleteConfirmation(
-            title: "Delete the backups from \(title(of: row))?",
+            title: screenText("Delete the backups from %@?", title(of: row)),
             lines: [title(of: row), games, snapshots, dateRangeText],
-            buttonLabel: "Delete \(snapshots)",
+            buttonLabel: row.snapshotCount == 1
+                ? screenText("Delete 1 backup") : screenText("Delete %lld backups", row.snapshotCount),
             spaceLine: spaceLine)
     }
 }

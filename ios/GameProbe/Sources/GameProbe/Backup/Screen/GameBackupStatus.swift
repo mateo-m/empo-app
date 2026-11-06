@@ -103,24 +103,24 @@ public struct GameBackupStatus: Equatable, Sendable {
     public func line(lastSuccessText: String? = nil) -> String {
         switch state {
         case .running:
-            return "Backing up now"
+            return screenText("Backing up now")
         case .paused:
-            return "Paused"
+            return screenText("Paused")
         case .failed:
-            return "Last backup failed"
+            return screenText("Last backup failed")
         case .waitingForWiFi:
-            return "Waiting for Wi-Fi"
+            return screenText("Waiting for Wi-Fi")
         case .stale(nil):
-            return "Never backed up"
+            return screenText("Never backed up")
         case .stale(let days?):
-            return days == 1 ? "Backed up 1 day ago" : "Backed up \(days) days ago"
+            return days == 1 ? screenText("Backed up 1 day ago") : screenText("Backed up %lld days ago", days)
         case .healthy:
-            let day = lastSuccessText ?? "today"
-            return "Backed up \(day)" + (targetLabel.map { " · \($0)" } ?? "")
+            let day = lastSuccessText ?? screenText("today")
+            return screenText("Backed up %@", day) + (targetLabel.map { " · \($0)" } ?? "")
         case .neverRun:
-            return "Never backed up" + (targetLabel.map { " · \($0)" } ?? "")
+            return screenText("Never backed up") + (targetLabel.map { " · \($0)" } ?? "")
         case .notSetUp:
-            return "Not set up"
+            return screenText("Not set up")
         }
     }
 

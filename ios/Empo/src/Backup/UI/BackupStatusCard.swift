@@ -33,8 +33,8 @@ struct BackupStatusCard: View {
 
     private var headline: String {
         switch mark {
-        case .running: return "Backing up"
-        case .pausedRun: return "Backup paused"
+        case .running: return String(localized: "Backing up")
+        case .pausedRun: return String(localized: "Backup paused")
         case .ready, .healthy, .paused, .problem: return status.line
         }
     }

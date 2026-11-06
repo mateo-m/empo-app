@@ -196,7 +196,7 @@ final class BackupSheetModel {
     ) async -> RestoreOutcome {
         guard let descriptor = BackupTargets.load().first(where: { $0.id == row.targetId }),
             let provider = await BackupTargets.provider(for: descriptor)
-        else { return .failed("This location isn't set up on this device any more.") }
+        else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
         let outcome = await RestoreCoordinator.shared.restore(
             row, into: container, provider: provider, descriptor: descriptor,
             scope: scope, replacesTheTree: replacesTheTree)

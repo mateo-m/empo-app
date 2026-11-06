@@ -32,8 +32,10 @@ struct SaveFileEditorView: View {
                 }
             } footer: {
                 Text(
-                    "A save file joins this list on its own. Add one Empo missed, "
-                        + "and it stays whatever Empo detects later."
+                    String(
+                        localized:
+                            "A save file joins this list on its own. Add one Empo missed, and it stays whatever Empo detects later."
+                    )
                 )
             }
 
@@ -85,9 +87,9 @@ struct SaveFileEditorView: View {
     /// The label of the source that found the file, per 3.6.
     private static func label(of source: DetectionSource) -> String {
         switch source {
-        case .classifier: return "Empo found it"
-        case .runtimeWatch: return "The game wrote it"
-        case .manualMark: return "You added it"
+        case .classifier: return String(localized: "Empo found it")
+        case .runtimeWatch: return String(localized: "The game wrote it")
+        case .manualMark: return String(localized: "You added it")
         }
     }
 }

@@ -44,10 +44,10 @@ public struct BackupSheetLocks: Equatable, Sendable {
 /// container waits.
 public enum BackupSheetLockRules {
 
-    public static let runInFlightLine = "A backup of this game is running."
+    public static let runInFlightLine = screenText("A backup of this game is running.")
 
     public static func gameIsOpenLine(_ gameName: String) -> String {
-        "Close \(gameName) to use these."
+        screenText("Close %@ to use these.", gameName)
     }
 
     /// `openGameName` is the game the player is in, whether it plays

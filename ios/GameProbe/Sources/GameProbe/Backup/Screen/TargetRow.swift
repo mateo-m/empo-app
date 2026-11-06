@@ -9,8 +9,8 @@ extension BackupProviderKind {
         case .iCloudDrive: return "iCloud Drive"
         case .dropbox: return "Dropbox"
         case .googleDrive: return "Google Drive"
-        case .s3: return "S3 storage"
-        case .webdav: return "WebDAV server"
+        case .s3: return screenText("S3 storage")
+        case .webdav: return screenText("WebDAV server")
         }
     }
 
@@ -92,10 +92,10 @@ public enum TargetRowAction: String, Equatable, Sendable {
 
     public var label: String {
         switch self {
-        case .signIn: return "Sign in"
-        case .resume: return "Resume"
-        case .tryAgain: return "Try again"
-        case .getPlus: return "Get Plus"
+        case .signIn: return screenText("Sign in")
+        case .resume: return screenText("Resume")
+        case .tryAgain: return screenText("Try again")
+        case .getPlus: return screenText("Get Plus")
         }
     }
 }
@@ -183,12 +183,12 @@ public struct TargetRow: Equatable, Sendable {
 public enum TargetRowRules {
 
     /// The permanent line a foreground-only target carries, per 8.9.
-    public static let foregroundOnlyLine = "Backs up only while Empo is open"
+    public static let foregroundOnlyLine = screenText("Backs up only while Empo is open")
 
     /// The line an iCloud target shows while the runtime gate of 9.1
     /// answers nil.
-    public static let iCloudOffLine = "iCloud Drive is off on this device"
-    public static let iCloudSignedOutLine = "Not signed in to iCloud on this device"
+    public static let iCloudOffLine = screenText("iCloud Drive is off on this device")
+    public static let iCloudSignedOutLine = screenText("Not signed in to iCloud on this device")
 
     /// The one state the row shows.
     public static func state(of facts: TargetRowFacts) -> TargetRowState {
@@ -238,28 +238,28 @@ public enum TargetRowRules {
         case .cannotOpen(.iCloudDriveOff):
             return iCloudOffLine
         case .cannotOpen:
-            return "This version of Empo can't use \(target.provider.serviceName)."
+            return screenText("This version of Empo can't use %@.", target.provider.serviceName)
         case .placeholder:
-            return "Sign in on this device to start"
+            return screenText("Sign in on this device to start")
         case .needsPlus:
-            return "Backups stopped. You can still restore."
+            return screenText("Backups stopped. You can still restore.")
         case .paused:
-            return "Paused"
+            return screenText("Paused")
         case .needsSignIn:
-            return "Sign in again to continue"
+            return screenText("Sign in again to continue")
         case .blockedByPermissions(let reason), .full(let reason):
             return reason
         case .rejected(let message):
             return message
         case .unreachable(_, .noAnswer):
-            return "Couldn't connect \(time)"
+            return screenText("Couldn't connect %@", time)
         case .unreachable(_, .serverError):
-            return "Server error \(time)"
+            return screenText("Server error %@", time)
         case .unreachable(_, .busy):
-            return "Server busy \(time)"
+            return screenText("Server busy %@", time)
         case .current:
-            guard let lastSuccessText else { return "No backup yet" }
-            return "Last backup \(lastSuccessText)"
+            guard let lastSuccessText else { return screenText("No backup yet") }
+            return screenText("Last backup %@", lastSuccessText)
         }
     }
 

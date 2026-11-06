@@ -127,7 +127,7 @@ private struct NamespaceDeleteSheet: View {
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            SheetDestructiveButton(isDeleting ? "Deleting…" : confirmation.buttonLabel) {
+            SheetDestructiveButton(isDeleting ? String(localized: "Deleting…") : confirmation.buttonLabel) {
                 Task { await run() }
             }
             .disabled(isDeleting)

@@ -31,7 +31,7 @@ enum BackupTargetAdd {
             id: "icloud-drive",
             provider: .iCloudDrive,
             label: "iCloud Drive",
-            accountHint: "this device",
+            accountHint: String(localized: "this device"),
             root: ICloudDrive.root)
         guard let provider = await ICloudDriveGate.shared.target() else {
             return .failed(await iCloudClosedLine(descriptor))
@@ -46,13 +46,13 @@ enum BackupTargetAdd {
 
     static func dropbox(presenting screen: UIViewController) async -> Outcome {
         guard DropboxSignIn.isConfigured else {
-            return .failed("Dropbox isn't available in this version of Empo.")
+            return .failed(String(localized: "Dropbox isn't available in this version of Empo."))
         }
         let descriptor = TargetDescriptor(
             id: UUID().uuidString,
             provider: .dropbox,
             label: "Dropbox",
-            accountHint: "this account",
+            accountHint: String(localized: "this account"),
             root: Dropbox.root)
         do {
             guard
@@ -70,13 +70,13 @@ enum BackupTargetAdd {
 
     static func googleDrive(presenting screen: UIViewController) async -> Outcome {
         guard GoogleDriveSignIn.isConfigured else {
-            return .failed("Google Drive isn't available in this version of Empo.")
+            return .failed(String(localized: "Google Drive isn't available in this version of Empo."))
         }
         let descriptor = TargetDescriptor(
             id: UUID().uuidString,
             provider: .googleDrive,
             label: "Google Drive",
-            accountHint: "this account",
+            accountHint: String(localized: "this account"),
             root: GoogleDrive.root)
         do {
             guard
@@ -98,7 +98,7 @@ enum BackupTargetAdd {
     /// its folder, and its backup policy.
     static func s3(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
         guard let bucket = s3Bucket(form: form) else {
-            return .failed("Enter the address.")
+            return .failed(String(localized: "Enter the address."))
         }
         let address = bucket.address
         if let refusal = bucket.refusal { return .failed(line(of: refusal)) }
@@ -167,7 +167,7 @@ enum BackupTargetAdd {
 
     static func webdav(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
         guard let server = webdavServer(form: form) else {
-            return .failed("Enter the address.")
+            return .failed(String(localized: "Enter the address."))
         }
         let address = server.address
         if let refusal = server.refusal { return .failed(line(of: refusal)) }
@@ -262,7 +262,7 @@ enum BackupTargetAdd {
             }
             return await check(target, provider: provider)
         case .s3, .webdav:
-            return .failed("Enter the password for this location again.")
+            return .failed(String(localized: "Enter the password for this location again."))
         }
     }
 
@@ -290,7 +290,7 @@ enum BackupTargetAdd {
             let result = try? await BackupTargets.addAfterPermissionCheck(
                 descriptor, provider: provider)
         else {
-            return .failed("Empo couldn't check this location. Try again.")
+            return .failed(String(localized: "Empo couldn't check this location. Try again."))
         }
         if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             try? store.recordTargetQuota(
@@ -307,11 +307,13 @@ enum BackupTargetAdd {
     private static func line(of error: BackupProviderError) -> String {
         switch error {
         case .rejected(let message): return message
-        default: return "Empo can't use this address. Check it and try again."
+        default: return String(localized: "Empo can't use this address. Check it and try again.")
         }
     }
 
-    static let noSignInScreenLine = "Empo couldn't show the sign-in page. Try again."
-    private static let openFailedLine = "Empo couldn't open this location after you signed in. Try again."
-    private static let keychainFailedLine = "Empo couldn't save the sign-in on this device. Try again."
+    static let noSignInScreenLine = String(localized: "Empo couldn't show the sign-in page. Try again.")
+    private static let openFailedLine = String(
+        localized: "Empo couldn't open this location after you signed in. Try again.")
+    private static let keychainFailedLine = String(
+        localized: "Empo couldn't save the sign-in on this device. Try again.")
 }

@@ -21,7 +21,7 @@ struct RemoveTargetSheet: View {
     private var sheet: TargetRemovalSheet {
         TargetRemovalRules.sheet(
             target: item.descriptor, deleteBackups: deletesBackups,
-            deviceName: "this " + UIDevice.current.model)
+            deviceName: String(localized: "this \(UIDevice.current.model)"))
     }
 
     var body: some View {
@@ -49,11 +49,15 @@ struct RemoveTargetSheet: View {
                     }
                 }
             } else if deletesBackups {
-                SheetDestructiveButton(isRemoving ? "Deleting…" : sheet.confirmLabel) { confirm() }
-                    .disabled(isRemoving)
+                SheetDestructiveButton(isRemoving ? String(localized: "Deleting…") : sheet.confirmLabel) {
+                    confirm()
+                }
+                .disabled(isRemoving)
             } else {
-                SheetPrimaryButton(isRemoving ? "Removing…" : sheet.confirmLabel) { confirm() }
-                    .disabled(isRemoving)
+                SheetPrimaryButton(isRemoving ? String(localized: "Removing…") : sheet.confirmLabel) {
+                    confirm()
+                }
+                .disabled(isRemoving)
             }
         }
         .interactiveDismissDisabled(isRemoving)

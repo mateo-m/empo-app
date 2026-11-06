@@ -120,10 +120,10 @@ public struct S3Bucket: Codable, Equatable, Sendable {
     public var refusal: BackupProviderError? {
         if let refusal = TransportSecurity.refusal(forAddress: address) { return refusal }
         if name.trimmingCharacters(in: .whitespaces).isEmpty {
-            return .rejected(message: "Type the name of the bucket.")
+            return .rejected(message: screenText("Type the name of the bucket."))
         }
         if region.trimmingCharacters(in: .whitespaces).isEmpty {
-            return .rejected(message: "Type the region of the bucket.")
+            return .rejected(message: screenText("Type the region of the bucket."))
         }
         return nil
     }

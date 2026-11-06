@@ -71,8 +71,8 @@ public enum BackupProviderError: Error, Equatable, Sendable {
     /// follow in quotes.
     static func refusal(by who: String, said: String = "") -> BackupProviderError {
         let said = said.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !said.isEmpty else { return .rejected(message: "\(who) refused the request.") }
-        return .rejected(message: "\(who) refused the request. It said: “\(said)”")
+        guard !said.isEmpty else { return .rejected(message: screenText("%@ refused the request.", who)) }
+        return .rejected(message: screenText("%@ refused the request. It said: “%@”", who, said))
     }
 
     /// The one effect of 8.4.

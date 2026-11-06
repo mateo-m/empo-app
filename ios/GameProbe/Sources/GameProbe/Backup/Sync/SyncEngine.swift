@@ -215,7 +215,7 @@ public final class SyncEngine {
                 continue
             }
             rebuildConflicts(
-                before: before, deviceName: namespace.record?.name ?? "another device")
+                before: before, deviceName: namespace.record?.name ?? screenText("another device"))
             if let modifiedAt = object.modifiedAt {
                 seen.append((namespace.id, modifiedAt, object.sizeBytes, descriptor.id))
             }

@@ -23,8 +23,8 @@ public enum FreshInstallHints {
     /// The line for an iCloud target a build without the entitlement
     /// cannot open, per 9.1. Ticket 017 greys the entry out.
     public static let iCloudUnavailableLine =
-        "This library backed up to iCloud on the App Store version of Empo. This version of Empo can't "
-        + "use iCloud. Restore from another location, or install Empo from the App Store."
+        screenText("This library backed up to iCloud on the App Store version of Empo. This version of Empo can't "
+        + "use iCloud. Restore from another location, or install Empo from the App Store.")
 
     /// The hint for one streamed descriptor.
     public static func line(
@@ -35,11 +35,11 @@ public enum FreshInstallHints {
         }
         let label = descriptor.label
         guard isSelfHosted(descriptor.provider), !descriptor.root.isEmpty else {
-            return "This library is also backed up to \(label). Add \(label) to see those backups "
-                + "too."
+            return screenText("This library is also backed up to %@. Add %@ to see those backups "
+                + "too.", label, label)
         }
-        return "This library is also backed up to \(label). Add it and point it at "
-            + "\(descriptor.root) to see those backups too."
+        return screenText("This library is also backed up to %@. Add it and point it at "
+            + "%@ to see those backups too.", label, descriptor.root)
     }
 
     /// The hints for every streamed descriptor this install has not

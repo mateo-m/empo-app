@@ -14,8 +14,9 @@ struct AccountHintText: View {
         if let masked = AccountHintMask.masked(hint, provider: provider) {
             TappableLine(
                 text: isShown ? hint : masked,
-                accessibilityText: isShown ? hint : "Account hidden",
-                accessibilityHint: isShown ? "Hides the account" : "Shows the account"
+                accessibilityText: isShown ? hint : String(localized: "Account hidden"),
+                accessibilityHint: isShown
+                    ? String(localized: "Hides the account") : String(localized: "Shows the account")
             ) { isShown.toggle() }
             // A list row merges this line into its own element, which
             // hides the label's activation from VoiceOver.

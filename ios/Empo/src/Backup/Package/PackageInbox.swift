@@ -80,7 +80,7 @@ struct PackageDoorClosedSheet: View {
         ) {
             SheetBodyText(
                 PackageDoors.line(gameName: EngineSessionCoordinator.shared.openGameName)
-                    ?? "Close the game to import a backup.")
+                    ?? String(localized: "Close the game to import a backup."))
         }
     }
 }

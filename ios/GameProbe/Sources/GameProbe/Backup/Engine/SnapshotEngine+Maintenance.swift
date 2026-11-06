@@ -221,7 +221,7 @@ extension SnapshotEngine {
         guard let data = try await fetch(paths.writerFile) else { return nil }
         return (try? WriterClaim.decode(json: data))
             ?? WriterClaim(
-                namespaceId: paths.namespaceId, deviceId: "", deviceName: "Another device",
+                namespaceId: paths.namespaceId, deviceId: "", deviceName: screenText("Another device"),
                 claimedAt: .distantPast)
     }
 

@@ -65,10 +65,10 @@ public enum StagingPause: String, Equatable, CaseIterable, Sendable {
 
     public var line: String {
         switch self {
-        case .gameRunning: return "a game is running"
-        case .restoreRunning: return "a restore is running"
-        case .lowPowerMode: return "Low Power Mode is on"
-        case .heat: return "the device is too warm"
+        case .gameRunning: return screenText("a game is running")
+        case .restoreRunning: return screenText("a restore is running")
+        case .lowPowerMode: return screenText("Low Power Mode is on")
+        case .heat: return screenText("the device is too warm")
         }
     }
 }

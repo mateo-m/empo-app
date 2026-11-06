@@ -14,35 +14,35 @@ import Foundation
 public enum AttachAction {
 
     /// The title of the game picker.
-    public static let pickTitle = "Restore into a different game"
+    public static let pickTitle = screenText("Restore into a different game")
 
     /// The row that opens the picker.
     public static let actionLabel = pickTitle + "…"
 
     public static func pickBody(snapshotName: String) -> String {
-        "Pick the game this backup of \(snapshotName) restores into."
+        screenText("Pick the game this backup of %@ restores into.", snapshotName)
     }
 
     public static func confirmTitle(targetGameName: String) -> String {
-        "Restore into \(targetGameName)?"
+        screenText("Restore into %@?", targetGameName)
     }
 
     public static func confirmBody(targetGameName: String) -> String {
-        "This backup will fill \(targetGameName)'s saves and settings. Future backups of "
-            + "\(targetGameName) will match this backup automatically."
+        screenText("This backup will fill %@'s saves and settings. Future backups of "
+            + "%@ will match this backup automatically.", targetGameName, targetGameName)
     }
 
-    public static let cancelLabel = "Cancel"
+    public static let cancelLabel = screenText("Cancel")
 
     public static func failedTitle(targetGameName: String) -> String {
-        "Couldn't link this backup to \(targetGameName)"
+        screenText("Couldn't link this backup to %@", targetGameName)
     }
 
-    public static let failedBody = "Nothing was restored."
-    public static let failedDismissLabel = "OK"
+    public static let failedBody = screenText("Nothing was restored.")
+    public static let failedDismissLabel = screenText("OK")
 
     public static func confirmLabel(targetGameName: String) -> String {
-        "Restore into \(targetGameName)"
+        screenText("Restore into %@", targetGameName)
     }
 
     /// Records the attach in the game's alias store.

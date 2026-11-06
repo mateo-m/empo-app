@@ -9,7 +9,7 @@ public enum PreferenceRollback {
 
     /// One confirmation states what a rollback reaches.
     public static let confirmation =
-        "It also changes the settings on every device that syncs with this one."
+        screenText("It also changes the settings on every device that syncs with this one.")
 
     /// What the rollback writes: the snapshot's portable values, and
     /// a delete for every portable key the snapshot does not carry.

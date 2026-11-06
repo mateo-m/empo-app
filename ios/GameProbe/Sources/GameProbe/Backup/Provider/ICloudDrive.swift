@@ -61,7 +61,7 @@ public enum ICloudDrive {
 
     /// What the row reads while the probe answers nil, per 9.1 and
     /// 13.5.
-    public static let disabledLine = "iCloud is off or not signed in on this device"
+    public static let disabledLine = screenText("iCloud is off or not signed in on this device")
 
     /// The five flags of 8.3, as the table of section 9 states them.
     ///

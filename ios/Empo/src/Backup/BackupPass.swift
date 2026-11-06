@@ -72,7 +72,8 @@ final class BackupPass: BackupRunning {
             guard let result else {
                 didFinish = false
                 if BackupRunMonitor.shared.stopLine == nil {
-                    BackupRunMonitor.shared.stopLine = "\(descriptor.displayName) didn't finish."
+                    BackupRunMonitor.shared.stopLine = String(
+                        localized: "\(descriptor.displayName) didn't finish.")
                 }
                 continue
             }
@@ -259,7 +260,7 @@ final class BackupPass: BackupRunning {
         }
         guard let cause = BackupFailFastCause.allCases.first(where: causes.contains) else {
             return result.stop.flatMap { ProgressPill.stopReason(of: $0, targetLabel: label) }
-                ?? "\(label) didn't finish."
+                ?? String(localized: "\(label) didn't finish.")
         }
         return cause.staleCause.line(targetLabel: label, deviceName: device)
     }

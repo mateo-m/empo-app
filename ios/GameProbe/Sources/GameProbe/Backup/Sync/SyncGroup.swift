@@ -84,27 +84,27 @@ public enum SyncGroupCopy {
 
     /// The one stable line the Backups screen carries. There is no
     /// dashboard, no per-key state, and no success alert.
-    public static let stableLine = "Settings sync when Empo opens."
+    public static let stableLine = screenText("Settings sync when Empo opens.")
 
     /// Two devices with no common target cannot sync.
     public static let noCommonTarget =
-        "To sync settings, add one backup location that both devices can open."
+        screenText("To sync settings, add one backup location that both devices can open.")
 
     public static func confirmation(of group: DiscoveredSyncGroup) -> String {
-        let devices = group.deviceNames.isEmpty ? "another device" : list(group.deviceNames)
-        return "Sync settings with \(devices)?"
+        let devices = group.deviceNames.isEmpty ? screenText("another device") : list(group.deviceNames)
+        return screenText("Sync settings with %@?", devices)
     }
 
     /// The join is the consent step, so this line says what changes.
     public static let failedLine =
-        "Your settings didn't sync the last time Empo tried. Empo tries again when it opens."
+        screenText("Your settings didn't sync the last time Empo tried. Empo tries again when it opens.")
 
     public static let joinBody =
-        "Empo keeps your app settings, your controller buttons, and your on-screen control "
-        + "layouts the same on these devices. It doesn't copy your saves."
+        screenText("Empo keeps your app settings, your controller buttons, and your on-screen control "
+        + "layouts the same on these devices. It doesn't copy your saves.")
 
     private static func list(_ names: [String]) -> String {
         guard names.count > 1 else { return names.first ?? "" }
-        return names.dropLast().joined(separator: ", ") + " and " + (names.last ?? "")
+        return screenText("%@ and %@", names.dropLast().joined(separator: ", "), names.last ?? "")
     }
 }

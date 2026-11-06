@@ -21,12 +21,12 @@ public enum AdoptQuestion {
         case startFresh = "start-fresh"
     }
 
-    public static let question = "Empo found earlier backups from this device. Continue them?"
+    public static let question = screenText("Empo found earlier backups from this device. Continue them?")
 
     public static func label(of answer: Answer) -> String {
         switch answer {
-        case .adopt: return "Continue"
-        case .startFresh: return "Start fresh"
+        case .adopt: return screenText("Continue")
+        case .startFresh: return screenText("Start fresh")
         }
     }
 

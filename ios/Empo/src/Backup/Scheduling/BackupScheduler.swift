@@ -68,7 +68,7 @@ final class BackupScheduler {
     private(set) var networkCause: StaleCause?
 
     /// The written detail of a run the process did not survive.
-    static let interruptedDetail = "the run stopped when Empo closed"
+    static let interruptedDetail = String(localized: "the run stopped when Empo closed")
 
     private var didStart = false
     /// Whether a pass is in flight. The manual restore door of

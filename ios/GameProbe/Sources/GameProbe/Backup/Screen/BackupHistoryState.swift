@@ -23,15 +23,15 @@ public enum BackupHistoryState: Equatable, Sendable {
         }
     }
 
-    public static let unfinishedLine = "Empo closed before this backup finished."
+    public static let unfinishedLine = screenText("Empo closed before this backup finished.")
 
     public var title: String {
         switch self {
-        case .backingUp: return "Backing up…"
-        case .success: return "Backed up"
-        case .partial: return "Partly backed up"
-        case .failed: return "Didn't finish"
-        case .cancelled: return "Stopped"
+        case .backingUp: return screenText("Backing up…")
+        case .success: return screenText("Backed up")
+        case .partial: return screenText("Partly backed up")
+        case .failed: return screenText("Didn't finish")
+        case .cancelled: return screenText("Stopped")
         }
     }
 }

@@ -148,7 +148,7 @@ public actor SnapshotEngine {
             return finish(
                 context, startedAt: startedAt,
                 stop: Task.isCancelled
-                    ? .paused : .rejected(message: "Empo couldn't read a save file on this device."))
+                    ? .paused : .rejected(message: screenText("Empo couldn't read a save file on this device.")))
         }
         return finish(context, startedAt: startedAt, stop: nil)
     }
@@ -234,25 +234,25 @@ public actor SnapshotEngine {
         case .writerConflict:
             return BackupNotificationRule.writerSplitLine
         case .readOnlyFormat:
-            return "This backup needs a newer version of Empo."
+            return screenText("This backup needs a newer version of Empo.")
         case .needsSignIn:
-            return "Sign in to this location again."
+            return screenText("Sign in to this location again.")
         case .blocked(let reason), .full(let reason):
             return reason
         case .quotaShortfall(let shortfall):
             return QuotaCheck.blockedLine(shortfall)
         case .offline:
-            return "Empo couldn't connect to this location."
+            return screenText("Empo couldn't connect to this location.")
         case .serverError:
-            return "This location had a server error."
+            return screenText("This location had a server error.")
         case .throttled(let retryAfter):
-            return "This location asked Empo to wait \(Int(retryAfter)) seconds."
+            return screenText("This location asked Empo to wait %lld seconds.", Int(retryAfter))
         case .rejected(let message):
             return message
         case .gameStarted:
-            return "A game started. Empo backs up the rest when you stop playing."
+            return screenText("A game started. Empo backs up the rest when you stop playing.")
         case .paused:
-            return "You or iOS paused the backup."
+            return screenText("You or iOS paused the backup.")
         }
     }
 
@@ -773,7 +773,7 @@ public actor SnapshotEngine {
             return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:
             return BackupRunStop.rejected(
-                message: "A backup file is missing from this location. Back up again to replace it.")
+                message: screenText("A backup file is missing from this location. Back up again to replace it."))
         }
     }
 

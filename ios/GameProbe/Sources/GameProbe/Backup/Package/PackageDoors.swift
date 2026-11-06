@@ -11,7 +11,7 @@ public enum PackageDoors {
 
     public static func line(gameName: String?) -> String? {
         guard let gameName else { return nil }
-        return "Close \(gameName) to export or import a backup."
+        return screenText("Close %@ to export or import a backup.", gameName)
     }
 
     /// What an export still needs, or `nil` where it fits.
@@ -26,7 +26,7 @@ public enum PackageDoors {
 
     /// The line the export shows when it does not fit.
     public static func shortfallLine(_ shortfallText: String) -> String {
-        "This export needs \(shortfallText) more free space on this device."
+        screenText("This export needs %@ more free space on this device.", shortfallText)
     }
 }
 
@@ -42,12 +42,12 @@ public enum PackageSaveChoice: String, Codable, Sendable, CaseIterable, Equatabl
 
     public var label: String {
         switch self {
-        case .saveAgain: return "Save again"
-        case .delete: return "Delete"
+        case .saveAgain: return screenText("Save again")
+        case .delete: return screenText("Delete")
         }
     }
 
     public static func question(fileName: String) -> String {
-        "Empo built \(fileName) but did not save it. Save it again?"
+        screenText("Empo built %@ but did not save it. Save it again?", fileName)
     }
 }

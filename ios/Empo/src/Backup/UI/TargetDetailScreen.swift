@@ -161,7 +161,7 @@ struct TargetDetailScreen: View {
                 ForEach(shown, id: \.gameKey) { game in
                     HStack(spacing: Spacing.md) {
                         BackupGameArtwork(gameKey: game.gameKey)
-                        Text(gameNames[game.gameKey] ?? "A removed game")
+                        Text(gameNames[game.gameKey] ?? String(localized: "A removed game"))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Spacer()
@@ -197,15 +197,15 @@ struct TargetDetailScreen: View {
     private func limitsSection(_ item: BackupTargetItem) -> some View {
         Section {
             SizeLimitPicker(
-                label: "Storage limit",
-                offLabel: "None",
+                label: String(localized: "Storage limit"),
+                offLabel: String(localized: "None"),
                 presets: Self.capPresets,
                 bytes: item.descriptor.capBytes
             ) { bytes in
                 Task { await model.setCap(bytes, targetId: targetId) }
             }
             SizeLimitPicker(
-                label: "Ask for games over",
+                label: String(localized: "Ask for games over"),
                 offLabel: BackupText.bytes(BackupThreshold.defaultBytes),
                 presets: Self.thresholdPresets,
                 bytes: item.descriptor.sizeThresholdBytes
@@ -216,8 +216,10 @@ struct TargetDetailScreen: View {
             Text("Limits")
         } footer: {
             Text(
-                "Empo stops adding backups here at the storage limit. For a game over the "
-                    + "second size, it asks whether to back up the whole game or only its saves.")
+                String(
+                    localized:
+                        "Empo stops adding backups here at the storage limit. For a game over the second size, it asks whether to back up the whole game or only its saves."
+                ))
         }
     }
 
@@ -240,7 +242,9 @@ struct TargetDetailScreen: View {
         if item.pendingDeletions > 0 {
             Section {
                 let count =
-                    item.pendingDeletions == 1 ? "1 old backup" : "\(item.pendingDeletions) old backups"
+                    item.pendingDeletions == 1
+                    ? String(localized: "1 old backup")
+                    : String(localized: "\(item.pendingDeletions) old backups")
                 Text("\(count) waiting to be deleted")
                 Button("Back up and delete them now") { model.backUpNow() }
             } footer: {

@@ -7,8 +7,8 @@ public enum TargetRemovalRefusalAction: String, Equatable, Sendable {
 
     public var label: String {
         switch self {
-        case .removeWithoutDeleting: return "Remove without deleting"
-        case .cancel: return "Cancel"
+        case .removeWithoutDeleting: return screenText("Remove without deleting")
+        case .cancel: return screenText("Cancel")
         }
     }
 }
@@ -62,17 +62,17 @@ public struct TargetRemovalSheet: Equatable, Sendable {
 public enum TargetRemovalRules {
 
     public static func sheet(
-        target: TargetDescriptor, deleteBackups: Bool, deviceName: String = "this device"
+        target: TargetDescriptor, deleteBackups: Bool, deviceName: String = screenText("this device")
     ) -> TargetRemovalSheet {
         let name = target.displayName
         return TargetRemovalSheet(
-            title: "Remove \(name)?",
+            title: screenText("Remove %@?", name),
             body: deleteBackups
-                ? "Empo stops backing up to \(name) and deletes \(deviceName)'s backups there. "
-                    + "You can't undo this."
-                : "Empo stops backing up to \(name). The backups already there stay in your account.",
-            deleteLabel: "Also delete \(deviceName)'s backups on \(name)",
-            confirmLabel: deleteBackups ? "Remove and delete" : "Remove")
+                ? screenText("Empo stops backing up to %@ and deletes %@'s backups there. "
+                    + "You can't undo this.", name, deviceName)
+                : screenText("Empo stops backing up to %@. The backups already there stay in your account.", name),
+            deleteLabel: screenText("Also delete %@'s backups on %@", deviceName, name),
+            confirmLabel: deleteBackups ? screenText("Remove and delete") : screenText("Remove"))
     }
 
     /// What the confirm button does.
@@ -88,7 +88,7 @@ public enum TargetRemovalRules {
         guard case .unreachable = state else { return .removeAndDelete }
         return .refuse(
             TargetRemovalRefusal(
-                line: "Empo can't delete the backups while it can't connect to \(target.displayName).",
+                line: screenText("Empo can't delete the backups while it can't connect to %@.", target.displayName),
                 actions: [.removeWithoutDeleting, .cancel]))
     }
 }

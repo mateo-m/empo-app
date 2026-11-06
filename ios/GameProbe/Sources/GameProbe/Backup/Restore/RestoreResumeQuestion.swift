@@ -49,25 +49,25 @@ public enum RestoreResumeQuestion {
         }
     }
 
-    public static let title = "Resume the restore?"
+    public static let title = screenText("Resume the restore?")
 
     /// `backupText` names the backup the restore came from, such as
     /// "the backup of 7 Sep 2026, 21:03".
     public static func detail(gameName: String, backupText: String) -> String {
-        "\(gameName) is only partly restored from \(backupText)."
+        screenText("%@ is only partly restored from %@.", gameName, backupText)
     }
 
-    public static let stopTitle = "Stop the restore?"
+    public static let stopTitle = screenText("Stop the restore?")
 
     public static func stopDetail(gameName: String) -> String {
-        "\(gameName) keeps the mix of files it has now."
+        screenText("%@ keeps the mix of files it has now.", gameName)
     }
 
     public static func label(of action: Action) -> String {
         switch action {
-        case .resume: return "Resume"
-        case .later: return "Not now"
-        case .stop: return "Stop restore"
+        case .resume: return screenText("Resume")
+        case .later: return screenText("Not now")
+        case .stop: return screenText("Stop restore")
         }
     }
 

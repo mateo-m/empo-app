@@ -41,25 +41,25 @@ public enum StaleCause: Equatable, Sendable {
     /// 017, and 018 render it.
     /// A whole sentence. `nil` names no location, because several
     /// failed.
-    public func line(targetLabel: String?, deviceName: String = "This device") -> String {
-        let target = targetLabel ?? "A backup location"
+    public func line(targetLabel: String?, deviceName: String = screenText("This device")) -> String {
+        let target = targetLabel ?? screenText("A backup location")
         switch self {
         case .waitingForWiFi:
-            return "Empo is waiting for Wi-Fi."
+            return screenText("Empo is waiting for Wi-Fi.")
         case .needsSignIn:
-            return "\(target) needs you to sign in again."
+            return screenText("%@ needs you to sign in again.", target)
         case .refusedTheRequest:
-            return "\(target) stopped letting Empo save backups."
+            return screenText("%@ stopped letting Empo save backups.", target)
         case .targetBlocked:
-            return "\(target) is full."
+            return screenText("%@ is full.", target)
         case .deviceStorageLow:
-            return "\(deviceName) is low on storage."
+            return screenText("%@ is low on storage.", deviceName)
         case .savesPartial(let path):
-            return "A save file didn't copy (\(path))."
+            return screenText("A save file didn't copy (%@).", path)
         case .runsInterrupted:
             return ForceQuitRule.habitLine
         case .waitingForARun:
-            return "Empo is waiting for the next backup."
+            return screenText("Empo is waiting for the next backup.")
         }
     }
 
@@ -100,11 +100,11 @@ public enum StaleAction: String, Equatable, Sendable {
 
     public var label: String {
         switch self {
-        case .allowThisRunOverCellular: return "Back up now over cellular"
-        case .signInAgain: return "Sign in again"
-        case .makeSpaceOnTheTarget: return "Make space"
-        case .freeSpaceOnThisDevice: return "Free up space"
-        case .backUpNow: return "Back up now"
+        case .allowThisRunOverCellular: return screenText("Back up now over cellular")
+        case .signInAgain: return screenText("Sign in again")
+        case .makeSpaceOnTheTarget: return screenText("Make space")
+        case .freeSpaceOnThisDevice: return screenText("Free up space")
+        case .backUpNow: return screenText("Back up now")
         }
     }
 }
@@ -183,10 +183,11 @@ public struct LibraryStaleBanner: Equatable, Sendable {
 
     /// The words the one banner shows. It names the cause, because
     /// the cause is what the single action clears.
-    public func line(targetLabel: String? = nil, deviceName: String = "This device") -> String {
-        let games = gameCount == 1 ? "1 game has" : "\(gameCount) games have"
+    public func line(targetLabel: String? = nil, deviceName: String = screenText("This device")) -> String {
         let reason = cause.line(targetLabel: targetLabel, deviceName: deviceName)
-        return "\(games) had no backup for 3 weeks. \(reason)"
+        return gameCount == 1
+            ? screenText("1 game has had no backup for 3 weeks. %@", reason)
+            : screenText("%lld games have had no backup for 3 weeks. %@", gameCount, reason)
     }
 }
 

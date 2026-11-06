@@ -146,8 +146,8 @@ public enum RestoreAvailability: Equatable, Sendable {
     public var line: String? {
         switch self {
         case .available: return nil
-        case .runInFlight: return "A backup of this game is running."
-        case .gameIsPlaying: return "Close the game to restore it."
+        case .runInFlight: return screenText("A backup of this game is running.")
+        case .gameIsPlaying: return screenText("Close the game to restore it.")
         }
     }
 }
@@ -159,7 +159,7 @@ public enum RestoreAvailability: Equatable, Sendable {
 public enum RestorePicker {
 
     /// The trailing section's heading, per 11.11.
-    public static let otherSnapshotsHeading = "Games not on this device"
+    public static let otherSnapshotsHeading = screenText("Games not on this device")
 
     /// Whether the manual door is open, per 11.3.
     public static func availability(

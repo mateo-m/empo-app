@@ -10,7 +10,7 @@ import GameProbe
 struct BackupGameNames {
 
     /// What the stream that belongs to no game is called, per 5.3.
-    static let preferencesName = "your settings"
+    static let preferencesName = String(localized: "your settings")
 
     private let containers: [GameContainer]
     private let identities: [GameIdentity]
@@ -67,7 +67,7 @@ struct BackupGameNames {
             let container = containers.first(where: {
                 BackupKeys.gameKey(containerFolderName: $0.folderName) == key
             })
-        else { return remembered[key] ?? "this game" }
+        else { return remembered[key] ?? String(localized: "this game") }
         return Self.name(of: container)
     }
 

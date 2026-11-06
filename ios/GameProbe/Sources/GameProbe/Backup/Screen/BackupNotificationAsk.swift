@@ -41,17 +41,17 @@ public enum BackupNotificationRowAction: Equatable, Sendable {
 /// chance only on a user who already said yes.
 public enum BackupNotificationAsk {
 
-    public static let title = "Know when a backup stops"
+    public static let title = screenText("Know when a backup stops")
 
     public static let body =
-        "Empo only notifies you when you need to fix something, like signing in again or freeing up space."
+        screenText("Empo only notifies you when you need to fix something, like signing in again or freeing up space.")
 
-    public static let notNowLabel = "Not now"
-    public static let turnOnLabel = "Turn on"
+    public static let notNowLabel = screenText("Not now")
+    public static let turnOnLabel = screenText("Turn on")
 
     /// The row the Backups screen carries above Backup history while
     /// the permission is off.
-    public static let rowLabel = "Turn on notifications"
+    public static let rowLabel = screenText("Turn on notifications")
 
     /// "Not now" opens nothing and spends nothing, and the sheet
     /// never comes back by itself.

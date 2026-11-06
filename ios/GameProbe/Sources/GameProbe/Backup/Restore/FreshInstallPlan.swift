@@ -49,8 +49,8 @@ public struct FreshInstallGameRow: Equatable, Sendable {
         selected?.mode == .slim
     }
 
-    public static let savesOnlyLabel = "saves only"
-    public static let savesOnlyNote = "Restore the game files first, then these saves."
+    public static let savesOnlyLabel = screenText("saves only")
+    public static let savesOnlyNote = screenText("Restore the game files first, then these saves.")
 }
 
 /// The two rows below the games, per 11.4.

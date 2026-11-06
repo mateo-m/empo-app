@@ -265,7 +265,7 @@ struct BackupsScreen: View {
     @ViewBuilder private var adoptBanners: some View {
         ForEach(model.adoptBanners) { banner in
             Section {
-                question(AdoptQuestion.question, note: "On \(banner.targetLabel).")
+                question(AdoptQuestion.question, note: String(localized: "On \(banner.targetLabel)."))
                 Button(AdoptQuestion.label(of: .adopt)) {
                     model.answerTheAdoptBanner(banner, adopts: true)
                 }
@@ -405,7 +405,8 @@ struct BackupsScreen: View {
         } footer: {
             Text(
                 PackageDoors.line(gameName: EngineSessionCoordinator.shared.openGameName)
-                    ?? "An export is a ZIP file you keep in Files. It needs no backup location.")
+                    ?? String(
+                        localized: "An export is a ZIP file you keep in Files. It needs no backup location."))
         }
     }
 

@@ -71,8 +71,10 @@ struct RestoreSnapshotSheet: View {
                 : SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
-                "\(BackupText.date(row.createdAt)) at \(BackupText.time(row.createdAt)), "
-                    + BackupText.bytes(row.bytesToDownload))
+                String(
+                    localized:
+                        "\(BackupText.date(row.createdAt)) at \(BackupText.time(row.createdAt)), \(BackupText.bytes(row.bytesToDownload))"
+                ))
             Picker("What to restore", selection: $scope) {
                 Text("Saves and settings").tag(RestoreScope.savesAndSettings)
                     .accessibilityLabel("Restore the saves and settings")
@@ -106,9 +108,9 @@ struct RestoreSnapshotSheet: View {
     }
 
     private var buttonTitle: String {
-        if isRestoring { return "Restoring…" }
+        if isRestoring { return String(localized: "Restoring…") }
         if attaches { return AttachAction.actionLabel }
-        return outcome == nil ? "Restore" : "Try again"
+        return outcome == nil ? String(localized: "Restore") : String(localized: "Try again")
     }
 
     private var markerDiffers: Bool {

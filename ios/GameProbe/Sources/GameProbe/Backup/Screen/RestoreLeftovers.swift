@@ -42,16 +42,16 @@ public struct LeftoverConfirmation: Equatable, Sendable {
 /// because this is data the player may still want.
 public enum RestoreLeftovers {
 
-    public static let heading = "Left over from a restore"
+    public static let heading = screenText("Left over from a restore")
 
     /// `sizeText` carries the size in the words the caller
     /// formatted.
     public static func replacedTreeRow(sizeText: String) -> String {
-        "Replaced game files, \(sizeText)"
+        screenText("Replaced game files, %@", sizeText)
     }
 
     public static func displacedCopiesRow(count: Int, sizeText: String) -> String {
-        let copies = count == 1 ? "1 replaced file" : "\(count) replaced files"
+        let copies = count == 1 ? screenText("1 replaced file") : screenText("%lld replaced files", count)
         return "\(copies), \(sizeText)"
     }
 
@@ -59,23 +59,23 @@ public enum RestoreLeftovers {
         gameName: String, sizeText: String
     ) -> LeftoverConfirmation {
         LeftoverConfirmation(
-            title: "Delete the replaced game files?",
+            title: screenText("Delete the replaced game files?"),
             body:
-                "A restore moved these files aside. They hold \(sizeText) of the game files "
-                + "\(gameName) had before that restore. You can't undo this.",
-            buttonLabel: "Delete")
+                screenText("A restore moved these files aside. They hold %@ of the game files "
+                + "%@ had before that restore. You can't undo this.", sizeText, gameName),
+            buttonLabel: screenText("Delete"))
     }
 
     public static func displacedCopiesConfirmation(
         count: Int, sizeText: String
     ) -> LeftoverConfirmation {
-        let copies = count == 1 ? "1 file" : "\(count) files"
+        let copies = count == 1 ? screenText("1 file") : screenText("%lld files", count)
         return LeftoverConfirmation(
-            title: count == 1 ? "Delete 1 replaced file?" : "Delete \(count) replaced files?",
+            title: count == 1 ? screenText("Delete 1 replaced file?") : screenText("Delete %lld replaced files?", count),
             body:
-                "A restore moved \(copies) aside and wrote the backup's files in their place. "
-                + "The moved files hold \(sizeText). You can't undo this.",
-            buttonLabel: count == 1 ? "Delete 1 file" : "Delete \(count) files")
+                screenText("A restore moved %@ aside and wrote the backup's files in their place. "
+                + "The moved files hold %@. You can't undo this.", copies, sizeText),
+            buttonLabel: count == 1 ? screenText("Delete 1 file") : screenText("Delete %lld files", count))
     }
 
     /// Every name inside one container that carries the displaced
@@ -129,6 +129,6 @@ public enum RestoreLeftovers {
     /// itself would be a silent delete of user data.
     public static func copyWarning(fileName: String, count: Int) -> String? {
         guard count > DisplacedCopy.copyWarningCount else { return nil }
-        return "\(fileName) now has \(count) replaced copies on this device."
+        return screenText("%@ now has %lld replaced copies on this device.", fileName, count)
     }
 }

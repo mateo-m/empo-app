@@ -22,17 +22,26 @@ extension RetentionPreset {
 
     var label: String {
         switch self {
-        case .small: return "Less"
-        case .standard: return "Standard"
-        case .deep: return "More"
+        case .small: return String(localized: "Less")
+        case .standard: return String(localized: "Standard")
+        case .deep:
+            return String(
+                localized: "backup-retention.more", defaultValue: "More",
+                comment: "Keeps more backups. The opposite of Less.")
         }
     }
 
     var line: String {
         switch self {
-        case .small: return "Keeps the last 5 backups, one a day for 3 days, and one a week for 2 weeks."
-        case .standard: return "Keeps the last 10 backups, one a day for 7 days, and one a week for 4 weeks."
-        case .deep: return "Keeps the last 20 backups, one a day for 14 days, and one a week for 8 weeks."
+        case .small:
+            return String(
+                localized: "Keeps the last 5 backups, one a day for 3 days, and one a week for 2 weeks.")
+        case .standard:
+            return String(
+                localized: "Keeps the last 10 backups, one a day for 7 days, and one a week for 4 weeks.")
+        case .deep:
+            return String(
+                localized: "Keeps the last 20 backups, one a day for 14 days, and one a week for 8 weeks.")
         }
     }
 }

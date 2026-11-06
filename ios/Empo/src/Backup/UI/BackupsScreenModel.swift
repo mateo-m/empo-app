@@ -248,7 +248,7 @@ final class BackupsScreenModel {
             } catch {
                 BackupLog.line("BackupsScreenModel", "deleting the backups of \(targetId) failed: \(error)")
                 await refresh()
-                return "Empo couldn't delete all of these backups. Try again."
+                return String(localized: "Empo couldn't delete all of these backups. Try again.")
             }
         }
         do {
@@ -262,7 +262,7 @@ final class BackupsScreenModel {
         } catch {
             BackupLog.line("BackupsScreenModel", "removing \(targetId) failed: \(error)")
             await refresh()
-            return "Empo couldn't remove this location. Try again."
+            return String(localized: "Empo couldn't remove this location. Try again.")
         }
         await refresh()
         return nil
@@ -337,7 +337,7 @@ final class BackupsScreenModel {
     ) async -> RestoreOutcome {
         guard let descriptor = targets.first(where: { $0.id == row.targetId })?.descriptor,
             let provider = await BackupTargets.provider(for: descriptor)
-        else { return .failed("this location is not set up on this device") }
+        else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
         return await RestoreCoordinator.shared.restore(
             row, into: GameIdentities.match(row.identity), provider: provider,
             descriptor: descriptor, scope: scope, replacesTheTree: replacesTheTree)

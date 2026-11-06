@@ -22,7 +22,7 @@ struct PlusScreen: View {
                 headline.padding(.horizontal, Spacing._3xl)
                 places
                 if offersSubscription {
-                    quiet("Restore purchase") { Task { await restore() } }
+                    quiet(String(localized: "Restore purchase")) { Task { await restore() } }
                 }
             }
             .padding(.bottom, Spacing._3xl)
@@ -122,8 +122,8 @@ struct PlusScreen: View {
             switch stage {
             case .join:
                 if UpdateChecker.isSideloadBuild {
-                    primary("Join on Patreon") { openURL(EmpoPlus.joinURL) }
-                    secondary("Already a member? Sign in") { Task { await signIn() } }
+                    primary(String(localized: "Join on Patreon")) { openURL(EmpoPlus.joinURL) }
+                    secondary(String(localized: "Already a member? Sign in")) { Task { await signIn() } }
                 } else {
                     subscribe
                     Button {
@@ -135,23 +135,23 @@ struct PlusScreen: View {
                 }
             case .notYet:
                 if UpdateChecker.isSideloadBuild {
-                    primary("Join on Patreon") { openURL(EmpoPlus.joinURL) }
+                    primary(String(localized: "Join on Patreon")) { openURL(EmpoPlus.joinURL) }
                 } else {
                     subscribe
                 }
-                secondary("Check again") { Task { await checkAgain() } }
-                quiet("Sign out of Patreon") { plus.signOut() }
+                secondary(String(localized: "Check again")) { Task { await checkAgain() } }
+                quiet(String(localized: "Sign out of Patreon")) { plus.signOut() }
             case .expired:
-                primary("Check again") { Task { await checkAgain() } }
-                quiet("Sign out of Patreon") { plus.signOut() }
+                primary(String(localized: "Check again")) { Task { await checkAgain() } }
+                quiet(String(localized: "Sign out of Patreon")) { plus.signOut() }
             case .signInAgain:
                 primary("Sign in with Patreon") { Task { await signIn() } }
             case .member:
                 if store.isSubscribed {
-                    quiet("Manage subscription") { managesSubscription = true }
+                    quiet(String(localized: "Manage subscription")) { managesSubscription = true }
                 }
                 if plus.isSignedIn {
-                    quiet("Sign out of Patreon") { plus.signOut() }
+                    quiet(String(localized: "Sign out of Patreon")) { plus.signOut() }
                 }
             }
             if let failure {
@@ -160,7 +160,9 @@ struct PlusScreen: View {
                     .foregroundStyle(.destructive)
             }
             if tooManyDevices {
-                secondary("Sign out other devices") { Task { await signIn(replace: true) } }
+                secondary(String(localized: "Sign out other devices")) {
+                    Task { await signIn(replace: true) }
+                }
             }
             if offersSubscription { subscriptionTerms }
         }
@@ -168,7 +170,10 @@ struct PlusScreen: View {
     }
 
     private var subscribe: some View {
-        primary(store.product.map { "Subscribe for \($0.displayPrice) a month" } ?? "Subscribe") {
+        primary(
+            store.product.map { String(localized: "Subscribe for \($0.displayPrice) a month") }
+                ?? String(localized: "Subscribe")
+        ) {
             Task { await purchase() }
         }
     }
@@ -225,9 +230,9 @@ struct PlusScreen: View {
         } catch {
             switch error {
             case .cancelled: break
-            case .server: failure = "Couldn't sign in with Patreon. Try again."
+            case .server: failure = String(localized: "Couldn't sign in with Patreon. Try again.")
             case .tooManyDevices:
-                failure = "Empo Plus works on up to 3 devices at a time."
+                failure = String(localized: "Empo Plus works on up to 3 devices at a time.")
                 tooManyDevices = true
             }
         }
@@ -243,8 +248,8 @@ struct PlusScreen: View {
         } catch {
             switch error {
             case .cancelled: break
-            case .pending: failure = "Your purchase is waiting for approval."
-            case .failed: failure = "Couldn't reach the App Store. Try again."
+            case .pending: failure = String(localized: "Your purchase is waiting for approval.")
+            case .failed: failure = String(localized: "Couldn't reach the App Store. Try again.")
             }
         }
     }
@@ -254,9 +259,9 @@ struct PlusScreen: View {
         defer { isWorking = false }
         failure = nil
         if await !store.restore() {
-            failure = "Couldn't reach the App Store. Try again."
+            failure = String(localized: "Couldn't reach the App Store. Try again.")
         } else if !store.isSubscribed {
-            failure = "No Empo Plus purchase on this Apple Account."
+            failure = String(localized: "No Empo Plus purchase on this Apple Account.")
         }
     }
 
@@ -264,7 +269,9 @@ struct PlusScreen: View {
         isWorking = true
         defer { isWorking = false }
         failure = nil
-        if await !plus.renew(force: true) { failure = "Couldn't check your membership. Try again." }
+        if await !plus.renew(force: true) {
+            failure = String(localized: "Couldn't check your membership. Try again.")
+        }
     }
 }
 
@@ -325,8 +332,8 @@ private let plusPlaces: [BackupProviderKind] = [.iCloudDrive, .dropbox, .googleD
 
 private func placeTitle(_ service: BackupProviderKind) -> String {
     switch service {
-    case .s3: "S3 storage"
-    case .webdav: "WebDAV server"
+    case .s3: String(localized: "S3 storage")
+    case .webdav: String(localized: "WebDAV server")
     default: service.serviceName
     }
 }

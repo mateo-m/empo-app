@@ -12,20 +12,20 @@ public enum TransportSecurity {
 
     /// What a plain `http` address earns, per 8.11.
     public static let plainAddressMessage =
-        "Empo takes an https address only. Type the address again with https."
+        screenText("Empo takes an https address only. Type the address again with https.")
 
     /// What a certificate the system does not trust earns, per 8.11.
     /// The add sheet of 13.7 adds this line to the failing step.
     public static let systemTrustMessage =
-        "This device does not trust the certificate of the server."
+        screenText("This device does not trust the certificate of the server."
         + " Empo takes a certificate that the system trusts."
-        + " It takes no self-signed certificate and no certificate authority of your own."
+        + " It takes no self-signed certificate and no certificate authority of your own.")
 
     /// The line the add form of 13.7 carries beside the host field,
     /// at the moment the user types someone else's host name. The
     /// rule behind it is 5.7: Empo writes the saves as they are.
     public static let storageWarning =
-        "Empo doesn't encrypt backups. Anyone who can open this storage can read your saves."
+        screenText("Empo doesn't encrypt backups. Anyone who can open this storage can read your saves.")
 
     /// Why Empo refuses this address before any request, or `nil`
     /// when the address is one it takes.
@@ -37,7 +37,7 @@ public enum TransportSecurity {
         guard let url, let scheme = url.scheme?.lowercased(), let host = url.host,
             !host.isEmpty
         else {
-            return .rejected(message: "Empo can't read that address. Check it, then try again.")
+            return .rejected(message: screenText("Empo can't read that address. Check it, then try again."))
         }
         guard scheme == "https" else { return .rejected(message: plainAddressMessage) }
         return nil
@@ -61,7 +61,7 @@ public enum TransportSecurity {
 
     /// What an address that URL loading cannot use earns.
     public static let unusableAddressMessage =
-        "Empo can't use that address. Check it, then try again."
+        screenText("Empo can't use that address. Check it, then try again.")
 
     /// The URL loading codes that no later pass fixes, because the
     /// address itself is wrong: bad URL, unsupported URL, the App

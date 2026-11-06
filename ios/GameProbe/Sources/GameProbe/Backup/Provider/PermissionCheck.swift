@@ -11,10 +11,10 @@ public enum PermissionCheckStep: String, CaseIterable, Equatable, Sendable {
     /// The word the add sheet shows, per 13.7.
     public var label: String {
         switch self {
-        case .write: return "Save a test file"
-        case .list: return "Find the test file"
-        case .delete: return "Delete the test file"
-        case .freeSpace: return "Read the free space"
+        case .write: return screenText("Save a test file")
+        case .list: return screenText("Find the test file")
+        case .delete: return screenText("Delete the test file")
+        case .freeSpace: return screenText("Read the free space")
         }
     }
 }
@@ -101,7 +101,7 @@ public enum PermissionCheck {
     public static let probeContents = Data("empo permission check".utf8)
 
     public static let localWriteFailedMessage =
-        "Empo couldn't save a test file on this device. Try again."
+        screenText("Empo couldn't save a test file on this device. Try again.")
 
     /// A probe path under the fixed root of 8.7.
     ///
@@ -143,7 +143,7 @@ public enum PermissionCheck {
         } catch {
             let message =
                 error.isOutOfSpace
-                ? "This device is full. Free up space, then try again." : localWriteFailedMessage
+                ? screenText("This device is full. Free up space, then try again.") : localWriteFailedMessage
             steps.append(
                 PermissionCheckStepResult(step: .write, outcome: .failed(.rejected(message: message))))
             return skipRest()

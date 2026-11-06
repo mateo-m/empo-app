@@ -55,7 +55,9 @@ final class PackageImportModel {
     func restore(
         _ row: SnapshotRow, scope: RestoreScope, replacesTheTree: Bool
     ) async -> RestoreOutcome {
-        guard let source else { return .failed("Empo couldn't read this package. Try again.") }
+        guard let source else {
+            return .failed(String(localized: "Empo couldn't read this package. Try again."))
+        }
         let outcome = await RestoreCoordinator.shared.restore(
             row, into: GameIdentities.match(row.identity), package: source,
             scope: scope, replacesTheTree: replacesTheTree)
@@ -123,7 +125,7 @@ struct PackageImportSheet: View {
                             if !settings.isEmpty {
                                 Section {
                                     ForEach(settings, id: \.snapshotId) { row in
-                                        rowButton(row, title: "Settings") { EmptyView() }
+                                        rowButton(row, title: String(localized: "Settings")) { EmptyView() }
                                     }
                                 } header: {
                                     if games.isEmpty { Text("What this package holds") }

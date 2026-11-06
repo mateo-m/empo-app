@@ -13,7 +13,7 @@ public enum ForceQuitRule {
 
     /// The line the stale warning carries. One plain sentence in the
     /// app's voice. No scolding, and no modal.
-    public static let habitLine = "The last three backups stopped when Empo closed."
+    public static let habitLine = screenText("The last three backups stopped when Empo closed.")
 
     /// Whether the stale line names the habit.
     ///

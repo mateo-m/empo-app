@@ -26,37 +26,37 @@ public struct BackupModeOption: Equatable, Sendable {
 /// it from both.
 public enum BackupModePicker {
 
-    public static let title = "What gets backed up"
+    public static let title = screenText("What gets backed up")
 
     /// A game above the threshold that was never asked reads this,
     /// per 13.15.
-    public static let notChosenYet = "Not chosen yet"
+    public static let notChosenYet = screenText("Not chosen yet")
 
     /// The row the ask carries beside the two options, per 3.7.
-    public static let saveFileEditorLabel = "Choose save files"
+    public static let saveFileEditorLabel = screenText("Choose save files")
 
     public static func options(fullBytes: Int64, slimBytes: Int64) -> [BackupModeOption] {
         [
             BackupModeOption(
                 mode: .full,
-                label: "The whole game",
-                detail: "Puts the game back as it is now, on any device.",
+                label: screenText("The whole game"),
+                detail: screenText("Puts the game back as it is now, on any device."),
                 sizeBytes: fullBytes),
             BackupModeOption(
                 mode: .slim,
-                label: "Saves and settings only",
-                detail: "Backs up your saves, settings, and control layouts.",
+                label: screenText("Saves and settings only"),
+                detail: screenText("Backs up your saves, settings, and control layouts."),
                 sizeBytes: slimBytes),
         ]
     }
 
     public static func label(of mode: BackupMode?) -> String {
         guard let mode else { return notChosenYet }
-        return mode == .full ? "The whole game" : "Saves and settings only"
+        return mode == .full ? screenText("The whole game") : screenText("Saves and settings only")
     }
 
     /// The question the two rows answer.
-    public static let askTitle = "What should the backup include?"
+    public static let askTitle = screenText("What should the backup include?")
 
     /// The ask fires against the lowest threshold among the enabled
     /// targets, and it names that target, per 3.5.
@@ -66,15 +66,15 @@ public enum BackupModePicker {
     public static func askBody(
         gameName: String, sizeText: String, targetLabel: String, thresholdText: String
     ) -> String {
-        "\(gameName) is \(sizeText). \(targetLabel) asks about games over \(thresholdText)."
+        screenText("%@ is %@. %@ asks about games over %@.", gameName, sizeText, targetLabel, thresholdText)
     }
 
     /// A game with no answer stays out of every backup, so the
     /// dismiss button must not read as "later".
-    public static let skipLabel = "Skip"
+    public static let skipLabel = screenText("Skip")
 
     public static func skipLine(gameName: String) -> String {
-        "If you skip, Empo doesn't back up \(gameName) until you choose. "
-            + "You can choose later in the game's settings, under Backup."
+        screenText("If you skip, Empo doesn't back up %@ until you choose. "
+            + "You can choose later in the game's settings, under Backup.", gameName)
     }
 }

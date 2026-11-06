@@ -471,7 +471,7 @@ public enum S3 {
     }
 
     private static func refusal(_ failure: Failure) -> BackupProviderError {
-        .refusal(by: "The bucket", said: failure.message)
+        .refusal(by: screenText("The bucket"), said: failure.message)
     }
 
     /// Whether a failed upload has to abort what it started.
@@ -505,32 +505,32 @@ public enum S3 {
     /// moment the user types someone else's host name.
     public static let addFormFields: [TargetFormField] = [
         TargetFormField(
-            name: "label", label: "Name", hint: "My bucket",
-            note: "The name Empo shows for this location.", group: "Name"),
+            name: "label", label: screenText("Name"), hint: screenText("My bucket"),
+            note: screenText("The name Empo shows for this location."), group: screenText("Name")),
         TargetFormField(
-            name: "address", label: "Address", hint: "https://s3.us-east-1.amazonaws.com",
-            kind: .address, note: "Your storage service lists this address as its S3 endpoint.",
-            group: "Bucket"),
-        TargetFormField(name: "bucket", label: "Bucket", hint: "my-saves", group: "Bucket"),
+            name: "address", label: screenText("Address"), hint: "https://s3.us-east-1.amazonaws.com",
+            kind: .address, note: screenText("Your storage service lists this address as its S3 endpoint."),
+            group: screenText("Bucket")),
+        TargetFormField(name: "bucket", label: screenText("Bucket"), hint: "my-saves", group: screenText("Bucket")),
         TargetFormField(
-            name: "region", label: "Region", hint: "us-east-1",
-            note: "Cloudflare R2 uses auto.", group: "Bucket"),
+            name: "region", label: screenText("Region"), hint: "us-east-1",
+            note: screenText("Cloudflare R2 uses auto."), group: screenText("Bucket")),
         TargetFormField(
-            name: "root", label: "Folder (optional)", hint: "backups",
+            name: "root", label: screenText("Folder (optional)"), hint: "backups",
             isRequired: false,
-            note: "Empo makes its own Empo folder in here. Leave it empty to make it at the top of the bucket.",
-            group: "Bucket"),
+            note: screenText("Empo makes its own Empo folder in here. Leave it empty to make it at the top of the bucket."),
+            group: screenText("Bucket")),
         TargetFormField(
-            name: "usesPathStyle", label: "Bucket name in the address path", kind: .toggle,
+            name: "usesPathStyle", label: screenText("Bucket name in the address path"), kind: .toggle,
             isRequired: false,
-            note: "On for MinIO and most servers you run yourself. Off for Amazon S3.",
-            group: "Bucket"),
+            note: screenText("On for MinIO and most servers you run yourself. Off for Amazon S3."),
+            group: screenText("Bucket")),
         TargetFormField(
-            name: "accessKeyId", label: "Access key ID", hint: "AKIAIOSFODNN7EXAMPLE",
-            group: "Keys"),
+            name: "accessKeyId", label: screenText("Access key ID"), hint: "AKIAIOSFODNN7EXAMPLE",
+            group: screenText("Keys")),
         TargetFormField(
-            name: "secretAccessKey", label: "Secret access key", kind: .secret,
-            note: "Make a key that can read, write, and delete files in this bucket only.",
-            group: "Keys"),
+            name: "secretAccessKey", label: screenText("Secret access key"), kind: .secret,
+            note: screenText("Make a key that can read, write, and delete files in this bucket only."),
+            group: screenText("Keys")),
     ]
 }

@@ -66,7 +66,7 @@ struct PermissionCheckSheet: View {
     private var space: String? {
         guard let quota = result.quota, let limit = quota.limitBytes else { return nil }
         let free = BackupText.bytes(max(limit - quota.usedBytes, 0))
-        return "\(free) free of \(BackupText.bytes(limit))"
+        return String(localized: "\(free) free of \(BackupText.bytes(limit))")
     }
 
     private func stepRow(_ step: PermissionCheckStepResult) -> some View {
@@ -102,10 +102,10 @@ struct PermissionCheckSheet: View {
 
     private func spokenOutcome(of outcome: PermissionCheckOutcome) -> String {
         switch outcome {
-        case .passed: return "done"
-        case .skipped: return "skipped"
-        case .failed: return "failed"
-        case .notRun: return "not tried"
+        case .passed: return String(localized: "done")
+        case .skipped: return String(localized: "skipped")
+        case .failed: return String(localized: "failed")
+        case .notRun: return String(localized: "not tried")
         }
     }
 }

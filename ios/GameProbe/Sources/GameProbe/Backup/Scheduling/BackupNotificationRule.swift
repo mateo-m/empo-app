@@ -64,11 +64,11 @@ public enum BackupNotificationRule {
     ) -> String {
         switch cause {
         case .signInDead:
-            return "Sign in to \(targetLabel) again. Your backups are waiting."
+            return screenText("Sign in to %@ again. Your backups are waiting.", targetLabel)
         case .targetBlocked:
-            return "\(targetLabel) is full. Free up space on it, or raise its storage limit in Empo."
+            return screenText("%@ is full. Free up space on it, or raise its storage limit in Empo.", targetLabel)
         case .deviceStorageLow:
-            return "\(deviceName) storage is low. Free up space to keep backing up."
+            return screenText("%@ storage is low. Free up space to keep backing up.", deviceName)
         }
     }
 
@@ -76,8 +76,8 @@ public enum BackupNotificationRule {
     /// 7.11 and 5.12. It heals itself, so a notification would
     /// report a problem that is not one.
     public static let writerSplitLine =
-        "Another device also backs up to this location. This device now keeps its own "
-        + "backups there, and both keep their history."
+        screenText("Another device also backs up to this location. This device now keeps its own "
+        + "backups there, and both keep their history.")
 
     /// Whether to ask for notification permission now.
     ///
