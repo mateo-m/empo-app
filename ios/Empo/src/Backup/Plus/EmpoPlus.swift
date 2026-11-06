@@ -68,8 +68,14 @@ final class EmpoPlus {
             // Patreon sends `access_denied` when the user presses Deny.
             switch error {
             case "server": throw .server
+            case "too_many_devices": throw .tooManyDevices
             default: throw .cancelled
             }
+        }
+        // A server from before the sign-in code puts the pass in the link.
+        if let pass = value("pass"), let renewal = value("renewal") {
+            guard keep(pass: pass, renewal: renewal) else { throw .server }
+            return
         }
         guard let code = value("code") else { throw .server }
         try await finish(code: code)
