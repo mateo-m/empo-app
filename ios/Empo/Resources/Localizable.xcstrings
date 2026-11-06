@@ -15932,6 +15932,64 @@
         }
       }
     },
+    "Copy this game's saves to a service you already use." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiere die Spielstände dieses Spiels zu einem Dienst, den du schon nutzt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia las partidas de este juego a un servicio que ya uses."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copie les parties de ce jeu vers un service que tu utilises déjà."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia i salvataggi di questo gioco su un servizio che usi già."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲームのセーブデータを、普段使っているサービスにコピーします。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 게임의 세이브를 이미 쓰고 있는 서비스에 복사하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copie os saves deste jogo para um serviço que você já usa."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копируйте сохранения этой игры в сервис, которым вы уже пользуетесь."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把这个游戏的存档复制到你已经在用的服务。"
+          }
+        }
+      }
+    },
     "Could not check for updates. Try again later." : {
       "localizations" : {
         "de" : {
@@ -34556,6 +34614,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "摇杆"
+          }
+        }
+      }
+    },
+    "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewahre Kopien deiner Spielstände in iCloud Drive, Dropbox, Google Drive oder auf deinem eigenen Server auf."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda copias de tus partidas en iCloud Drive, Dropbox, Google Drive o en tu propio servidor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garde des copies de tes parties dans iCloud Drive, Dropbox, Google Drive ou sur ton propre serveur."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva copie dei tuoi salvataggi su iCloud Drive, Dropbox, Google Drive o sul tuo server."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セーブデータのコピーをiCloud Drive、Dropbox、Google Drive、または自分のサーバーに保存できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세이브 사본을 iCloud Drive, Dropbox, Google Drive 또는 내 서버에 보관하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarde cópias dos seus saves no iCloud Drive, no Dropbox, no Google Drive ou no seu próprio servidor."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Храните копии сохранений в iCloud Drive, Dropbox, Google Drive или на своём сервере."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把存档的副本保存在 iCloud Drive、Dropbox、Google Drive 或你自己的服务器上。"
           }
         }
       }
