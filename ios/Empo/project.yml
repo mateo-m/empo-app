@@ -8,7 +8,9 @@ packages:
   # proven part and handles the authorization code exchange.
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
-    from: 3.0.0
+    # A tag can move, and the app has no Package.resolved, so each
+    # package is pinned by commit.
+    revision: a972daac82d449d58ab119e91c68153e29ddac33 # 3.0.0
   # The causal history and the merge of SPEC 10. Ticket 22 proved
   # 0.7.2 on an iPhone 13 Pro: a 100,000-mutation document saved to
   # 52,225 bytes, a median load took 64.87 ms, a two-branch merge
@@ -17,7 +19,7 @@ packages:
   # targets, so `automerge-repo-swift` stays out.
   Automerge:
     url: https://github.com/automerge/automerge-swift.git
-    exactVersion: 0.7.2
+    revision: aa45d17ac92cef2b8ded63b47e65a28dc85e3418 # 0.7.2
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:
