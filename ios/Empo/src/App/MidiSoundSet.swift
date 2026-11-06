@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import AVFoundation
 import Foundation
 import UniformTypeIdentifiers
 
@@ -55,20 +56,31 @@ enum MidiSoundSet {
     /// SoundFont and DLS files are RIFF files with the form type
     /// "sfbk" or "DLS ". The engine's FluidSynth has no libsndfile, so it
     /// can't read SoundFont 3, which has 3 as the major version in `ifil`.
+    /// Apple's sampler loads SoundFont 3 files, so it can't catch them.
     private static func isSoundSet(_ url: URL) -> Bool {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
         defer { try? handle.close() }
         guard let header = try? handle.read(upToCount: 34), header.count >= 12,
             header.subdata(in: 0..<4) == Data("RIFF".utf8)
         else { return false }
-        // A copy that stopped early is shorter than the size in its RIFF header.
-        let riffSize = header.subdata(in: 4..<8).withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
-        guard let fileSize = try? handle.seekToEnd(), UInt64(UInt32(littleEndian: riffSize)) + 8 <= fileSize
-        else { return false }
         let form = header.subdata(in: 8..<12)
-        if form == Data("DLS ".utf8) { return true }
         // A SoundFont starts with the LIST INFO chunk, and `ifil` comes first in it.
-        return form == Data("sfbk".utf8) && header.count == 34
+        let isSoundFont2 =
+            form == Data("sfbk".utf8) && header.count == 34
             && header.subdata(in: 24..<28) == Data("ifil".utf8) && header[32] == 2
+        return (isSoundFont2 || form == Data("DLS ".utf8)) && loads(url)
+    }
+
+    /// Apple's sampler refuses a file that stopped early or has broken
+    /// chunks, also when its header is intact. Every General MIDI set has
+    /// program 0 in the melodic bank.
+    private static func loads(_ url: URL) -> Bool {
+        let engine = AVAudioEngine()
+        let sampler = AVAudioUnitSampler()
+        engine.attach(sampler)
+        return
+            (try? sampler.loadSoundBankInstrument(
+                at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB))) != nil
     }
 }
