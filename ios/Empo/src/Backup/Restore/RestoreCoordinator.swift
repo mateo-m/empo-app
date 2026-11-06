@@ -401,17 +401,19 @@ final class RestoreCoordinator {
         for container: GameContainer?, manifest: SnapshotManifest
     ) -> MemberSource {
         let isPreferences = manifest.gameKey == BackupStream.preferencesKey
-        let local = container.flatMap {
-            DataDirectory.resolve(for: $0, core: GameCores.core(forGameAt: $0.gameURL))
-        }
+        let sharedData: URL? =
+            if isPreferences {
+                nil
+            } else if let container {
+                DataDirectory.resolve(for: container, core: GameCores.core(forGameAt: container.gameURL))
+            } else {
+                manifest.sharedDataDirectory.flatMap {
+                    ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
+                }
+            }
         return MemberSource(
             container: container?.url,
-            sharedData: isPreferences
-                ? nil
-                : local
-                    ?? manifest.sharedDataDirectory.flatMap {
-                        ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
-                    },
+            sharedData: sharedData,
             rescuedBuckets: RescuedSaves.restorableBuckets(
                 named: manifest.rescuedSavesBuckets, in: DataDirectory.rescuedSavesRootURL,
                 folderName: isPreferences ? nil : container?.folderName ?? manifest.containerFolderName),
