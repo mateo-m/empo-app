@@ -185,7 +185,6 @@ public actor SnapshotEngine {
         // The run reached its end with the process alive, so it left
         // no interruption to ask about at the next launch, per 6.5.
         save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")
-        save(try store.clearIntent(kind: .pausedRun), "the end of the paused run")
         // The target row of 13.5 outlives this run, and a run that
         // reached the target clears what an earlier one left. A pause
         // can land before the first request, so it proves nothing.
@@ -329,6 +328,10 @@ public actor SnapshotEngine {
             try await writeClaim(context)
         }
 
+        // Only a sync pass moves the sync date. The join picker reads
+        // it to find the device that last changed the settings.
+        let known = (try? await fetch(context.paths.deviceFile))
+            .flatMap { try? DeviceRecord.decode(json: $0) }
         try await put(
             try DeviceRecord(
                 deviceId: context.request.deviceId,
@@ -336,7 +339,8 @@ public actor SnapshotEngine {
                 name: context.request.deviceName,
                 lastWriteAt: now,
                 syncGroupId: context.request.syncGroupId,
-                syncUpdatedAt: context.request.syncGroupId == nil ? nil : now
+                syncUpdatedAt: known?.syncGroupId == context.request.syncGroupId
+                    ? known?.syncUpdatedAt : nil
             ).jsonData(),
             to: context.paths.deviceFile)
     }
@@ -586,8 +590,7 @@ public actor SnapshotEngine {
     /// iCloud Drive commits and reports the object durable later.
     /// The manifest may not name a blob the remote has not confirmed,
     /// per 5.8, so a blob that stays pending ends the stream without
-    /// a manifest. The next run finds the blob confirmed and reuses
-    /// it for free.
+    /// a manifest. The next run puts the blob again.
     func waitForConfirmations(_ paths: [String]) async throws -> Bool {
         var pending = paths
         var attempt = 0
@@ -617,7 +620,8 @@ public actor SnapshotEngine {
     /// A snapshot that carries a partial path resets the clock only
     /// when no partial path is a save member, per 7.2.
     func markSuccess(
-        targetId: String, gameKey: String, manifest: SnapshotManifest, scannedAt: Date
+        targetId: String, gameKey: String, manifest: SnapshotManifest, scannedAt: Date,
+        isComplete: Bool
     ) {
         var clock =
             (try? store.staleness(targetId: targetId, gameKey: gameKey))
@@ -625,7 +629,7 @@ public actor SnapshotEngine {
         clock.lastAttemptAt = now
 
         let savePartials = PartialPathClock.savePartials(in: manifest.entries)
-        if savePartials.isEmpty {
+        if savePartials.isEmpty, isComplete {
             clock.lastSuccessAt = scannedAt
             clock.partialSince = nil
         } else if clock.partialSince == nil {

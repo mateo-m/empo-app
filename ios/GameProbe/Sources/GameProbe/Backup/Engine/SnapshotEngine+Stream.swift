@@ -45,6 +45,13 @@ extension SnapshotEngine {
         var confirmed: [String: BlobCompression]
         /// The puts that came back pending, per 8.5.
         var pendingPaths: [String] = []
+        /// The blobs of `pendingPaths`. The checkpoint leaves them
+        /// out, so a later run never names a blob the target did not
+        /// confirm.
+        var pendingHashes: Set<String> = []
+        /// A member the manifest cannot hold. The game keeps its
+        /// dirty mark and does not count as backed up.
+        var missedMember = false
         var confirmedBytes: Int64 = 0
 
         var key: String { stream.key }
@@ -191,7 +198,10 @@ extension SnapshotEngine {
     private func upload(
         _ member: BackupSetMember, at index: Int, of run: StreamRun, in context: RunContext
     ) async throws {
-        guard let file = run.source.url(of: member) else { return }
+        guard let file = run.source.url(of: member) else {
+            run.missedMember = true
+            return
+        }
         let targetId = context.request.descriptor.id
         let staged = try stage(member, from: file, route: run.route, into: run.staging, index: index)
         var entry = SnapshotManifest.Entry(
@@ -222,7 +232,10 @@ extension SnapshotEngine {
             run.result.uploadedBytes += uploaded.bytes
             run.result.uploadedBlobCount += 1
             run.confirmed[uploaded.hash] = uploaded.compression
-            if uploaded.isPending { run.pendingPaths.append(uploaded.path) }
+            if uploaded.isPending {
+                run.pendingPaths.append(uploaded.path)
+                run.pendingHashes.insert(uploaded.hash)
+            }
             readTheFile = uploaded.readTheFile
         }
         // The plan counts the member, so the progress counts the
@@ -252,7 +265,7 @@ extension SnapshotEngine {
         }
 
         if entry.partial { run.result.partialPaths.append(member.path) }
-        if let kept { run.entries.append(kept) }
+        if let kept { run.entries.append(kept) } else { run.missedMember = true }
         save(
             try store.saveCheckpoint(
                 RunCheckpoint(
@@ -262,6 +275,7 @@ extension SnapshotEngine {
                     uploadedBytes: run.result.uploadedBytes,
                     pendingPaths: run.plan.changed.dropFirst(index + 1).map(\.path),
                     confirmedBlobs: run.confirmed
+                        .filter { !run.pendingHashes.contains($0.key) }
                         .map { ConfirmedBlob(hash: $0.key, compression: $0.value) }
                         .sorted { $0.hash < $1.hash },
                     updatedAt: now)),
@@ -296,12 +310,11 @@ extension SnapshotEngine {
         else {
             closeWithNoChange(
                 context, stream: run.stream, previous: run.previous, header: run.header,
-                scannedAt: run.scannedAt)
+                scannedAt: run.scannedAt, isComplete: !run.missedMember)
             return
         }
 
-        // A blob still pending leaves the manifest for the next run,
-        // which reuses every blob for free.
+        // A blob still pending leaves the manifest for the next run.
         guard try await waitForConfirmations(run.pendingPaths) else {
             context.streams.append(run.result)
             try? markAttempt(targetId: targetId, gameKey: run.key)
@@ -329,11 +342,14 @@ extension SnapshotEngine {
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: run.key),
             "the end of the checkpoint of \(run.key)")
-        save(
-            try store.clearDirty(gameKey: run.key, markedUpTo: run.scannedAt),
-            "the end of the dirty mark of \(run.key)")
+        if !run.missedMember {
+            save(
+                try store.clearDirty(gameKey: run.key, markedUpTo: run.scannedAt),
+                "the end of the dirty mark of \(run.key)")
+        }
         markSuccess(
-            targetId: targetId, gameKey: run.key, manifest: manifest, scannedAt: run.scannedAt)
+            targetId: targetId, gameKey: run.key, manifest: manifest, scannedAt: run.scannedAt,
+            isComplete: !run.missedMember)
 
         run.result.outcome = .wroteSnapshot(snapshotId: run.snapshotId)
         // Step 4 of 5.8, inline at the end of the stream that just
@@ -348,18 +364,20 @@ extension SnapshotEngine {
     /// game counts as backed up at the time of the read.
     private func closeWithNoChange(
         _ context: RunContext, stream: BackupStream, previous: SnapshotManifest?,
-        header: SnapshotManifest, scannedAt: Date
+        header: SnapshotManifest, scannedAt: Date, isComplete: Bool = true
     ) {
         let targetId = context.request.descriptor.id
         context.streams.append(StreamResult(streamKey: stream.key, outcome: .noChange))
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: stream.key),
             "the end of the checkpoint of \(stream.key)")
-        save(
-            try store.clearDirty(gameKey: stream.key, markedUpTo: scannedAt),
-            "the end of the dirty mark of \(stream.key)")
+        if isComplete {
+            save(
+                try store.clearDirty(gameKey: stream.key, markedUpTo: scannedAt),
+                "the end of the dirty mark of \(stream.key)")
+        }
         markSuccess(
             targetId: targetId, gameKey: stream.key, manifest: previous ?? header,
-            scannedAt: scannedAt)
+            scannedAt: scannedAt, isComplete: isComplete)
     }
 }

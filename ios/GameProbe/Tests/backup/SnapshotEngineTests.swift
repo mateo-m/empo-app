@@ -425,6 +425,24 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(blobPaths(target).count, 4)
     }
 
+    func testABlobTheTargetHasNotConfirmedStaysOutOfTheCheckpoint() async throws {
+        try makeGameTree(gameName)
+        let stateURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: stateURL) }
+        let target = FakeBackupTarget(
+            directory: targetDirectory, confirmsLater: true, clock: FakeBackupClock())
+        let engine = try makeEngine(target, stateURL: stateURL)
+
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(manifestPaths(target).count, 0)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        let checkpoint = try store.checkpoint(targetId: targetId, gameKey: key(gameName))
+        XCTAssertEqual(checkpoint?.confirmedBlobs ?? [], [])
+    }
+
     func testAResumedRunKeepsTheAlgorithmTheOrphanBlobsWentUpWith() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
