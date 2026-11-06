@@ -601,62 +601,62 @@
         }
       }
     },
-    "Keep copies of your saves in iCloud Drive. With Empo Plus, you can also use Dropbox, Google Drive, or your own server. Go to Settings > Backups." : {
-      "comment" : "Text of an item in the What's new sheet after an update.",
+    "Keep copies of your saves in iCloud Drive. With Empo %@, you can also use Dropbox, Google Drive, or your own server. Go to Settings > Backups." : {
+      "comment" : "Text of an item in the What's new sheet after an update. %@ is the word Plus, the name of the subscription. Keep it after Empo.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bewahre Kopien deiner Spielstände in iCloud Drive auf. Mit Empo Plus geht das auch mit Dropbox, Google Drive oder deinem eigenen Server. Gehe zu Einstellungen > Backups."
+            "value" : "Bewahre Kopien deiner Spielstände in iCloud Drive auf. Mit Empo %@ geht das auch mit Dropbox, Google Drive oder deinem eigenen Server. Gehe zu Einstellungen > Backups."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guarda copias de tus partidas en iCloud Drive. Con Empo Plus también puedes usar Dropbox, Google Drive o tu propio servidor. Ve a Ajustes > Copias de seguridad."
+            "value" : "Guarda copias de tus partidas en iCloud Drive. Con Empo %@ también puedes usar Dropbox, Google Drive o tu propio servidor. Ve a Ajustes > Copias de seguridad."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Garde des copies de tes parties dans iCloud Drive. Avec Empo Plus, tu peux aussi utiliser Dropbox, Google Drive ou ton propre serveur. Va dans Réglages > Copies de secours."
+            "value" : "Garde des copies de tes parties dans iCloud Drive. Avec Empo %@, tu peux aussi utiliser Dropbox, Google Drive ou ton propre serveur. Va dans Réglages > Copies de secours."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Conserva copie dei tuoi salvataggi su iCloud Drive. Con Empo Plus puoi usare anche Dropbox, Google Drive o il tuo server. Vai in Impostazioni > Backup."
+            "value" : "Conserva copie dei tuoi salvataggi su iCloud Drive. Con Empo %@ puoi usare anche Dropbox, Google Drive o il tuo server. Vai in Impostazioni > Backup."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "セーブデータのコピーをiCloud Driveに保存できます。Empo Plusなら、Dropbox、Google Drive、自分のサーバーも使えます。「設定」>「バックアップ」から設定できます。"
+            "value" : "セーブデータのコピーをiCloud Driveに保存できます。Empo %@なら、Dropbox、Google Drive、自分のサーバーも使えます。「設定」>「バックアップ」から設定できます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "세이브 사본을 iCloud Drive에 보관할 수 있어요. Empo Plus가 있으면 Dropbox, Google Drive, 내 서버도 쓸 수 있어요. 설정 > 백업에서 시작하세요."
+            "value" : "세이브 사본을 iCloud Drive에 보관할 수 있어요. Empo %@가 있으면 Dropbox, Google Drive, 내 서버도 쓸 수 있어요. 설정 > 백업에서 시작하세요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guarde cópias dos seus saves no iCloud Drive. Com o Empo Plus, você também pode usar o Dropbox, o Google Drive ou seu próprio servidor. Vá em Ajustes > Backups."
+            "value" : "Guarde cópias dos seus saves no iCloud Drive. Com o Empo %@, você também pode usar o Dropbox, o Google Drive ou seu próprio servidor. Vá em Ajustes > Backups."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Храните копии сохранений в iCloud Drive. С Empo Plus также можно использовать Dropbox, Google Drive или свой сервер. Откройте «Настройки» > «Резервные копии»."
+            "value" : "Храните копии сохранений в iCloud Drive. С Empo %@ также можно использовать Dropbox, Google Drive или свой сервер. Откройте «Настройки» > «Резервные копии»."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把存档的副本保存在 iCloud Drive。有了 Empo Plus，还可以使用 Dropbox、Google Drive 或你自己的服务器。前往“设置”>“备份”。"
+            "value" : "把存档的副本保存在 iCloud Drive。有了 Empo %@，还可以使用 Dropbox、Google Drive 或你自己的服务器。前往“设置”>“备份”。"
           }
         }
       }

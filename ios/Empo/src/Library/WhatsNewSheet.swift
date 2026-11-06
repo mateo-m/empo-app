@@ -168,10 +168,11 @@ private struct WhatsNewRow: View {
                 Text(Bundle.main.localizedString(forKey: item.title, value: nil, table: "WhatsNew"))
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(Bundle.main.localizedString(forKey: item.detail, value: nil, table: "WhatsNew"))
+                detail
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .plusShine()
                 if let section = item.settingsSection, section.isShown {
                     Button("Turn it on in Settings") { onOpenSettings(section) }
                         .font(.subheadline.weight(.semibold))
@@ -182,5 +183,14 @@ private struct WhatsNewRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// A `%@` in the detail stands for the Plus mark.
+    private var detail: Text {
+        let parts = Bundle.main.localizedString(forKey: item.detail, value: nil, table: "WhatsNew")
+            .components(separatedBy: "%@")
+        return parts.dropFirst().reduce(Text(verbatim: parts[0])) {
+            Text("\($0)\(plusWord)\(Text(verbatim: $1))")
+        }
     }
 }
