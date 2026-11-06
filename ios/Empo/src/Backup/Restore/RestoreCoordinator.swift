@@ -156,6 +156,9 @@ final class RestoreCoordinator {
         scope: RestoreScope,
         replacesTheTree: Bool
     ) async -> RestoreOutcome {
+        guard manifest.gameKey == row.identity.gameKey else {
+            return .failed(RestoreNotices.unreadableLine)
+        }
         let destination = Self.destination(for: container, manifest: manifest)
         let localFiles = await Self.localFiles(
             destination: destination, manifest: manifest, scope: scope)
