@@ -380,16 +380,15 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(BackupRunRecord.retention, 90 * 86_400)
     }
 
-    func testRunHistoryDropsARowPast90DaysAndKeepsOneAt89() throws {
+    func testANewRunDropsARowPast90DaysAndKeepsOneAt89() throws {
         let store = try makeStore()
         defer { store.close() }
         try store.recordRun(run("old", daysAgo: 91, outcome: .success))
         try store.recordRun(run("edge", daysAgo: 89, outcome: .success))
 
-        let dropped = try store.pruneRunHistory(now: now)
+        try store.recordRun(run("new", daysAgo: 0, outcome: .success))
 
-        XCTAssertEqual(dropped, 1)
-        XCTAssertEqual(try store.runHistory().map(\.id), ["edge"])
+        XCTAssertEqual(try store.runHistory().map(\.id), ["new", "edge"])
     }
 
     func testAFailedRunKeepsItsLine() throws {

@@ -217,6 +217,10 @@ extension BackupStateStore {
                 .integer(Int64(run.gameCount)),
                 run.detail.map { .text($0) } ?? .null,
             ])
+        let cutoff = run.startedAt.addingTimeInterval(-BackupRunRecord.retention)
+        try database.run(
+            "DELETE FROM run_record WHERE startedAt < ?",
+            [.real(cutoff.timeIntervalSince1970)])
     }
 
     /// The whole history, newest first. One global list, per 6.6.
@@ -245,17 +249,6 @@ extension BackupStateStore {
                 gameCount: Int(gameCount),
                 detail: row[7].string)
         }
-    }
-
-    /// Drops the rows past the 90-day retention of 6.6. The clock is
-    /// a parameter, so the rule is testable.
-    @discardableResult
-    public func pruneRunHistory(now: Date) throws -> Int {
-        let cutoff = now.addingTimeInterval(-BackupRunRecord.retention)
-        try database.run(
-            "DELETE FROM run_record WHERE startedAt < ?",
-            [.real(cutoff.timeIntervalSince1970)])
-        return try changeCount()
     }
 
     // MARK: - Intent records
