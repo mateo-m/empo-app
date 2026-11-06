@@ -102,9 +102,6 @@ final class BackupScheduler {
             self.observeAppLifetime()
             self.appDidBecomeActive()
             self.countTheRunsThatVanished()
-            #if DEBUG
-            BackupDeviceCheck.run()
-            #endif
         }
     }
 
@@ -180,9 +177,6 @@ final class BackupScheduler {
     private func runUnderTheGrant(_ trigger: BackupTrigger) async {
         await BackupBackgroundTask.run(named: "backup.\(trigger.rawValue)") {
             await BackupScheduler.shared.run(trigger: trigger)
-            #if DEBUG
-            await BackupBackgroundTask.holdForADeviceCheck()
-            #endif
         }
     }
 

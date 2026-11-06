@@ -47,19 +47,6 @@ enum BackupNotifier {
             .requestAuthorization(options: [.alert, .sound])
     }
 
-    /// The device check of tickets 007 to 012 has no screen to tap,
-    /// so it goes straight to the system prompt. The Backups screen
-    /// shows the sheet of 13.19 instead.
-    static func askForPermissionIfNeeded(configuredTargetCount: Int) async {
-        let asked = UserDefaults.standard.bool(forKey: DefaultsKey.backupNotificationsAsked)
-        guard
-            BackupNotificationRule.asksForPermission(
-                configuredTargetCount: configuredTargetCount, hasAsked: asked)
-        else { return }
-        UserDefaults.standard.set(true, forKey: DefaultsKey.backupNotificationsAsked)
-        await spendTheSystemPrompt()
-    }
-
     /// Posts what one pass found on every target it touched, and
     /// keeps the ledger so nothing posts twice.
     ///

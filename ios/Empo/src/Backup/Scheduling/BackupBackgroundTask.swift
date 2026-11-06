@@ -66,27 +66,11 @@ enum BackupBackgroundTask {
         return finished
     }
 
-    #if DEBUG
-    /// `backgroundTimeRemaining` reads as unlimited while the app
-    /// still runs in the foreground, so measuring the grant needs a
-    /// hold that logs the time left from inside the background task.
-    static func holdForADeviceCheck() async {
-        guard UserDefaults.standard.bool(forKey: "backupHoldGrant") else { return }
-        while !Task.isCancelled {
-            let left = UIApplication.shared.backgroundTimeRemaining
-            log("the hold sees \(seconds(left)) left")
-            try? await Task.sleep(for: .seconds(5))
-        }
-        log("the hold stopped")
-    }
-    #endif
-
     private static func seconds(_ value: TimeInterval) -> String {
         value > 1_000 ? "unlimited" : String(format: "%.1fs", value)
     }
 
-    /// Always logged, whatever the debug setting says. The device
-    /// check of ticket 007 has to read it on a clean install.
+    /// Always logged, whatever the debug setting says.
     private static func log(_ message: String) {
         BackupLog.line("BackupBackgroundTask", message)
     }

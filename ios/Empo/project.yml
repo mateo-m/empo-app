@@ -376,24 +376,6 @@ targets:
       - target: MvmzCore
         link: false
         embed: false
-  EmpoChecks:
-    type: bundle.ui-testing
-    platform: iOS
-    sources:
-      - path: checks
-    dependencies:
-      - target: Empo
-    configFiles:
-      Debug: Signing.xcconfig
-      Release: Signing.xcconfig
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.dev2.checks
-        CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_ENTITLEMENTS: ""
-        GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "5.0"
-        TARGETED_DEVICE_FAMILY: "1,2"
   GameProcess:
     # One process for each game. The app starts it with ExtensionKit,
     # and it opens the core of the game from the app's Frameworks.
@@ -772,15 +754,6 @@ targets:
         HEADER_SEARCH_PATHS: *sdlHeaders
         CODE_SIGN_IDENTITY: "-"
 schemes:
-  EmpoChecks:
-    build:
-      targets:
-        Empo: all
-        EmpoChecks: test
-    test:
-      config: Debug
-      targets:
-        - EmpoChecks
   Empo:
     build:
       targets:

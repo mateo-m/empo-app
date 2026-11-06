@@ -37,9 +37,6 @@ public final class SyncEngine {
     private let device: DeviceRecord
     private let namespaceId: String
     private let now: @MainActor () -> Date
-    /// What each pass merged. The device checks of ticket 020 read
-    /// it, and nothing else does.
-    private let didMerge: @MainActor (SyncDocumentModel, [String]) -> Void
     private let note: @MainActor (String) -> Void
 
     /// What this device held at the last pass.
@@ -58,7 +55,6 @@ public final class SyncEngine {
         /// The engine takes its clock as an input, because no rule
         /// of section 10 reads the wall clock.
         now: @escaping @MainActor () -> Date,
-        didMerge: @escaping @MainActor (SyncDocumentModel, [String]) -> Void = { _, _ in },
         note: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.document = document
@@ -68,7 +64,6 @@ public final class SyncEngine {
         self.device = device
         self.namespaceId = namespaceId
         self.now = now
-        self.didMerge = didMerge
         self.note = note
     }
 
@@ -188,7 +183,6 @@ public final class SyncEngine {
         // pass read. Nothing of it goes to the new group.
         guard state.state().groupId == groupId else { return .runAgain }
         await publish(groupId: groupId, to: enabled)
-        didMerge(merged, document.heads())
         return .done
     }
 
