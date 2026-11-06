@@ -1,12 +1,8 @@
 import Foundation
 
-/// The three intents of SPEC 6.5. Each is one row, and each survives
-/// a process death.
+/// The intents of SPEC 6.5. Each is one row, and each survives a
+/// process death.
 public enum BackupIntentKind: String, Codable, Sendable, CaseIterable, Equatable {
-    /// The user paused a run. The outstanding upload tasks are
-    /// cancelled and the staging and outbox files stay. Resume is one
-    /// tap while the process lives, so a pause never asks at launch.
-    case pausedRun = "paused-run"
     /// A run died with the process. Under the 100 MB floor Empo
     /// recovers silently. Over it, the next launch asks once.
     case interruptedRun = "interrupted-run"
@@ -72,8 +68,6 @@ public struct BackupIntentRecord: Equatable, Sendable {
     public var asksAtNextLaunch: Bool {
         if asked { return false }
         switch kind {
-        case .pausedRun:
-            return false
         case .interruptedRun:
             return uploadedBytes >= Self.resumeQuestionFloorBytes
         case .interruptedRestore:

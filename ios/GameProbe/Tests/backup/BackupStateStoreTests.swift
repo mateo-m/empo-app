@@ -281,11 +281,8 @@ final class BackupStateStoreTests: XCTestCase {
 
     // MARK: - Intent records, per 6.5
 
-    func testTheThreeIntentRecordsSurviveACloseAndAReopen() throws {
+    func testTheIntentRecordsSurviveACloseAndAReopen() throws {
         let records = [
-            BackupIntentRecord(
-                kind: .pausedRun, targetId: targetId, gameKey: "abc",
-                snapshotId: "20260501T000000Z-aabbcc", uploadedBytes: 1024, createdAt: now),
             BackupIntentRecord(
                 kind: .interruptedRun, targetId: targetId, gameKey: "def",
                 uploadedBytes: 250 * 1024 * 1024, createdAt: now),
@@ -327,15 +324,6 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertTrue(record.asksAtNextLaunch)
     }
 
-    func testAPausedRunNeverAsksAtLaunch() {
-        // Resume is one tap while the process lives, per 6.5.
-        let record = BackupIntentRecord(
-            kind: .pausedRun, targetId: targetId,
-            uploadedBytes: 900 * 1024 * 1024, createdAt: now)
-
-        XCTAssertFalse(record.asksAtNextLaunch)
-    }
-
     func testAnInterruptedRestoreAsksWhateverItsSize() {
         let record = BackupIntentRecord(
             kind: .interruptedRestore, targetId: targetId, uploadedBytes: 0, createdAt: now)
@@ -364,13 +352,13 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
         try store.saveIntent(
-            BackupIntentRecord(kind: .pausedRun, targetId: targetId, createdAt: now))
+            BackupIntentRecord(kind: .interruptedRun, targetId: targetId, createdAt: now))
         try store.saveIntent(
             BackupIntentRecord(kind: .interruptedRestore, targetId: targetId, createdAt: now))
 
-        try store.clearIntent(kind: .pausedRun)
+        try store.clearIntent(kind: .interruptedRun)
 
-        XCTAssertNil(try store.intent(kind: .pausedRun))
+        XCTAssertNil(try store.intent(kind: .interruptedRun))
         XCTAssertNotNil(try store.intent(kind: .interruptedRestore))
     }
 

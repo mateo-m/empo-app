@@ -238,22 +238,10 @@ final class BackupScheduler {
         runTask?.cancel()
         runTask = nil
         queuedPress = nil
-        recordThePause()
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
     }
 
     // MARK: - The resume question of 6.5 and 13.18
-
-    /// A pause is its own record. It keeps the staging and the outbox
-    /// files, and it never asks at the next launch, because resume is
-    /// one tap while the process lives.
-    private func recordThePause() {
-        guard let store, var record = try? store.intent(kind: .interruptedRun) else {
-            return
-        }
-        record.kind = .pausedRun
-        try? store.saveIntent(record)
-    }
 
     /// The run the process did not survive, or `nil` when the last
     /// launch left nothing to ask about.

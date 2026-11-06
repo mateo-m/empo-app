@@ -183,13 +183,6 @@ final class RunProgressTests: XCTestCase {
         XCTAssertFalse(BackupResumeQuestion.asks(interrupted(uploaded: floor, asked: true)))
     }
 
-    func testAPausedRunNeverAsksAtTheNextLaunch() {
-        var record = interrupted(uploaded: 4 * BackupIntentRecord.resumeQuestionFloorBytes)
-        record.kind = .pausedRun
-        XCTAssertFalse(BackupResumeQuestion.asks(record))
-        XCTAssertFalse(record.asksAtNextLaunch)
-    }
-
     func testTheQuestionNamesTheGameAndWhatRemains() {
         XCTAssertEqual(BackupResumeQuestion.title, "Resume the backup?")
         XCTAssertEqual(
