@@ -541,6 +541,66 @@
         }
       }
     },
+    "I build Empo alone in my spare time. Join Empo %@ to help me keep working on it. It's at the top of Settings." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ich baue Empo allein in meiner Freizeit. Mit Empo %@ hilfst du mir, weiter daran zu arbeiten. Du findest es ganz oben in den Einstellungen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hago Empo yo solo en mi tiempo libre. Con Empo %@ me ayudas a seguir trabajando en él. Lo encontrarás arriba del todo en Ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je développe Empo seul, sur mon temps libre. Avec Empo %@, tu m'aides à continuer. Tu le trouves tout en haut des Réglages."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sviluppo Empo da solo nel mio tempo libero. Con Empo %@ mi aiuti a continuare a lavorarci. Lo trovi in cima alle Impostazioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empoは、私がひとりで空き時間に作っています。Empo %@で開発を応援していただけます。「設定」のいちばん上にあります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo는 제가 여가 시간에 혼자 만들고 있어요. Empo %@로 개발을 응원해 주세요. 설정 맨 위에 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faço o Empo sozinho, no meu tempo livre. Com o Empo %@, você me ajuda a continuar trabalhando nele. Ele fica no topo dos Ajustes."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Я делаю Empo один в свободное время. С Empo %@ вы помогаете мне продолжать работу. Он в самом верху настроек."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 是我一个人在业余时间做的。加入 Empo %@，帮我继续开发下去。它就在“设置”的最上面。"
+          }
+        }
+      }
+    },
     "iPhone Duo support" : {
       "comment" : "Title of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
@@ -1137,6 +1197,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一些之前启动就卡住的 RPG Maker XP 游戏（比如 Vinemon）现在能正常启动了。"
+          }
+        }
+      }
+    },
+    "Support Empo" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo unterstützen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apoya Empo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Soutiens Empo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sostieni Empo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empoを応援"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 응원하기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apoie o Empo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Поддержите Empo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "支持 Empo"
           }
         }
       }

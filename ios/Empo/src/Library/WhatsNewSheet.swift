@@ -7,8 +7,7 @@ import SwiftUI
 /// with the next `version` and the app version that ships it. Add its
 /// title and detail, with their translations, to
 /// Resources/WhatsNew.xcstrings: the rows look them up by their English text.
-/// Set `"plus": true` on an item that only Plus members get. The sheet
-/// shows those items in their own section after the others.
+/// Set `"plus": true` on an item about Plus. Its title gets a Plus pill.
 enum WhatsNew {
     static let releases: [WhatsNewRelease] = {
         let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!
@@ -108,19 +107,9 @@ struct WhatsNewSheet: View {
     var body: some View {
         StandardSheet(title: "What's new in \(AppInfo.name)", emblem: "sparkles") {
             VStack(alignment: .leading, spacing: Spacing._2xl) {
-                ForEach(Array(freeItems.enumerated()), id: \.offset) { index, item in
-                    row(item, index: index)
-                }
-                if !plusItems.isEmpty {
-                    Text("With Empo \(plusWord)")
-                        .font(.title3.weight(.semibold))
-                        .plusShine()
-                        .accessibilityAddTraits(.isHeader)
-                        .padding(.top, Spacing.md)
-                        .entering(entered, reduceMotion: reduceMotion, index: freeItems.count)
-                    ForEach(Array(plusItems.enumerated()), id: \.offset) { index, item in
-                        row(item, index: freeItems.count + 1 + index)
-                    }
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    WhatsNewRow(item: item, onOpenSettings: onOpenSettings)
+                        .entering(entered, reduceMotion: reduceMotion, index: index)
                 }
             }
             .padding(.vertical, Spacing.md)
@@ -145,14 +134,6 @@ struct WhatsNewSheet: View {
             }
         }
         .onAppear { entered = true }
-    }
-
-    private var freeItems: [WhatsNewItem] { items.filter { $0.plus != true } }
-    private var plusItems: [WhatsNewItem] { items.filter { $0.plus == true } }
-
-    private func row(_ item: WhatsNewItem, index: Int) -> some View {
-        WhatsNewRow(item: item, onOpenSettings: onOpenSettings)
-            .entering(entered, reduceMotion: reduceMotion, index: index)
     }
 }
 
@@ -191,9 +172,19 @@ private struct WhatsNewRow: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
-                Text(Bundle.main.localizedString(forKey: item.title, value: nil, table: "WhatsNew"))
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                HStack(spacing: Spacing.sm) {
+                    Text(Bundle.main.localizedString(forKey: item.title, value: nil, table: "WhatsNew"))
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    if item.plus == true {
+                        plusWord
+                            .font(.caption)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.xxs)
+                            .background(Color.brand.opacity(0.15), in: .capsule)
+                            .plusShine()
+                    }
+                }
                 detail
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

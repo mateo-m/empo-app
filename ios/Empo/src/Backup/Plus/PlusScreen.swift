@@ -305,7 +305,7 @@ private enum PlusStage {
 
     var headline: Text {
         switch self {
-        case .member: Text("You have Empo \(plusWord)")
+        case .member: Text("Thank you for supporting Empo")
         case .notYet: Text("Your Patreon account isn't a member yet")
         case .expired: Text("Empo couldn't check your membership")
         case .signInAgain: Text("Sign in to Patreon again")
@@ -315,7 +315,8 @@ private enum PlusStage {
 
     var detail: Text {
         switch self {
-        case .member: Text("Add Dropbox, Google Drive, or your own server in Backups.")
+        case .member:
+            Text("You have Empo \(plusWord).\nAdd Dropbox, Google Drive, or your own server in Backups.")
         case .notYet: Text("Join on Patreon, then tap Check again.")
         case .expired: Text("Connect to the internet, then tap Check again.")
         case .signInAgain(let date):
