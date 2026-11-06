@@ -113,7 +113,7 @@ struct SettingsView: View {
                         SettingsNavigationRow(
                             title: Text("Empo \(plusWord)"),
                             description:
-                                "Back up to Dropbox, Google Drive, and your own server with a Patreon membership."
+                                "Back up to Dropbox, Google Drive, and your own server."
                         ) {
                             PlusScreen()
                         }

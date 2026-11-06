@@ -1,16 +1,19 @@
 import AuthenticationServices
 import GameProbe
+import StoreKit
 import SwiftUI
 
 struct PlusScreen: View {
 
     private let plus = EmpoPlus.shared
+    private let store = PlusStore.shared
 
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @Environment(\.openURL) private var openURL
     @State private var isWorking = false
     @State private var failure: String?
     @State private var tooManyDevices = false
+    @State private var managesSubscription = false
 
     var body: some View {
         ScrollView {
@@ -18,12 +21,14 @@ struct PlusScreen: View {
                 PlusOrbit(isMember: plus.hasPlus).padding(.top, Spacing.lg)
                 headline.padding(.horizontal, Spacing._3xl)
                 places
+                if offersSubscription {
+                    quiet("Restore purchase") { Task { await restore() } }
+                }
             }
             .padding(.bottom, Spacing._3xl)
         }
         .background(Color(.systemGroupedBackground))
-        // `safeAreaBar` gives the system scroll edge blur, so the page
-        // shows through and the buttons stay legible over content.
+        .scrollEdgeEffectStyle(.hard, for: .bottom)
         .safeAreaBar(edge: .bottom) {
             buttons
                 .padding(.horizontal, Spacing._2xl)
@@ -31,7 +36,13 @@ struct PlusScreen: View {
                 .padding(.bottom, Spacing.md)
         }
         .overlay {
-            if isWorking { ProgressView().accessibilityLabel("Checking with Patreon") }
+            if isWorking { ProgressView().accessibilityLabel("Loading") }
+        }
+        .manageSubscriptionsSheet(isPresented: $managesSubscription)
+        .task {
+            guard sellsSubscription else { return }
+            await store.loadProduct()
+            await store.refresh()
         }
         .navigationTitle("Empo Plus")
         .navigationBarTitleDisplayMode(.inline)
@@ -42,7 +53,11 @@ struct PlusScreen: View {
         }
     }
 
+    // The GitHub build has no App Store to sell through.
+    private var sellsSubscription: Bool { !UpdateChecker.isSideloadBuild }
+
     private var stage: PlusStage {
+        if store.isSubscribed { return .member }
         switch (plus.isSignedIn, plus.pass) {
         case (true, let pass?) where pass.grantsPlus(at: .now): return .member
         case (true, let pass?) where pass.includesPlus: return .expired
@@ -72,7 +87,7 @@ struct PlusScreen: View {
                 }
             }
             .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: Radius.lg))
-            Text("Restore is always free, also after a membership ends.")
+            Text("Restoring your saves stays free, also after Plus ends.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, Spacing.xl)
@@ -103,18 +118,26 @@ struct PlusScreen: View {
     }
 
     private var buttons: some View {
-        VStack(spacing: Spacing.lg) {
+        VStack(spacing: Spacing.md) {
             switch stage {
             case .join:
                 if UpdateChecker.isSideloadBuild {
                     primary("Join on Patreon") { openURL(EmpoPlus.joinURL) }
                     secondary("Already a member? Sign in") { Task { await signIn() } }
                 } else {
-                    primary("Sign in with Patreon") { Task { await signIn() } }
+                    subscribe
+                    Button {
+                        Task { await signIn() }
+                    } label: {
+                        Text("Sign in with Patreon").frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.secondary)
                 }
             case .notYet:
                 if UpdateChecker.isSideloadBuild {
                     primary("Join on Patreon") { openURL(EmpoPlus.joinURL) }
+                } else {
+                    subscribe
                 }
                 secondary("Check again") { Task { await checkAgain() } }
                 quiet("Sign out of Patreon") { plus.signOut() }
@@ -124,7 +147,12 @@ struct PlusScreen: View {
             case .signInAgain:
                 primary("Sign in with Patreon") { Task { await signIn() } }
             case .member:
-                quiet("Sign out of Patreon") { plus.signOut() }
+                if store.isSubscribed {
+                    quiet("Manage subscription") { managesSubscription = true }
+                }
+                if plus.isSignedIn {
+                    quiet("Sign out of Patreon") { plus.signOut() }
+                }
             }
             if let failure {
                 Label(failure, systemImage: "exclamationmark.triangle.fill")
@@ -134,8 +162,38 @@ struct PlusScreen: View {
             if tooManyDevices {
                 secondary("Sign out other devices") { Task { await signIn(replace: true) } }
             }
+            if offersSubscription { subscriptionTerms }
         }
         .disabled(isWorking)
+    }
+
+    private var subscribe: some View {
+        primary(store.product.map { "Subscribe for \($0.displayPrice) a month" } ?? "Subscribe") {
+            Task { await purchase() }
+        }
+    }
+
+    private var offersSubscription: Bool {
+        sellsSubscription && !store.isSubscribed && stage.offersSubscription
+    }
+
+    // App Review asks for the renewal terms and both links next to the
+    // purchase button.
+    private var subscriptionTerms: some View {
+        Text(
+            AttributedString(localized: "Renews every month until you cancel.") + " "
+                + link("Terms", to: EmpoLink.terms) + " · " + link("Privacy", to: EmpoLink.privacy)
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .tint(.brand)
+        .multilineTextAlignment(.center)
+    }
+
+    private func link(_ title: String.LocalizationValue, to url: URL) -> AttributedString {
+        var text = AttributedString(localized: title)
+        text.link = url
+        return text
     }
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
@@ -175,6 +233,33 @@ struct PlusScreen: View {
         }
     }
 
+    private func purchase() async {
+        isWorking = true
+        defer { isWorking = false }
+        failure = nil
+        await store.loadProduct()
+        do throws(PlusStore.PurchaseFailure) {
+            try await store.purchase()
+        } catch {
+            switch error {
+            case .cancelled: break
+            case .pending: failure = "Your purchase is waiting for approval."
+            case .failed: failure = "Couldn't reach the App Store. Try again."
+            }
+        }
+    }
+
+    private func restore() async {
+        isWorking = true
+        defer { isWorking = false }
+        failure = nil
+        if await !store.restore() {
+            failure = "Couldn't reach the App Store. Try again."
+        } else if !store.isSubscribed {
+            failure = "No Empo Plus purchase on this Apple Account."
+        }
+    }
+
     private func checkAgain() async {
         isWorking = true
         defer { isWorking = false }
@@ -203,6 +288,13 @@ private enum PlusStage {
     case join, notYet, expired
     case signInAgain(until: Date)
     case member
+
+    var offersSubscription: Bool {
+        switch self {
+        case .join, .notYet: true
+        default: false
+        }
+    }
 
     var headline: Text {
         switch self {

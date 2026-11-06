@@ -1,13 +1,23 @@
 These terms cover the Empo app and this documentation site.
 
-Last update: 19 October 2026.
+Last update: 5 November 2026.
 
 ## The licence
 
-Empo is free. You may install it, use it, and stop using it at any time. The
-source code carries its own licence in the repository, and that licence governs
-the code. The name "Empo", the Empo logo, and the Empo icon are not part of
-that licence. TRADEMARKS.md in the repository tells which uses are permitted.
+Empo is free, and Empo Plus is an optional paid extra. You may install it, use
+it, and stop using it at any time. The source code carries its own licence in
+the repository, and that licence governs the code. The name "Empo", the Empo
+logo, and the Empo icon are not part of that licence. TRADEMARKS.md in the
+repository tells which uses are permitted.
+
+## Empo Plus
+
+Empo Plus adds backups to Dropbox, Google Drive, S3 storage, and a WebDAV
+server. iCloud Drive backups and every restore stay free. You get Empo Plus
+with a paid membership of Empo on Patreon. Patreon's terms cover the payment.
+
+Empo Plus works on up to 3 devices for each Patreon account. When Plus ends,
+backups to the Plus places stop. Restore from them stays free.
 
 ## What you supply
 
