@@ -13,16 +13,17 @@ final class MidiSoundSetCopies {
     static let shared = MidiSoundSetCopies()
 
     private(set) var folders: Set<URL> = []
-    private var finished: [URL: Int] = [:]
+    private var revisions: [URL: Int] = [:]
 
     func isCopying(into soundSet: MidiSoundSet) -> Bool {
         folders.contains(soundSet.folderURL)
     }
 
     /// A copy can start and end between two updates of a view, so
-    /// `isCopying` can look unchanged. This count changes at each end.
-    func finishedCopies(into soundSet: MidiSoundSet) -> Int {
-        finished[soundSet.folderURL, default: 0]
+    /// `isCopying` can look unchanged. This count changes at each end of a
+    /// copy and at each removal, also when another window did it.
+    func revision(of soundSet: MidiSoundSet) -> Int {
+        revisions[soundSet.folderURL, default: 0]
     }
 
     func begin(_ soundSet: MidiSoundSet) {
@@ -31,7 +32,11 @@ final class MidiSoundSetCopies {
 
     func end(_ soundSet: MidiSoundSet) {
         folders.remove(soundSet.folderURL)
-        finished[soundSet.folderURL, default: 0] += 1
+        revisions[soundSet.folderURL, default: 0] += 1
+    }
+
+    func removed(_ soundSet: MidiSoundSet) {
+        revisions[soundSet.folderURL, default: 0] += 1
     }
 }
 

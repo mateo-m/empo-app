@@ -140,7 +140,11 @@ final class MkxpSettingsState: CoreSettings {
         self.gameOwnMidiSoundFont = ManagedMkxpConfig.readGameDefaults(from: container.gameURL).midiSoundFont
     }
 
-    var midiSoundFont: String? { settings.midiSoundFont(for: container) }
+    /// Default plays the app's set, which another window can change.
+    var midiSoundFont: String? {
+        _ = MidiSoundSetCopies.shared.revision(of: .app)
+        return settings.midiSoundFont(for: container)
+    }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
 
@@ -157,6 +161,7 @@ final class MkxpSettingsState: CoreSettings {
 
     func reset() {
         try? MidiSoundSet.game(container).removeImported()
+        MidiSoundSetCopies.shared.removed(.game(container))
         gameMidiSoundSet = nil
         settings = MkxpSettings()
         settings.save(to: container.empoStateURL)

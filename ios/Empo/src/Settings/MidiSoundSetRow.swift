@@ -158,6 +158,7 @@ struct MidiSoundSetPicker: View {
                 break
             case .choice(let choice):
                 try? soundSet.removeImported()
+                MidiSoundSetCopies.shared.removed(soundSet)
                 imported = soundSet.current
                 pick(choice)
             case .importNew:
@@ -194,7 +195,7 @@ struct MidiSoundSetPicker: View {
         .padding(.vertical, Spacing.xxs)
         .disabled(isCopying)
         // The copy can end after this sheet closed and opened again.
-        .onChange(of: MidiSoundSetCopies.shared.finishedCopies(into: soundSet)) {
+        .onChange(of: MidiSoundSetCopies.shared.revision(of: soundSet)) {
             imported = soundSet.current
         }
         #if os(iOS)

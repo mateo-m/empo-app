@@ -153,7 +153,7 @@ struct GameMidiSoundSetRow: View {
             }
         )
         // A sheet that opened during the copy holds the old choice.
-        .onChange(of: MidiSoundSetCopies.shared.finishedCopies(into: .game(state.container))) {
+        .onChange(of: MidiSoundSetCopies.shared.revision(of: .game(state.container))) {
             state.settings.midiSoundSet = MkxpSettings.load(from: state.container.empoStateURL).midiSoundSet
         }
     }
@@ -171,6 +171,7 @@ struct GameMidiSoundSetRow: View {
             return .init(
                 name: URL(fileURLWithPath: own).deletingPathExtension().lastPathComponent, source: .game)
         }
+        _ = MidiSoundSetCopies.shared.revision(of: .app)
         if let app = MidiSoundSet.app.current {
             return .init(name: app.deletingPathExtension().lastPathComponent, source: .imported)
         }
