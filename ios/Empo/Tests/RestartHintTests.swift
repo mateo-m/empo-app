@@ -89,6 +89,16 @@ final class RestartHintTests: XCTestCase {
         XCTAssertEqual(launched.restartRequiredChanges(to: MkxpSettingsState(container: container)), [])
     }
 
+    func testSoundFontAddedToTheGameFolderNeedsARestart() throws {
+        try moveAppSoundSetAside()
+        let launched = MkxpLaunchedSettings(container: container)
+
+        try writeSoundSet(into: container.gameURL.appendingPathComponent("Audio", isDirectory: true))
+
+        XCTAssertEqual(
+            launched.restartRequiredChanges(to: MkxpSettingsState(container: container)), ["MIDI sound set"])
+    }
+
     private func choose(_ soundSet: GameMidiSoundSet?) {
         var settings = MkxpSettings.load(from: container.empoStateURL)
         settings.midiSoundSet = soundSet

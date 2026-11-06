@@ -336,23 +336,33 @@ public enum ManagedMkxpConfig {
         return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
-    /// The .sf2 and .dls files in the game folder, relative to it, the shallowest first, then by
-    /// name. Some games ship one for Windows players that `mkxp.json` does not name.
-    public static func shippedSoundFonts(in gameDirectory: URL) -> [String] {
+    /// The .sf2 and .dls files in the game folder. Some games ship one for Windows players that
+    /// `mkxp.json` does not name.
+    public static func shippedSoundFonts(in gameDirectory: URL) -> ShippedSoundFonts {
+        // The date of a folder is read before the walk lists it, so a later change shows.
+        var folders = ["": ShippedSoundFonts.modificationDate(of: gameDirectory) ?? .distantPast]
         guard
-            let files = FileManager.default.enumerator(
-                at: gameDirectory, includingPropertiesForKeys: [], options: [.skipsHiddenFiles])
-        else { return [] }
+            let items = FileManager.default.enumerator(
+                at: gameDirectory, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                options: [.skipsHiddenFiles])
+        else { return ShippedSoundFonts(files: [], folders: folders) }
         let base = gameDirectory.standardizedFileURL.pathComponents.count
-        var found: [[String]] = []
-        for case let url as URL in files where ["sf2", "dls"].contains(url.pathExtension.lowercased()) {
-            found.append(Array(url.standardizedFileURL.pathComponents.dropFirst(base)))
+        var files: [[String]] = []
+        for case let url as URL in items {
+            let path = Array(url.standardizedFileURL.pathComponents.dropFirst(base))
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .contentModificationDateKey])
+            if values?.isDirectory == true {
+                folders[path.joined(separator: "/")] = values?.contentModificationDate ?? .distantPast
+            } else if ["sf2", "dls"].contains(url.pathExtension.lowercased()) {
+                files.append(path)
+            }
         }
-        return found.sorted {
+        let sorted = files.sorted {
             $0.count != $1.count
                 ? $0.count < $1.count
                 : $0.joined(separator: "/").localizedStandardCompare($1.joined(separator: "/")) == .orderedAscending
-        }.map { $0.joined(separator: "/") }
+        }
+        return ShippedSoundFonts(files: sorted.map { $0.joined(separator: "/") }, folders: folders)
     }
 
     // MARK: - Overlay string for engine bridge
@@ -762,5 +772,21 @@ public enum ManagedMkxpConfig {
         } catch {
             return false
         }
+    }
+}
+
+public struct ShippedSoundFonts: Codable, Equatable, Sendable {
+    /// Relative to the game folder, the shallowest first, then by name.
+    public var files: [String]
+    /// The date of each folder that the walk read, by its path relative to the game folder.
+    public var folders: [String: Date]
+
+    public static func modificationDate(of url: URL) -> Date? {
+        // On Apple platforms, a URL keeps the resource values that it read once.
+        var url = url
+        #if canImport(Darwin)
+        url.removeAllCachedResourceValues()
+        #endif
+        return (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 }

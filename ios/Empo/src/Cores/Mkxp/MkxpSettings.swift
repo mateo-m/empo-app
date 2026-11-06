@@ -69,6 +69,35 @@ struct MkxpSettings: GameSettingsGroup {
     }
 }
 
+/// The sound font that a game ships. Default plays it, not the app's set.
+enum MkxpGameSoundFont {
+    static func url(in container: GameContainer) -> URL? {
+        ManagedMkxpConfig.namedSoundFont(in: container.gameURL)
+            ?? shipped(in: container).files.first.map { container.gameURL.appendingPathComponent($0) }
+    }
+
+    /// A walk of a large game folder takes a tenth of a second or more. The Files app and Finder
+    /// can change the folder while Empo is closed. A new, removed, or renamed file changes the
+    /// date of its folder, so the stored list is good while each folder keeps its date.
+    private static func shipped(in container: GameContainer) -> ShippedSoundFonts {
+        let url = container.metadataURL.appendingPathComponent("mkxp-sound-fonts.json")
+        if let data = try? Data(contentsOf: url),
+            let stored = try? JSONDecoder().decode(ShippedSoundFonts.self, from: data),
+            stored.folders.allSatisfy({ path, date in
+                ShippedSoundFonts.modificationDate(of: container.gameURL.appendingPathComponent(path)) == date
+            })
+        {
+            return stored
+        }
+        let found = ManagedMkxpConfig.shippedSoundFonts(in: container.gameURL)
+        container.ensureMetadataDirectory()
+        if let data = try? JSONEncoder().encode(found) {
+            try? data.write(to: url, options: .atomic)
+        }
+        return found
+    }
+}
+
 enum GameMidiSoundSet: String, Codable {
     case builtIn
     /// The file in the game's own `EmpoState/SoundFonts/`.
@@ -85,7 +114,7 @@ struct MkxpLaunchedSettings: CoreLaunchedSettings {
         settings = MkxpSettings.load(from: container.empoStateURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)
         midiSoundFont = settings.midiSoundFont(
-            for: container, gameSoundFont: MkxpProfile.load(for: container).gameSoundFont(in: container))
+            for: container, gameSoundFont: MkxpGameSoundFont.url(in: container))
         midiSoundFontFile = Self.fileNumber(of: midiSoundFont)
     }
 
@@ -120,7 +149,7 @@ final class MkxpSettingsState: CoreSettings {
     let isPokemonEssentials: Bool
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
-    private(set) var gameSoundFont: URL?
+    let gameSoundFont: URL?
 
     @ObservationIgnored let container: GameContainer
 
@@ -130,12 +159,11 @@ final class MkxpSettingsState: CoreSettings {
         self.settings = settings
         self.engine = MkxpEngineSettings.load(from: container.empoStateURL)
         self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
-        let profile = MkxpProfile.load(for: container)
-        self.profile = profile
+        self.profile = MkxpProfile.load(for: container)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
         self.gameMidiSoundSet = MidiSoundSet.game(container).current
-        self.gameSoundFont = profile.gameSoundFont(in: container)
+        self.gameSoundFont = MkxpGameSoundFont.url(in: container)
     }
 
     /// Default plays the app's set, which another window can change.
@@ -164,7 +192,6 @@ final class MkxpSettingsState: CoreSettings {
         settings = MkxpSettings()
         settings.save(to: container.empoStateURL)
         profile = MkxpProfile.load(for: container, rescan: true)
-        gameSoundFont = profile.gameSoundFont(in: container)
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)

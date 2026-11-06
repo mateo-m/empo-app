@@ -101,20 +101,37 @@ final class ManagedMkxpConfigTests: XCTestCase {
         """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
         XCTAssertNil(ManagedMkxpConfig.namedSoundFont(in: gameDir))
-        XCTAssertEqual(ManagedMkxpConfig.shippedSoundFonts(in: gameDir), ["Audio/BGM/GMGSx.SF2"])
+        XCTAssertEqual(ManagedMkxpConfig.shippedSoundFonts(in: gameDir).files, ["Audio/BGM/GMGSx.SF2"])
     }
 
     func testShippedSoundFontsPutTheShallowestFirstThenSortByName() throws {
         let gameDir = try makeGame(files: ["Audio/BGM/a.sf2", "c.sf2", "b.dls", "Audio/z.sf2", "notes.txt"])
 
         XCTAssertEqual(
-            ManagedMkxpConfig.shippedSoundFonts(in: gameDir), ["b.dls", "c.sf2", "Audio/z.sf2", "Audio/BGM/a.sf2"])
+            ManagedMkxpConfig.shippedSoundFonts(in: gameDir).files,
+            ["b.dls", "c.sf2", "Audio/z.sf2", "Audio/BGM/a.sf2"])
     }
 
     func testShippedSoundFontsSkipHiddenAndOtherFiles() throws {
         let gameDir = try makeGame(files: [".hidden.sf2", ".git/a.sf2", "Audio/BGM/song.mid", "Audio/font.sf3"])
 
-        XCTAssertEqual(ManagedMkxpConfig.shippedSoundFonts(in: gameDir), [])
+        XCTAssertEqual(ManagedMkxpConfig.shippedSoundFonts(in: gameDir).files, [])
+    }
+
+    func testShippedSoundFontsKeepTheDateOfEachFolder() throws {
+        let gameDir = try makeGame(files: ["Audio/BGM/song.mid", "Graphics/a.png"])
+        let found = ManagedMkxpConfig.shippedSoundFonts(in: gameDir)
+
+        XCTAssertEqual(Set(found.folders.keys), ["", "Audio", "Audio/BGM", "Graphics"])
+        for (path, date) in found.folders {
+            XCTAssertEqual(ShippedSoundFonts.modificationDate(of: gameDir.appendingPathComponent(path)), date)
+        }
+        let bgm = gameDir.appendingPathComponent("Audio/BGM")
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -60)], ofItemAtPath: bgm.path)
+        let before = try XCTUnwrap(ShippedSoundFonts.modificationDate(of: bgm))
+        try Data().write(to: bgm.appendingPathComponent("font.sf2"))
+        XCTAssertNotEqual(ShippedSoundFonts.modificationDate(of: bgm), before)
     }
 
     private func makeGame(files: [String]) throws -> URL {
