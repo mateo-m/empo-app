@@ -51,7 +51,8 @@ final class OAuthSignIn {
     @discardableResult
     func resume(with url: URL) -> Bool {
         guard let session else { return false }
-        let took = session.resumeExternalUserAgentFlow(with: url)
+        // AppAuth 3 throws when the URL is not this sign-in's redirect.
+        let took = (try? session.resumeExternalUserAgentFlow(url)) != nil
         if took { self.session = nil }
         return took
     }
