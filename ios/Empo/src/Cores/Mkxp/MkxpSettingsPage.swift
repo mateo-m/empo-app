@@ -152,8 +152,8 @@ struct GameMidiSoundSetRow: View {
                 saved.save(to: state.container.empoStateURL)
             }
         )
-        // A sheet that opened during the copy holds the old choice, and saves it when it closes.
-        .onChange(of: MidiSoundSetCopies.shared.isCopying(into: .game(state.container))) {
+        // A sheet that opened during the copy holds the old choice.
+        .onChange(of: MidiSoundSetCopies.shared.finishedCopies(into: .game(state.container))) {
             state.settings.midiSoundSet = MkxpSettings.load(from: state.container.empoStateURL).midiSoundSet
         }
     }

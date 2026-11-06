@@ -77,7 +77,9 @@ struct MidiSoundSetPicker: View {
         }
         .disabled(isCopying)
         // The copy can end after this sheet closed and opened again.
-        .onChange(of: isCopying) { imported = soundSet.current }
+        .onChange(of: MidiSoundSetCopies.shared.finishedCopies(into: soundSet)) {
+            imported = soundSet.current
+        }
         #if os(iOS)
         .sheet(isPresented: $isImporting) {
             DocumentPickerView(contentTypes: MidiSoundSet.contentTypes, allowsMultipleSelection: false) {

@@ -146,8 +146,12 @@ final class MkxpSettingsState: CoreSettings {
 
     var isBusy: Bool { MidiSoundSetCopies.shared.isCopying(into: .game(container)) }
 
+    /// The sound set picker and `reset()` write `midiSoundSet` themselves.
+    /// An import can end after this state loaded, so this copy of it is old.
     func save() {
-        settings.save(to: container.empoStateURL)
+        var saved = settings
+        saved.midiSoundSet = MkxpSettings.load(from: container.empoStateURL).midiSoundSet
+        saved.save(to: container.empoStateURL)
         engine.save(to: container.empoStateURL)
     }
 
@@ -155,6 +159,7 @@ final class MkxpSettingsState: CoreSettings {
         try? MidiSoundSet.game(container).removeImported()
         gameMidiSoundSet = nil
         settings = MkxpSettings()
+        settings.save(to: container.empoStateURL)
         profile = MkxpProfile.load(for: container, rescan: true)
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
