@@ -463,7 +463,7 @@ final class S3Tests: XCTestCase {
     }
 
     func testAnAddressURLLoadingCannotUseIsRejectedWithEmposOwnLine() {
-        for code in [-1000, -1002, -1022] {
+        for code in [-1000, -1002, -1022, -1205, -1206] {
             XCTAssertEqual(
                 TransportSecurity.transportError(urlError(code, "System words.")),
                 .rejected(message: TransportSecurity.unusableAddressMessage), "code \(code)")

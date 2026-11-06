@@ -49,7 +49,7 @@ public enum TransportSecurity {
     /// The URL loading codes that mean the certificate failed.
     ///
     /// The numbers are `NSURLErrorSecureConnectionFailed` and the
-    /// five certificate codes beside it. They are written out because
+    /// four server certificate codes beside it. They are written out because
     /// the names live in `FoundationNetworking` on Linux, and this
     /// package builds on both.
     public static let certificateErrorCodes: Set<Int> = [
@@ -58,8 +58,6 @@ public enum TransportSecurity {
         -1202,  // NSURLErrorServerCertificateUntrusted
         -1203,  // NSURLErrorServerCertificateHasUnknownRoot
         -1204,  // NSURLErrorServerCertificateNotYetValid
-        -1205,  // NSURLErrorClientCertificateRejected
-        -1206,  // NSURLErrorClientCertificateRequired
     ]
 
     /// What an address that URL loading cannot use earns.
@@ -67,9 +65,12 @@ public enum TransportSecurity {
         "Empo can't use that address. Check it, then try again."
 
     /// The URL loading codes that no later pass fixes, because the
-    /// address itself is wrong: bad URL, unsupported URL, and the
-    /// App Transport Security refusal.
-    private static let unusableAddressErrorCodes: Set<Int> = [-1000, -1002, -1022]
+    /// address itself is wrong: bad URL, unsupported URL, the App
+    /// Transport Security refusal, and a server that wants a client
+    /// certificate, which Empo never sends.
+    private static let unusableAddressErrorCodes: Set<Int> = [
+        -1000, -1002, -1022, -1205, -1206,
+    ]
 
     /// The error kind for a request that got no HTTP answer.
     ///
