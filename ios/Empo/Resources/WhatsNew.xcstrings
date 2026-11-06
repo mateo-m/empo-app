@@ -601,7 +601,7 @@
         }
       }
     },
-    "Keep copies of your saves in iCloud Drive. With Empo Plus, you can also use Dropbox, Google Drive, or your own server. Go to Settings > Backups." : {
+    "Keep copies of your saves in iCloud Drive. With Empo Plus, you can also use Dropbox, Google Drive, or your own server. Go to Settings > Backups." : {
       "comment" : "Text of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
       "localizations" : {
@@ -841,7 +841,7 @@
         }
       }
     },
-    "Older RPG Maker games now play their MIDI music. To use another sound set, go to Settings > Music." : {
+    "Older RPG Maker games now play their MIDI music. To use another sound set, go to Settings > Music." : {
       "comment" : "Text of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
       "localizations" : {
@@ -1141,7 +1141,7 @@
         }
       }
     },
-    "Turn on \"Respect silent mode\" in Settings, and games stay quiet when your device is in silent mode." : {
+    "Turn on \"Respect silent mode\" in Settings, and games stay quiet when your device is in silent mode." : {
       "comment" : "Text of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
       "localizations" : {
