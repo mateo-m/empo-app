@@ -11,7 +11,7 @@ struct MidiSoundSetRow: View {
         let fileName = Text(verbatim: "gm.dls").font(.footnote.monospaced())
         MidiSoundSetPicker(
             soundSet: .app,
-            defaultName: nil,
+            defaultSet: nil,
             description: Text(
                 "Plays music in older games. For the Windows sound, import \(fileName) from a Windows PC."
             ),
@@ -27,14 +27,41 @@ struct MidiSoundSetPicker: View {
         case appSetting, builtIn, imported
     }
 
+    enum Source {
+        case game, imported, bundled
+
+        var symbol: String {
+            switch self {
+            case .game: "gamecontroller"
+            case .imported: "square.and.arrow.down"
+            case .bundled: "shippingbox"
+            }
+        }
+
+        var name: Text {
+            switch self {
+            case .game:
+                Text("From the game", comment: "Where a MIDI sound set comes from. Read by VoiceOver.")
+            case .imported: Text("Imported", comment: "Where a MIDI sound set comes from. Read by VoiceOver.")
+            case .bundled:
+                Text("Comes with Empo", comment: "Where a MIDI sound set comes from. Read by VoiceOver.")
+            }
+        }
+    }
+
+    struct DefaultSet {
+        let name: String
+        let source: Source
+    }
+
     private enum Option: Hashable {
         case choice(Choice)
         case importNew
     }
 
     let soundSet: MidiSoundSet
-    /// The name of the set that "Default" plays. nil hides "Default".
-    let defaultName: String?
+    /// The set that "Default" plays. nil hides "Default".
+    let defaultSet: DefaultSet?
     let description: Text
     let choice: Choice
     @Binding var imported: URL?
@@ -45,12 +72,14 @@ struct MidiSoundSetPicker: View {
     @State private var copyFailure: String?
 
     @ViewBuilder private var menuItems: some View {
-        if let defaultName {
-            item(.appSetting, "Default", subtitle: defaultName)
+        if let defaultSet {
+            item(.appSetting, "Default", subtitle: defaultSet.name, source: defaultSet.source)
         }
-        item(.builtIn, "Built-in", subtitle: MidiSoundSet.builtInName)
+        item(.builtIn, "Built-in", subtitle: MidiSoundSet.builtInName, source: .bundled)
         if let imported {
-            item(.imported, "\(imported.deletingPathExtension().lastPathComponent)", subtitle: nil)
+            item(
+                .imported, "\(imported.deletingPathExtension().lastPathComponent)", subtitle: nil,
+                source: .imported)
         }
         Divider()
         Button("Import Sound Set…") { selection.wrappedValue = .importNew }
@@ -65,7 +94,13 @@ struct MidiSoundSetPicker: View {
     }
 
     // A menu shows the second Text of a toggle as a dimmed line under the first.
-    private func item(_ option: Choice, _ title: LocalizedStringKey, subtitle: String?) -> some View {
+    // On iOS it shows an Image as an icon. On macOS it drops that Image when the
+    // item has a second line, so the icon goes inside the title. An icon there
+    // that is shorter than the text, such as `gamecontroller` at body size,
+    // makes macOS drop the second line too.
+    private func item(
+        _ option: Choice, _ title: LocalizedStringKey, subtitle: String?, source: Source
+    ) -> some View {
         Toggle(
             isOn: Binding {
                 choice == option
@@ -73,11 +108,24 @@ struct MidiSoundSetPicker: View {
                 selection.wrappedValue = .choice(option)
             }
         ) {
+            #if os(iOS)
             Text(title)
+            #else
+            Text(
+                "\(Text(title))  \(Text(Image(systemName: source.symbol)).font(.title3).foregroundStyle(.secondary))"
+            )
+            #endif
             if let subtitle {
                 Text(subtitle)
             }
+            #if os(iOS)
+            Image(systemName: source.symbol)
+            #endif
         }
+        // A menu item drops the label of its icon.
+        .accessibilityLabel(
+            subtitle.map { Text("\(Text(title)), \($0), \(source.name)") }
+                ?? Text("\(Text(title)), \(source.name)"))
     }
 
     private var isCopying: Bool { MidiSoundSetCopies.shared.isCopying(into: soundSet) }
