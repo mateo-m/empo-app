@@ -1,5 +1,26 @@
 [
   {
+    "version": 5,
+    "appVersion": "0.11.0",
+    "items": [
+      {
+        "symbol": "icloud.and.arrow.up",
+        "title": "Back up your saves",
+        "detail": "Keep copies of your saves in iCloud Drive. With Empo Plus, you can also use Dropbox, Google Drive, or your own server. Go to Settings > Backups."
+      },
+      {
+        "symbol": "music.note",
+        "title": "MIDI music",
+        "detail": "Older RPG Maker games now play their MIDI music. To use another sound set, go to Settings > Music."
+      },
+      {
+        "symbol": "bell.slash",
+        "title": "Mute games in silent mode",
+        "detail": "Turn on \"Respect silent mode\" in Settings, and games stay quiet when your device is in silent mode."
+      }
+    ]
+  },
+  {
     "version": 4,
     "appVersion": "0.8.1",
     "items": [

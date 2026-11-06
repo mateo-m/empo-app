@@ -1,6 +1,66 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Back up your saves" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spielstände sichern"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copias de tus partidas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarde de tes parties"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup dei salvataggi"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セーブデータをバックアップ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세이브 백업"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup dos seus saves"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Резервные копии сохранений"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "备份存档"
+          }
+        }
+      }
+    },
     "Controls that fit the game" : {
       "comment" : "Title of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
@@ -541,6 +601,126 @@
         }
       }
     },
+    "Keep copies of your saves in iCloud Drive. With Empo Plus, you can also use Dropbox, Google Drive, or your own server. Go to Settings > Backups." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewahre Kopien deiner Spielstände in iCloud Drive auf. Mit Empo Plus geht das auch mit Dropbox, Google Drive oder deinem eigenen Server. Gehe zu Einstellungen > Backups."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda copias de tus partidas en iCloud Drive. Con Empo Plus también puedes usar Dropbox, Google Drive o tu propio servidor. Ve a Ajustes > Copias de seguridad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garde des copies de tes parties dans iCloud Drive. Avec Empo Plus, tu peux aussi utiliser Dropbox, Google Drive ou ton propre serveur. Va dans Réglages > Copies de secours."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva copie dei tuoi salvataggi su iCloud Drive. Con Empo Plus puoi usare anche Dropbox, Google Drive o il tuo server. Vai in Impostazioni > Backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セーブデータのコピーをiCloud Driveに保存できます。Empo Plusなら、Dropbox、Google Drive、自分のサーバーも使えます。「設定」>「バックアップ」から設定できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세이브 사본을 iCloud Drive에 보관할 수 있어요. Empo Plus가 있으면 Dropbox, Google Drive, 내 서버도 쓸 수 있어요. 설정 > 백업에서 시작하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarde cópias dos seus saves no iCloud Drive. Com o Empo Plus, você também pode usar o Dropbox, o Google Drive ou seu próprio servidor. Vá em Ajustes > Backups."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Храните копии сохранений в iCloud Drive. С Empo Plus также можно использовать Dropbox, Google Drive или свой сервер. Откройте «Настройки» > «Резервные копии»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把存档的副本保存在 iCloud Drive。有了 Empo Plus，还可以使用 Dropbox、Google Drive 或你自己的服务器。前往“设置”>“备份”。"
+          }
+        }
+      }
+    },
+    "MIDI music" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MIDI-Musik"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Música MIDI"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musique MIDI"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Musica MIDI"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MIDIの音楽"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MIDI 음악"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Música MIDI"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Музыка MIDI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MIDI 音乐"
+          }
+        }
+      }
+    },
     "More XP games start" : {
       "comment" : "Title of an item in the What's new sheet after an update.",
       "extractionState" : "manual",
@@ -597,6 +777,126 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更多 XP 游戏能启动了"
+          }
+        }
+      }
+    },
+    "Mute games in silent mode" : {
+      "comment" : "Title of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stummmodus für Spiele"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silencia los juegos en modo silencio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Coupe le son en mode silencieux"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Giochi muti in modalità silenziosa"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "消音モードでゲームを消音"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "무음 모드에서 게임 음소거"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jogos mudos no modo silencioso"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Тишина в бесшумном режиме"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "静音模式下游戏静音"
+          }
+        }
+      }
+    },
+    "Older RPG Maker games now play their MIDI music. To use another sound set, go to Settings > Music." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ältere RPG-Maker-Spiele spielen jetzt ihre MIDI-Musik ab. Ein anderes Soundset wählst du unter Einstellungen > Musik."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los juegos antiguos de RPG Maker ahora reproducen su música MIDI. Para usar otro banco de sonidos, ve a Ajustes > Música."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les anciens jeux RPG Maker jouent maintenant leur musique MIDI. Pour utiliser une autre banque de sons, va dans Réglages > Musique."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I giochi RPG Maker più vecchi ora riproducono la loro musica MIDI. Per usare un altro banco suoni, vai in Impostazioni > Musica."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "古いRPGツクールのゲームでMIDIの音楽が鳴るようになりました。別の音源を使うには、「設定」>「音楽」を開いてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이제 예전 RPG Maker 게임에서 MIDI 음악이 나와요. 다른 사운드 세트를 쓰려면 설정 > 음악으로 가세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jogos antigos de RPG Maker agora tocam sua música MIDI. Para usar outro banco de sons, vá em Ajustes > Música."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Старые игры на RPG Maker теперь играют свою музыку MIDI. Чтобы выбрать другой набор звуков, откройте «Настройки» > «Музыка»."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "较老的 RPG Maker 游戏现在可以播放 MIDI 音乐了。想换一个音色库，可以前往“设置”>“音乐”。"
           }
         }
       }
@@ -837,6 +1137,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "一些之前启动就卡住的 RPG Maker XP 游戏（比如 Vinemon）现在能正常启动了。"
+          }
+        }
+      }
+    },
+    "Turn on \"Respect silent mode\" in Settings, and games stay quiet when your device is in silent mode." : {
+      "comment" : "Text of an item in the What's new sheet after an update.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schalte „Stummmodus beachten“ in den Einstellungen ein, dann bleiben Spiele leise, wenn dein Gerät im Stummmodus ist."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activa «Respetar el modo silencio» en Ajustes y los juegos no sonarán cuando tu dispositivo esté en modo silencio."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active « Respecter le mode silencieux » dans les Réglages, et les jeux restent muets quand ton appareil est en mode silencieux."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attiva «Rispetta la modalità silenziosa» in Impostazioni e i giochi restano muti quando il dispositivo è in modalità silenziosa."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「設定」で「消音モードに従う」をオンにすると、デバイスが消音モードのときゲームの音が鳴りません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설정에서 '무음 모드 따르기'를 켜면 기기가 무음 모드일 때 게임 소리가 나지 않아요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ative “Respeitar o modo silencioso” em Ajustes, e os jogos ficam mudos quando o dispositivo está no modo silencioso."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Включите «Учитывать бесшумный режим» в настройках, и игры будут молчать, когда устройство в бесшумном режиме."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“设置”中打开“遵循静音模式”，设备处于静音模式时游戏就不会出声。"
           }
         }
       }
