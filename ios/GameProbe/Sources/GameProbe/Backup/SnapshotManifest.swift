@@ -36,6 +36,7 @@ public enum ManifestFailure: Error, Equatable {
     case unknownRoot(label: String, path: String)
     case unknownCompression(algorithm: String, path: String)
     case unknownDetectionSource(label: String, path: String)
+    case badHash(path: String)
 }
 
 /// One snapshot, per SPEC 5.5.
@@ -159,6 +160,10 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
             self.hash = try values.decode(String.self, forKey: .hash)
             self.partial = try values.decodeIfPresent(Bool.self, forKey: .partial) ?? false
             self.chunks = try values.decodeIfPresent([String].self, forKey: .chunks)
+            // The restore stages a blob at `restore/<hash>`, so a hash
+            // such as `../../Documents/Save01` would reach outside it.
+            guard BackupKeys.isContentHash(hash), (chunks ?? []).allSatisfy(BackupKeys.isContentHash)
+            else { throw ManifestFailure.badHash(path: path) }
         }
 
         public func encode(to encoder: Encoder) throws {

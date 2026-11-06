@@ -88,6 +88,10 @@ public enum BackupKeys {
         return "blobs/\(prefix)/\(hash)"
     }
 
+    public static func isContentHash(_ text: String) -> Bool {
+        text.count == 64 && text.allSatisfy(\.isLowercaseHexDigit)
+    }
+
     /// The hash a blob path names, or `nil` when the path is not a
     /// blob path.
     ///

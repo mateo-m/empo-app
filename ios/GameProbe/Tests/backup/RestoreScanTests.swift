@@ -44,7 +44,7 @@ final class RestoreScanTests: XCTestCase {
                     entries: [
                         SnapshotManifest.Entry(
                             root: .container, path: "Save/file\(index)", size: 10,
-                            modifiedAt: stamp, hash: "h\(index)", compression: .zlib)
+                            modifiedAt: stamp, hash: ContentHash.hex(ofUTF8: "h\(index)"), compression: .zlib)
                     ])
                 let id = BackupKeys.snapshotId(
                     date: stamp.addingTimeInterval(Double(index) * 60), suffix: "0a1b2c")

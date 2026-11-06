@@ -177,6 +177,20 @@ final class SnapshotManifestTests: XCTestCase {
         }
     }
 
+    func testAHashThatIsNotAContentHashIsRejected() throws {
+        var text = String(
+            decoding: try BackupFixtures.data("manifest-v1.json"), as: UTF8.self)
+        text = text.replacingOccurrences(
+            of: "938f7934f3328f54e648bd5812473be574ace4c4501e2e0c1a81e67fca77e2f8",
+            with: "../../../Documents/Save01.rvdata2")
+
+        XCTAssertThrowsError(try SnapshotManifest.decode(json: Data(text.utf8))) { error in
+            guard case .badHash = error as? ManifestFailure else {
+                return XCTFail("expected a bad hash failure, got \(error)")
+            }
+        }
+    }
+
     // MARK: - The read-only test of 5.16
 
     func testAVersion2ManifestIsReadOnlyAndRefusesAWriteAndAPrune() throws {
