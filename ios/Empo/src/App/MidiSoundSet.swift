@@ -72,15 +72,20 @@ enum MidiSoundSet {
     }
 
     /// Apple's sampler refuses a file that stopped early or has broken
-    /// chunks, also when its header is intact. Every General MIDI set has
-    /// program 0 in the melodic bank.
+    /// chunks, also when its header is intact. For a file that it reads but
+    /// that has no program 0 in the melodic bank, it throws
+    /// `kAudioUnitErr_InvalidPropertyValue`, and the file is good.
     private static func loads(_ url: URL) -> Bool {
         let engine = AVAudioEngine()
         let sampler = AVAudioUnitSampler()
         engine.attach(sampler)
-        return
-            (try? sampler.loadSoundBankInstrument(
+        do {
+            try sampler.loadSoundBankInstrument(
                 at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
-                bankLSB: UInt8(kAUSampler_DefaultBankLSB))) != nil
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+            return true
+        } catch {
+            return (error as NSError).code == Int(kAudioUnitErr_InvalidPropertyValue)
+        }
     }
 }
