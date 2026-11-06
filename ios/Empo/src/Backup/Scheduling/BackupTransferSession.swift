@@ -191,7 +191,7 @@ final class BackupTransferSession: NSObject {
     /// iOS woke the app to finish this session's events. The handler
     /// runs once the delegate reports it is done.
     func takeSystemWake(completion: @escaping () -> Void) {
-        systemWakeCompletion = completion
+        lock.withLock { systemWakeCompletion = completion }
         start()
     }
 
@@ -376,8 +376,10 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
-        let completion = systemWakeCompletion
-        systemWakeCompletion = nil
+        let completion = lock.withLock {
+            defer { systemWakeCompletion = nil }
+            return systemWakeCompletion
+        }
         DispatchQueue.main.async { completion?() }
     }
 }
