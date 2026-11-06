@@ -328,6 +328,32 @@ public enum ManagedMkxpConfig {
         )
     }
 
+    /// The sound font that the game ships: the file that `mkxp.json` names, or the first .sf2 or
+    /// .dls file in the game folder. Some games name a file that they do not ship, and some
+    /// ship one for Windows players that `mkxp.json` does not name.
+    public static func gameSoundFont(in gameDirectory: URL) -> URL? {
+        let fm = FileManager.default
+        if let named = readGameDefaults(from: gameDirectory).midiSoundFont {
+            let url = gameDirectory.appendingPathComponent(named)
+            if fm.fileExists(atPath: url.path) { return url }
+        }
+        guard let files = fm.enumerator(atPath: gameDirectory.path) else { return nil }
+        var found: [String] = []
+        while let path = files.nextObject() as? String {
+            let name = (path as NSString).lastPathComponent
+            if name.hasPrefix(".") {
+                files.skipDescendants()
+            } else if ["sf2", "dls"].contains((name as NSString).pathExtension.lowercased()) {
+                found.append(path)
+            }
+        }
+        let first = found.min {
+            let (a, b) = ($0.split(separator: "/").count, $1.split(separator: "/").count)
+            return a != b ? a < b : $0.localizedStandardCompare($1) == .orderedAscending
+        }
+        return first.map { gameDirectory.appendingPathComponent($0) }
+    }
+
     // MARK: - Overlay string for engine bridge
 
     /// The JSON object string that the mkxp core takes as its `configOverlay` setting,

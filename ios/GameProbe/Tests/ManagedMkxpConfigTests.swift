@@ -73,6 +73,53 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(ManagedMkxpConfig.readGameDefaults(from: gameDir).midiSoundFont, "Audio/BGM/GMGSx.sf2")
     }
 
+    func testGameSoundFontIsTheFileThatMkxpJsonNames() throws {
+        let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.sf2", "Audio/a.sf2"])
+        try """
+        { "midiSoundFont": "Audio/BGM/GMGSx.sf2" }
+        """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(
+            ManagedMkxpConfig.gameSoundFont(in: gameDir)?.path,
+            gameDir.appendingPathComponent("Audio/BGM/GMGSx.sf2").path)
+    }
+
+    func testGameSoundFontIsAShippedFileWhenMkxpJsonNamesAMissingOne() throws {
+        let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.SF2"])
+        try """
+        { "midiSoundFont": "soundfont.sf2" }
+        """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(
+            ManagedMkxpConfig.gameSoundFont(in: gameDir)?.path,
+            gameDir.appendingPathComponent("Audio/BGM/GMGSx.SF2").path)
+    }
+
+    func testGameSoundFontPrefersTheShallowestFileThenTheName() throws {
+        let gameDir = try makeGame(files: ["Audio/BGM/a.sf2", "b.dls", "c.sf2", "Audio/z.sf2", "notes.txt"])
+
+        XCTAssertEqual(
+            ManagedMkxpConfig.gameSoundFont(in: gameDir)?.path, gameDir.appendingPathComponent("b.dls").path)
+    }
+
+    func testGameSoundFontSkipsHiddenAndOtherFiles() throws {
+        let gameDir = try makeGame(files: [".hidden.sf2", "Audio/BGM/song.mid", "Audio/font.sf3"])
+
+        XCTAssertNil(ManagedMkxpConfig.gameSoundFont(in: gameDir))
+    }
+
+    private func makeGame(files: [String]) throws -> URL {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        for file in files {
+            let url = gameDir.appendingPathComponent(file)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: url)
+        }
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        return gameDir
+    }
+
     func testOverlayStringReplacesTheSoundFontOfTheGame() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)

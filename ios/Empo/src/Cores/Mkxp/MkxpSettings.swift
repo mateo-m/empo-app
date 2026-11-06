@@ -56,19 +56,16 @@ struct MkxpSettings: GameSettingsGroup {
     var joiplayCompatEnabled: Bool { joiplayCompat ?? false }
     var networkAccessEnabled: Bool { networkEnabled ?? true }
 
-    /// The sound font that replaces the game's own. An empty path is the
-    /// engine's built-in set, and nil leaves the sound font to the game.
-    func midiSoundFont(for container: GameContainer) -> String? {
+    /// The sound font for the engine. An empty path is the engine's built-in
+    /// set, and nil leaves the sound font to the game's `mkxp.json`.
+    func midiSoundFont(for container: GameContainer, gameSoundFont: URL?) -> String? {
         if midiSoundSet == .builtIn {
             return ""
         }
         if midiSoundSet == .imported, let file = MidiSoundSet.game(container).current {
             return file.path
         }
-        if ManagedMkxpConfig.readGameDefaults(from: container.gameURL).midiSoundFont != nil {
-            return nil
-        }
-        return MidiSoundSet.app.current?.path
+        return gameSoundFont?.path ?? MidiSoundSet.app.current?.path
     }
 }
 
@@ -87,7 +84,8 @@ struct MkxpLaunchedSettings: CoreLaunchedSettings {
     init(container: GameContainer) {
         settings = MkxpSettings.load(from: container.empoStateURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)
-        midiSoundFont = settings.midiSoundFont(for: container)
+        midiSoundFont = settings.midiSoundFont(
+            for: container, gameSoundFont: ManagedMkxpConfig.gameSoundFont(in: container.gameURL))
         midiSoundFontFile = Self.fileNumber(of: midiSoundFont)
     }
 
@@ -122,8 +120,8 @@ final class MkxpSettingsState: CoreSettings {
     let isPokemonEssentials: Bool
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
-    /// The sound font that the game's `mkxp.json` names. Default plays it, not the app's set.
-    let gameOwnMidiSoundFont: String?
+    /// The sound font that the game ships. Default plays it, not the app's set.
+    let gameSoundFont: URL?
 
     @ObservationIgnored let container: GameContainer
 
@@ -137,13 +135,13 @@ final class MkxpSettingsState: CoreSettings {
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
         self.gameMidiSoundSet = MidiSoundSet.game(container).current
-        self.gameOwnMidiSoundFont = ManagedMkxpConfig.readGameDefaults(from: container.gameURL).midiSoundFont
+        self.gameSoundFont = ManagedMkxpConfig.gameSoundFont(in: container.gameURL)
     }
 
     /// Default plays the app's set, which another window can change.
     var midiSoundFont: String? {
         _ = MidiSoundSetCopies.shared.revision(of: .app)
-        return settings.midiSoundFont(for: container)
+        return settings.midiSoundFont(for: container, gameSoundFont: gameSoundFont)
     }
 
     var hasCustomizations: Bool { settings.hasCustomizations || engine.hasOverrides }
