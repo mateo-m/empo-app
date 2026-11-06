@@ -344,8 +344,16 @@ describe("routes", () => {
     const renewals = [];
     for (const device of devices.slice(0, deviceLimit)) renewals.push((await signIn(device)).renewal);
     expect((await callback(devices[3]!)).searchParams.get("error")).toBe("too_many_devices");
-    expect(sessions.size).toBe(deviceLimit);
+    expect([...sessions.values()].filter((state) => state.values.size > 0).length).toBe(deviceLimit);
     for (const [index, renewal] of renewals.entries()) expect((await renew(renewal, devices[index])).status).toBe(200);
+  });
+
+  test("sign-ins at the same moment still stop at 3 devices", async () => {
+    const devices = [phone, ...(await Promise.all([1, 2, 3].map(() => Device.make())))];
+    const locations = await Promise.all(devices.map((device) => callback(device)));
+    const refused = locations.filter((location) => location.searchParams.get("error") === "too_many_devices");
+    expect(refused.length).toBe(devices.length - deviceLimit);
+    expect([...sessions.values()].filter((state) => state.values.size > 0).length).toBe(deviceLimit);
   });
 
   test("a sign-in that replaces the others signs them out", async () => {

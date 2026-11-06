@@ -82,14 +82,9 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
         const { pass, userId } = await issue(tokens.access_token);
         const renewal = newRenewal();
         const keys = (await renewalKeys(renewal))!;
-        const added = await member(userId, {
-          action: "add",
-          device: await deviceId(trip.device),
-          session: keys.id,
-          replace: trip.replace,
-        });
-        if (added.status === 409) return redirect(backToApp(trip.state, "too_many_devices"), 302);
-        if (!added.ok) throw new Error(`The device list did not answer: ${added.status}`);
+        // The session starts before the device list counts it. A session
+        // that has not started answers 404 to "alive", so a second sign-in
+        // at the same moment would not count this one.
         const started = await callSession(env, keys.id, {
           action: "start",
           renewal,
@@ -97,6 +92,15 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
           device: trip.device,
         });
         if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
+        const added = await member(userId, {
+          action: "add",
+          device: await deviceId(trip.device),
+          session: keys.id,
+          replace: trip.replace,
+        });
+        if (!added.ok) await callSession(env, keys.id, { action: "evict" });
+        if (added.status === 409) return redirect(backToApp(trip.state, "too_many_devices"), 302);
+        if (!added.ok) throw new Error(`The device list did not answer: ${added.status}`);
         const back = new URL(backToApp(trip.state));
         back.searchParams.set("pass", pass);
         back.searchParams.set("renewal", renewal);

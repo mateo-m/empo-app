@@ -57,7 +57,9 @@ export class PatreonMember {
     const devices = (await this.state.storage.get<Record<string, string>>("devices")) ?? {};
     const live: Record<string, string> = {};
     for (const [device, session] of Object.entries(devices)) {
-      if ((await callSession(this.env, session, { action: "alive" })).status === 204) live[device] = session;
+      // Only a 404 says the session ended. Any other answer keeps the
+      // device, so a fault in one session does not free its place.
+      if ((await callSession(this.env, session, { action: "alive" })).status !== 404) live[device] = session;
     }
     return live;
   }
