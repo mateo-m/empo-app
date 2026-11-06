@@ -90,7 +90,7 @@ public struct S3Bucket: Codable, Equatable, Sendable {
     /// prefix here, because the root of 8.7 is already inside the
     /// path the engine hands over.
     public func canonicalPath(key: String) -> String {
-        var parts = basePath
+        var parts = S3SigV4.encodePath(basePath)
         if namesBucketInPath, !name.isEmpty {
             parts += "/" + S3SigV4.uriEncode(name)
         }

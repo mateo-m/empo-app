@@ -550,6 +550,15 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(bucket.canonicalPath(key: ""), "/s3/my-saves")
     }
 
+    func testAnAddressPathWithASpaceEncodesOnce() {
+        let bucket = S3Bucket(
+            address: URL(string: "https://example.com/my%20s3/")!, region: "us-east-1",
+            name: "my-saves", usesPathStyle: true)
+        XCTAssertEqual(bucket.canonicalPath(key: "Empo/a"), "/my%20s3/my-saves/Empo/a")
+        XCTAssertEqual(
+            bucket.url(key: "Empo/a")?.absoluteString, "https://example.com/my%20s3/my-saves/Empo/a")
+    }
+
     func testAKeyEncodesOnceInTheURL() {
         let bucket = S3Bucket(
             address: URL(string: "https://example.com")!, region: "us-east-1",
