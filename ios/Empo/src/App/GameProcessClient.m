@@ -605,7 +605,9 @@ int gameprocess_isTextInputActive(void) {
 }
 
 double gameprocess_getAverageFPS(void) {
-    return [statusValue(EmpoGameProcessStatusAverageFPS, NSNumber.class) doubleValue];
+    double fps = [statusValue(EmpoGameProcessStatusAverageFPS, NSNumber.class) doubleValue];
+    // The overlay's Swift Int() traps on NaN, infinity, or a huge value.
+    return fps >= 0 && fps <= 1000 ? fps : 0;
 }
 
 int gameprocess_getTargetFPS(void) {
