@@ -128,10 +128,13 @@ public enum RescuedSaves {
         let mine = folderName.map {
             Set(matchingBuckets(in: root, folderName: $0, fm: fm).map(\.lastPathComponent))
         }
+        let existing = fm.subdirectoryNames(at: root)
         var buckets: [String: URL] = [:]
         for name in names where !name.contains("/") && name != "." && name != ".." && !name.isEmpty {
-            let bucket = root.appendingPathComponent(name, isDirectory: true)
-            if let mine, !mine.contains(name), fm.fileExists(atPath: bucket.path) { continue }
+            // A case-insensitive volume opens the bucket of another spelling.
+            let onDisk = DirectoryNameMatch.preferringExisting(name, among: existing)
+            let bucket = root.appendingPathComponent(onDisk, isDirectory: true)
+            if let mine, !mine.contains(onDisk), fm.fileExists(atPath: bucket.path) { continue }
             buckets[name] = bucket
         }
         return buckets
