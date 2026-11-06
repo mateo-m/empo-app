@@ -272,7 +272,7 @@ final class ControllerInputManager {
                 }
             } else {
                 if let action = elementPressAction.removeValue(forKey: edge.element) {
-                    actionHandler?(action, false)
+                    _ = actionHandler?(action, false)
                     continue
                 }
                 guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
@@ -291,7 +291,7 @@ final class ControllerInputManager {
         elementPressScancode.removeAll()
 
         for action in elementPressAction.values {
-            actionHandler?(action, false)
+            _ = actionHandler?(action, false)
         }
         elementPressAction.removeAll()
     }
