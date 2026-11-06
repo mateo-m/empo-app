@@ -19,7 +19,7 @@
 #
 # workflow_dispatch with mode=dry-run builds + audits any ref and
 # uploads the .ipa and the Mac disk image as workflow artifacts without
-# publishing anything.
+# publishing anything. Only the publish job has a token that can write.
 #
 # Secrets:
 #   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
@@ -54,7 +54,7 @@ on:
         default: "main"
 
 permissions:
-  contents: write
+  contents: read
 
 # The Discord action still runs on Node.js 16, which GitHub no longer
 # ships. Drop this when it moves to Node.js 24.
@@ -99,10 +99,13 @@ jobs:
         run: scripts/verify-empo-deps-pins.sh
 
       - name: Install git-cliff
+        env:
+          GIT_CLIFF_SHA256: 9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546
         run: |
           set -e
           curl -fsSL -o /tmp/git-cliff.tar.gz \
             https://github.com/orhun/git-cliff/releases/download/v2.13.1/git-cliff-2.13.1-x86_64-unknown-linux-gnu.tar.gz
+          echo "$GIT_CLIFF_SHA256  /tmp/git-cliff.tar.gz" | sha256sum --check --strict
           tar -xzf /tmp/git-cliff.tar.gz -C /tmp
           BIN="$(find /tmp -type f -name git-cliff -perm -u+x | head -n 1)"
           sudo mv "$BIN" /usr/local/bin/git-cliff
@@ -206,6 +209,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
           submodules: false
+          persist-credentials: false
 
       - name: Verify empo-deps pins
         # Tag releases must build from published pins (this replaces
@@ -243,6 +247,7 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .release-actions
           sparse-checkout: .github/actions
+          persist-credentials: false
 
       - uses: ./.release-actions/.github/actions/prepare-xcode-project
         env:
@@ -305,27 +310,43 @@ jobs:
           DMG="$(scripts/package-mac.sh "${{ steps.meta.outputs.version }}" | tail -n 1)"
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
 
-      - name: Upload .ipa artifact (dry run)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload .ipa artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.package.outputs.ipa_name }}
           path: build/ipa/${{ steps.package.outputs.ipa_name }}
 
-      - name: Upload Mac disk image artifact (dry run)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload Mac disk image artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Empo-mac.dmg
           path: ${{ steps.mac.outputs.dmg }}
 
+  publish:
+    name: Publish the GitHub release
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+
       - name: Create GitHub release
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -e
-          VERSION="${{ steps.meta.outputs.version }}"
+          VERSION="${{ needs.build.outputs.version }}"
           scripts/extract-changelog.sh "$VERSION" > changelog-section.md
           {
             echo "## What's changed"
@@ -340,13 +361,12 @@ jobs:
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --notes-file release-notes.md \
-            "build/ipa/${{ steps.package.outputs.ipa_name }}" \
-            "${{ steps.mac.outputs.dmg }}"
+            dist/*
 
   # ── Finish: sync AltStore manifest to main ───────────────────────
   post-release:
     name: Sync AltStore manifest
-    needs: build
+    needs: [build, publish]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -414,10 +434,10 @@ jobs:
   # (build is skipped then, so the version comes from the input).
   notify:
     name: Post release changelog to Discord
-    needs: build
+    needs: [build, publish]
     if: >-
       !cancelled() &&
-      ((github.event_name == 'push' && needs.build.result == 'success') ||
+      ((github.event_name == 'push' && needs.publish.result == 'success') ||
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'announce'))
     runs-on: ubuntu-latest
     steps:
