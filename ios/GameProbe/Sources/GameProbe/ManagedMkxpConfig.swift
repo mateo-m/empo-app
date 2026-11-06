@@ -333,6 +333,7 @@ public enum ManagedMkxpConfig {
         gameDirectory: URL,
         stateDirectory: URL,
         overrides: MkxpEngineValues = MkxpEngineValues(),
+        midiSoundFont: String? = nil,
         onUnparseableOverlay: ((String) -> Void)? = nil
     ) -> String? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
@@ -377,6 +378,10 @@ public enum ManagedMkxpConfig {
             // that case, neutralize both keys as a safe default.
             patches["defScreenW"] = 0
             patches["defScreenH"] = 0
+        }
+
+        if let midiSoundFont, (base?["midiSoundFont"] as? String ?? "").isEmpty {
+            patches["midiSoundFont"] = midiSoundFont
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {

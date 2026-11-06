@@ -27,6 +27,8 @@ extension UTType {
 
 #if os(iOS)
 struct DocumentPickerView: UIViewControllerRepresentable {
+    var contentTypes: [UTType] = UTType.importableGames
+    var allowsMultipleSelection = true
     var onPick: ([URL]) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
@@ -44,10 +46,10 @@ struct DocumentPickerView: UIViewControllerRepresentable {
         // (folder: spinner forever) or silently no-ops (file: Open
         // does nothing). asCopy bypasses that whole grant flow.
         let picker = UIDocumentPickerViewController(
-            forOpeningContentTypes: UTType.importableGames,
+            forOpeningContentTypes: contentTypes,
             asCopy: true
         )
-        picker.allowsMultipleSelection = true
+        picker.allowsMultipleSelection = allowsMultipleSelection
         picker.delegate = context.coordinator
         picker.view.tintColor = UIColor(.brand)
         return picker

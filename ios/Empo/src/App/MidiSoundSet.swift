@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
+import AVFoundation
+import Foundation
+import UniformTypeIdentifiers
+
+/// The sound set that the player imported for MIDI music. Without one,
+/// the engine uses the sound set it ships.
+enum MidiSoundSet {
+    enum ImportError: Error {
+        case notASoundSet
+    }
+
+    static let folderURL = DataDirectory.documentsRootURL.appendingPathComponent(
+        "SoundFonts", isDirectory: true)
+
+    private static let extensions = ["sf2", "dls"]
+    static let contentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
+
+    static var current: URL? {
+        files.first
+    }
+
+    static func replace(with source: URL) throws {
+        let scoped = source.startAccessingSecurityScopedResource()
+        defer { if scoped { source.stopAccessingSecurityScopedResource() } }
+        guard isSoundSet(source) else { throw ImportError.notASoundSet }
+        let fm = FileManager.default
+        try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        let staged = folderURL.appendingPathComponent(".import-\(UUID().uuidString)")
+        try fm.copyItem(at: source, to: staged)
+        do {
+            try removeImported()
+            try fm.moveItem(at: staged, to: folderURL.appendingPathComponent(source.lastPathComponent))
+        } catch {
+            try? fm.removeItem(at: staged)
+            throw error
+        }
+    }
+
+    static func removeImported() throws {
+        for file in files {
+            try FileManager.default.removeItem(at: file)
+        }
+    }
+
+    private static var files: [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? [])
+            .filter { extensions.contains($0.pathExtension.lowercased()) }
+            .sorted {
+                $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
+            }
+    }
+
+    /// SoundFont and DLS files are RIFF files with the form type
+    /// "sfbk" or "DLS ". The engine's FluidSynth has no libsndfile, so it
+    /// can't read SoundFont 3, which has 3 as the major version in `ifil`.
+    /// Apple's sampler loads SoundFont 3 files, so it can't catch them.
+    private static func isSoundSet(_ url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
+        defer { try? handle.close() }
+        guard let header = try? handle.read(upToCount: 34), header.count >= 12,
+            header.subdata(in: 0..<4) == Data("RIFF".utf8)
+        else { return false }
+        let form = header.subdata(in: 8..<12)
+        // A SoundFont starts with the LIST INFO chunk, and `ifil` comes first in it.
+        let isSoundFont2 =
+            form == Data("sfbk".utf8) && header.count == 34
+            && header.subdata(in: 24..<28) == Data("ifil".utf8) && header[32] == 2
+        return (isSoundFont2 || form == Data("DLS ".utf8)) && loads(url)
+    }
+
+    /// Apple's sampler refuses a file that stopped early or has broken
+    /// chunks, also when its header is intact. For a file that it reads but
+    /// that has no program 0 in the melodic bank, it throws
+    /// `kAudioUnitErr_InvalidPropertyValue`, and the file is good.
+    private static func loads(_ url: URL) -> Bool {
+        let engine = AVAudioEngine()
+        let sampler = AVAudioUnitSampler()
+        engine.attach(sampler)
+        do {
+            try sampler.loadSoundBankInstrument(
+                at: url, program: 0, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: UInt8(kAUSampler_DefaultBankLSB))
+            return true
+        } catch {
+            return (error as NSError).code == Int(kAudioUnitErr_InvalidPropertyValue)
+        }
+    }
+}

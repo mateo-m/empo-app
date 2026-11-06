@@ -282,11 +282,11 @@ struct MkxpEngineSection: View {
                 .pickerStyle(.navigationLink)
                 #endif
 
-                Text(
-                    "Auto-detect reads the game's scripts and picks the correct Ruby version. Change it only if the game shows a script error or runs wrongly."
+                SettingsDescription(
+                    Text(
+                        "Auto-detect reads the game's scripts and picks the correct Ruby version. Change it only if the game shows a script error or runs wrongly."
+                    )
                 )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
             .padding(.vertical, Spacing.xxs)
 
@@ -309,11 +309,11 @@ struct MkxpEngineSection: View {
                     .pickerStyle(.navigationLink)
                     #endif
 
-                    Text(
-                        "Legacy rewrites old Ruby code so newer Ruby can run it. Switch to Legacy if a Pokemon Essentials game crashes with a \"private method\" error."
+                    SettingsDescription(
+                        Text(
+                            "Legacy rewrites old Ruby code so newer Ruby can run it. Switch to Legacy if a Pokemon Essentials game crashes with a \"private method\" error."
+                        )
                     )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, Spacing.xxs)
             }

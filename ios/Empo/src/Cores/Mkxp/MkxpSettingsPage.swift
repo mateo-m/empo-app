@@ -70,9 +70,7 @@ struct MkxpSettingsPage: View {
                 .pickerStyle(.navigationLink)
                 #endif
 
-                Text(state.effectiveRenderScale.description)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                SettingsDescription(Text(state.effectiveRenderScale.description))
             }
             .padding(.vertical, Spacing.xxs)
         }
@@ -99,9 +97,7 @@ struct MkxpSettingsPage: View {
                     in: 0.5...2.0,
                     step: 0.1
                 )
-                Text("Scale all in-game text. 1.0x is the default size.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                SettingsDescription(Text("Scale all in-game text. 1.0x is the default size."))
             }
             .padding(.vertical, Spacing.xxs)
         }

@@ -54,6 +54,14 @@ Gameplay**, also check that the device is not in silent mode. If the game is sti
 **Debug logs**, play until the music should start, and attach the log to an issue. The log names
 each audio file that the engine opens.
 
+## MIDI music sounds different than on Windows
+
+Empo plays MIDI music with its built-in sound set, GeneralUser GS. Windows uses its own sound set,
+so some instruments sound different. To hear a game as on Windows, copy `gm.dls` from
+`C:\Windows\System32\drivers` on a Windows PC to your device. Then open **Settings → Music** and
+tap **Import Sound Set…**. On the Mac, the setting is in **Settings → General**. You can also
+import any SoundFont 2 file (`.sf2`). A game that ships its own sound set keeps it.
+
 ## A movie does not play
 
 Empo plays Ogg/Theora movies only. The engine skips MP4 and other formats without a message. A
