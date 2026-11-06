@@ -7,6 +7,8 @@ import SwiftUI
 /// with the next `version` and the app version that ships it. Add its
 /// title and detail, with their translations, to
 /// Resources/WhatsNew.xcstrings: the rows look them up by their English text.
+/// Set `"plus": true` on an item that only Plus members get. The sheet
+/// shows those items in their own section after the others.
 enum WhatsNew {
     static let releases: [WhatsNewRelease] = {
         let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!
@@ -39,6 +41,7 @@ struct WhatsNewItem: Decodable {
     let title: String
     let detail: String
     var settingsSection: SettingsSection?
+    var plus: Bool?
 }
 
 /// Shows the news once after an update. Any dismissal marks it as
@@ -105,16 +108,19 @@ struct WhatsNewSheet: View {
     var body: some View {
         StandardSheet(title: "What's new in \(AppInfo.name)", emblem: "sparkles") {
             VStack(alignment: .leading, spacing: Spacing._2xl) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    // Animate only the fade and the slide. An animation
-                    // on the whole row also catches the layout pass of
-                    // the opening sheet, and SwiftUI shows a moved Text
-                    // as glyphs that fade across the gap.
-                    WhatsNewRow(item: item, onOpenSettings: onOpenSettings)
-                        .animation(Motion.standard.delay(0.1 + Double(index) * 0.1)) {
-                            $0.opacity(entered ? 1 : 0)
-                                .offset(y: entered || reduceMotion ? 0 : 8)
-                        }
+                ForEach(Array(freeItems.enumerated()), id: \.offset) { index, item in
+                    row(item, index: index)
+                }
+                if !plusItems.isEmpty {
+                    Text("With Empo \(plusWord)")
+                        .font(.title3.weight(.semibold))
+                        .plusShine()
+                        .accessibilityAddTraits(.isHeader)
+                        .padding(.top, Spacing.md)
+                        .entering(entered, reduceMotion: reduceMotion, index: freeItems.count)
+                    ForEach(Array(plusItems.enumerated()), id: \.offset) { index, item in
+                        row(item, index: freeItems.count + 1 + index)
+                    }
                 }
             }
             .padding(.vertical, Spacing.md)
@@ -139,6 +145,26 @@ struct WhatsNewSheet: View {
             }
         }
         .onAppear { entered = true }
+    }
+
+    private var freeItems: [WhatsNewItem] { items.filter { $0.plus != true } }
+    private var plusItems: [WhatsNewItem] { items.filter { $0.plus == true } }
+
+    private func row(_ item: WhatsNewItem, index: Int) -> some View {
+        WhatsNewRow(item: item, onOpenSettings: onOpenSettings)
+            .entering(entered, reduceMotion: reduceMotion, index: index)
+    }
+}
+
+extension View {
+    // Animate only the fade and the slide. An animation on the whole
+    // row also catches the layout pass of the opening sheet, and SwiftUI
+    // shows a moved Text as glyphs that fade across the gap.
+    fileprivate func entering(_ entered: Bool, reduceMotion: Bool, index: Int) -> some View {
+        animation(Motion.standard.delay(0.1 + Double(index) * 0.1)) {
+            $0.opacity(entered ? 1 : 0)
+                .offset(y: entered || reduceMotion ? 0 : 8)
+        }
     }
 }
 
@@ -168,10 +194,11 @@ private struct WhatsNewRow: View {
                 Text(Bundle.main.localizedString(forKey: item.title, value: nil, table: "WhatsNew"))
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(Bundle.main.localizedString(forKey: item.detail, value: nil, table: "WhatsNew"))
+                detail
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .plusShine()
                 if let section = item.settingsSection, section.isShown {
                     Button("Turn it on in Settings") { onOpenSettings(section) }
                         .font(.subheadline.weight(.semibold))
@@ -182,5 +209,14 @@ private struct WhatsNewRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// A `%@` in the detail stands for the Plus mark.
+    private var detail: Text {
+        let parts = Bundle.main.localizedString(forKey: item.detail, value: nil, table: "WhatsNew")
+            .components(separatedBy: "%@")
+        return parts.dropFirst().reduce(Text(verbatim: parts[0])) {
+            Text("\($0)\(plusWord)\(Text(verbatim: $1))")
+        }
     }
 }
