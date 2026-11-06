@@ -40,9 +40,6 @@ runs:
         if [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
           rm -rf "$DIR"
         fi
-        # The objects stay. The app is put together again, so a file or
-        # core that a change removes cannot stay in it.
-        rm -rf "$DIR/Build/Products"
         echo "DERIVED_DATA=$DIR" >> "$GITHUB_ENV"
         echo "XCODE_BUILD=$XCODE_BUILD" >> "$GITHUB_ENV"
         echo "Build data in $DIR"
@@ -64,17 +61,31 @@ runs:
         git -c diff.renames=false restore-mtime --commit-time --merge --quiet
 
     - name: Restore the build data from the GitHub cache
-      if: inputs.build-data != '' && runner.environment == 'github-hosted'
+      if: >-
+        inputs.build-data != '' && runner.environment == 'github-hosted' &&
+        github.run_attempt == '1'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ${{ env.DERIVED_DATA }}
-          !${{ env.DERIVED_DATA }}/Build/Products
           ios/Dependencies
           ios/GameProbe/.build
           ios/Json5/.build
         key: build-${{ inputs.build-data }}-${{ env.XCODE_BUILD }}-${{ github.run_id }}
         restore-keys: build-${{ inputs.build-data }}-${{ env.XCODE_BUILD }}-
+
+    # The cache saves each folder whole, so a "!" path inside one of them
+    # does not keep it out.
+    - name: Remove what the build must not take from earlier runs
+      if: inputs.build-data != ''
+      shell: bash
+      run: |
+        # The objects stay. The app is put together again, so a file or
+        # core that a change removes cannot stay in it.
+        rm -rf "$DERIVED_DATA/Build/Products"
+        # The cache also holds the tracked version files of an older
+        # commit.
+        git checkout -- ios/Dependencies
 
     - name: Install xcodegen
       # Two runners on one Mac run this at the same time, and a second
