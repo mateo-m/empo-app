@@ -51,7 +51,8 @@ final class OAuthSignIn {
     @discardableResult
     func resume(with url: URL) -> Bool {
         guard let session else { return false }
-        let took = session.resumeExternalUserAgentFlow(with: url)
+        // AppAuth 3 throws when the URL is not this sign-in's redirect.
+        let took = (try? session.resumeExternalUserAgentFlow(url)) != nil
         if took { self.session = nil }
         return took
     }
@@ -133,6 +134,12 @@ final class OAuthSignIn {
             || error.code == OIDErrorCode.programCanceledAuthorizationFlow.rawValue
     }
 
+    private static func isOffline(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == OIDGeneralErrorDomain
+            && error.code == OIDErrorCode.networkError.rawValue
+    }
+
     /// Signs in to one service and answers the tokens, or `nil` where
     /// the user stopped.
     func signIn(
@@ -172,7 +179,7 @@ final class OAuthSignIn {
                         continuation.resume(returning: nil)
                         return
                     }
-                    continuation.resume(throwing: error)
+                    continuation.resume(throwing: Self.isOffline(error) ? BackupProviderError.offline : error)
                     return
                 }
                 continuation.resume(returning: state)
