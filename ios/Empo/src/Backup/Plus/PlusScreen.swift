@@ -21,12 +21,14 @@ struct PlusScreen: View {
                 PlusOrbit(isMember: plus.hasPlus).padding(.top, Spacing.lg)
                 headline.padding(.horizontal, Spacing._3xl)
                 places
+                if sellsSubscription && !store.isSubscribed && stage.offersSubscription {
+                    subscriptionTerms
+                }
             }
             .padding(.bottom, Spacing._3xl)
         }
         .background(Color(.systemGroupedBackground))
-        // `safeAreaBar` gives the system scroll edge blur, so the page
-        // shows through and the buttons stay legible over content.
+        .scrollEdgeEffectStyle(.hard, for: .bottom)
         .safeAreaBar(edge: .bottom) {
             buttons
                 .padding(.horizontal, Spacing._2xl)
@@ -124,8 +126,7 @@ struct PlusScreen: View {
                     secondary("Already a member? Sign in") { Task { await signIn() } }
                 } else {
                     subscribe
-                    secondary("Already a Patreon member? Sign in") { Task { await signIn() } }
-                    quiet("Restore purchase") { Task { await restore() } }
+                    primary("Sign in with Patreon") { Task { await signIn() } }
                 }
             case .notYet:
                 if UpdateChecker.isSideloadBuild {
@@ -156,9 +157,6 @@ struct PlusScreen: View {
             if tooManyDevices {
                 secondary("Sign out other devices") { Task { await signIn(replace: true) } }
             }
-            if sellsSubscription && !store.isSubscribed && stage.offersSubscription {
-                subscriptionTerms
-            }
         }
         .disabled(isWorking)
     }
@@ -169,19 +167,21 @@ struct PlusScreen: View {
         }
     }
 
-    // App Review asks for the renewal terms and both links next to the
-    // purchase button.
+    // App Review asks for the renewal terms, both links, and a restore
+    // button on the screen that sells the subscription.
     private var subscriptionTerms: some View {
-        VStack(spacing: Spacing.xs) {
+        VStack(spacing: Spacing.sm) {
             Text("Renews every month until you cancel.")
-            HStack(spacing: Spacing.md) {
+            HStack(spacing: Spacing.xl) {
+                Button("Restore purchase") { Task { await restore() } }
                 Link("Terms", destination: EmpoLink.terms)
                 Link("Privacy", destination: EmpoLink.privacy)
             }
             .foregroundStyle(.brand)
         }
-        .font(.caption)
+        .font(.footnote)
         .foregroundStyle(.secondary)
+        .disabled(isWorking)
     }
 
     private func primary(_ title: String, action: @escaping () -> Void) -> some View {
