@@ -105,6 +105,9 @@ struct GameSettingsView: View {
                 model.refresh()
                 backupModel = model
             }
+            .onChange(of: BackupRunMonitor.shared.isRunning) { _, running in
+                if !running { backupModel?.refresh() }
+            }
         }
         .tint(.brand)
     }
