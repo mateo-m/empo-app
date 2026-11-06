@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { parseMembership } from "../src/membership";
 import { signPass } from "../src/pass";
 import { newRenewal, open, renewalKeys, seal } from "../src/renewal";
@@ -453,6 +453,18 @@ describe("routes", () => {
     expect(state.alarm).toBeGreaterThan(Date.now() + 9 * 60 * 1000);
     expect(state.alarm).toBeLessThanOrEqual(Date.now() + 10 * 60 * 1000);
     await new PatreonSession(state, env).alarm();
+    expect(stored()).toBe("[]");
+  });
+
+  test("a sign-in code does not work after 10 minutes, also when the alarm is late", async () => {
+    const code = (await callback(phone)).searchParams.get("code")!;
+    const call = await phone.signFinish(code);
+    try {
+      setSystemTime(new Date(Date.now() + 10 * 60 * 1000));
+      expect((await post("/patreon/finish", call)).status).toBe(401);
+    } finally {
+      setSystemTime();
+    }
     expect(stored()).toBe("[]");
   });
 

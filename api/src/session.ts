@@ -61,7 +61,12 @@ export class PatreonSession {
         return new Response(null, { status: 204 });
       case "hold": {
         const held: Held = { userId: body.userId, pass: body.pass, replace: body.replace };
-        await this.store(body.refreshToken, body.code, { device: body.device, held }, heldLifetimeMs);
+        await this.store(
+          body.refreshToken,
+          body.code,
+          { device: body.device, held, expires: Date.now() + heldLifetimeMs },
+          heldLifetimeMs,
+        );
         return new Response(null, { status: 204 });
       }
       case "finish":
@@ -121,7 +126,13 @@ export class PatreonSession {
     try {
       const device = await this.state.storage.get<string>("device");
       const held = await this.state.storage.get<Held>("held");
+      // An alarm can run late, so the alarm alone does not end the code.
+      const expires = (await this.state.storage.get<number>("expires")) ?? 0;
       if (!held || !device || !(await signedByDevice(device, `finish ${request.code}`, request.signature))) {
+        return signedOut();
+      }
+      if (Date.now() >= expires) {
+        await this.end();
         return signedOut();
       }
       const keys = await renewalKeys(request.code);
