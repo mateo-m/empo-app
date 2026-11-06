@@ -151,16 +151,8 @@ struct LayoutSettingsSection: View {
 
     var body: some View {
         Section {
-            Button {
+            SettingsValueButton(title: "Layout profile", value: currentPinLabel) {
                 showLayoutProfilePicker = true
-            } label: {
-                HStack {
-                    Text("Layout profile")
-                        .foregroundStyle(.primary)
-                    Spacer()
-                    Text(currentPinLabel)
-                        .foregroundStyle(.secondary)
-                }
             }
             .sheet(
                 isPresented: $showLayoutProfilePicker,
