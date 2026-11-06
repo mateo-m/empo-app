@@ -781,20 +781,18 @@ private struct MarshalReader {
     /// Reads a Marshal string body without the leading tag byte:
     /// a length prefix, then that many bytes.
     private mutating func readRawString() -> Data? {
-        let start = pos
-        guard skipCountedBytes() else { return nil }
-        return data.subdata(in: start..<pos)
+        readCountedBytes().map { data.subdata(in: $0) }
     }
 
     /// Reads a length prefix and moves past that many bytes. A
     /// negative length from the file would move the cursor back
     /// before the buffer, and the next read would trap.
-    private mutating func skipCountedBytes() -> Bool {
+    private mutating func readCountedBytes() -> Range<Int>? {
         guard let len = readLong(), len >= 0, len <= data.count - pos else {
-            return false
+            return nil
         }
         pos += len
-        return true
+        return (pos - len)..<pos
     }
 
     /// Real script archives nest 2 or 3 levels. A file of deeply nested
@@ -816,7 +814,7 @@ private struct MarshalReader {
         case 0x69:  // 'i' = integer
             return readLong() != nil
         case 0x66, 0x22, 0x3a:  // 'f' float (string repr), '"' string, ':' symbol
-            return skipCountedBytes()
+            return readCountedBytes() != nil
         case 0x3b, 0x40:  // ';' symbol link, '@' object link
             return readLong() != nil
         case 0x49:  // 'I' = ivar wrapper
