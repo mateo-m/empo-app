@@ -522,7 +522,6 @@ targets:
         excludes:
           - Player
           - App/main.m
-          - App/AppLoader.m
           - App/AppCoreForwarders.c
           - App/GameProcessClient.m
           - App/GameProcessHost.swift
@@ -560,6 +559,7 @@ targets:
           - Design/Sheet.swift
           - Design/IntrinsicSheet.swift
           - Design/SheetToolbar.swift
+          - Design/SheetBarButton.swift
           - Design/PauseSnapshotOverlay.swift
           - Design/SplashIcons.swift
           - Settings/SettingsView.swift

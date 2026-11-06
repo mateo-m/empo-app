@@ -98,6 +98,13 @@ struct SettingsView: View {
                             description:
                                 "Feel a gentle tap when you press the on-screen controls while you play."
                         )
+
+                        SettingsToggle(
+                            title: "Respect silent mode",
+                            isOn: $settings.respectsSilentMode,
+                            description:
+                                "Mutes games when your device is in silent mode."
+                        )
                     } header: {
                         Text("Gameplay")
                     }
@@ -345,7 +352,7 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    SheetBarButton.done { dismiss() }
                 }
             }
         }

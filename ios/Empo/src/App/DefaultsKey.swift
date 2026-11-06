@@ -26,6 +26,7 @@ enum DefaultsKey {
     static let maxLogFiles = PreferenceKeys.maxLogFiles.name
     static let interfaceHaptics = PreferenceKeys.interfaceHaptics.name
     static let controllerHaptics = PreferenceKeys.controllerHaptics.name
+    static let respectsSilentMode = PreferenceKeys.respectsSilentMode.name
     static let caBundleLastRefresh = PreferenceKeys.caBundleLastRefresh.name
     /// `GameRunner.rawValue`. String.
     static let rubyGameRunner = PreferenceKeys.rubyGameRunner.name

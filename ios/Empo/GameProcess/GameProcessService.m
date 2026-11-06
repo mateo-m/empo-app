@@ -254,7 +254,6 @@ void EmpoGameProcessSceneHasSize(void) {
     NSURL *binary = [[app URLByAppendingPathComponent:[NSString stringWithFormat:@"Frameworks/%@.framework", framework]]
         URLByAppendingPathComponent:framework];
     dispatch_async(dispatch_get_main_queue(), ^{
-        EmpoConfigureAudioSession();
         if (!EmpoCoreOpen(binary.fileSystemRepresentation)) {
             reply([NSString stringWithFormat:@"cannot open %@", binary.path]);
             return;
@@ -344,6 +343,12 @@ void EmpoGameProcessSceneHasSize(void) {
 - (void)setSetting:(NSString *)key value:(NSString *)value {
     onMain(^{
       gamecore_setSetting(key.UTF8String, value.UTF8String);
+    });
+}
+
+- (void)setRespectsSilentMode:(BOOL)respects {
+    onMain(^{
+      EmpoConfigureAudioSession(respects);
     });
 }
 

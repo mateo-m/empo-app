@@ -20,8 +20,8 @@ final class PreferenceSyncTests: XCTestCase {
 
     func testEveryKeyOf101LandsInItsClass() {
         let portable = [
-            "theme", "interfaceHaptics", "controllerHaptics", "controlsEditSnapToGrid",
-            "libraryDisplayMode", "librarySortOption", "showContinuePlaying", "titlePosition",
+            "theme", "interfaceHaptics", "controllerHaptics", "respectsSilentMode",
+            "controlsEditSnapToGrid", "libraryDisplayMode", "librarySortOption", "showContinuePlaying", "titlePosition",
             "cleanupInvalidGames", "controllerMap.global", "layoutProfiles.gameNoticeShown",
             "layoutProfiles.default",
         ]

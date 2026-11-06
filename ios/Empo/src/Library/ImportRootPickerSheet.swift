@@ -126,22 +126,23 @@ struct ImportRootPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     if step == .update && !freshChoices.isEmpty {
-                        Button("Back") {
+                        SheetBarButton("Back", systemImage: "chevron.backward") {
                             withAnimation(Motion.gentle) { step = .add }
                         }
                     } else {
-                        Button("Cancel", action: onCancel)
+                        SheetBarButton.cancel(action: onCancel)
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     if isFinalStep {
-                        Button("Import") {
+                        SheetBarButton("Import", systemImage: "square.and.arrow.down") {
                             onConfirm(selectedChoices, selectedUpdateIDs)
                         }
                         .disabled(confirmedSelectionCount == 0)
                     } else {
-                        Button(
-                            LocalizedStringResource("Next", comment: "Moves to the next step of the import")
+                        SheetBarButton(
+                            LocalizedStringResource("Next", comment: "Moves to the next step of the import"),
+                            systemImage: "chevron.forward"
                         ) {
                             withAnimation(Motion.gentle) { step = .update }
                         }

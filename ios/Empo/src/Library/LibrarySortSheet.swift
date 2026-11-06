@@ -26,7 +26,7 @@ struct LibrarySortSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { isPresented = false }
+                    SheetBarButton.done { isPresented = false }
                 }
             }
         }

@@ -210,6 +210,13 @@ class AppSettings {
         didSet { UserDefaults.standard.set(controllerHaptics, forKey: DefaultsKey.controllerHaptics) }
     }
 
+    var respectsSilentMode: Bool {
+        didSet {
+            UserDefaults.standard.set(respectsSilentMode, forKey: DefaultsKey.respectsSilentMode)
+            pushSilentModeToCore()
+        }
+    }
+
     var titlePosition: TitlePosition {
         didSet { UserDefaults.standard.set(titlePosition.rawValue, forKey: DefaultsKey.titlePosition) }
     }
@@ -318,6 +325,7 @@ class AppSettings {
         self.cleanupInvalidGames = stored.cleanupInvalidGames
         self.interfaceHaptics = stored.interfaceHaptics
         self.controllerHaptics = stored.controllerHaptics
+        self.respectsSilentMode = stored.respectsSilentMode
         self.titlePosition = stored.titlePosition
         self.libraryDisplayMode = stored.libraryDisplayMode
         self.showContinuePlaying = stored.showContinuePlaying
@@ -354,6 +362,7 @@ class AppSettings {
         update(\.cleanupInvalidGames, stored.cleanupInvalidGames)
         update(\.interfaceHaptics, stored.interfaceHaptics)
         update(\.controllerHaptics, stored.controllerHaptics)
+        update(\.respectsSilentMode, stored.respectsSilentMode)
         update(\.titlePosition, stored.titlePosition)
         update(\.libraryDisplayMode, stored.libraryDisplayMode)
         update(\.showContinuePlaying, stored.showContinuePlaying)
@@ -378,6 +387,7 @@ class AppSettings {
         let cleanupInvalidGames: Bool
         let interfaceHaptics: Bool
         let controllerHaptics: Bool
+        let respectsSilentMode: Bool
         let titlePosition: TitlePosition
         let libraryDisplayMode: LibraryDisplayMode
         let showContinuePlaying: Bool
@@ -403,6 +413,7 @@ class AppSettings {
             // Haptics default to on. UserDefaults.bool returns false for unset keys.
             interfaceHaptics = ud.object(forKey: DefaultsKey.interfaceHaptics) as? Bool ?? true
             controllerHaptics = ud.object(forKey: DefaultsKey.controllerHaptics) as? Bool ?? true
+            respectsSilentMode = ud.bool(forKey: DefaultsKey.respectsSilentMode)
             let raw = ud.string(forKey: DefaultsKey.titlePosition) ?? TitlePosition.inside.rawValue
             titlePosition = TitlePosition(rawValue: raw) ?? .inside
             let modeRaw =
@@ -471,6 +482,13 @@ class AppSettings {
         gamecore_setShowViewportBounds(showViewportBounds)
         let c = resolvedRGBA()
         gamecore_setViewportBoundsColor(Float(c.r), Float(c.g), Float(c.b), Float(c.a))
+        #endif
+    }
+
+    func pushSilentModeToCore() {
+        #if os(iOS)
+        guard EmpoCoreIsOpen() != 0 else { return }
+        EmpoCoreSetRespectsSilentMode(respectsSilentMode)
         #endif
     }
 }

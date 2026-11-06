@@ -106,6 +106,7 @@ final class EngineSessionCoordinator {
         gamecore_setLauncherIdentity("empo", AppInfo.version)
         pushCABundlePath()
         AppSettings.shared.pushToCore()
+        AppSettings.shared.pushSilentModeToCore()
         AppWindow.pushSafeAreaInsets()
         registerBridgeCallbacks()
     }

@@ -43,6 +43,7 @@ public enum PreferenceKeys {
     public static let theme = PreferenceEntry("theme", .portable)
     public static let interfaceHaptics = PreferenceEntry("interfaceHaptics", .portable)
     public static let controllerHaptics = PreferenceEntry("controllerHaptics", .portable)
+    public static let respectsSilentMode = PreferenceEntry("respectsSilentMode", .portable)
     public static let controlsEditSnapToGrid = PreferenceEntry("controlsEditSnapToGrid", .portable)
     public static let debugMode = PreferenceEntry("debugMode", .deviceLocal)
     public static let debugLogs = PreferenceEntry("debugLogs", .deviceLocal)
@@ -120,7 +121,7 @@ public enum PreferenceKeys {
     // MARK: - The table
 
     public static let all: [PreferenceEntry] = [
-        theme, interfaceHaptics, controllerHaptics, controlsEditSnapToGrid, debugMode, debugLogs,
+        theme, interfaceHaptics, controllerHaptics, respectsSilentMode, controlsEditSnapToGrid, debugMode, debugLogs,
         maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
         rubyGameRunner, lastGameReport, dataAppGroup, quitClosesGamesWithoutAsking,
         libraryDisplayMode, librarySortOption, showContinuePlaying, titlePosition,

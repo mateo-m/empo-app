@@ -4,14 +4,16 @@
 #ifndef EMPO_AUDIO_SESSION_H
 #define EMPO_AUDIO_SESSION_H
 
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/// Configure `AVAudioSession` for game playback. Must run in the
-/// process of the game before the core opens, so before any code
-/// calls `alcOpenDevice`. See AudioSession.m for rationale.
-void EmpoConfigureAudioSession(void);
+/// Sets the `AVAudioSession` of the process that plays the game. Call
+/// it before the game opens its audio device, and again when the
+/// setting changes.
+void EmpoConfigureAudioSession(bool respectsSilentMode);
 
 #ifdef __cplusplus
 }

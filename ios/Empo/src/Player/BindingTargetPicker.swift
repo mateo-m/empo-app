@@ -37,7 +37,7 @@ struct BindingTargetPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    SheetBarButton.cancel { dismiss() }
                 }
             }
         }

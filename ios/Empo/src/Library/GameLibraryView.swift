@@ -543,7 +543,10 @@ struct GameLibraryView: View {
         if hasSensorStrip {
             GeometryReader { geo in
                 Group {
-                    if !selectionMode {
+                    if selectionMode {
+                        IconButton("checkmark", label: "Done", style: .primary) { exitSelectionMode() }
+                            .position(railSlotCenter(0, in: geo.size))
+                    } else {
                         IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }
                             .position(railSlotCenter(0, in: geo.size))
                     }
@@ -620,9 +623,14 @@ struct GameLibraryView: View {
                 )
                 .font(.headline)
                 Spacer()
-                Button("Done") { exitSelectionMode() }
-                    .font(.body.weight(.semibold))
-                    .tint(.brand)
+                if hasSensorStrip {
+                    Color.clear.frame(width: AppSize.toolbarButton, height: AppSize.toolbarButton)
+                        .accessibilityHidden(true)
+                } else {
+                    Button("Done") { exitSelectionMode() }
+                        .font(.body.weight(.semibold))
+                        .tint(.brand)
+                }
             } else {
                 if !hasSensorStrip {
                     IconButton("gearshape", label: "Settings", style: .outline) { showSettings = true }

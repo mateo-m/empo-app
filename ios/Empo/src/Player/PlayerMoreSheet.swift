@@ -153,7 +153,7 @@ struct PlayerMoreSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                    SheetBarButton.done { dismiss() }
                 }
             }
         }
