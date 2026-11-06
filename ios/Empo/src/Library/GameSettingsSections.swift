@@ -270,7 +270,7 @@ struct ResetSettingsSection: View {
         Section {
             LabeledContent {
                 Button("Reset to Defaults…") { showsConfirmation = true }
-                    .disabled(!model.hasAnyCustomizations)
+                    .disabled(!model.hasAnyCustomizations || model.coreSettings?.isBusy == true)
             } label: {
                 footer.foregroundStyle(.secondary)
             }
@@ -279,6 +279,7 @@ struct ResetSettingsSection: View {
         if model.hasAnyCustomizations {
             Section {
                 Button("Reset to defaults", role: .destructive) { showsConfirmation = true }
+                    .disabled(model.coreSettings?.isBusy == true)
             } footer: {
                 footer
             }

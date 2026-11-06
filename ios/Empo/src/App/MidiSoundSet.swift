@@ -3,29 +3,84 @@
 
 import AVFoundation
 import Foundation
+import Observation
 import UniformTypeIdentifiers
 
-/// The sound set that the player imported for MIDI music. Without one,
-/// the engine uses the sound set it ships.
-enum MidiSoundSet {
+/// The sound set folders that an import copies into now. A settings sheet
+/// can close and open again during the copy, so the sheet can't keep this.
+@MainActor @Observable
+final class MidiSoundSetCopies {
+    static let shared = MidiSoundSetCopies()
+
+    private(set) var folders: Set<URL> = []
+    private var revisions: [URL: Int] = [:]
+
+    func isCopying(into soundSet: MidiSoundSet) -> Bool {
+        folders.contains(soundSet.folderURL)
+    }
+
+    /// A copy can start and end between two updates of a view, so
+    /// `isCopying` can look unchanged. This count changes at each end of a
+    /// copy and at each removal, also when another window did it.
+    func revision(of soundSet: MidiSoundSet) -> Int {
+        revisions[soundSet.folderURL, default: 0]
+    }
+
+    func begin(_ soundSet: MidiSoundSet) {
+        folders.insert(soundSet.folderURL)
+    }
+
+    func end(_ soundSet: MidiSoundSet) {
+        folders.remove(soundSet.folderURL)
+        revisions[soundSet.folderURL, default: 0] += 1
+    }
+
+    func removed(_ soundSet: MidiSoundSet) {
+        revisions[soundSet.folderURL, default: 0] += 1
+    }
+}
+
+/// The sound set that the player imported for MIDI music, for the whole
+/// app or for one game. Without one, the engine uses the sound set it ships.
+struct MidiSoundSet {
     enum ImportError: Error {
         case notASoundSet
     }
 
-    static let folderURL = DataDirectory.documentsRootURL.appendingPathComponent(
-        "SoundFonts", isDirectory: true)
+    static let app = MidiSoundSet(
+        folderURL: DataDirectory.documentsRootURL.appendingPathComponent("SoundFonts", isDirectory: true))
+
+    static func game(_ container: GameContainer) -> MidiSoundSet {
+        MidiSoundSet(
+            folderURL: container.empoStateURL.appendingPathComponent("SoundFonts", isDirectory: true))
+    }
+
+    /// The file name of the sound set that the engine ships.
+    static let builtInName: String? = {
+        guard
+            let framework = Bundle.main.privateFrameworksURL.flatMap({
+                Bundle(url: $0.appendingPathComponent("MkxpCore.framework"))
+            }),
+            let folder = framework.url(
+                forResource: "SoundFonts", withExtension: nil, subdirectory: "Assets.bundle")
+        else { return nil }
+        return MidiSoundSet(folderURL: folder).current?.deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "-", with: " ")
+    }()
+
+    let folderURL: URL
 
     private static let extensions = ["sf2", "dls"]
     static let contentTypes = extensions.compactMap { UTType(filenameExtension: $0) }
 
-    static var current: URL? {
+    var current: URL? {
         files.first
     }
 
-    static func replace(with source: URL) throws {
+    func replace(with source: URL) throws {
         let scoped = source.startAccessingSecurityScopedResource()
         defer { if scoped { source.stopAccessingSecurityScopedResource() } }
-        guard isSoundSet(source) else { throw ImportError.notASoundSet }
+        guard Self.isSoundSet(source) else { throw ImportError.notASoundSet }
         let fm = FileManager.default
         try fm.createDirectory(at: folderURL, withIntermediateDirectories: true)
         let staged = folderURL.appendingPathComponent(".import-\(UUID().uuidString)")
@@ -39,15 +94,15 @@ enum MidiSoundSet {
         }
     }
 
-    static func removeImported() throws {
+    func removeImported() throws {
         for file in files {
             try FileManager.default.removeItem(at: file)
         }
     }
 
-    private static var files: [URL] {
+    private var files: [URL] {
         ((try? FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? [])
-            .filter { extensions.contains($0.pathExtension.lowercased()) }
+            .filter { Self.extensions.contains($0.pathExtension.lowercased()) }
             .sorted {
                 $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
             }

@@ -46,6 +46,13 @@ struct MkxpSettingsPage: View {
             } footer: {
                 Text("How the engine handles heavy scenes.")
             }
+            Section {
+                GameMidiSoundSetRow(state: state)
+            } header: {
+                Text("Music")
+            } footer: {
+                Text("How the game's music sounds.")
+            }
             MkxpEngineSection(model: model, state: state)
         }
         .onChange(of: state.settings) { state.save() }
@@ -115,5 +122,58 @@ struct MkxpEngineRow<Content: View>: View {
         } content: {
             content
         }
+    }
+}
+
+struct GameMidiSoundSetRow: View {
+    @Bindable var state: MkxpSettingsState
+
+    var body: some View {
+        MidiSoundSetPicker(
+            soundSet: .game(state.container),
+            defaultSet: defaultSet,
+            description: state.gameSoundFont == nil
+                ? Text("Default uses the sound set from Settings.")
+                : Text("Default uses the game's own sound set."),
+            choice: choice,
+            imported: $state.gameMidiSoundSet,
+            pick: { choice in
+                let value: GameMidiSoundSet? =
+                    switch choice {
+                    case .appSetting: nil
+                    case .builtIn: .builtIn
+                    case .imported: .imported
+                    }
+                state.settings.midiSoundSet = value
+                // An import can end after the page closed, and the page can open again with a new state
+                // in the meantime. So save only this field, on top of the settings on disk.
+                var saved = MkxpSettings.load(from: state.container.empoStateURL)
+                saved.midiSoundSet = value
+                saved.save(to: state.container.empoStateURL)
+            }
+        )
+        // A sheet that opened during the copy holds the old choice.
+        .onChange(of: MidiSoundSetCopies.shared.revision(of: .game(state.container))) {
+            state.settings.midiSoundSet = MkxpSettings.load(from: state.container.empoStateURL).midiSoundSet
+        }
+    }
+
+    private var choice: MidiSoundSetPicker.Choice {
+        switch state.settings.midiSoundSet {
+        case .builtIn: .builtIn
+        case .imported where state.gameMidiSoundSet != nil: .imported
+        case .imported, nil: .appSetting
+        }
+    }
+
+    private var defaultSet: MidiSoundSetPicker.DefaultSet {
+        if let own = state.gameSoundFont {
+            return .init(name: own.deletingPathExtension().lastPathComponent, source: .game)
+        }
+        _ = MidiSoundSetCopies.shared.revision(of: .app)
+        if let app = MidiSoundSet.app.current {
+            return .init(name: app.deletingPathExtension().lastPathComponent, source: .imported)
+        }
+        return .init(name: MidiSoundSet.builtInName ?? String(localized: "Built-in"), source: .bundled)
     }
 }
