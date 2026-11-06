@@ -309,11 +309,13 @@ struct PEImage {
 
         var icons: [UInt32: (data: Data, size: Int)] = [:]
         var groups: [ParsedGroup] = []
+        var visited: Set<Int> = []
         walkResourceDirectory(
             sectionStart: sectionStart,
             sectionVirtualAddress: sectionVA,
             directoryOffset: sectionStart,
             level: 0,
+            visited: &visited,
             currentType: nil,
             currentName: nil,
             icons: &icons,
@@ -382,12 +384,16 @@ struct PEImage {
         sectionVirtualAddress: UInt32,
         directoryOffset: Int,
         level: Int,
+        visited: inout Set<Int>,
         currentType: UInt32?,
         currentName: UInt32?,
         icons: inout [UInt32: (data: Data, size: Int)],
         groups: inout [ParsedGroup]
     ) {
-        guard let namedCount = reader.readUInt16(at: directoryOffset + ResourceLayout.namedEntryCountOffset),
+        // The type, name, and language levels. A deeper tree, or one whose
+        // entries point back to a directory, comes from a broken or crafted file.
+        guard level < 3, visited.insert(directoryOffset).inserted,
+            let namedCount = reader.readUInt16(at: directoryOffset + ResourceLayout.namedEntryCountOffset),
             let idCount = reader.readUInt16(at: directoryOffset + ResourceLayout.idEntryCountOffset)
         else {
             return
@@ -425,6 +431,7 @@ struct PEImage {
                     sectionVirtualAddress: sectionVirtualAddress,
                     directoryOffset: sectionStart + subOffset,
                     level: level + 1,
+                    visited: &visited,
                     currentType: nextType,
                     currentName: nextName,
                     icons: &icons,

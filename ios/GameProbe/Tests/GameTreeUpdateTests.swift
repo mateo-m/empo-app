@@ -84,6 +84,53 @@ final class GameTreeUpdateTests: XCTestCase {
             contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
 
+    // MARK: - removeSymbolicLinks
+
+    func testRemoveSymbolicLinksKeepsTheTargets() throws {
+        let outside = try makeTree("outside", files: ["secret.txt": "keep"])
+        let game = try makeTree("game", files: ["Game.exe": "exe", "Data/Map.rxdata": "map"])
+        try fm.createSymbolicLink(
+            at: game.appendingPathComponent("Data/link-dir"), withDestinationURL: outside)
+        try fm.createSymbolicLink(
+            atPath: game.appendingPathComponent("link-file").path,
+            withDestinationPath: "../outside/secret.txt")
+
+        try GameTreeUpdate.removeSymbolicLinks(under: game)
+
+        XCTAssertFalse(fm.fileExists(atPath: game.appendingPathComponent("Data/link-dir").path))
+        XCTAssertNil(try? fm.destinationOfSymbolicLink(atPath: game.appendingPathComponent("link-file").path))
+        XCTAssertEqual(contents(game, "Data/Map.rxdata"), "map")
+        XCTAssertEqual(contents(outside, "secret.txt"), "keep")
+    }
+
+    func testRemoveSymbolicLinksFailsOnAFolderItCannotRead() throws {
+        try XCTSkipIf(getuid() == 0, "Root reads every folder.")
+        let game = try makeTree("game", files: ["locked/Map.rxdata": "map"])
+        let locked = game.appendingPathComponent("locked")
+        try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: locked.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+
+        XCTAssertThrowsError(try GameTreeUpdate.removeSymbolicLinks(under: game))
+    }
+
+    func testAnUpdateReplacesALinkInTheInstalledGameAndKeepsItsTarget() throws {
+        let outside = try makeTree("outside", files: ["Map.rxdata": "outside"])
+        let installed = try makeTree("installed/Game", files: ["Game.exe": "old"])
+        try fm.createSymbolicLink(
+            at: installed.appendingPathComponent("Data"), withDestinationURL: outside)
+        let saves = try makeTree("installed/Game/Saves", files: [:])
+        try fm.createSymbolicLink(
+            at: saves.appendingPathComponent("Save1.rxdata"),
+            withDestinationURL: outside.appendingPathComponent("Map.rxdata"))
+        let source = try makeTree("source", files: ["Data/Map.rxdata": "new"])
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: installed)
+
+        XCTAssertEqual(contents(installed, "Data/Map.rxdata"), "new")
+        XCTAssertNil(try? fm.destinationOfSymbolicLink(atPath: saves.appendingPathComponent("Save1.rxdata").path))
+        XCTAssertEqual(contents(outside, "Map.rxdata"), "outside")
+    }
+
     // MARK: - mergeMove
 
     func testMergeIntoMissingDestinationIsAPlainMove() throws {

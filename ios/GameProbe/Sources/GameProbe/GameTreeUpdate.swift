@@ -56,6 +56,33 @@ public enum GameTreeUpdate {
         }
     }
 
+    /// A link in an imported folder can point outside the game, and
+    /// the unpack, the validator, and the update merge would follow it.
+    public static func removeSymbolicLinks(
+        under root: URL,
+        fm: FileManager = .default
+    ) throws {
+        // The walk skips a folder that it cannot read, and the links in it.
+        var unreadable: Error?
+        guard
+            let entries = fm.enumerator(
+                at: root, includingPropertiesForKeys: [.isSymbolicLinkKey],
+                errorHandler: { _, error in
+                    unreadable = error
+                    return false
+                })
+        else { return }
+        var links: [URL] = []
+        for case let entry as URL in entries
+        where (try? entry.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+            links.append(entry)
+        }
+        if let unreadable { throw unreadable }
+        for link in links {
+            try fm.removeItem(at: link)
+        }
+    }
+
     /// Move the tree at `source` into `destination`,
     /// upgrade-in-place: a file that exists at the same relative
     /// path is overwritten by the new copy (a type conflict
@@ -233,6 +260,9 @@ public enum GameTreeUpdate {
             // Normalizing the staging tree lets the merge overwrite
             // read-only entries.
             try normalizeOwnerWritable(at: staging, fm: fm)
+            // A game installed before links were removed at import can
+            // still hold one.
+            try removeSymbolicLinks(under: staging, fm: fm)
             let saveEntries = Set(PortableGameSaves.entryNames(atGameRoot: staging, fm: fm))
             try mergeMove(from: source, into: staging, protecting: saveEntries, fm: fm)
             // The original tree becomes the swap's backup and is

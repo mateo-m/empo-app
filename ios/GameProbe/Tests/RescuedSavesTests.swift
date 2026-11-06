@@ -125,6 +125,29 @@ final class RescuedSavesTests: XCTestCase {
         XCTAssertEqual(matches, [bucket])
     }
 
+    func testARestoreWritesOnlyItsOwnBucketsAndNewOnes() throws {
+        let own = try makeBucket("Nickname", identity: "Pokemon Example")
+        _ = try makeBucket("Other Game", identity: "Other Game")
+
+        let buckets = RescuedSaves.restorableBuckets(
+            named: ["Nickname", "Other Game", "New Bucket", "..", "a/b", ""],
+            in: tempRoot, folderName: "Pokemon Example")
+
+        XCTAssertEqual(buckets["Nickname"], own)
+        XCTAssertEqual(
+            buckets["New Bucket"], tempRoot.appendingPathComponent("New Bucket", isDirectory: true))
+        XCTAssertEqual(Set(buckets.keys), ["Nickname", "New Bucket"])
+    }
+
+    func testTheStreamOfNoGameKeepsEveryPlainBucketName() throws {
+        _ = try makeBucket("Other Game", identity: "Other Game")
+
+        let buckets = RescuedSaves.restorableBuckets(
+            named: ["Other Game", "..", "a/b"], in: tempRoot, folderName: nil)
+
+        XCTAssertEqual(Set(buckets.keys), ["Other Game"])
+    }
+
     func testMatchingIsCaseInsensitive() throws {
         let bucket = try makeBucket("nickname", identity: "POKEMON EXAMPLE")
 

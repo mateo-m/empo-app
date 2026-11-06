@@ -718,6 +718,7 @@ private enum ImportPipelineService {
                 let copyURL = copyDirectoryURL.appendingPathComponent(url.lastPathComponent)
                 do {
                     try fm.copyItem(at: url, to: copyURL)
+                    try GameTreeUpdate.removeSymbolicLinks(under: copyURL, fm: fm)
                 } catch {
                     try? fm.removeItem(at: copyDirectoryURL)
                     throw error
@@ -1215,6 +1216,7 @@ extension GameLibrary {
                             try fm.copyItem(at: sourceURL, to: tmpDest)
                         }
                         #endif
+                        try GameTreeUpdate.removeSymbolicLinks(under: tmpDest, fm: fm)
                     }
                     try ImportSignpost.interval("unpack-packed-exe", id: batchID) {
                         try EnigmaVirtualBoxImport.unpackAll(under: tmpDest) {

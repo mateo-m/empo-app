@@ -400,19 +400,23 @@ final class RestoreCoordinator {
     static func destination(
         for container: GameContainer?, manifest: SnapshotManifest
     ) -> MemberSource {
-        var buckets: [String: URL] = [:]
-        for name in manifest.rescuedSavesBuckets {
-            buckets[name] = DataDirectory.rescuedSavesRootURL
-                .appendingPathComponent(name, isDirectory: true)
+        let isPreferences = manifest.gameKey == BackupStream.preferencesKey
+        let local = container.flatMap {
+            DataDirectory.resolve(for: $0, core: GameCores.core(forGameAt: $0.gameURL))
         }
         return MemberSource(
             container: container?.url,
-            sharedData: manifest.sharedDataDirectory.flatMap {
-                ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
-            },
-            rescuedBuckets: buckets,
-            profiles: LayoutProfilesManager.profilesRootURL,
-            userDefaultsExport: PreferenceRestore.restoredFile)
+            sharedData: isPreferences
+                ? nil
+                : local
+                    ?? manifest.sharedDataDirectory.flatMap {
+                        ExternalMembers.url(ofRecordedPath: $0, documentsRoot: DataDirectory.documentsRootURL)
+                    },
+            rescuedBuckets: RescuedSaves.restorableBuckets(
+                named: manifest.rescuedSavesBuckets, in: DataDirectory.rescuedSavesRootURL,
+                folderName: isPreferences ? nil : container?.folderName ?? manifest.containerFolderName),
+            profiles: isPreferences ? LayoutProfilesManager.profilesRootURL : nil,
+            userDefaultsExport: isPreferences ? PreferenceRestore.restoredFile : nil)
     }
 
     /// Every local file the plan has to know about.

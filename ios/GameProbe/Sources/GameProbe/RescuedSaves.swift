@@ -119,6 +119,24 @@ public enum RescuedSaves {
         }
     }
 
+    /// The names come from the backup. A game's restore writes only its
+    /// own buckets and new ones. `folderName` is nil for the stream that
+    /// belongs to no game.
+    public static func restorableBuckets(
+        named names: [String], in root: URL, folderName: String?, fm: FileManager = .default
+    ) -> [String: URL] {
+        let mine = folderName.map {
+            Set(matchingBuckets(in: root, folderName: $0, fm: fm).map(\.lastPathComponent))
+        }
+        var buckets: [String: URL] = [:]
+        for name in names where !name.contains("/") && name != "." && name != ".." && !name.isEmpty {
+            let bucket = root.appendingPathComponent(name, isDirectory: true)
+            if let mine, !mine.contains(name), fm.fileExists(atPath: bucket.path) { continue }
+            buckets[name] = bucket
+        }
+        return buckets
+    }
+
     /// Drains a bucket back into a freshly imported `Game/` tree
     /// with the `LegacyDataDrain` rules (recursive merge, the newer
     /// file wins, the loser stays beside it, nothing deleted). The
