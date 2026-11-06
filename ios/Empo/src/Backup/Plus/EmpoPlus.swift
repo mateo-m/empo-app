@@ -17,7 +17,7 @@ final class EmpoPlus {
         case tooManyDevices
     }
 
-    static let joinURL = URL(string: "https://www.patreon.com/checkout/mateo_m?rid=29989848")!
+    static let joinURL = URL(string: "https://www.patreon.com/checkout/empo_app?rid=29989848")!
     private static let api = URL(string: "https://api.empo.mateo.sh")!
     private static let callbackScheme = "empo"
     private static let publicKey = Data(
