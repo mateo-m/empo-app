@@ -11,14 +11,18 @@
 # The repository variable MACOS_RUNNER chooses the Mac. The value is
 # JSON: a label list such as ["self-hosted","macOS"], or one quoted
 # label such as "xcode-27". A bare xcode-27 fails. With no variable,
-# the Mac jobs run on a GitHub-hosted Mac. A pull request from a fork
-# does too. A fork can edit this file, so only the repository's
-# approval rule for fork runs keeps fork code off a self-hosted machine.
+# the Mac jobs run on a GitHub-hosted Mac. Every pull request does too,
+# also one from a branch of this repository or from Dependabot. A pull
+# request runs the workflow files of its own branch, so a pull request
+# that edits this file can still choose the self-hosted Mac. Only the
+# repository's approval rule for fork runs stops that for a fork.
 #
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
 # next. A job-completed hook on that runner that cleans the checkout
 # must run `git clean -ffdx -e /ios/Dependencies/ -e .build/` to keep them.
+# A GitHub-hosted Mac keeps the same folders in the GitHub cache. A pull
+# request reads the cache of its own earlier runs.
 
 name: CI
 
@@ -35,6 +39,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 # A new push to a pull request makes its older run useless. Every other
 # run has a group of its own commit, so each commit on main gets a result.
@@ -376,7 +383,7 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.MACOS_RUNNER || '"xcode-27"') }}
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -468,7 +475,7 @@ jobs:
     name: Mac build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(!github.event.pull_request.head.repo.fork && vars.MACOS_RUNNER || '"xcode-27"') }}
+    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"') }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

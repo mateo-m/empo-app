@@ -44,7 +44,37 @@ runs:
         # core that a change removes cannot stay in it.
         rm -rf "$DIR/Build/Products"
         echo "DERIVED_DATA=$DIR" >> "$GITHUB_ENV"
+        echo "XCODE_BUILD=$XCODE_BUILD" >> "$GITHUB_ENV"
         echo "Build data in $DIR"
+
+    # Xcode and SwiftPM compare the date of each source file with the
+    # date in their build records, and a checkout gives every file the
+    # time of the checkout. The commit dates give each unchanged file the
+    # same date as in the cached run.
+    - name: Give each file the date of its last commit
+      if: inputs.build-data != '' && runner.environment == 'github-hosted'
+      shell: bash
+      run: |
+        git fetch --quiet --unshallow --filter=blob:none origin
+        HOMEBREW_NO_AUTO_UPDATE=1 brew install --quiet git-tools
+        # With rename detection, git downloads the old file of each
+        # rename one at a time, and the step takes minutes, not seconds.
+        # With --merge, a file that only the merge of a pull request into
+        # main changes gets the time of that merge, so it builds again.
+        git -c diff.renames=false restore-mtime --commit-time --merge --quiet
+
+    - name: Restore the build data from the GitHub cache
+      if: inputs.build-data != '' && runner.environment == 'github-hosted'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ${{ env.DERIVED_DATA }}
+          !${{ env.DERIVED_DATA }}/Build/Products
+          ios/Dependencies
+          ios/GameProbe/.build
+          ios/Json5/.build
+        key: build-${{ inputs.build-data }}-${{ env.XCODE_BUILD }}-${{ github.run_id }}
+        restore-keys: build-${{ inputs.build-data }}-${{ env.XCODE_BUILD }}-
 
     - name: Install xcodegen
       # Two runners on one Mac run this at the same time, and a second
