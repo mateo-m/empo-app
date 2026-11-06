@@ -73,39 +73,48 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(ManagedMkxpConfig.readGameDefaults(from: gameDir).midiSoundFont, "Audio/BGM/GMGSx.sf2")
     }
 
-    func testGameSoundFontIsTheFileThatMkxpJsonNames() throws {
+    func testNamedSoundFontIsTheFileThatMkxpJsonNames() throws {
         let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.sf2", "Audio/a.sf2"])
         try """
         { "midiSoundFont": "Audio/BGM/GMGSx.sf2" }
         """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(
-            ManagedMkxpConfig.gameSoundFont(in: gameDir)?.path,
+            ManagedMkxpConfig.namedSoundFont(in: gameDir)?.path,
             gameDir.appendingPathComponent("Audio/BGM/GMGSx.sf2").path)
     }
 
-    func testGameSoundFontIsAShippedFileWhenMkxpJsonNamesAMissingOne() throws {
+    func testNamedSoundFontReadsWindowsSeparators() throws {
+        let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.sf2"])
+        try #"{ "midiSoundFont": "Audio\\BGM\\GMGSx.sf2" }"#
+            .write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(
+            ManagedMkxpConfig.namedSoundFont(in: gameDir)?.path,
+            gameDir.appendingPathComponent("Audio/BGM/GMGSx.sf2").path)
+    }
+
+    func testNamedSoundFontIsNilWhenTheGameDoesNotShipIt() throws {
         let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.SF2"])
         try """
         { "midiSoundFont": "soundfont.sf2" }
         """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(
-            ManagedMkxpConfig.gameSoundFont(in: gameDir)?.path,
-            gameDir.appendingPathComponent("Audio/BGM/GMGSx.SF2").path)
+        XCTAssertNil(ManagedMkxpConfig.namedSoundFont(in: gameDir))
+        XCTAssertEqual(ManagedMkxpConfig.shippedSoundFonts(in: gameDir), ["Audio/BGM/GMGSx.SF2"])
     }
 
-    func testGameSoundFontPrefersTheShallowestFileThenTheName() throws {
-        let gameDir = try makeGame(files: ["Audio/BGM/a.sf2", "b.dls", "c.sf2", "Audio/z.sf2", "notes.txt"])
+    func testShippedSoundFontsPutTheShallowestFirstThenSortByName() throws {
+        let gameDir = try makeGame(files: ["Audio/BGM/a.sf2", "c.sf2", "b.dls", "Audio/z.sf2", "notes.txt"])
 
         XCTAssertEqual(
-            ManagedMkxpConfig.gameSoundFont(in: gameDir)?.path, gameDir.appendingPathComponent("b.dls").path)
+            ManagedMkxpConfig.shippedSoundFonts(in: gameDir), ["b.dls", "c.sf2", "Audio/z.sf2", "Audio/BGM/a.sf2"])
     }
 
-    func testGameSoundFontSkipsHiddenAndOtherFiles() throws {
-        let gameDir = try makeGame(files: [".hidden.sf2", "Audio/BGM/song.mid", "Audio/font.sf3"])
+    func testShippedSoundFontsSkipHiddenAndOtherFiles() throws {
+        let gameDir = try makeGame(files: [".hidden.sf2", ".git/a.sf2", "Audio/BGM/song.mid", "Audio/font.sf3"])
 
-        XCTAssertNil(ManagedMkxpConfig.gameSoundFont(in: gameDir))
+        XCTAssertEqual(ManagedMkxpConfig.shippedSoundFonts(in: gameDir), [])
     }
 
     private func makeGame(files: [String]) throws -> URL {

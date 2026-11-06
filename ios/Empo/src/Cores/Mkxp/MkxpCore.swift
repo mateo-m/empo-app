@@ -188,7 +188,7 @@ struct MkxpCore: GameCore {
                 fixedAspectRatio: shared.fixedAspectRatio
             ),
             midiSoundFont: settings.midiSoundFont(
-                for: container, gameSoundFont: ManagedMkxpConfig.gameSoundFont(in: container.gameURL)),
+                for: container, gameSoundFont: profile.gameSoundFont(in: container)),
             onUnparseableOverlay: { NSLog($0) }
         )
         set("configOverlay", overlay ?? "")

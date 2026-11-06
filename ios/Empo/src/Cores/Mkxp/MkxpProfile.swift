@@ -16,6 +16,9 @@ struct MkxpProfile: Codable {
     var schema: String
     /// `inputsDigest` of the files that the scan read.
     var inputs: String
+    /// `ManagedMkxpConfig.shippedSoundFonts`. The walk of a large game folder takes a tenth of
+    /// a second or more. A profile from before this key fails to decode, so it scans again.
+    var soundFonts: [String]
 
     /// The stored profile. A new scan replaces it when `rescan` is true,
     /// when nothing is stored, when older rules wrote it, or when a file
@@ -35,12 +38,20 @@ struct MkxpProfile: Codable {
             rubyVersion: result.rubyVersion,
             modernRubyScripts: result.modernRubyScripts,
             schema: currentSchema,
-            inputs: inputs)
+            inputs: inputs,
+            soundFonts: ManagedMkxpConfig.shippedSoundFonts(in: container.gameURL))
         container.ensureMetadataDirectory()
         if let data = try? JSONEncoder().encode(profile) {
             try? data.write(to: url, options: .atomic)
         }
         return profile
+    }
+
+    /// The sound font that the game ships. Default plays it, not the app's set.
+    func gameSoundFont(in container: GameContainer) -> URL? {
+        ManagedMkxpConfig.namedSoundFont(in: container.gameURL)
+            ?? soundFonts.lazy.map { container.gameURL.appendingPathComponent($0) }
+            .first { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     private static func inputsDigest(of gameDirectory: URL) -> String {

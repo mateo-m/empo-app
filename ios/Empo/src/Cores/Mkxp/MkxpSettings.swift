@@ -85,7 +85,7 @@ struct MkxpLaunchedSettings: CoreLaunchedSettings {
         settings = MkxpSettings.load(from: container.empoStateURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)
         midiSoundFont = settings.midiSoundFont(
-            for: container, gameSoundFont: ManagedMkxpConfig.gameSoundFont(in: container.gameURL))
+            for: container, gameSoundFont: MkxpProfile.load(for: container).gameSoundFont(in: container))
         midiSoundFontFile = Self.fileNumber(of: midiSoundFont)
     }
 
@@ -120,8 +120,7 @@ final class MkxpSettingsState: CoreSettings {
     let isPokemonEssentials: Bool
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
-    /// The sound font that the game ships. Default plays it, not the app's set.
-    let gameSoundFont: URL?
+    private(set) var gameSoundFont: URL?
 
     @ObservationIgnored let container: GameContainer
 
@@ -131,11 +130,12 @@ final class MkxpSettingsState: CoreSettings {
         self.settings = settings
         self.engine = MkxpEngineSettings.load(from: container.empoStateURL)
         self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
-        self.profile = MkxpProfile.load(for: container)
+        let profile = MkxpProfile.load(for: container)
+        self.profile = profile
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
         self.gameMidiSoundSet = MidiSoundSet.game(container).current
-        self.gameSoundFont = ManagedMkxpConfig.gameSoundFont(in: container.gameURL)
+        self.gameSoundFont = profile.gameSoundFont(in: container)
     }
 
     /// Default plays the app's set, which another window can change.
@@ -164,6 +164,7 @@ final class MkxpSettingsState: CoreSettings {
         settings = MkxpSettings()
         settings.save(to: container.empoStateURL)
         profile = MkxpProfile.load(for: container, rescan: true)
+        gameSoundFont = profile.gameSoundFont(in: container)
         ManagedMkxpConfig.resetAllEngineFields(
             stateDirectory: container.empoStateURL, gameDirectory: container.gameURL)
         engine = MkxpEngineSettings.load(from: container.empoStateURL)

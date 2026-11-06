@@ -328,30 +328,31 @@ public enum ManagedMkxpConfig {
         )
     }
 
-    /// The sound font that the game ships: the file that `mkxp.json` names, or the first .sf2 or
-    /// .dls file in the game folder. Some games name a file that they do not ship, and some
-    /// ship one for Windows players that `mkxp.json` does not name.
-    public static func gameSoundFont(in gameDirectory: URL) -> URL? {
-        let fm = FileManager.default
-        if let named = readGameDefaults(from: gameDirectory).midiSoundFont {
-            let url = gameDirectory.appendingPathComponent(named)
-            if fm.fileExists(atPath: url.path) { return url }
+    /// The sound font that `mkxp.json` names, when the game ships it. Some games name a file
+    /// that they do not ship. A game made on Windows can name it with backslashes.
+    public static func namedSoundFont(in gameDirectory: URL) -> URL? {
+        guard let named = readGameDefaults(from: gameDirectory).midiSoundFont else { return nil }
+        let url = gameDirectory.appendingPathComponent(named.replacingOccurrences(of: "\\", with: "/"))
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    /// The .sf2 and .dls files in the game folder, relative to it, the shallowest first, then by
+    /// name. Some games ship one for Windows players that `mkxp.json` does not name.
+    public static func shippedSoundFonts(in gameDirectory: URL) -> [String] {
+        guard
+            let files = FileManager.default.enumerator(
+                at: gameDirectory, includingPropertiesForKeys: [], options: [.skipsHiddenFiles])
+        else { return [] }
+        let base = gameDirectory.standardizedFileURL.pathComponents.count
+        var found: [[String]] = []
+        for case let url as URL in files where ["sf2", "dls"].contains(url.pathExtension.lowercased()) {
+            found.append(Array(url.standardizedFileURL.pathComponents.dropFirst(base)))
         }
-        guard let files = fm.enumerator(atPath: gameDirectory.path) else { return nil }
-        var found: [String] = []
-        while let path = files.nextObject() as? String {
-            let name = (path as NSString).lastPathComponent
-            if name.hasPrefix(".") {
-                files.skipDescendants()
-            } else if ["sf2", "dls"].contains((name as NSString).pathExtension.lowercased()) {
-                found.append(path)
-            }
-        }
-        let first = found.min {
-            let (a, b) = ($0.split(separator: "/").count, $1.split(separator: "/").count)
-            return a != b ? a < b : $0.localizedStandardCompare($1) == .orderedAscending
-        }
-        return first.map { gameDirectory.appendingPathComponent($0) }
+        return found.sorted {
+            $0.count != $1.count
+                ? $0.count < $1.count
+                : $0.joined(separator: "/").localizedStandardCompare($1.joined(separator: "/")) == .orderedAscending
+        }.map { $0.joined(separator: "/") }
     }
 
     // MARK: - Overlay string for engine bridge
