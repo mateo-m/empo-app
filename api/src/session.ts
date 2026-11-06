@@ -3,6 +3,7 @@ import { type Env, SignedOut, token } from "./patreon";
 import { open, renewalKeys, seal } from "./renewal";
 
 const unusedLifetimeMs = 90 * 24 * 60 * 60 * 1000;
+const heldLifetimeMs = 10 * 60 * 1000;
 
 export interface Signed {
   renewal: string;
@@ -12,8 +13,21 @@ export interface Signed {
   signature: string;
 }
 
+export interface Held {
+  userId: string;
+  pass: string;
+  replace: boolean;
+}
+
+export interface Finish {
+  code: string;
+  signature: string;
+}
+
 export type SessionRequest =
   | { action: "start"; renewal: string; refreshToken: string; device: string }
+  | ({ action: "hold"; code: string; refreshToken: string; device: string } & Held)
+  | ({ action: "finish" } & Finish)
   | ({ action: "renew" } & Signed)
   | ({ action: "sign-out" } & Signed)
   | { action: "evict" }
@@ -45,6 +59,18 @@ export class PatreonSession {
       case "start":
         await this.store(body.refreshToken, body.renewal, { device: body.device, time: 0 });
         return new Response(null, { status: 204 });
+      case "hold": {
+        const held: Held = { userId: body.userId, pass: body.pass, replace: body.replace };
+        await this.store(
+          body.refreshToken,
+          body.code,
+          { device: body.device, held, expires: Date.now() + heldLifetimeMs },
+          heldLifetimeMs,
+        );
+        return new Response(null, { status: 204 });
+      }
+      case "finish":
+        return this.state.blockConcurrencyWhile(() => this.finish(body));
       case "renew":
       case "sign-out":
         // Patreon refresh tokens are single use. This holds every other
@@ -68,7 +94,8 @@ export class PatreonSession {
     try {
       const device = await this.state.storage.get<string>("device");
       const lastTime = (await this.state.storage.get<number>("time")) ?? 0;
-      if (!device || !(await signedByDevice(device, `${request.action} ${request.time}`, request.signature))) {
+      const held = await this.state.storage.get<Held>("held");
+      if (held || !device || !(await signedByDevice(device, `${request.action} ${request.time}`, request.signature))) {
         return signedOut();
       }
       // An old time is a repeated call, or a device clock that went
@@ -95,11 +122,41 @@ export class PatreonSession {
     }
   }
 
-  private async store(refreshToken: string, renewal: string, more: Record<string, unknown>): Promise<void> {
-    const keys = await renewalKeys(renewal);
+  private async finish(request: Finish): Promise<Response> {
+    try {
+      const device = await this.state.storage.get<string>("device");
+      const held = await this.state.storage.get<Held>("held");
+      // An alarm can run late, so the alarm alone does not end the code.
+      const expires = (await this.state.storage.get<number>("expires")) ?? 0;
+      if (!held || !device || !(await signedByDevice(device, `finish ${request.code}`, request.signature))) {
+        return signedOut();
+      }
+      if (Date.now() >= expires) {
+        await this.end();
+        return signedOut();
+      }
+      const keys = await renewalKeys(request.code);
+      const sealed = await this.state.storage.get<string>("refreshToken");
+      const refreshToken = keys && sealed ? await open(sealed, keys.seal) : null;
+      await this.end();
+      if (!refreshToken) return signedOut();
+      return Response.json({ ...held, device, refreshToken });
+    } catch (error) {
+      console.error(error);
+      return Response.json({ error: "server" }, { status: 502 });
+    }
+  }
+
+  private async store(
+    refreshToken: string,
+    secret: string,
+    more: Record<string, unknown>,
+    lifetimeMs = unusedLifetimeMs,
+  ): Promise<void> {
+    const keys = await renewalKeys(secret);
     if (!keys) throw new Error("A session needs a valid renewal");
     await this.state.storage.put({ refreshToken: await seal(refreshToken, keys.seal), ...more });
-    await this.state.storage.setAlarm(Date.now() + unusedLifetimeMs);
+    await this.state.storage.setAlarm(Date.now() + lifetimeMs);
   }
 
   private async end(): Promise<void> {

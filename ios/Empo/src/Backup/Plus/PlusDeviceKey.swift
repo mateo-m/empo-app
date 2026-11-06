@@ -24,10 +24,8 @@ enum PlusDeviceKey {
         return base64URL(key.x963Representation)
     }
 
-    /// Signs "<action> <time>", which the server checks against the
-    /// stored public key.
-    static func sign(_ action: String, time: Int64) throws -> String {
-        let message = Data("\(action) \(time)".utf8)
+    static func sign(_ text: String) throws -> String {
+        let message = Data(text.utf8)
         let signature: P256.Signing.ECDSASignature
         switch try load() {
         case .enclave(let privateKey): signature = try privateKey.signature(for: message)
