@@ -5,7 +5,6 @@ import SwiftUI
 
 struct MidiSoundSetRow: View {
     @State private var imported = MidiSoundSet.app.current
-    @State private var isCopying = false
 
     var body: some View {
         // Under RootView's `.fontDesign(.rounded)`, only `Font.monospaced()` stays fixed-width.
@@ -18,7 +17,6 @@ struct MidiSoundSetRow: View {
             ),
             choice: imported == nil ? .builtIn : .imported,
             imported: $imported,
-            isCopying: $isCopying,
             pick: { _ in }
         )
     }
@@ -40,12 +38,13 @@ struct MidiSoundSetPicker: View {
     let description: Text
     let choice: Choice
     @Binding var imported: URL?
-    @Binding var isCopying: Bool
     let pick: (Choice) -> Void
 
     @State private var isImporting = false
     @State private var formatFailed = false
     @State private var copyFailure: String?
+
+    private var isCopying: Bool { MidiSoundSetCopies.shared.isCopying(into: soundSet) }
 
     private var selection: Binding<Option> {
         Binding {
@@ -77,6 +76,8 @@ struct MidiSoundSetPicker: View {
             Text("Import Sound Set…").tag(Option.importNew)
         }
         .disabled(isCopying)
+        // The copy can end after this sheet closed and opened again.
+        .onChange(of: isCopying) { imported = soundSet.current }
         #if os(iOS)
         .sheet(isPresented: $isImporting) {
             DocumentPickerView(contentTypes: MidiSoundSet.contentTypes, allowsMultipleSelection: false) {
@@ -116,7 +117,7 @@ struct MidiSoundSetPicker: View {
     }
 
     private func importSoundSet(_ url: URL) {
-        isCopying = true
+        MidiSoundSetCopies.shared.begin(soundSet)
         Task {
             do {
                 try await Task.detached { [soundSet] in try soundSet.replace(with: url) }.value
@@ -127,8 +128,7 @@ struct MidiSoundSetPicker: View {
                 NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
                 copyFailure = error.localizedDescription
             }
-            imported = soundSet.current
-            isCopying = false
+            MidiSoundSetCopies.shared.end(soundSet)
         }
     }
 }

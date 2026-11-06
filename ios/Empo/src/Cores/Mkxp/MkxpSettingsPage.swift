@@ -137,7 +137,6 @@ struct GameMidiSoundSetRow: View {
                 : Text("Default uses the game's own sound set."),
             choice: choice,
             imported: $state.gameMidiSoundSet,
-            isCopying: $state.isImportingSoundSet,
             pick: { choice in
                 let value: GameMidiSoundSet? =
                     switch choice {
@@ -153,6 +152,10 @@ struct GameMidiSoundSetRow: View {
                 saved.save(to: state.container.empoStateURL)
             }
         )
+        // A sheet that opened during the copy holds the old choice, and saves it when it closes.
+        .onChange(of: MidiSoundSetCopies.shared.isCopying(into: .game(state.container))) {
+            state.settings.midiSoundSet = MkxpSettings.load(from: state.container.empoStateURL).midiSoundSet
+        }
     }
 
     private var choice: MidiSoundSetPicker.Choice {

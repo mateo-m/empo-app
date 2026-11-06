@@ -3,7 +3,29 @@
 
 import AVFoundation
 import Foundation
+import Observation
 import UniformTypeIdentifiers
+
+/// The sound set folders that an import copies into now. A settings sheet
+/// can close and open again during the copy, so the sheet can't keep this.
+@MainActor @Observable
+final class MidiSoundSetCopies {
+    static let shared = MidiSoundSetCopies()
+
+    private(set) var folders: Set<URL> = []
+
+    func isCopying(into soundSet: MidiSoundSet) -> Bool {
+        folders.contains(soundSet.folderURL)
+    }
+
+    func begin(_ soundSet: MidiSoundSet) {
+        folders.insert(soundSet.folderURL)
+    }
+
+    func end(_ soundSet: MidiSoundSet) {
+        folders.remove(soundSet.folderURL)
+    }
+}
 
 /// The sound set that the player imported for MIDI music, for the whole
 /// app or for one game. Without one, the engine uses the sound set it ships.
