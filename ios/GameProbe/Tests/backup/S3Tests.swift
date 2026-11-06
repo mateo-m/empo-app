@@ -462,6 +462,12 @@ final class S3Tests: XCTestCase {
         }
     }
 
+    func testAnExpiredTokenWithA400AsksForTheKeysAgain() {
+        XCTAssertEqual(
+            S3.error(status: 400, failure: S3.Failure(code: "ExpiredToken", message: "")),
+            .authExpired)
+    }
+
     func testAnAddressURLLoadingCannotUseIsRejectedWithEmposOwnLine() {
         for code in [-1000, -1002, -1022, -1205, -1206] {
             XCTAssertEqual(

@@ -410,6 +410,14 @@ public enum S3 {
         "NoSuchKey", "NoSuchUpload", "NotFound",
     ]
 
+    /// The codes that mean the keys are wrong or old. A wrong secret
+    /// key signs wrong, so the fix is the keys again, which is what
+    /// needs-sign-in asks for. AWS sends `ExpiredToken` with a 400,
+    /// not a 403.
+    private static let credentialCodes: Set<String> = [
+        "SignatureDoesNotMatch", "InvalidAccessKeyId", "ExpiredToken", "TokenRefreshRequired",
+    ]
+
     /// One S3 failure onto one error kind of 8.4.
     public static func error(
         status: Int,
@@ -418,6 +426,7 @@ public enum S3 {
         attempt: Int = 1
     ) -> BackupProviderError {
         if outOfSpaceCodes.contains(failure.code) { return .outOfSpace }
+        if credentialCodes.contains(failure.code) { return .authExpired }
         if throttleCodes.contains(failure.code) {
             return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
         }
@@ -456,11 +465,6 @@ public enum S3 {
             // re-sign-in does not add a right, so 8.4 blocks the
             // target, per 9.4.
             return .permissionDenied
-        case "SignatureDoesNotMatch", "InvalidAccessKeyId", "ExpiredToken",
-            "TokenRefreshRequired":
-            // A wrong secret key signs wrong. The fix is the keys
-            // again, which is what needs-sign-in asks for.
-            return .authExpired
         default:
             return refusal(failure)
         }
