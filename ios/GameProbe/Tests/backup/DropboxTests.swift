@@ -63,6 +63,14 @@ final class DropboxTests: XCTestCase {
         XCTAssertTrue(error.effect.stopsTheRun)
     }
 
+    func testAMalformedLookupPathIsNotReadAsNotFound() {
+        XCTAssertEqual(
+            Dropbox.error(status: 409, errorSummary: "path_lookup/malformed_path/"),
+            .rejected(message: "Dropbox refused the request."))
+        XCTAssertEqual(
+            Dropbox.error(status: 409, errorSummary: "path_lookup/not_found/"), .notFound)
+    }
+
     func testTheErrorSummaryComesOutOfTheBody() {
         let body = Data(#"{"error_summary": "path/conflict/file/..."}"#.utf8)
         XCTAssertEqual(Dropbox.errorSummary(inBody: body), "path/conflict/file/...")

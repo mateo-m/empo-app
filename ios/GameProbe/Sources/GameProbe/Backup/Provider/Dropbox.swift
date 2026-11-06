@@ -289,7 +289,7 @@ public enum Dropbox {
     private static func endpointError(summary: String) -> BackupProviderError {
         let tags = summary.split(separator: "/").map(String.init)
         if tags.contains("insufficient_space") { return .outOfSpace }
-        if tags.contains("not_found") || tags.contains("path_lookup") { return .notFound }
+        if tags.contains("not_found") { return .notFound }
         if tags.contains("expired_access_token") || tags.contains("invalid_access_token") {
             return .authExpired
         }
