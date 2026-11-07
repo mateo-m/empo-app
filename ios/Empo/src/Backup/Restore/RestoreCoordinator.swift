@@ -110,14 +110,16 @@ final class RestoreCoordinator {
         provider: some BackupProvider,
         descriptor: TargetDescriptor,
         scope: RestoreScope,
-        replacesTheTree: Bool = false
+        replacesTheTree: Bool = false,
+        resumingInto movedAsideTree: String? = nil
     ) async -> RestoreOutcome {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         let path = BackupNamespacePaths(root: descriptor.root, namespaceId: row.namespaceId)
             .manifestPath(stream: Self.stream(of: row), snapshotId: row.snapshotId)
         return await run(
             row, into: container, provider: provider, targetId: descriptor.id,
-            root: descriptor.root, scope: scope, replacesTheTree: replacesTheTree
+            root: descriptor.root, scope: scope, replacesTheTree: replacesTheTree,
+            movedAsideTree: movedAsideTree
         ) { try? await scan.manifest(at: path) }
     }
 
@@ -129,13 +131,14 @@ final class RestoreCoordinator {
         into container: GameContainer?,
         package: PackageSource,
         scope: RestoreScope,
-        replacesTheTree: Bool = false
+        replacesTheTree: Bool = false,
+        resumingInto movedAsideTree: String? = nil
     ) async -> RestoreOutcome {
         let manifest = package.manifest.stream(Self.stream(of: row).key)?.manifest
         return await run(
             row, into: container, provider: package,
             targetId: PackageSource.targetId(packageId: package.packageId), root: "",
-            scope: scope, replacesTheTree: replacesTheTree
+            scope: scope, replacesTheTree: replacesTheTree, movedAsideTree: movedAsideTree
         ) { manifest }
     }
 
@@ -147,6 +150,7 @@ final class RestoreCoordinator {
         root: String,
         scope: RestoreScope,
         replacesTheTree: Bool,
+        movedAsideTree: String?,
         manifest readManifest: @escaping @MainActor () async -> SnapshotManifest?
     ) async -> RestoreOutcome {
         guard running == nil else {
@@ -165,7 +169,8 @@ final class RestoreCoordinator {
         let task = Task<RestoreOutcome, Never> {
             await prepareAndRun(
                 row, into: container, provider: provider, targetId: targetId, root: root,
-                scope: scope, replacesTheTree: replacesTheTree, manifest: readManifest)
+                scope: scope, replacesTheTree: replacesTheTree, movedAsideTree: movedAsideTree,
+                manifest: readManifest)
         }
         // A fresh-install restore has no container yet, so the
         // snapshot names the game.
@@ -202,6 +207,7 @@ final class RestoreCoordinator {
         root: String,
         scope: RestoreScope,
         replacesTheTree: Bool,
+        movedAsideTree: String?,
         manifest readManifest: () async -> SnapshotManifest?
     ) async -> RestoreOutcome {
         let manifest = await readManifest()
@@ -227,7 +233,8 @@ final class RestoreCoordinator {
             localFiles: localFiles,
             localVersionMarker: container.map(GameIdentities.versionMarker(for:)),
             freeSpaceBytes: Self.freeSpaceBytes,
-            mode: manifest.mode)
+            mode: manifest.mode,
+            movedAsideTree: movedAsideTree)
 
         let store: BackupStateStore
         do {
@@ -345,7 +352,7 @@ final class RestoreCoordinator {
         guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
             let provider = await BackupTargets.provider(for: descriptor),
             let snapshotId = record.snapshotId,
-            case .restore(let choice, _) = record.work
+            case .restore(let choice, let movedAsideTree) = record.work
         else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
 
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
@@ -361,7 +368,8 @@ final class RestoreCoordinator {
         }
         return await restore(
             row, into: container, provider: provider, descriptor: descriptor,
-            scope: choice.scope, replacesTheTree: choice == .replaceTheTree)
+            scope: choice.scope, replacesTheTree: choice == .replaceTheTree,
+            resumingInto: movedAsideTree)
     }
 
     /// An import that stopped, per 12.6. The staged package is still
@@ -378,14 +386,15 @@ final class RestoreCoordinator {
             let source = try? PackageSource(
                 zip: staged.zipURL(localRoot: localRoot), packageId: packageId),
             let snapshotId = record.snapshotId,
-            case .restore(let choice, _) = record.work,
+            case .restore(let choice, let movedAsideTree) = record.work,
             let row = PackageSource.rows(of: source.manifest, packageId: packageId)
                 .first(where: { $0.snapshotId == snapshotId })
         else { return .failed(String(localized: "The backup file isn't on this device any more.")) }
 
         return await restore(
             row, into: GameIdentities.match(row.identity), package: source,
-            scope: choice.scope, replacesTheTree: choice == .replaceTheTree)
+            scope: choice.scope, replacesTheTree: choice == .replaceTheTree,
+            resumingInto: movedAsideTree)
     }
 
     /// Applies one answer. The caller resumes the restore itself when

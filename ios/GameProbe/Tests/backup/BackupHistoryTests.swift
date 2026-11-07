@@ -17,6 +17,10 @@ final class BackupHistoryTests: XCTestCase {
     func testARowWithNoEndThatIsNotTheLiveRunDidNotFinish() {
         XCTAssertEqual(BackupHistoryState.of(run("crashed"), liveRunId: "live"), .failed)
         XCTAssertEqual(BackupHistoryState.of(run("crashed"), liveRunId: nil), .failed)
+        XCTAssertEqual(
+            BackupHistoryState.detail(of: run("crashed"), liveRunId: "live"),
+            "Empo closed before this backup finished.")
+        XCTAssertNil(BackupHistoryState.detail(of: run("live"), liveRunId: "live"))
     }
 
     func testAFinishedRunKeepsItsOutcome() {

@@ -247,8 +247,11 @@ final class BackupsScreenModel {
     /// them from.
     func remove(targetId: String, deleteBackups: Bool) async -> String? {
         // A pass in flight holds the provider and writes rows for each
-        // target it covers.
-        await BackupScheduler.shared.stopTheRun()
+        // target it covers. The other targets still need their pass.
+        let stoppedARun = await BackupScheduler.shared.stopTheRun()
+        defer {
+            if stoppedARun { Task { await BackupScheduler.shared.run(trigger: .foreground) } }
+        }
         if deleteBackups {
             do {
                 try await deleteThisDeviceNamespace(targetId: targetId)

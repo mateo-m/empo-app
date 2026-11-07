@@ -110,35 +110,30 @@ public actor RestoreEngine {
     ) async -> RestoreOutcome {
         let gameKey = request.stream == .preferences ? nil : request.stream.key
         var result = RestoreResult(partialPathCount: plan.partialPaths.count)
-        var replaced: URL?
-        if request.choice == .replaceTheTree, let tree = request.gameTreeURL {
-            if let earlier = movedAsideTree(of: request, gameKey: gameKey) {
-                // An earlier try of this restore moved `Game/` aside.
-                // The tree there now is half restored, so it stays.
-                let url = tree.deletingLastPathComponent()
-                    .appendingPathComponent(earlier, isDirectory: true)
-                replaced = fm.fileExists(atPath: url.path) ? url : nil
-            } else {
-                do {
-                    replaced = try moveTheTreeAside(tree)
-                } catch {
-                    return .failed(
-                        screenText("Empo couldn't move the current game files aside. Nothing changed."))
-                }
-            }
-            result.replacedTreeName = replaced?.lastPathComponent
-        }
+        let tree = request.choice == .replaceTheTree ? request.gameTreeURL : nil
+        let replaced = tree.flatMap { treeAside(of: $0, resumingInto: request.movedAsideTree) }
 
-        // The record goes in before the first byte lands, so a
-        // process that dies mid-restore leaves one, per 6.5.
-        try? store.saveIntent(
-            RestoreResumeQuestion.record(
-                targetId: request.targetId,
-                gameKey: gameKey,
-                snapshotId: request.snapshotId,
-                choice: request.choice,
-                movedAsideTree: replaced?.lastPathComponent,
-                at: now))
+        // The record goes in before the first byte lands and before
+        // `Game/` moves, so a process that dies mid-restore leaves one
+        // that names the moved tree, per 6.5.
+        let saved =
+            (try? store.saveIntent(
+                RestoreResumeQuestion.record(
+                    targetId: request.targetId,
+                    gameKey: gameKey,
+                    snapshotId: request.snapshotId,
+                    choice: request.choice,
+                    movedAsideTree: replaced?.lastPathComponent,
+                    at: now))) != nil
+
+        if let tree, let replaced, !fm.fileExists(atPath: replaced.path) {
+            guard saved, (try? fm.moveItem(at: tree, to: replaced)) != nil else {
+                try? store.clearIntent(kind: .interruptedRestore)
+                return .failed(
+                    screenText("Empo couldn't move the current game files aside. Nothing changed."))
+            }
+        }
+        result.replacedTreeName = replaced?.lastPathComponent
 
         for step in plan.steps {
             guard !Task.isCancelled else {
@@ -278,28 +273,20 @@ public actor RestoreEngine {
 
     // MARK: - The replace path, per 11.12
 
-    /// The folder an earlier try of this same restore moved `Game/`
-    /// to, from its record.
-    private func movedAsideTree(of request: RestoreRequest, gameKey: String?) -> String? {
-        guard let record = try? store.intent(kind: .interruptedRestore),
-            record.targetId == request.targetId,
-            record.snapshotId == request.snapshotId,
-            record.gameKey == gameKey,
-            case .restore(.replaceTheTree, let moved) = record.work
-        else { return nil }
-        return moved
-    }
-
-    /// Moves `Game/` to a hidden sibling and answers where it went.
-    private func moveTheTreeAside(_ tree: URL) throws -> URL? {
-        guard fm.fileExists(atPath: tree.path) else { return nil }
+    /// Where `Game/` goes aside, or `nil` when there is nothing to
+    /// move. A resume keeps the folder its first try named. That
+    /// folder may not exist yet, when the process died between the
+    /// record and the move.
+    private func treeAside(of tree: URL, resumingInto earlier: String?) -> URL? {
         let parent = tree.deletingLastPathComponent()
-        let taken = Set(
-            (try? fm.contentsOfDirectory(atPath: parent.path)) ?? [])
+        if let earlier {
+            let url = parent.appendingPathComponent(earlier, isDirectory: true)
+            return fm.fileExists(atPath: url.path) || fm.fileExists(atPath: tree.path) ? url : nil
+        }
+        guard fm.fileExists(atPath: tree.path) else { return nil }
+        let taken = Set((try? fm.contentsOfDirectory(atPath: parent.path)) ?? [])
         let name = DisplacedCopy.nextTreeName(for: tree.lastPathComponent, taken: taken)
-        let destination = parent.appendingPathComponent(name, isDirectory: true)
-        try fm.moveItem(at: tree, to: destination)
-        return destination
+        return parent.appendingPathComponent(name, isDirectory: true)
     }
 
     /// Drops from the replaced tree only the files with proven

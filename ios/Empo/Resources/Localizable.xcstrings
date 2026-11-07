@@ -23308,6 +23308,65 @@
         }
       }
     },
+    "Empo closed before this backup finished." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo wurde geschlossen, bevor dieses Backup fertig war."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo se cerró antes de que terminara esta copia de seguridad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo s'est fermé avant la fin de cette copie de secours."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo si è chiuso prima della fine di questo backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このバックアップが終わる前にEmpoが閉じました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 백업이 끝나기 전에 Empo가 닫혔어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo fechou antes de este backup terminar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo закрылся до завершения этого резервного копирования."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这次备份完成前 Empo 已关闭。"
+          }
+        }
+      }
+    },
     "Empo comes with this layout. Games use it when nothing else applies." : {
       "localizations" : {
         "de" : {

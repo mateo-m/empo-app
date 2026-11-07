@@ -107,9 +107,8 @@ public final class BackupStateStore {
             try database.transaction { try migrateFrom5(database) }
             return (database, .opened)
         }
-        // No migration path. The cache is never truth, per 6.3, so
-        // dropping it is cheaper to write and cheaper to trust than a
-        // migration for every version pair.
+        // The cache is never truth, per 6.3, so any other version
+        // rebuilds.
         for table in tables where !table.hasPrefix("sqlite_") {
             try database.execute("DROP TABLE IF EXISTS \"\(table)\"")
         }
@@ -117,8 +116,6 @@ public final class BackupStateStore {
         return (database, .rebuilt(.schemaVersion(found: version)))
     }
 
-    /// No target can give back the rows of version 5 that change
-    /// here, so they move and are not dropped.
     private static func migrateFrom5(_ database: SQLiteDatabase) throws {
         // A version 5 mark was for every target. It goes to each
         // target this store knows.

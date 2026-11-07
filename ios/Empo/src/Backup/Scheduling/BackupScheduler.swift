@@ -245,11 +245,13 @@ final class BackupScheduler {
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
     }
 
-    /// Pauses the pass in flight and returns when it ended.
-    func stopTheRun() async {
-        guard let pass = inFlight else { return }
+    /// Pauses the pass in flight and returns when it ended. It answers
+    /// whether a pass was in flight.
+    func stopTheRun() async -> Bool {
+        guard let pass = inFlight else { return false }
         pauseTheRun()
         _ = await pass.value
+        return true
     }
 
     // MARK: - The resume question of 6.5 and 13.18

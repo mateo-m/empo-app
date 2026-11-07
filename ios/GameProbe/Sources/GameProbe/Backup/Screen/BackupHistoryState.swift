@@ -20,6 +20,15 @@ public enum BackupHistoryState: Equatable, Sendable {
         }
     }
 
+    /// The line under the row. A row with no end that is not the
+    /// live run is a run the process did not live to finish.
+    public static func detail(of run: BackupRunRecord, liveRunId: String?) -> String? {
+        guard let end = run.end else {
+            return run.id == liveRunId ? nil : screenText("Empo closed before this backup finished.")
+        }
+        return end.detail
+    }
+
     public var title: String {
         switch self {
         case .backingUp: return screenText("Backing up…")

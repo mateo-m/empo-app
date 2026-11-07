@@ -20,7 +20,8 @@ struct BackupHistoryScreen: View {
                 .listRowBackground(Color.clear)
             }
             ForEach(model.history, id: \.id) { run in
-                let state = BackupHistoryState.of(run, liveRunId: BackupRunMonitor.shared.liveRunId)
+                let liveRunId = BackupRunMonitor.shared.liveRunId
+                let state = BackupHistoryState.of(run, liveRunId: liveRunId)
                 HStack(alignment: .top, spacing: Spacing.lg) {
                     Group {
                         if state == .backingUp {
@@ -46,7 +47,7 @@ struct BackupHistoryScreen: View {
                         Text(Self.line(of: run, target: label(of: run)))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        if let detail = run.end?.detail {
+                        if let detail = BackupHistoryState.detail(of: run, liveRunId: liveRunId) {
                             Text(detail.prefix(1).uppercased() + detail.dropFirst())
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)

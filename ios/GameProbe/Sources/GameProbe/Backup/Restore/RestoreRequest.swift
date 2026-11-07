@@ -42,6 +42,9 @@ public struct RestoreRequest: Sendable {
     public var freeSpaceBytes: Int64
     /// The game's mode, which gates proven coverage.
     public var mode: BackupMode
+    /// The folder the first try of a resumed replace moved `Game/`
+    /// to. A new restore leaves it `nil`.
+    public var movedAsideTree: String?
 
     public init(
         restoreId: String = UUID().uuidString,
@@ -55,7 +58,8 @@ public struct RestoreRequest: Sendable {
         localFiles: [RestoreLocalFile] = [],
         localVersionMarker: SnapshotManifest.VersionMarker? = nil,
         freeSpaceBytes: Int64,
-        mode: BackupMode = .slim
+        mode: BackupMode = .slim,
+        movedAsideTree: String? = nil
     ) {
         self.restoreId = restoreId
         self.targetId = targetId
@@ -69,6 +73,7 @@ public struct RestoreRequest: Sendable {
         self.localVersionMarker = localVersionMarker
         self.freeSpaceBytes = freeSpaceBytes
         self.mode = mode
+        self.movedAsideTree = movedAsideTree
     }
 
     /// `Documents/Games/<folderName>/Game/`, the tree a replace
