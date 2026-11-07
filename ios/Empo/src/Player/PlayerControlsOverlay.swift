@@ -399,7 +399,11 @@ struct PlayerControlsOverlay: View {
                             y: resolved.y / geo.size.height
                         ))
                 },
-                onFinished: { finishDrag(id) })
+                onFinished: { finishDrag(id) }
+            )
+            // An undo can remove the control mid-drag. Its gesture
+            // then never ends, so the drag must end here.
+            .onDisappear { finishDrag(id) }
     }
 }
 
