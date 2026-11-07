@@ -188,6 +188,8 @@ describe("routes", () => {
   let phone: Device;
   // Each action in this set fails once, as a lost call.
   let broken: Set<string>;
+  // Each action in this map runs its function once and waits for it, as a slow call.
+  let stalled: Map<string, () => Promise<void>>;
   const original = globalThis.fetch;
 
   function namespace(states: Map<string, MemoryState>, make: (state: MemoryState) => { fetch(request: Request): Promise<Response> }) {
@@ -201,6 +203,11 @@ describe("routes", () => {
           fetch: async (request: Request) => {
             const { action } = (await request.clone().json()) as { action: string };
             if (broken.delete(action)) throw new Error(`The ${action} call did not arrive`);
+            const stall = stalled.get(action);
+            if (stall) {
+              stalled.delete(action);
+              await stall();
+            }
             return target.fetch(request);
           },
         };
@@ -213,6 +220,7 @@ describe("routes", () => {
     sessions = new Map();
     members = new Map();
     broken = new Set();
+    stalled = new Map();
     phone = await Device.make();
     const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     env = {
@@ -487,6 +495,45 @@ describe("routes", () => {
       const answer = await post("/patreon/finish", call);
       expect(answer.status).toBe(200);
       const { renewal } = (await answer.json()) as { renewal: string };
+      expect((await renew(renewal)).status).toBe(200);
+    } finally {
+      setSystemTime();
+    }
+  });
+
+  test("a finish that outlived its claim does not replace the session of a newer finish", async () => {
+    const call = await phone.signFinish((await callback(phone)).searchParams.get("code")!);
+    let resume!: () => void;
+    const startStalls = new Promise<void>((reached) => {
+      stalled.set("start", () => {
+        reached();
+        return new Promise((done) => (resume = done));
+      });
+    });
+    const first = post("/patreon/finish", call);
+    await startStalls;
+    try {
+      setSystemTime(new Date(Date.now() + 30 * 1000));
+      const second = await post("/patreon/finish", call);
+      expect(second.status).toBe(200);
+      const { renewal } = (await second.json()) as { renewal: string };
+      resume();
+      expect((await first).status).toBe(502);
+      expect((await renew(renewal)).status).toBe(200);
+    } finally {
+      setSystemTime();
+    }
+  });
+
+  test("a finished sign-in can't finish again when the code was not deleted", async () => {
+    const call = await phone.signFinish((await callback(phone)).searchParams.get("code")!);
+    broken.add("evict");
+    const answer = await post("/patreon/finish", call);
+    expect(answer.status).toBe(200);
+    const { renewal } = (await answer.json()) as { renewal: string };
+    try {
+      setSystemTime(new Date(Date.now() + 30 * 1000));
+      expect((await post("/patreon/finish", call)).status).toBe(401);
       expect((await renew(renewal)).status).toBe(200);
     } finally {
       setSystemTime();

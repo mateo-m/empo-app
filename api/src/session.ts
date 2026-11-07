@@ -29,14 +29,16 @@ export interface Finish {
 
 // held: a sign-in code waits for the app to finish it.
 // claimed: a finish took the code and did not end yet.
+// used: the claimed finish adds its session, and no other finish can.
 // started: a new session waits for the device list to add it.
 // signed-in: the device list has the session.
-type Phase = "held" | "claimed" | "started" | "signed-in";
+type Phase = "held" | "claimed" | "used" | "started" | "signed-in";
 
 export type SessionRequest =
   | { action: "start"; renewal: string; refreshToken: string; device: string }
   | ({ action: "hold"; code: string; refreshToken: string; device: string } & Held)
   | ({ action: "finish" } & Finish)
+  | { action: "use"; claim: string }
   | { action: "release"; claim: string }
   | { action: "confirm" }
   | ({ action: "renew" } & Signed)
@@ -87,8 +89,10 @@ export class PatreonSession {
       }
       case "finish":
         return this.state.blockConcurrencyWhile(() => this.finish(body));
+      case "use":
+        return this.state.blockConcurrencyWhile(() => this.ownClaim(body.claim, ["claimed"], "used"));
       case "release":
-        return this.state.blockConcurrencyWhile(() => this.release(body.claim));
+        return this.state.blockConcurrencyWhile(() => this.ownClaim(body.claim, ["claimed", "used"], "held"));
       case "confirm":
         return this.state.blockConcurrencyWhile(() => this.move("started", "signed-in", unusedLifetimeMs));
       case "renew":
@@ -176,9 +180,14 @@ export class PatreonSession {
     }
   }
 
-  private async release(claim: string): Promise<Response> {
-    if ((await this.state.storage.get<string>("claim")) !== claim) return new Response(null, { status: 404 });
-    return this.move("claimed", "held");
+  // A finish that outlived its claim must not change the claim of a newer finish.
+  private async ownClaim(claim: string, from: Phase[], to: Phase): Promise<Response> {
+    const phase = await this.phase();
+    if ((await this.state.storage.get<string>("claim")) !== claim || !phase || !from.includes(phase)) {
+      return new Response(null, { status: 404 });
+    }
+    await this.state.storage.put({ phase: to });
+    return new Response(null, { status: 204 });
   }
 
   private async move(from: Phase, to: Phase, lifetimeMs?: number): Promise<Response> {

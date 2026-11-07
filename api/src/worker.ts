@@ -111,7 +111,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     const sessionId = (await renewalKeys(renewal))!.id;
     let added: Response;
     try {
-      added = await addSession(held, renewal, sessionId);
+      added = await addSession(held, body.code, renewal, sessionId);
     } catch (error) {
       await Promise.allSettled([
         callSession(env, sessionId, { action: "evict" }),
@@ -119,7 +119,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
       ]);
       throw error;
     }
-    // The alarm of the code also deletes it, so a lost call here is no fault.
+    // The code is used, and its alarm also deletes it, so a lost call here is no fault.
     await session(body.code, { action: "evict" }).catch((error) => console.error(error));
     if (added.status === 409) return status(409, { error: "too_many_devices" });
     return { pass: held.pass, renewal };
@@ -171,7 +171,8 @@ async function session(renewal: string, request: SessionRequest): Promise<Respon
 }
 
 async function addSession(
-  held: Held & { device: string; refreshToken: string },
+  held: Held & { device: string; refreshToken: string; claim: string },
+  code: string,
   renewal: string,
   sessionId: string,
 ): Promise<Response> {
@@ -185,6 +186,8 @@ async function addSession(
     device: held.device,
   });
   if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
+  const used = await session(code, { action: "use", claim: held.claim });
+  if (!used.ok) throw new Error(`The sign-in code is no longer this finish's: ${used.status}`);
   const added = await member(held.userId, {
     action: "add",
     device: await deviceId(held.device),
