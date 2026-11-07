@@ -307,16 +307,7 @@ public enum GameTreeUpdate {
                 backupItemName: backupDirectoryName
             )
         #else
-            try fm.moveItem(at: target, to: backup)
-            do {
-                try fm.moveItem(at: staging, to: target)
-            } catch {
-                // Put the original back so the catch in
-                // `stageAndSwap` sees a healthy tree and only
-                // removes genuinely redundant artifacts.
-                try? fm.moveItem(at: backup, to: target)
-                throw error
-            }
+            try fm.archive(target, to: backup, replacingWith: staging)
         #endif
     }
 
@@ -345,12 +336,10 @@ public enum GameTreeUpdate {
         try? fm.moveItem(at: displaced, to: target)
     }
 
-    /// When no directory sits at `target`, move the backup (the
-    /// tree before the update) into place, or the staging tree when
-    /// no backup exists. An update that did not finish must not
-    /// install its new files: its finalize step never ran, so the
-    /// app still has the script profile of the old tree. A stray non-directory at `target`
-    /// (a crash artifact of unknown origin) is moved aside first,
+    /// When no directory sits at `target`, move a tree into place.
+    /// Prefer the backup (the tree before the update). Use the merged
+    /// staging tree only when no backup exists. A stray non-directory
+    /// at `target` (a crash artifact of unknown origin) is moved aside first,
     /// but only when an artifact exists to restore - otherwise the
     /// file, whatever it is, stays untouched.
     private static func restoreMissingTarget(
