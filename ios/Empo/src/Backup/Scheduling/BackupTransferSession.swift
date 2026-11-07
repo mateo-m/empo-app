@@ -35,7 +35,7 @@ final class BackupTransferSession: NSObject {
         let resume: (Result<HTTPAnswer, BackupProviderError>) -> Void
         var body = Data()
         var bodyStarts = 0
-        var gaveUp = false
+        var gaveUp: Bool { bodyStarts > BackupTransferSession.bodyStartsBeforeGivingUp }
         /// Where a download lands. A successful download moves its
         /// file here before it completes, and the body stays empty.
         var localFile: URL?
@@ -210,9 +210,8 @@ final class BackupTransferSession: NSObject {
         let transfer = pending[task.taskIdentifier]
         transfer?.bodyStarts += 1
         let starts = transfer?.bodyStarts ?? 0
-        let giveUp = starts > Self.bodyStartsBeforeGivingUp && transfer?.gaveUp == false
-        if giveUp { transfer?.gaveUp = true }
         lock.unlock()
+        let giveUp = starts == Self.bodyStartsBeforeGivingUp + 1
         guard giveUp else { return }
         BackupLog.line(
             "BackupTransferSession",
