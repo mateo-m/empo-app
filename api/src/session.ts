@@ -4,6 +4,9 @@ import { open, renewalKeys, seal } from "./renewal";
 
 const unusedLifetimeMs = 90 * 24 * 60 * 60 * 1000;
 const heldLifetimeMs = 10 * 60 * 1000;
+// A worker that stops in the middle of a finish sends no release, so
+// a claim lapses after this time and the next finish can take it.
+const claimLifetimeMs = 30 * 1000;
 
 export interface Signed {
   renewal: string;
@@ -34,7 +37,7 @@ export type SessionRequest =
   | { action: "start"; renewal: string; refreshToken: string; device: string }
   | ({ action: "hold"; code: string; refreshToken: string; device: string } & Held)
   | ({ action: "finish" } & Finish)
-  | { action: "release" }
+  | { action: "release"; claim: string }
   | { action: "confirm" }
   | ({ action: "renew" } & Signed)
   | ({ action: "sign-out" } & Signed)
@@ -85,7 +88,7 @@ export class PatreonSession {
       case "finish":
         return this.state.blockConcurrencyWhile(() => this.finish(body));
       case "release":
-        return this.state.blockConcurrencyWhile(() => this.move("claimed", "held"));
+        return this.state.blockConcurrencyWhile(() => this.release(body.claim));
       case "confirm":
         return this.state.blockConcurrencyWhile(() => this.move("started", "signed-in", unusedLifetimeMs));
       case "renew":
@@ -146,7 +149,9 @@ export class PatreonSession {
       const held = await this.state.storage.get<Held>("held");
       // An alarm can run late, so the alarm alone does not end the code.
       const expires = (await this.state.storage.get<number>("expires")) ?? 0;
-      if ((await this.phase()) !== "held" || !held || !device || !(await signedByDevice(device, `finish ${request.code}`, request.signature))) {
+      const phase = await this.phase();
+      const claimLapsed = phase === "claimed" && Date.now() >= ((await this.state.storage.get<number>("claimedUntil")) ?? 0);
+      if ((phase !== "held" && !claimLapsed) || !held || !device || !(await signedByDevice(device, `finish ${request.code}`, request.signature))) {
         return signedOut();
       }
       if (Date.now() >= expires) {
@@ -162,12 +167,18 @@ export class PatreonSession {
       }
       // The code stays until the device list has the new session, so a
       // failed step can release the code for one more finish.
-      await this.state.storage.put({ phase: "claimed" });
-      return Response.json({ ...held, device, refreshToken });
+      const claim = crypto.randomUUID();
+      await this.state.storage.put({ phase: "claimed", claim, claimedUntil: Date.now() + claimLifetimeMs });
+      return Response.json({ ...held, device, refreshToken, claim });
     } catch (error) {
       console.error(error);
       return Response.json({ error: "server" }, { status: 502 });
     }
+  }
+
+  private async release(claim: string): Promise<Response> {
+    if ((await this.state.storage.get<string>("claim")) !== claim) return new Response(null, { status: 404 });
+    return this.move("claimed", "held");
   }
 
   private async move(from: Phase, to: Phase, lifetimeMs?: number): Promise<Response> {

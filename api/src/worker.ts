@@ -106,7 +106,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     const answer = await session(body.code, { ...body, action: "finish" });
     if (answer.status === 401) return status(401, { error: "signed_out" });
     if (!answer.ok) throw new Error(`The sign-in did not finish: ${answer.status}`);
-    const held = (await answer.json()) as Held & { device: string; refreshToken: string };
+    const held = (await answer.json()) as Held & { device: string; refreshToken: string; claim: string };
     const renewal = newRenewal();
     const sessionId = (await renewalKeys(renewal))!.id;
     let added: Response;
@@ -115,7 +115,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     } catch (error) {
       await Promise.allSettled([
         callSession(env, sessionId, { action: "evict" }),
-        session(body.code, { action: "release" }),
+        session(body.code, { action: "release", claim: held.claim }),
       ]);
       throw error;
     }

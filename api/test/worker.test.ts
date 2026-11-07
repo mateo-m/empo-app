@@ -477,6 +477,34 @@ describe("routes", () => {
     expect((await post("/patreon/finish", call)).status).toBe(200);
   });
 
+  test("a sign-in whose finish could not release its claim finishes again after 30 seconds", async () => {
+    const call = await phone.signFinish((await callback(phone)).searchParams.get("code")!);
+    broken = new Set(["start", "release"]);
+    expect((await post("/patreon/finish", call)).status).toBe(502);
+    expect((await post("/patreon/finish", call)).status).toBe(401);
+    try {
+      setSystemTime(new Date(Date.now() + 30 * 1000));
+      const answer = await post("/patreon/finish", call);
+      expect(answer.status).toBe(200);
+      const { renewal } = (await answer.json()) as { renewal: string };
+      expect((await renew(renewal)).status).toBe(200);
+    } finally {
+      setSystemTime();
+    }
+  });
+
+  test("a late release of an old claim does not free the claim of a newer finish", async () => {
+    const state = new MemoryState();
+    const session = new PatreonSession(state, env);
+    await state.storage.put({ phase: "claimed", claim: "newer" });
+    const release = (claim: string) =>
+      session.fetch(new Request("https://session", { method: "POST", body: JSON.stringify({ action: "release", claim }) }));
+    expect((await release("older")).status).toBe(404);
+    expect(await state.storage.get("phase")).toBe("claimed");
+    expect((await release("newer")).status).toBe(204);
+    expect(await state.storage.get("phase")).toBe("held");
+  });
+
   test("a session stored without a phase still renews", async () => {
     const { renewal } = await signIn();
     for (const state of sessions.values()) state.values.delete("phase");
