@@ -4,32 +4,25 @@ import XCTest
 
 final class BackupHistoryTests: XCTestCase {
 
-    private let passStart = Date(timeIntervalSince1970: 1_000)
-
-    private func run(startedAt: TimeInterval, finished: Bool, outcome: BackupRunOutcome = .failed)
-        -> BackupRunRecord
-    {
+    private func run(_ id: String, end: BackupRunEnd? = nil) -> BackupRunRecord {
         BackupRunRecord(
-            id: UUID().uuidString, targetId: "t", startedAt: Date(timeIntervalSince1970: startedAt),
-            finishedAt: finished ? Date(timeIntervalSince1970: startedAt + 5) : nil,
-            outcome: outcome, detail: BackupHistoryState.unfinishedLine)
+            id: id, targetId: "t", startedAt: Date(timeIntervalSince1970: 1_000), end: end)
     }
 
     func testTheRunInFlightReadsAsBackingUp() {
-        let live = run(startedAt: 1_010, finished: false)
-        XCTAssertEqual(BackupHistoryState.of(live, passStartedAt: passStart), .backingUp)
+        XCTAssertEqual(BackupHistoryState.of(run("live"), liveRunId: "live"), .backingUp)
         XCTAssertEqual(BackupHistoryState.backingUp.title, "Backing up…")
     }
 
-    func testAnUnfinishedRunFromAnEarlierPassDidNotFinish() {
-        let crashed = run(startedAt: 900, finished: false)
-        XCTAssertEqual(BackupHistoryState.of(crashed, passStartedAt: passStart), .failed)
-        XCTAssertEqual(BackupHistoryState.of(crashed, passStartedAt: nil), .failed)
+    func testARowWithNoEndThatIsNotTheLiveRunDidNotFinish() {
+        XCTAssertEqual(BackupHistoryState.of(run("crashed"), liveRunId: "live"), .failed)
+        XCTAssertEqual(BackupHistoryState.of(run("crashed"), liveRunId: nil), .failed)
     }
 
     func testAFinishedRunKeepsItsOutcome() {
-        let done = run(startedAt: 1_010, finished: true, outcome: .success)
-        XCTAssertEqual(BackupHistoryState.of(done, passStartedAt: passStart), .success)
+        let done = run(
+            "live", end: BackupRunEnd(outcome: .success, finishedAt: Date(timeIntervalSince1970: 1_005)))
+        XCTAssertEqual(BackupHistoryState.of(done, liveRunId: "live"), .success)
     }
 
     func testEveryStopLineIsASentence() {
@@ -44,6 +37,5 @@ final class BackupHistoryTests: XCTestCase {
             XCTAssertFalse(line.contains("route"), line)
             XCTAssertFalse(line.contains("503"), line)
         }
-        XCTAssertTrue(BackupHistoryState.unfinishedLine.hasSuffix("."))
     }
 }

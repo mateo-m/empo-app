@@ -20,7 +20,7 @@ struct BackupHistoryScreen: View {
                 .listRowBackground(Color.clear)
             }
             ForEach(model.history, id: \.id) { run in
-                let state = BackupHistoryState.of(run, passStartedAt: passStartedAt)
+                let state = BackupHistoryState.of(run, liveRunId: BackupRunMonitor.shared.liveRunId)
                 HStack(alignment: .top, spacing: Spacing.lg) {
                     Group {
                         if state == .backingUp {
@@ -37,7 +37,7 @@ struct BackupHistoryScreen: View {
                         HStack(alignment: .firstTextBaseline) {
                             Text(state.title)
                             Spacer()
-                            if let finishedAt = run.finishedAt {
+                            if let finishedAt = run.end?.finishedAt {
                                 Text(BackupText.ago(finishedAt))
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
@@ -46,7 +46,7 @@ struct BackupHistoryScreen: View {
                         Text(Self.line(of: run, target: label(of: run)))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
-                        if state != .backingUp, let detail = run.detail {
+                        if let detail = run.end?.detail {
                             Text(detail.prefix(1).uppercased() + detail.dropFirst())
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
@@ -62,11 +62,6 @@ struct BackupHistoryScreen: View {
         .onChange(of: BackupRunMonitor.shared.isRunning) { _, running in
             if !running { Task { await model.refresh() } }
         }
-    }
-
-    private var passStartedAt: Date? {
-        let monitor = BackupRunMonitor.shared
-        return monitor.isRunning ? monitor.startedAt : nil
     }
 
     private static func symbol(of state: BackupHistoryState) -> String {

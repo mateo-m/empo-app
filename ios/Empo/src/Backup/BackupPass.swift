@@ -148,7 +148,9 @@ final class BackupPass: BackupRunning {
             provider: provider, store: store, localRoot: BackupRoot.layout.root,
             observer: BackupRunMonitor.shared,
             note: { BackupLog.line("SnapshotEngine", $0) })
+        BackupRunMonitor.shared.liveRunId = request.runId
         let result = await engine.run(request)
+        BackupRunMonitor.shared.liveRunId = nil
         log(
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"

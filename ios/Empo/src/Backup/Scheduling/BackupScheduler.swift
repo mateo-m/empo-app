@@ -395,7 +395,7 @@ final class BackupScheduler {
 
     private func closeTheRunsThatVanished() {
         guard let store else { return }
-        let open = ((try? store.runHistory()) ?? []).filter { $0.finishedAt == nil }
+        let open = ((try? store.runHistory()) ?? []).filter { $0.end == nil }
         guard !open.isEmpty else { return }
 
         // One launch counts one interrupted run, however many targets
@@ -404,8 +404,8 @@ final class BackupScheduler {
 
         // The process died at an unknown time after the start.
         for var row in open {
-            row.finishedAt = row.startedAt
-            row.detail = Self.interruptedDetail
+            row.end = BackupRunEnd(
+                outcome: .failed, finishedAt: row.startedAt, detail: Self.interruptedDetail)
             try? store.recordRun(row)
         }
     }

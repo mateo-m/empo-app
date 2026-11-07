@@ -110,6 +110,8 @@ final class BackupStateStoreTests: XCTestCase {
                 kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
                 restoreScope, replacesTree, createdAt, asked)
             VALUES ('interrupted-restore', 'target-a', 'abc', 'snap', 0, 0, 'whole-game', 1, 1000, 0);
+            INSERT INTO run_record VALUES ('open', 'target-a', 900, NULL, 'failed', 0, 0, 'closed early');
+            INSERT INTO run_record VALUES ('done', 'target-a', 800, 860, 'partial', 10, 2, NULL);
             """)
         try raw.setUserVersion(5)
         raw.close()
@@ -131,6 +133,16 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(
             try store.intent(kind: .interruptedRestore)?.work,
             .restore(.replaceTheTree, movedAsideTree: nil))
+        XCTAssertEqual(
+            try store.runHistory(),
+            [
+                BackupRunRecord(
+                    id: "open", targetId: "target-a", startedAt: Date(timeIntervalSince1970: 900)),
+                BackupRunRecord(
+                    id: "done", targetId: "target-a", startedAt: Date(timeIntervalSince1970: 800),
+                    end: BackupRunEnd(outcome: .partial, finishedAt: Date(timeIntervalSince1970: 860)),
+                    uploadedBytes: 10, gameCount: 2),
+            ])
         let reopened = try BackupStateStore(url: databaseURL)
         defer { reopened.close() }
         XCTAssertEqual(reopened.openOutcome, .opened)
@@ -531,11 +543,11 @@ final class BackupStateStoreTests: XCTestCase {
             id: id,
             targetId: targetId,
             startedAt: now.addingTimeInterval(-daysAgo * 86_400),
-            finishedAt: now.addingTimeInterval(-daysAgo * 86_400 + 60),
-            outcome: outcome,
+            end: BackupRunEnd(
+                outcome: outcome, finishedAt: now.addingTimeInterval(-daysAgo * 86_400 + 60),
+                detail: outcome == .failed ? "the target refused the write" : nil),
             uploadedBytes: 2048,
-            gameCount: 3,
-            detail: outcome == .failed ? "the target refused the write" : nil)
+            gameCount: 3)
     }
 
     func testTheRetentionIs90Days() {
@@ -562,8 +574,8 @@ final class BackupStateStoreTests: XCTestCase {
         try store.recordRun(run("failed", daysAgo: 1, outcome: .failed))
 
         let record = try store.runHistory().first
-        XCTAssertEqual(record?.outcome, .failed)
-        XCTAssertEqual(record?.detail, "the target refused the write")
+        XCTAssertEqual(record?.end?.outcome, .failed)
+        XCTAssertEqual(record?.end?.detail, "the target refused the write")
     }
 
     func testRunHistoryIsOneGlobalListNewestFirst() throws {
@@ -583,12 +595,11 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
         var record = run("live", daysAgo: 0, outcome: .success)
-        record.finishedAt = nil
+        record.end = nil
         try store.recordRun(record)
+        XCTAssertEqual(try store.runHistory(), [record])
 
-        record.finishedAt = now
-        record.outcome = .failed
-        record.detail = "the network went away"
+        record.end = BackupRunEnd(outcome: .failed, finishedAt: now, detail: "the network went away")
         try store.recordRun(record)
 
         XCTAssertEqual(try store.runHistory(), [record])
@@ -735,8 +746,8 @@ final class BackupStateStoreTests: XCTestCase {
             StalenessClock(targetId: targetId, gameKey: gameKey, lastSuccessAt: now))
         try store.recordRun(
             BackupRunRecord(
-                id: "r1", targetId: targetId, startedAt: now, finishedAt: now,
-                outcome: .success))
+                id: "r1", targetId: targetId, startedAt: now,
+                end: BackupRunEnd(outcome: .success, finishedAt: now)))
         try store.saveIntent(
             BackupIntentRecord(
                 targetId: targetId, gameKey: gameKey,

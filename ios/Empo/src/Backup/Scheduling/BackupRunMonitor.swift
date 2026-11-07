@@ -17,6 +17,8 @@ final class BackupRunMonitor: BackupRunObserver {
     private(set) var plan = BackupRunPlan()
     private(set) var startedAt: Date?
     private(set) var finishedAt: Date?
+    /// The id of the run the engine runs now, or `nil` between runs.
+    var liveRunId: String?
     /// The games the pass covers, in the order the run takes them,
     /// with the name each card shows.
     private(set) var queue: [BackupRunGameRow] = []

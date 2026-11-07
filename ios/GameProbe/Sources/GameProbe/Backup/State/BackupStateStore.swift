@@ -147,6 +147,25 @@ public final class BackupStateStore {
             DROP TABLE dirty_game;
             ALTER TABLE dirty_game_v6 RENAME TO dirty_game;
             ALTER TABLE intent_record ADD COLUMN movedAsideTree TEXT;
+            CREATE TABLE run_record_v6 (
+                id TEXT NOT NULL PRIMARY KEY,
+                targetId TEXT NOT NULL,
+                startedAt REAL NOT NULL,
+                finishedAt REAL,
+                outcome TEXT,
+                uploadedBytes INTEGER NOT NULL,
+                gameCount INTEGER NOT NULL,
+                detail TEXT
+            );
+            INSERT INTO run_record_v6
+                SELECT id, targetId, startedAt, finishedAt,
+                       CASE WHEN finishedAt IS NULL THEN NULL ELSE outcome END,
+                       uploadedBytes, gameCount,
+                       CASE WHEN finishedAt IS NULL THEN NULL ELSE detail END
+                FROM run_record;
+            DROP TABLE run_record;
+            ALTER TABLE run_record_v6 RENAME TO run_record;
+            CREATE INDEX run_record_startedAt ON run_record (startedAt);
             """)
         try database.setUserVersion(schemaVersion)
     }
@@ -232,7 +251,7 @@ public final class BackupStateStore {
             targetId TEXT NOT NULL,
             startedAt REAL NOT NULL,
             finishedAt REAL,
-            outcome TEXT NOT NULL,
+            outcome TEXT,
             uploadedBytes INTEGER NOT NULL,
             gameCount INTEGER NOT NULL,
             detail TEXT

@@ -215,10 +215,11 @@ extension BackupStateStore {
             [
                 .text(run.id), .text(run.targetId),
                 .real(run.startedAt.timeIntervalSince1970),
-                run.finishedAt.map { .real($0.timeIntervalSince1970) } ?? .null,
-                .text(run.outcome.rawValue), .integer(run.uploadedBytes),
+                run.end.map { .real($0.finishedAt.timeIntervalSince1970) } ?? .null,
+                run.end.map { .text($0.outcome.rawValue) } ?? .null,
+                .integer(run.uploadedBytes),
                 .integer(Int64(run.gameCount)),
-                run.detail.map { .text($0) } ?? .null,
+                run.end?.detail.map { .text($0) } ?? .null,
             ])
         let cutoff = run.startedAt.addingTimeInterval(-BackupRunRecord.retention)
         try database.run(
@@ -238,19 +239,24 @@ extension BackupStateStore {
             guard let id = row[0].string,
                 let targetId = row[1].string,
                 let startedAt = row[2].double,
-                let outcome = row[4].string.flatMap(BackupRunOutcome.init(rawValue:)),
                 let uploadedBytes = row[5].int64,
                 let gameCount = row[6].int64
             else { return nil }
+            var end: BackupRunEnd?
+            if let finishedAt = row[3].double {
+                guard let outcome = row[4].string.flatMap(BackupRunOutcome.init(rawValue:))
+                else { return nil }
+                end = BackupRunEnd(
+                    outcome: outcome, finishedAt: Date(timeIntervalSince1970: finishedAt),
+                    detail: row[7].string)
+            }
             return BackupRunRecord(
                 id: id,
                 targetId: targetId,
                 startedAt: Date(timeIntervalSince1970: startedAt),
-                finishedAt: row[3].double.map { Date(timeIntervalSince1970: $0) },
-                outcome: outcome,
+                end: end,
                 uploadedBytes: uploadedBytes,
-                gameCount: Int(gameCount),
-                detail: row[7].string)
+                gameCount: Int(gameCount))
         }
     }
 

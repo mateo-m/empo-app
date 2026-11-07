@@ -604,7 +604,7 @@ final class SnapshotEngineTests: XCTestCase {
         try makeGameTree(gameName)
         try makeGameTree(other)
         let stateURL = tempRoot.appendingPathComponent("state.sqlite")
-        let watcher = InterruptedRunWatcher(stateURL: stateURL)
+        let watcher = StoreWatcher(stateURL: stateURL)
         let engine = try makeEngine(makeTarget(), observer: watcher, stateURL: stateURL)
 
         _ = await engine.run(request(games: [game(gameName), game(other)]))
@@ -618,6 +618,22 @@ final class SnapshotEngineTests: XCTestCase {
             seen.contains { $0.event == "confirmed" && $0.record == firstStream },
             "the first stream wrote no record")
         XCTAssertNil(uploads.last?.record)
+    }
+
+    func testTheRunRowHasNoEndUntilTheRunEnds() async throws {
+        try makeGameTree(gameName)
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let watcher = StoreWatcher(stateURL: stateURL)
+        let engine = try makeEngine(makeTarget(), observer: watcher, stateURL: stateURL)
+
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        let midRun = await watcher.runRowEnds
+        XCTAssertFalse(midRun.isEmpty)
+        XCTAssertEqual(midRun, midRun.map { _ in nil })
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertEqual(try store.runHistory().first?.end?.outcome, .success)
     }
 
     func testARunThatFindsNothingNewCountsAsASuccess() async throws {
@@ -1682,7 +1698,7 @@ final class SnapshotEngineTests: XCTestCase {
         let store = try BackupStateStore(url: stateURL)
         defer { store.close() }
         XCTAssertEqual(try store.targetStatus(targetId: targetId)?.failure, .needsSignIn)
-        XCTAssertEqual(try store.runHistory().first?.outcome, .cancelled)
+        XCTAssertEqual(try store.runHistory().first?.end?.outcome, .cancelled)
     }
 
     func testAPlayThatEndsDuringTheUploadIsNotCountedAsBackedUp() async throws {
@@ -1859,9 +1875,9 @@ actor RunPlanRecorder: BackupRunObserver {
     }
 }
 
-/// Reads the interrupted-run record at each upload start and each
-/// confirmed blob.
-private actor InterruptedRunWatcher: BackupRunObserver {
+/// Reads the state store at each upload start and each confirmed
+/// blob.
+private actor StoreWatcher: BackupRunObserver {
     struct Sighting: Sendable {
         var event: String
         var stream: String
@@ -1870,6 +1886,7 @@ private actor InterruptedRunWatcher: BackupRunObserver {
 
     let stateURL: URL
     var seen: [Sighting] = []
+    var runRowEnds: [BackupRunEnd?] = []
 
     init(stateURL: URL) {
         self.stateURL = stateURL
@@ -1879,6 +1896,10 @@ private actor InterruptedRunWatcher: BackupRunObserver {
 
     func runUploads(streamKey: String) {
         seen.append(Sighting(event: "uploads", stream: streamKey, record: recordGameKey()))
+        if let store = try? BackupStateStore(url: stateURL) {
+            runRowEnds.append((try? store.runHistory())?.first?.end)
+            store.close()
+        }
     }
 
     func runConfirmed(streamKey: String, bytes: Int64) {

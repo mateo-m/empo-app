@@ -116,12 +116,10 @@ public actor SnapshotEngine {
     public func run(_ request: BackupRunRequest) async -> BackupRunResult {
         let startedAt = now
         // The row goes in before the first byte moves. A process
-        // that dies mid-run therefore leaves a failed row, and 7.11
-        // rests on that row being the written record of a transient
-        // failure.
-        recordRun(
-            request, startedAt: startedAt, finishedAt: nil, outcome: .failed,
-            uploadedBytes: 0, gameCount: 0, detail: BackupHistoryState.unfinishedLine)
+        // that dies mid-run therefore leaves a row with no end, and
+        // 7.11 rests on that row being the written record of a
+        // transient failure.
+        recordRun(request, startedAt: startedAt, end: nil, uploadedBytes: 0, gameCount: 0)
 
         let context = RunContext(
             request: request,
@@ -148,7 +146,8 @@ public actor SnapshotEngine {
             return finish(
                 context, startedAt: startedAt,
                 stop: Task.isCancelled
-                    ? .paused : .rejected(message: screenText("Empo couldn't read a save file on this device.")))
+                    ? .paused
+                    : .rejected(message: screenText("Empo couldn't read a save file on this device.")))
         }
         return finish(context, startedAt: startedAt, stop: nil)
     }
@@ -178,10 +177,10 @@ public actor SnapshotEngine {
             detail: stop.map(Self.detail(of:)))
 
         recordRun(
-            context.request, startedAt: startedAt, finishedAt: now, outcome: outcome,
+            context.request, startedAt: startedAt,
+            end: BackupRunEnd(outcome: outcome, finishedAt: now, detail: result.detail),
             uploadedBytes: result.uploadedBytes,
-            gameCount: context.streams.filter { $0.streamKey != BackupStream.preferencesKey }.count,
-            detail: result.detail)
+            gameCount: context.streams.filter { $0.streamKey != BackupStream.preferencesKey }.count)
         // The run reached its end with the process alive, so it left
         // no interruption to ask about at the next launch, per 6.5.
         save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")
@@ -209,11 +208,9 @@ public actor SnapshotEngine {
     private func recordRun(
         _ request: BackupRunRequest,
         startedAt: Date,
-        finishedAt: Date?,
-        outcome: BackupRunOutcome,
+        end: BackupRunEnd?,
         uploadedBytes: Int64,
-        gameCount: Int,
-        detail: String?
+        gameCount: Int
     ) {
         save(
             try store.recordRun(
@@ -221,11 +218,9 @@ public actor SnapshotEngine {
                     id: request.runId,
                     targetId: request.descriptor.id,
                     startedAt: startedAt,
-                    finishedAt: finishedAt,
-                    outcome: outcome,
+                    end: end,
                     uploadedBytes: uploadedBytes,
-                    gameCount: gameCount,
-                    detail: detail)),
+                    gameCount: gameCount)),
             "the run history row of \(request.runId)")
     }
 
@@ -402,8 +397,9 @@ public actor SnapshotEngine {
         let scannedAt = now
         var setRequest = game.set
         if game.isOneOffFullSnapshot { setRequest.mode = .full }
-        let previous = (try? store.lastUploadedManifest(
-            targetId: targetId, gameKey: game.stream.key))?.manifest
+        let previous =
+            (try? store.lastUploadedManifest(
+                targetId: targetId, gameKey: game.stream.key))?.manifest
         // The app keeps its joins in memory for one launch only.
         let earlierJoins = (previous?.entries ?? [])
             .filter { $0.root == .container && $0.detectionSource == .runtimeWatch }
@@ -773,7 +769,8 @@ public actor SnapshotEngine {
             return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:
             return BackupRunStop.rejected(
-                message: screenText("A backup file is missing from this location. Back up again to replace it."))
+                message: screenText(
+                    "A backup file is missing from this location. Back up again to replace it."))
         }
     }
 
