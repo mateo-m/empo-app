@@ -791,6 +791,7 @@ struct UpdateStatusBadge: View {
     private func promoDragGesture(url: URL, dismiss: @escaping () -> Void) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                suppressTapOpen = false
                 let vertical = value.translation.height
                 let horizontal = abs(value.translation.width)
                 if vertical > 0, vertical > horizontal {
