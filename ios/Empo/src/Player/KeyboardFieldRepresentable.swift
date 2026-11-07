@@ -140,7 +140,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         }
 
         func typeBackspace(from field: TCKeyboardField?) {
-            type([.key(Int32(GAMECORE_SCANCODE_BACKSPACE), shifted: false)], from: field)
+            let backspace = Int32(GAMECORE_SCANCODE_BACKSPACE)
+            type([.key(backspace, shifted: false, hold: KeyboardAccessoryKeyState.tapHold)], from: field)
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -189,10 +190,10 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                         case .text(let text):
                             text.withCString { gamecore_pushTextInput($0) }
                             await Task.yield()
-                        case .key(let scancode, let shifted):
+                        case .key(let scancode, let shifted, let hold):
                             if shifted { engine.holdKey(scancode: shift, by: holder) }
                             engine.holdKey(scancode: scancode, by: holder)
-                            try? await Task.sleep(for: .milliseconds(50))
+                            try? await Task.sleep(for: hold)
                             engine.releaseKey(scancode: scancode, by: holder)
                             if shifted { engine.releaseKey(scancode: shift, by: holder) }
                             try? await Task.sleep(for: .milliseconds(50))
@@ -243,5 +244,5 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
 
 private enum TypedInput {
     case text(String)
-    case key(Int32, shifted: Bool)
+    case key(Int32, shifted: Bool, hold: Duration = .milliseconds(50))
 }

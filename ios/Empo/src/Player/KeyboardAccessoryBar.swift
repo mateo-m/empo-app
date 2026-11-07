@@ -67,7 +67,7 @@ final class KeyboardAccessoryKeyState {
     /// Floor for a key's hold time. Heavy scenes poll input well
     /// below 40 fps. A shorter press can fall between two polls, and
     /// the game never sees the key.
-    private static let tapHold: Duration = .milliseconds(120)
+    static let tapHold: Duration = .milliseconds(120)
 
     func press(_ key: AccessoryKey) {
         let holder = KeyHolder.touch("acckey:\(key.id)")
