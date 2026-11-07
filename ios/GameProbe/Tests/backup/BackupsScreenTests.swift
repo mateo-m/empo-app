@@ -35,7 +35,7 @@ final class BackupsScreenTests: XCTestCase {
                 descriptor: target(), failure: .rejected(message: "too big"), hasPlus: false),
             TargetRowFacts(descriptor: target(), failure: .rejected(message: "too big")),
             TargetRowFacts(descriptor: target(), failure: .full(reason: "no room")),
-            TargetRowFacts(descriptor: target(), failure: .unreachable(), failedAt: failedAt),
+            TargetRowFacts(descriptor: target(), failure: .unreachable()),
             TargetRowFacts(descriptor: target()),
         ]
     }
@@ -120,7 +120,7 @@ final class BackupsScreenTests: XCTestCase {
         let row = TargetRowRules.row(
             TargetRowFacts(
                 descriptor: target(label: "Homelab", accountHint: "homelab.lan"),
-                failure: .unreachable(), failedAt: failedAt,
+                failure: .unreachable(),
                 failedAtText: "yesterday at 14:03"))
         XCTAssertEqual(row.stateLine, "Couldn't connect yesterday at 14:03")
         XCTAssertEqual(row.action, .tryAgain)
@@ -131,7 +131,7 @@ final class BackupsScreenTests: XCTestCase {
         let lines = [UnreachableCause.serverError, .busy].map { cause in
             TargetRowRules.row(
                 TargetRowFacts(
-                    descriptor: target(), failure: .unreachable(cause), failedAt: failedAt,
+                    descriptor: target(), failure: .unreachable(cause),
                     failedAtText: "at 14:03")
             ).stateLine
         }
@@ -310,7 +310,7 @@ final class BackupsScreenTests: XCTestCase {
     func testRemoveRefusesACheckedDeleteBoxOnAnUnreachableTarget() {
         let unreachable = target(label: "Dropbox")
         let answer = TargetRemovalRules.answer(
-            deleteBackups: true, state: .unreachable(at: failedAt), target: unreachable)
+            deleteBackups: true, state: .unreachable(), target: unreachable)
         guard case .refuse(let refusal) = answer else {
             return XCTFail("a checked box on an unreachable target must refuse")
         }
@@ -323,7 +323,7 @@ final class BackupsScreenTests: XCTestCase {
     func testAnUncheckedBoxRemovesEvenWhenTheTargetIsUnreachable() {
         XCTAssertEqual(
             TargetRemovalRules.answer(
-                deleteBackups: false, state: .unreachable(at: failedAt), target: target()),
+                deleteBackups: false, state: .unreachable(), target: target()),
             .remove)
     }
 

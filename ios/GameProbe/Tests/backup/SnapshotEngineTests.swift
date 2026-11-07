@@ -1047,7 +1047,6 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(status.quota?.limitBytes, 50_000_000)
         let live = try await target.quota()
         XCTAssertEqual(status.quota?.usedBytes, live?.usedBytes)
-        XCTAssertNotNil(status.quotaAt)
     }
 
     // MARK: - 9. The order of 7.8
@@ -1732,7 +1731,7 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(result.outcome, .cancelled)
         let store = try BackupStateStore(url: stateURL)
         defer { store.close() }
-        XCTAssertEqual(try store.targetStatus(targetId: targetId)?.failure, .needsSignIn)
+        XCTAssertEqual(try store.targetStatus(targetId: targetId)?.lastFailure?.failure, .needsSignIn)
         XCTAssertEqual(try store.runHistory().first?.end?.outcome, .cancelled)
     }
 

@@ -175,27 +175,32 @@ public struct StalenessClock: Equatable, Sendable {
     }
 }
 
+/// The failure the last run of a target left, and when.
+public struct TargetFailureRecord: Equatable, Sendable {
+    public var failure: TargetFailure
+    public var at: Date
+
+    public init(failure: TargetFailure, at: Date) {
+        self.failure = failure
+        self.at = at
+    }
+}
+
 /// What the target row of SPEC 13.5 shows between runs.
 public struct TargetStatusRecord: Equatable, Sendable {
     public var targetId: String
-    public var failure: TargetFailure?
-    public var failedAt: Date?
+    public var lastFailure: TargetFailureRecord?
     /// The last space query answer, per 9.7. Empo never polls it.
     public var quota: QuotaReading?
-    public var quotaAt: Date?
 
     public init(
         targetId: String,
-        failure: TargetFailure? = nil,
-        failedAt: Date? = nil,
-        quota: QuotaReading? = nil,
-        quotaAt: Date? = nil
+        lastFailure: TargetFailureRecord? = nil,
+        quota: QuotaReading? = nil
     ) {
         self.targetId = targetId
-        self.failure = failure
-        self.failedAt = failedAt
+        self.lastFailure = lastFailure
         self.quota = quota
-        self.quotaAt = quotaAt
     }
 }
 

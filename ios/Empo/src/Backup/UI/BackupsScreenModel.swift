@@ -106,9 +106,8 @@ final class BackupsScreenModel {
             let row = TargetRowFacts(
                 descriptor: descriptor,
                 reach: descriptor.provider == .iCloudDrive ? iCloudReach : .open,
-                failure: status?.failure,
-                failedAt: status?.failedAt,
-                failedAtText: (status?.failedAt).map(BackupText.when) ?? "",
+                failure: status?.lastFailure?.failure,
+                failedAtText: (status?.lastFailure?.at).map(BackupText.when) ?? "",
                 supportsBackgroundTransfer: capabilities?.supportsBackgroundTransfer ?? true,
                 lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs),
                 hasPlus: EmpoPlus.shared.hasPlus)

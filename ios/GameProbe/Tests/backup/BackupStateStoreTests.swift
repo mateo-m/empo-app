@@ -666,8 +666,9 @@ final class BackupStateStoreTests: XCTestCase {
         try store.recordTargetFailure(
             targetId: "t1", failure: .blockedByPermissions(reason: "no write right"), at: now)
         let status = try store.targetStatus(targetId: "t1")
-        XCTAssertEqual(status?.failure, .blockedByPermissions(reason: "no write right"))
-        XCTAssertEqual(status?.failedAt, now)
+        XCTAssertEqual(
+            status?.lastFailure,
+            TargetFailureRecord(failure: .blockedByPermissions(reason: "no write right"), at: now))
     }
 
     func testTheStoreKeepsWhyATargetWasUnreachable() throws {
@@ -675,7 +676,7 @@ final class BackupStateStoreTests: XCTestCase {
         defer { store.close() }
         for cause in [UnreachableCause.noAnswer, .serverError, .busy] {
             try store.recordTargetFailure(targetId: "t1", failure: .unreachable(cause), at: now)
-            XCTAssertEqual(try store.targetStatus(targetId: "t1")?.failure, .unreachable(cause))
+            XCTAssertEqual(try store.targetStatus(targetId: "t1")?.lastFailure?.failure, .unreachable(cause))
         }
     }
 
@@ -685,20 +686,32 @@ final class BackupStateStoreTests: XCTestCase {
         try store.recordTargetFailure(targetId: "t1", failure: .unreachable(), at: now)
         try store.recordTargetFailure(targetId: "t1", failure: nil, at: now)
         let status = try store.targetStatus(targetId: "t1")
-        XCTAssertNil(status?.failure)
-        XCTAssertNil(status?.failedAt)
+        XCTAssertNil(status?.lastFailure)
     }
 
     func testTheSpaceQueryAnswerAndTheFailureKeepTheirOwnColumns() throws {
         let store = try BackupStateStore(url: nil)
         defer { store.close() }
         try store.recordTargetQuota(
-            targetId: "t1", reading: QuotaReading(usedBytes: 400, limitBytes: 1_000), at: now)
+            targetId: "t1", reading: QuotaReading(usedBytes: 400, limitBytes: 1_000))
         try store.recordTargetFailure(targetId: "t1", failure: .needsSignIn, at: now)
         let status = try store.targetStatus(targetId: "t1")
         XCTAssertEqual(status?.quota, QuotaReading(usedBytes: 400, limitBytes: 1_000))
-        XCTAssertEqual(status?.quotaAt, now)
-        XCTAssertEqual(status?.failure, .needsSignIn)
+        XCTAssertEqual(status?.lastFailure?.failure, .needsSignIn)
+    }
+
+    func testAFailureOfAnUnknownKindLeavesNoFailureAndNoTime() throws {
+        let first = try BackupStateStore(url: databaseURL)
+        try first.recordTargetFailure(targetId: "t1", failure: .needsSignIn, at: now)
+        first.close()
+        let raw = try SQLiteDatabase(url: databaseURL)
+        try raw.execute("UPDATE target_status SET failureKind = 'a-kind-from-a-newer-build'")
+        raw.close()
+
+        let store = try BackupStateStore(url: databaseURL)
+        defer { store.close() }
+
+        XCTAssertNil(try store.targetStatus(targetId: "t1")?.lastFailure)
     }
 
     func testUsageSumsTheNewestManifestOfEachGameBiggestFirst() throws {

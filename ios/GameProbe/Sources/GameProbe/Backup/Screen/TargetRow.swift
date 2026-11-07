@@ -52,7 +52,7 @@ public enum TargetRowState: Equatable, Sendable {
     case blockedByPermissions(reason: String)
     case rejected(message: String)
     case full(reason: String)
-    case unreachable(at: Date, cause: UnreachableCause = .noAnswer)
+    case unreachable(UnreachableCause = .noAnswer)
     case current
 
     /// 1 wins over 10.
@@ -106,8 +106,6 @@ public struct TargetRowFacts: Equatable, Sendable {
     public var descriptor: TargetDescriptor
     public var reach: TargetReach
     public var failure: TargetFailure?
-    /// When the failure happened. The unreachable line names it.
-    public var failedAt: Date?
     /// The failure time in the words the caller formatted, such as
     /// "at 14:03" or "yesterday at 14:03".
     public var failedAtText: String
@@ -122,7 +120,6 @@ public struct TargetRowFacts: Equatable, Sendable {
         descriptor: TargetDescriptor,
         reach: TargetReach = .open,
         failure: TargetFailure? = nil,
-        failedAt: Date? = nil,
         failedAtText: String = "",
         supportsBackgroundTransfer: Bool = true,
         lastSuccessText: String? = nil,
@@ -131,7 +128,6 @@ public struct TargetRowFacts: Equatable, Sendable {
         self.descriptor = descriptor
         self.reach = reach
         self.failure = failure
-        self.failedAt = failedAt
         self.failedAtText = failedAtText
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.lastSuccessText = lastSuccessText
@@ -216,7 +212,7 @@ public enum TargetRowRules {
         case .full(let reason):
             return .full(reason: reason)
         case .unreachable(let cause):
-            return .unreachable(at: facts.failedAt ?? Date(timeIntervalSince1970: 0), cause: cause)
+            return .unreachable(cause)
         case nil:
             return .current
         }
@@ -251,11 +247,11 @@ public enum TargetRowRules {
             return reason
         case .rejected(let message):
             return message
-        case .unreachable(_, .noAnswer):
+        case .unreachable(.noAnswer):
             return screenText("Couldn't connect %@", time)
-        case .unreachable(_, .serverError):
+        case .unreachable(.serverError):
             return screenText("Server error %@", time)
-        case .unreachable(_, .busy):
+        case .unreachable(.busy):
             return screenText("Server busy %@", time)
         case .current:
             guard let lastSuccessText else { return screenText("No backup yet") }

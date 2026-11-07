@@ -294,7 +294,7 @@ enum BackupTargetAdd {
         }
         if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             try? store.recordTargetQuota(
-                targetId: descriptor.id, reading: result.quota, at: Date())
+                targetId: descriptor.id, reading: result.quota)
             if result.allowsAdd {
                 try? store.recordTargetFailure(
                     targetId: descriptor.id, failure: nil, at: Date())

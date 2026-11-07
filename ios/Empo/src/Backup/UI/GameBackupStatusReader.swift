@@ -23,7 +23,7 @@ enum GameBackupStatusReader {
         let interrupted = (try? store?.interruptedRunTally()) ?? InterruptedRunTally()
         let targets = descriptors.map { descriptor in
             let clock = try? store?.staleness(targetId: descriptor.id, gameKey: gameKey)
-            let failure = (try? store?.targetStatus(targetId: descriptor.id))?.failure
+            let failure = (try? store?.targetStatus(targetId: descriptor.id))?.lastFailure?.failure
             let tally =
                 (try? store?.partialTally(targetId: descriptor.id, gameKey: gameKey)) ?? [:]
             var state = GameTargetState(

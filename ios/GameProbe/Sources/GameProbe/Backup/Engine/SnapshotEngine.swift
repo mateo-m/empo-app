@@ -199,7 +199,7 @@ public actor SnapshotEngine {
         if let quota = context.quota {
             save(
                 try store.recordTargetQuota(
-                    targetId: context.request.descriptor.id, reading: quota, at: now),
+                    targetId: context.request.descriptor.id, reading: quota),
                 "the space reading of \(context.request.descriptor.id)")
         }
         return result

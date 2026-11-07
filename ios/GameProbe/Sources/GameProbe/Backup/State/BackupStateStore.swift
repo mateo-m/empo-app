@@ -167,6 +167,7 @@ public final class BackupStateStore {
             ALTER TABLE run_record_v6 RENAME TO run_record;
             CREATE INDEX run_record_startedAt ON run_record (startedAt);
             ALTER TABLE pending_deletion DROP COLUMN rescuedBuckets;
+            ALTER TABLE target_status DROP COLUMN quotaAt;
             """)
         try database.setUserVersion(schemaVersion)
     }
@@ -219,8 +220,7 @@ public final class BackupStateStore {
             failureDetail TEXT,
             failedAt REAL,
             quotaUsed INTEGER,
-            quotaLimit INTEGER,
-            quotaAt REAL
+            quotaLimit INTEGER
         );
         CREATE TABLE IF NOT EXISTS target_maintenance (
             targetId TEXT NOT NULL PRIMARY KEY,
