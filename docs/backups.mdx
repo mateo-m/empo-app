@@ -10,6 +10,7 @@ wrong, you can restore the game from a backup, on this device or on another one.
 
 Open **Settings → Backups** to set up backups. To see the backups of one game, touch and hold the
 game, tap **Settings**, then tap **Backup**.
+On a Mac, right-click the game where this page says touch and hold.
 
 ## Add a location
 
@@ -17,13 +18,18 @@ Open **Settings → Backups** and tap **Add a location**.
 
 | Location       | What you need                                                                 |
 | -------------- | ----------------------------------------------------------------------------- |
-| iCloud Drive   | iCloud Drive turned on for Empo. Free.                                        |
+| iCloud Drive   | iCloud Drive turned on for Empo. Free. See the note below.                    |
 | Dropbox        | A Dropbox account and [Empo Plus](/plus).                                     |
 | Google Drive   | A Google account and [Empo Plus](/plus).                                      |
 | S3 storage     | The address, the bucket, and an access key, and [Empo Plus](/plus). For example Amazon S3, Cloudflare R2, Backblaze B2, or MinIO. |
 | WebDAV server  | The address, a user name, and a password, and [Empo Plus](/plus). For example Nextcloud, ownCloud, Synology, or Koofr. |
 
 If your WebDAV server uses two-step sign-in, make an app password for Empo.
+
+iCloud Drive needs the iCloud permission that Empo is signed with. A sideloading tool can remove
+this permission when it signs Empo. Then **Add a location** shows iCloud Drive with
+**Not available in this version of Empo**. Use one of the other locations, or an
+[export](#export-and-import).
 
 ## What Empo backs up
 
