@@ -63,10 +63,13 @@ public enum LegacyDataDrain {
         return "\(filename).\(displacedMarker)-\(index).bak"
     }
 
+    /// `leaving` names entries at the top of `source` that stay
+    /// there and do not count as failures.
     @discardableResult
     public static func drain(
         from source: URL,
         into destination: URL,
+        leaving kept: Set<String> = [],
         fm: FileManager = .default
     ) -> Outcome {
         var outcome = Outcome()
@@ -76,7 +79,8 @@ public enum LegacyDataDrain {
         else { return outcome }
 
         try? fm.createDirectory(at: destination, withIntermediateDirectories: true)
-        drainEntries(from: source, into: destination, prefix: "", outcome: &outcome, fm: fm)
+        drainEntries(
+            from: source, into: destination, prefix: "", leaving: kept, outcome: &outcome, fm: fm)
 
         if outcome.isComplete,
             (try? fm.contentsOfDirectory(atPath: source.path))?.isEmpty == true,
@@ -91,6 +95,7 @@ public enum LegacyDataDrain {
         from source: URL,
         into destination: URL,
         prefix: String,
+        leaving kept: Set<String> = [],
         outcome: inout Outcome,
         fm: FileManager
     ) {
@@ -99,7 +104,7 @@ public enum LegacyDataDrain {
             return
         }
 
-        for name in entryNames.sorted() {
+        for name in entryNames.sorted() where !kept.contains(name) {
             let entry = source.appendingPathComponent(name)
             let target = destination.appendingPathComponent(name)
             let relative = prefix.isEmpty ? name : "\(prefix)/\(name)"
