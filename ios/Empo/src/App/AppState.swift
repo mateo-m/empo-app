@@ -256,17 +256,16 @@ class AppState {
         // the only way back to the library, so it is the last point
         // the app controls before the user may close it.
         GameSaveWatch.shared.takeReading()
-        EngineState.shared.isBackgroundPause = false
+        EngineState.shared.pauseRequest = .user
         session.requestPause()
     }
 
     /// The bridge's paused callback calls this on the main thread.
-    /// We ignore background pauses. They stay silent with no UI
-    /// transition.
+    /// A background pause stays silent with no UI transition. A
+    /// callback with no request is late: the app returned first.
     func handlePause(snapshot: UIImage?) {
-        guard phase == .playing else { return }
-        // A quit can meet a background pause: the app went to the
-        // background before the game paused for the quit.
+        guard phase == .playing, EngineState.shared.pauseRequest == .user else { return }
+        EngineState.shared.pauseRequest = nil
         if quitOnPause {
             session.note("The player quit the game.")
             let game = selectedGame
@@ -281,7 +280,6 @@ class AppState {
             }
             return
         }
-        if EngineState.shared.isBackgroundPause { return }
         let pm = PauseManager.shared
         withAnimation(Motion.snappy) {
             phase = nil
@@ -397,6 +395,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // game goes away below, so read it first.
         let played = activeSessionGame
         quitOnPause = false
+        EngineState.shared.pauseRequest = nil
         quitTask?.cancel()
         quitTask = nil
         resumeTask?.cancel()
