@@ -1450,8 +1450,8 @@ extension GameLibrary {
                     self.updateCardProgress(sel.importID, 1.0)
 
                     // The import stays registered until the card is
-                    // ready, so a delete in between cannot take the
-                    // path of a finished import.
+                    // ready. A library reload in between skips this
+                    // game, so it cannot replace the import card.
                     await GameLibrary.shared.mergeImportedGame(container: container)
                     self.endInFlightImport(sel.importID)
                 }
