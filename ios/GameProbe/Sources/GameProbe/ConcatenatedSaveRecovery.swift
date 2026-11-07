@@ -73,8 +73,7 @@ public enum ConcatenatedSaveRecovery {
         )
 
         if sourceIsNewer {
-            try fm.moveItem(at: canonical, to: backup)
-            try fm.moveItem(at: source, to: canonical)
+            try fm.archive(canonical, to: backup, replacingWith: source)
         } else {
             try fm.moveItem(at: source, to: backup)
         }

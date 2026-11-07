@@ -186,6 +186,8 @@ describe("routes", () => {
   let members: Map<string, MemoryState>;
   let env: ConstructorParameters<typeof PatreonSession>[1];
   let phone: Device;
+  // Each action in this set fails once, as a lost call.
+  let broken: Set<string>;
   const original = globalThis.fetch;
 
   function namespace(states: Map<string, MemoryState>, make: (state: MemoryState) => { fetch(request: Request): Promise<Response> }) {
@@ -194,7 +196,14 @@ describe("routes", () => {
       get: (id: unknown) => {
         const name = id as string;
         if (!states.has(name)) states.set(name, new MemoryState());
-        return make(states.get(name)!);
+        const target = make(states.get(name)!);
+        return {
+          fetch: async (request: Request) => {
+            const { action } = (await request.clone().json()) as { action: string };
+            if (broken.delete(action)) throw new Error(`The ${action} call did not arrive`);
+            return target.fetch(request);
+          },
+        };
       },
     };
   }
@@ -203,6 +212,7 @@ describe("routes", () => {
     patreon = new FakePatreon();
     sessions = new Map();
     members = new Map();
+    broken = new Set();
     phone = await Device.make();
     const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"])) as CryptoKeyPair;
     env = {
@@ -445,6 +455,32 @@ describe("routes", () => {
     const answers = await Promise.all([1, 2, 3, 4, 5].map(() => post("/patreon/finish", call)));
     expect(answers.map((answer) => answer.status).sort()).toEqual([200, 401, 401, 401, 401]);
     expect([...sessions.values()].filter((state) => state.values.size > 0)).toHaveLength(1);
+  });
+
+  test("a sign-in whose session did not start finishes on the next try", async () => {
+    const call = await phone.signFinish((await callback(phone)).searchParams.get("code")!);
+    broken.add("start");
+    expect((await post("/patreon/finish", call)).status).toBe(502);
+    const answer = await post("/patreon/finish", call);
+    expect(answer.status).toBe(200);
+    const { renewal } = (await answer.json()) as { renewal: string };
+    expect((await renew(renewal)).status).toBe(200);
+  });
+
+  test("a session that the device list did not add ends after 10 minutes, and the sign-in finishes on the next try", async () => {
+    const call = await phone.signFinish((await callback(phone)).searchParams.get("code")!);
+    broken = new Set(["add", "evict"]);
+    expect((await post("/patreon/finish", call)).status).toBe(502);
+    for (const state of sessions.values()) {
+      if (state.values.size > 0) expect(state.alarm).toBeLessThanOrEqual(Date.now() + 10 * 60 * 1000);
+    }
+    expect((await post("/patreon/finish", call)).status).toBe(200);
+  });
+
+  test("a session stored without a phase still renews", async () => {
+    const { renewal } = await signIn();
+    for (const state of sessions.values()) state.values.delete("phase");
+    expect((await renew(renewal)).status).toBe(200);
   });
 
   test("a sign-in that nobody finishes deletes itself after 10 minutes", async () => {

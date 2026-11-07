@@ -73,6 +73,21 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(ManagedMkxpConfig.readGameDefaults(from: gameDir).midiSoundFont, "Audio/BGM/GMGSx.sf2")
     }
 
+    func testRenderScaleReadsTheFactorOnlyInHiresMode() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        let config = gameDir.appendingPathComponent("mkxp.json")
+        func renderScale(_ json: String) throws -> MkxpRenderScale? {
+            try json.write(to: config, atomically: true, encoding: .utf8)
+            return ManagedMkxpConfig.readGameDefaults(from: gameDir).renderScale
+        }
+
+        XCTAssertNil(try renderScale(#"{ "framebufferScalingFactor": 2 }"#))
+        XCTAssertEqual(try renderScale(#"{ "enableHires": false, "framebufferScalingFactor": 2 }"#), .native)
+        XCTAssertEqual(try renderScale(#"{ "enableHires": true }"#), .hires(factor: 1.0))
+        XCTAssertEqual(try renderScale(#"{ "enableHires": true, "framebufferScalingFactor": 2 }"#), .hires(factor: 2.0))
+    }
+
     func testNamedSoundFontIsTheFileThatMkxpJsonNames() throws {
         let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.sf2", "Audio/a.sf2"])
         try """
@@ -880,6 +895,52 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertNil(settings["renderScale"])
         XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
     }
+
+    func testLegacyMigrationMovesTheDisplayValuesFirst() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try """
+            { "fixedAspectRatio": false }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "renderScale": "x2" }
+            """.write(
+            to: stateDir.appendingPathComponent("game_settings.json"),
+            atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(
+            ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+                stateDirectory: stateDir, gameDirectory: gameDir))
+
+        XCTAssertEqual(try readSettings(stateDir)["fixedAspectRatio"] as? Bool, false)
+        XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
+    }
+
+    #if canImport(Darwin)
+    func testLegacyMigrationPutsTheOldOverlayBackWhenTheStripFails() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let overlayURL = stateDir.appendingPathComponent("mkxp.json")
+        let settingsURL = stateDir.appendingPathComponent("game_settings.json")
+        try #"{ "fontScale": 2.0 }"#.write(to: overlayURL, atomically: true, encoding: .utf8)
+        try #"{ "renderScale": "x2" }"#.write(to: settingsURL, atomically: true, encoding: .utf8)
+        let before = try Data(contentsOf: overlayURL)
+        // An immutable file cannot be replaced, so the strip fails.
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: settingsURL.path)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.immutable: false], ofItemAtPath: settingsURL.path)
+        }
+
+        XCTAssertFalse(
+            ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+                stateDirectory: stateDir, gameDirectory: gameDir))
+
+        XCTAssertEqual(try Data(contentsOf: overlayURL), before)
+    }
+    #endif
 
     func testDisplayMigrationRemovesEmptyOverlayAndKeepsSettingsValue() throws {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)

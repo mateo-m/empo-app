@@ -274,6 +274,22 @@ final class GameTreeUpdateTests: XCTestCase {
         XCTAssertEqual(contents(destination, displaced("Save A.rxdata")), "stale save")
     }
 
+    func testFailedProtectedReplaceKeepsTheInstalledSave() throws {
+        let source = try makeTree("source", files: ["Save A.rxdata": "transferred save"])
+        let destination = try makeTree("dest", files: ["Save A.rxdata": "stale save"])
+        try setModificationDate(source, "Save A.rxdata", Date(timeIntervalSince1970: 2000))
+        try setModificationDate(destination, "Save A.rxdata", Date(timeIntervalSince1970: 1000))
+        let failing = FailingFileManager()
+        failing.failMoveFrom = source.appendingPathComponent("Save A.rxdata")
+
+        XCTAssertThrowsError(
+            try GameTreeUpdate.mergeMove(
+                from: source, into: destination, protecting: ["Save A.rxdata"], fm: failing))
+
+        XCTAssertEqual(contents(destination, "Save A.rxdata"), "stale save")
+        XCTAssertNil(contents(destination, displaced("Save A.rxdata")))
+    }
+
     func testProtectedCollisionTieGoesToTheIncomingFile() throws {
         let source = try makeTree("source", files: ["Save A.rxdata": "incoming"])
         let destination = try makeTree("dest", files: ["Save A.rxdata": "installed"])
@@ -561,6 +577,20 @@ final class GameTreeUpdateTests: XCTestCase {
                 atPath: parent.appendingPathComponent(GameTreeUpdate.backupDirectoryName).path))
     }
 
+    func testStageAndSwapRestoresAMissingTreeBeforeItClearsLeftovers() throws {
+        let parent = tempRoot.appendingPathComponent("container", isDirectory: true)
+        let target = parent.appendingPathComponent("Game", isDirectory: true)
+        _ = try makeTree(
+            "container/\(GameTreeUpdate.backupDirectoryName)",
+            files: ["Game.exe": "v1", "Save01.rxdata": "precious save"])
+        let source = try makeTree("incoming", files: ["Game.exe": "v2"])
+
+        try GameTreeUpdate.stageAndSwap(newTree: source, over: target)
+
+        XCTAssertEqual(contents(target, "Game.exe"), "v2")
+        XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
+    }
+
     func testStageAndSwapFailureLeavesTargetUntouched() throws {
         let target = try makeTree(
             "container/Game",
@@ -758,11 +788,11 @@ final class GameTreeUpdateTests: XCTestCase {
 
     // MARK: - sweepInterruptedUpdate
 
-    func testSweepRestoresMergedTreeWhenSwapDiedBetweenRenames() throws {
+    func testSweepRestoresTheOldTreeWhenSwapDiedBetweenRenames() throws {
         // replaceItemAt = rename target->backup, rename
         // staging->target, delete backup. A kill between the
-        // renames leaves NO target. The staging tree (fully merged)
-        // must be restored, never swept.
+        // renames leaves NO target. The update did not finish, so
+        // the backup (the old tree) comes back, as on a failed swap.
         let parent = tempRoot.appendingPathComponent("container", isDirectory: true)
         let target = parent.appendingPathComponent("Game", isDirectory: true)
         _ = try makeTree(
@@ -774,9 +804,9 @@ final class GameTreeUpdateTests: XCTestCase {
 
         let outcome = GameTreeUpdate.sweepInterruptedUpdate(target: target)
 
-        XCTAssertEqual(outcome.restoredFrom, GameTreeUpdate.stagingDirectoryName)
-        XCTAssertEqual(outcome.removed, [GameTreeUpdate.backupDirectoryName])
-        XCTAssertEqual(contents(target, "Game.exe"), "v2 merged")
+        XCTAssertEqual(outcome.restoredFrom, GameTreeUpdate.backupDirectoryName)
+        XCTAssertEqual(outcome.removed, [GameTreeUpdate.stagingDirectoryName])
+        XCTAssertEqual(contents(target, "Game.exe"), "v1")
         XCTAssertEqual(contents(target, "Save01.rxdata"), "precious save")
     }
 

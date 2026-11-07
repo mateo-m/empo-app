@@ -474,8 +474,15 @@ enum DataDirectory {
             UserDefaults.standard.data(forKey: DefaultsKey.pendingSaveRecoveries))
     }
 
-    static func clearPendingSaveRecoveries() {
-        UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingSaveRecoveries)
+    static func clearSaveRecoveries(shown: [SaveRecoveryLedger.Record]) {
+        drainLock.withLock { _ in
+            let ledger = SaveRecoveryLedger.removing(shown, from: pendingSaveRecoveries())
+            guard !ledger.isEmpty, let blob = SaveRecoveryLedger.encode(ledger) else {
+                UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingSaveRecoveries)
+                return
+            }
+            UserDefaults.standard.set(blob, forKey: DefaultsKey.pendingSaveRecoveries)
+        }
     }
 
     // MARK: - Engine handoff spelling

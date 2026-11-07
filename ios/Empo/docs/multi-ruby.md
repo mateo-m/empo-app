@@ -60,7 +60,7 @@ The app does not know these keys. Only `MkxpCore` sends them, and `mkxp_setSetti
 
 ### Detection
 
-`ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` decides which Ruby version a game wants and whether the scripts look modern (one directory walk). The decision tree follows, and the first decisive signal wins:
+`ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` decides which Ruby runs a game (one directory walk). The result is `GameScriptProfile.Ruby`: `ruby18`, `ruby19`, or `ruby31(convertLegacy:)`. Only Ruby 3.1 has a syntax transform, so only Ruby 3.1 has a legacy or modern mode. Modern grammar from step 2 always gives Ruby 3.1, because Ruby 1.8 and 1.9 cannot parse it. Otherwise the first decisive signal of this decision tree wins:
 
 1. **Bundled `*-rubyXYZ.dll`** at the project root: `x64-msvcrt-ruby310.dll`, `msvcrt-ruby187.dll`, `ruby193.dll`, etc. The three-digit suffix decodes:
    - `1, 8` → 18
@@ -98,10 +98,11 @@ enum Schema: String {
     case mixedRuby31 = "mixed-ruby31"  // legacy scripts with 1.9 encoding calls on 3.1
     case codeOnlyTokens = "code-only-tokens"  // modern tokens count only in code, not in comments or strings
     case shiftNotHeredoc = "shift-not-heredoc"  // a `<<` with no end line after it is a shift
-    case pluginScripts = "plugin-scripts"  // current: the scan also reads Data/PluginScripts.rxdata
+    case pluginScripts = "plugin-scripts"  // the scan also reads Data/PluginScripts.rxdata
+    case oneRubyChoice = "one-ruby-choice"  // current: modern grammar outranks a 1.8 or 1.9 DLL
 }
 
-static let currentSchema: Schema = .pluginScripts
+static let currentSchema: Schema = .oneRubyChoice
 ```
 
 `MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file that the scan reads (`GameScriptProfile.inputFiles`): `Game.ini`, the libraries, and the RGSS archives in the game folder, the `Scripts` file in the game folder or in `Data/`, `Data/PluginScripts.rxdata`, the `.fpk` archives in `Data/`, and the `.rb` files in the loose script folders. Saves are not in it, so a save does not start a new scan. `MkxpProfile.load(for:)` scans again when the schema or the digest is different. The import and the settings reset always scan again, because an archive keeps the dates of its files. `GameScriptProfile` is the only entry point.

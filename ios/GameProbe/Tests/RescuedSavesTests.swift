@@ -261,8 +261,40 @@ final class RescuedSavesTests: XCTestCase {
             "rescued")
     }
 
+    func testTheMarkerStaysWhileTheSavesMove() throws {
+        let bucket = try makeBucket(
+            "Nickname", identity: "Pokemon Example",
+            files: ["Save A.rxdata": "slot a", "Save B.rxdata": "slot b"])
+        let gameRoot = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        try fm.createDirectory(at: gameRoot, withIntermediateDirectories: true)
+        let failing = FailingFileManager()
+        var identitiesDuringMoves: [RescuedSaves.Identity?] = []
+        failing.onMove = {
+            identitiesDuringMoves.append(RescuedSaves.readMarker(inBucket: bucket))
+        }
+
+        let outcome = RescuedSaves.restore(from: bucket, into: gameRoot, fm: failing)
+
+        XCTAssertTrue(outcome.isComplete)
+        XCTAssertTrue(outcome.removedSource)
+        XCTAssertEqual(
+            identitiesDuringMoves,
+            Array(repeating: RescuedSaves.Identity(folderName: "Pokemon Example"), count: 2))
+        XCTAssertFalse(fm.fileExists(atPath: bucket.path))
+    }
+
+    func testAMarkerFromBeforeTheBackupFlagReadsAsIncluded() throws {
+        let bucket = try makeBucket("Nickname", identity: nil)
+        try Data(#"{"folderName":"Pokemon Example"}"#.utf8)
+            .write(to: bucket.appendingPathComponent(RescuedSaves.markerName))
+
+        XCTAssertEqual(
+            RescuedSaves.readMarker(inBucket: bucket),
+            RescuedSaves.Identity(folderName: "Pokemon Example", backupExcluded: false))
+    }
+
     #if canImport(Darwin)
-    func testPartialRestoreRewritesTheMarkerForTheNextAttempt() throws {
+    func testPartialRestoreKeepsTheMarkerForTheNextAttempt() throws {
         // An unlistable subdirectory makes the drain fail on
         // that entry. The bucket must stay identifiable.
         let bucket = try makeBucket(

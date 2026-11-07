@@ -165,6 +165,21 @@ final class LegacyDataDrainTests: XCTestCase {
             ])
     }
 
+    func testFailedReplaceKeepsTheOldFileAtTheCanonicalName() throws {
+        let source = try makeTree("UserData", files: ["Game.rxdata": "new"])
+        let destination = try makeTree("dest", files: ["Game.rxdata": "old"])
+        try setMtime(source, "Game.rxdata", 200)
+        try setMtime(destination, "Game.rxdata", 100)
+        let failing = FailingFileManager()
+        failing.failMoveFrom = source.appendingPathComponent("Game.rxdata")
+
+        let outcome = LegacyDataDrain.drain(from: source, into: destination, fm: failing)
+
+        XCTAssertEqual(outcome.failures, ["Game.rxdata"])
+        XCTAssertEqual(try snapshot(destination), ["Game.rxdata": "old"])
+        XCTAssertEqual(try snapshot(source), ["Game.rxdata": "new"])
+    }
+
     func testNewerDestinationKeepsCanonicalNameAndDisplacesSource() throws {
         let source = try makeTree("UserData", files: ["Game.rxdata": "stale retry"])
         let destination = try makeTree("dest", files: ["Game.rxdata": "live"])
@@ -291,6 +306,19 @@ final class LegacyDataDrainTests: XCTestCase {
                 "saves/extra.txt": "extra",
                 "saves/keep.txt": "keep",
             ])
+    }
+
+    func testEmptiedSubfolderThatStaysIsAFailure() throws {
+        let source = try makeTree("UserData", files: ["saves/Game.rxdata": "save"])
+        let destination = try makeTree("dest", files: ["saves/keep.txt": "keep"])
+        let failing = FailingFileManager()
+        failing.failRemoveAt = source.appendingPathComponent("saves")
+
+        let outcome = LegacyDataDrain.drain(from: source, into: destination, fm: failing)
+
+        XCTAssertEqual(outcome.failures, ["saves"])
+        XCTAssertFalse(outcome.isComplete)
+        XCTAssertFalse(outcome.removedSource)
     }
 
     // MARK: - Type conflicts

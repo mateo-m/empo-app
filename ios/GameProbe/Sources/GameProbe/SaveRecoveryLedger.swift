@@ -66,6 +66,13 @@ public enum SaveRecoveryLedger {
         return merged
     }
 
+    /// The ledger after the sheet showed `shown`. A heal can merge
+    /// while the sheet is open. Its record no longer equals the
+    /// shown one, so it stays for the next sheet.
+    public static func removing(_ shown: [Record], from records: [Record]) -> [Record] {
+        records.filter { !shown.contains($0) }
+    }
+
     /// Encoding is deterministic (sorted keys) so equal ledgers
     /// produce equal blobs.
     public static func encode(_ records: [Record]) -> Data? {
