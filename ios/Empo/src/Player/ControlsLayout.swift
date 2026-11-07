@@ -806,6 +806,7 @@ class ControlsLayout {
         profileRejectionErrorCount = 0
         pinFellThrough = false
         importOfferPending = false
+        gameLayoutNoticePending = false
         separationLogSignature = nil
         activeManifestSource = nil
         resolutionInvolvesDerivation = false
@@ -1610,6 +1611,7 @@ class ControlsLayout {
             pinnedRead?.invalid == true ? (pinnedRead?.errorCount ?? 1) : 0
 
         provenance = outcome.provenance
+        gameLayoutNoticePending = false
         switch outcome.provenance {
         case .pinnedProfile:
             if let touch = pinnedRead?.touch {
@@ -1618,13 +1620,10 @@ class ControlsLayout {
         case .gameLayout:
             // One-time heads-up that the game layout displaced the
             // user's default profile (record section 8 wording).
-            if loaded.pin == .followChain,
-                LayoutProfilesManager.defaultProfileName != nil,
-                let gameID = currentGameID,
-                !Self.shownGameLayoutNotices().contains(gameID)
-            {
-                gameLayoutNoticePending = true
-            }
+            gameLayoutNoticePending =
+                loaded.pin == .followChain
+                && LayoutProfilesManager.defaultProfileName != nil
+                && currentGameID.map { !Self.shownGameLayoutNotices().contains($0) } == true
             applyResolvedLayout()
         case .defaultProfile(let name):
             if let touch = store.validTouch(name) {
