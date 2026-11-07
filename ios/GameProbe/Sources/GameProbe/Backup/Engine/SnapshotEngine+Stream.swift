@@ -128,7 +128,6 @@ extension SnapshotEngine {
         context.uploadedBytes += run.result.uploadedBytes
         run.result.outcome = .failed(reason: QuotaCheck.blockedLine(missing))
         context.streams.append(run.result)
-        try? markAttempt(targetId: context.request.descriptor.id, gameKey: run.key)
         if let earlier = context.shortfall {
             context.shortfall = QuotaCheck.Shortfall(
                 neededBytes: earlier.neededBytes + missing.missingBytes,
@@ -166,7 +165,6 @@ extension SnapshotEngine {
         guard route != .notEnoughSpace else {
             context.streams.append(
                 StreamResult(streamKey: stream.key, outcome: .notEnoughLocalSpace))
-            try? markAttempt(targetId: targetId, gameKey: stream.key)
             return nil
         }
 
@@ -317,7 +315,6 @@ extension SnapshotEngine {
         // A blob still pending leaves the manifest for the next run.
         guard try await waitForConfirmations(run.pendingPaths) else {
             context.streams.append(run.result)
-            try? markAttempt(targetId: targetId, gameKey: run.key)
             return
         }
 

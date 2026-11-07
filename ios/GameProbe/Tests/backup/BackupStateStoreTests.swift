@@ -105,6 +105,8 @@ final class BackupStateStoreTests: XCTestCase {
             """
             INSERT INTO target_status (targetId) VALUES ('target-a');
             INSERT INTO staleness (targetId, gameKey) VALUES ('target-b', 'other');
+            INSERT INTO staleness (targetId, gameKey, lastSuccessAt, lastAttemptAt)
+                VALUES ('target-a', 'abc', 500, 600);
             INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES ('abc', 1000, 'play session');
             INSERT INTO intent_record (
                 kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
@@ -150,6 +152,11 @@ final class BackupStateStoreTests: XCTestCase {
                 PendingDeletion(
                     targetId: "target-a", gameKey: "gone", requestedAt: Date(timeIntervalSince1970: 700))
             ])
+        XCTAssertEqual(
+            try store.staleness(targetId: "target-a", gameKey: "abc"),
+            StalenessClock(
+                targetId: "target-a", gameKey: "abc", lastSuccessAt: Date(timeIntervalSince1970: 500)))
+        XCTAssertNil(try store.staleness(targetId: "target-b", gameKey: "other"))
         let reopened = try BackupStateStore(url: databaseURL)
         defer { reopened.close() }
         XCTAssertEqual(reopened.openOutcome, .opened)
@@ -411,18 +418,15 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(try store.pendingDeletions(targetId: targetId), [])
     }
 
-    func testAStalenessClockRoundTripsWithItsEmptyFields() throws {
+    func testAStalenessClockRoundTrips() throws {
         let store = try makeStore()
         defer { store.close() }
-        let clock = StalenessClock(
-            targetId: targetId, gameKey: "abc",
-            lastSuccessAt: now, lastAttemptAt: now.addingTimeInterval(3600))
+        let clock = StalenessClock(targetId: targetId, gameKey: "abc", lastSuccessAt: now)
 
         try store.saveStaleness(clock)
-        let read = try store.staleness(targetId: targetId, gameKey: "abc")
 
-        XCTAssertEqual(read, clock)
-        XCTAssertNil(read?.partialSince)
+        XCTAssertEqual(try store.staleness(targetId: targetId, gameKey: "abc"), clock)
+        XCTAssertNil(try store.staleness(targetId: targetId, gameKey: "def"))
     }
 
     func testRemovingATargetLeavesTheOtherTargetAlone() throws {

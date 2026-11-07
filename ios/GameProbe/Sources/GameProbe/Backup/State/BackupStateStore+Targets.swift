@@ -47,43 +47,30 @@ extension BackupStateStore {
     // MARK: - Staleness clocks
 
     public func saveStaleness(_ clock: StalenessClock) throws {
-        func value(_ date: Date?) -> SQLiteValue {
-            date.map { .real($0.timeIntervalSince1970) } ?? .null
-        }
         try database.run(
             """
-            INSERT INTO staleness
-                (targetId, gameKey, lastSuccessAt, lastAttemptAt, partialSince)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO staleness (targetId, gameKey, lastSuccessAt)
+            VALUES (?, ?, ?)
             ON CONFLICT (targetId, gameKey) DO UPDATE SET
-                lastSuccessAt = excluded.lastSuccessAt,
-                lastAttemptAt = excluded.lastAttemptAt,
-                partialSince = excluded.partialSince
+                lastSuccessAt = excluded.lastSuccessAt
             """,
             [
                 .text(clock.targetId), .text(clock.gameKey),
-                value(clock.lastSuccessAt), value(clock.lastAttemptAt),
-                value(clock.partialSince),
+                .real(clock.lastSuccessAt.timeIntervalSince1970),
             ])
     }
 
     public func staleness(targetId: String, gameKey: String) throws -> StalenessClock? {
         let rows = try database.query(
             """
-            SELECT lastSuccessAt, lastAttemptAt, partialSince FROM staleness
-            WHERE targetId = ? AND gameKey = ?
+            SELECT lastSuccessAt FROM staleness WHERE targetId = ? AND gameKey = ?
             """,
             [.text(targetId), .text(gameKey)])
-        guard let row = rows.first else { return nil }
-        func date(_ value: SQLiteValue) -> Date? {
-            value.double.map { Date(timeIntervalSince1970: $0) }
-        }
+        guard let lastSuccessAt = rows.first?[0].double else { return nil }
         return StalenessClock(
             targetId: targetId,
             gameKey: gameKey,
-            lastSuccessAt: date(row[0]),
-            lastAttemptAt: date(row[1]),
-            partialSince: date(row[2]))
+            lastSuccessAt: Date(timeIntervalSince1970: lastSuccessAt))
     }
 
     // MARK: - What the target row shows, per SPEC 13.5

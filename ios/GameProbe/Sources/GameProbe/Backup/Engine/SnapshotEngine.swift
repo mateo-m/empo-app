@@ -605,33 +605,19 @@ public actor SnapshotEngine {
 
     // MARK: - The staleness clock, per 7.2
 
-    func markAttempt(targetId: String, gameKey: String) throws {
-        var clock =
-            (try? store.staleness(targetId: targetId, gameKey: gameKey))
-            ?? StalenessClock(targetId: targetId, gameKey: gameKey)
-        clock.lastAttemptAt = now
-        try store.saveStaleness(clock)
-    }
-
     /// A snapshot that carries a partial path resets the clock only
     /// when no partial path is a save member, per 7.2.
     func markSuccess(
         targetId: String, gameKey: String, manifest: SnapshotManifest, scannedAt: Date,
         isComplete: Bool
     ) {
-        var clock =
-            (try? store.staleness(targetId: targetId, gameKey: gameKey))
-            ?? StalenessClock(targetId: targetId, gameKey: gameKey)
-        clock.lastAttemptAt = now
-
         let savePartials = PartialPathClock.savePartials(in: manifest.entries)
         if savePartials.isEmpty, isComplete {
-            clock.lastSuccessAt = scannedAt
-            clock.partialSince = nil
-        } else if clock.partialSince == nil {
-            clock.partialSince = now
+            save(
+                try store.saveStaleness(
+                    StalenessClock(targetId: targetId, gameKey: gameKey, lastSuccessAt: scannedAt)),
+                "the staleness clock of \(gameKey)")
         }
-        save(try store.saveStaleness(clock), "the staleness clock of \(gameKey)")
 
         let previous = (try? store.partialTally(targetId: targetId, gameKey: gameKey)) ?? [:]
         save(

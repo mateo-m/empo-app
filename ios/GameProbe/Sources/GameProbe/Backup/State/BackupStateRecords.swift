@@ -153,25 +153,12 @@ public struct StalenessClock: Equatable, Sendable {
     public var targetId: String
     public var gameKey: String
     /// The last run that closed a whole snapshot.
-    public var lastSuccessAt: Date?
-    /// The last run that tried, whatever it ended as.
-    public var lastAttemptAt: Date?
-    /// When the game first went partial, per 7.2. A partial snapshot
-    /// does not stop this clock.
-    public var partialSince: Date?
+    public var lastSuccessAt: Date
 
-    public init(
-        targetId: String,
-        gameKey: String,
-        lastSuccessAt: Date? = nil,
-        lastAttemptAt: Date? = nil,
-        partialSince: Date? = nil
-    ) {
+    public init(targetId: String, gameKey: String, lastSuccessAt: Date) {
         self.targetId = targetId
         self.gameKey = gameKey
         self.lastSuccessAt = lastSuccessAt
-        self.lastAttemptAt = lastAttemptAt
-        self.partialSince = partialSince
     }
 }
 

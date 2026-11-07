@@ -168,6 +168,17 @@ public final class BackupStateStore {
             CREATE INDEX run_record_startedAt ON run_record (startedAt);
             ALTER TABLE pending_deletion DROP COLUMN rescuedBuckets;
             ALTER TABLE target_status DROP COLUMN quotaAt;
+            CREATE TABLE staleness_v6 (
+                targetId TEXT NOT NULL,
+                gameKey TEXT NOT NULL,
+                lastSuccessAt REAL NOT NULL,
+                PRIMARY KEY (targetId, gameKey)
+            );
+            INSERT INTO staleness_v6
+                SELECT targetId, gameKey, lastSuccessAt FROM staleness
+                WHERE lastSuccessAt IS NOT NULL;
+            DROP TABLE staleness;
+            ALTER TABLE staleness_v6 RENAME TO staleness;
             """)
         try database.setUserVersion(schemaVersion)
     }
@@ -241,9 +252,7 @@ public final class BackupStateStore {
         CREATE TABLE IF NOT EXISTS staleness (
             targetId TEXT NOT NULL,
             gameKey TEXT NOT NULL,
-            lastSuccessAt REAL,
-            lastAttemptAt REAL,
-            partialSince REAL,
+            lastSuccessAt REAL NOT NULL,
             PRIMARY KEY (targetId, gameKey)
         );
         CREATE TABLE IF NOT EXISTS run_record (
