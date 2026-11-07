@@ -6,13 +6,20 @@ import Foundation
 import Observation
 import UniformTypeIdentifiers
 
-/// The sound set folders that an import copies into now. A settings sheet
-/// can close and open again during the copy, so the sheet can't keep this.
+/// The sound set folders that an import copies into now, and the import
+/// failures that the player did not see yet. A settings sheet can close
+/// and open again during the copy, so the sheet can't keep this.
 @MainActor @Observable
 final class MidiSoundSetCopies {
     static let shared = MidiSoundSetCopies()
 
+    enum Failure: Equatable {
+        case notASoundSet
+        case copy(String)
+    }
+
     private(set) var folders: Set<URL> = []
+    var failures: [URL: Failure] = [:]
     private var revisions: [URL: Int] = [:]
 
     func isCopying(into soundSet: MidiSoundSet) -> Bool {
@@ -30,7 +37,12 @@ final class MidiSoundSetCopies {
         folders.insert(soundSet.folderURL)
     }
 
-    func end(_ soundSet: MidiSoundSet) {
+    func failure(of soundSet: MidiSoundSet) -> Failure? {
+        failures[soundSet.folderURL]
+    }
+
+    func end(_ soundSet: MidiSoundSet, failure: Failure? = nil) {
+        failures[soundSet.folderURL] = failure
         folders.remove(soundSet.folderURL)
         revisions[soundSet.folderURL, default: 0] += 1
     }
