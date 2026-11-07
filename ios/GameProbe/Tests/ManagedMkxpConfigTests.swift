@@ -881,6 +881,52 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
     }
 
+    func testLegacyMigrationMovesTheDisplayValuesFirst() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try """
+            { "fixedAspectRatio": false }
+            """.write(to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            { "renderScale": "x2" }
+            """.write(
+            to: stateDir.appendingPathComponent("game_settings.json"),
+            atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(
+            ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+                stateDirectory: stateDir, gameDirectory: gameDir))
+
+        XCTAssertEqual(try readSettings(stateDir)["fixedAspectRatio"] as? Bool, false)
+        XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
+    }
+
+    #if canImport(Darwin)
+    func testLegacyMigrationPutsTheOldOverlayBackWhenTheStripFails() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let overlayURL = stateDir.appendingPathComponent("mkxp.json")
+        let settingsURL = stateDir.appendingPathComponent("game_settings.json")
+        try #"{ "fontScale": 2.0 }"#.write(to: overlayURL, atomically: true, encoding: .utf8)
+        try #"{ "renderScale": "x2" }"#.write(to: settingsURL, atomically: true, encoding: .utf8)
+        let before = try Data(contentsOf: overlayURL)
+        // An immutable file cannot be replaced, so the strip fails.
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: settingsURL.path)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.immutable: false], ofItemAtPath: settingsURL.path)
+        }
+
+        XCTAssertFalse(
+            ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+                stateDirectory: stateDir, gameDirectory: gameDir))
+
+        XCTAssertEqual(try Data(contentsOf: overlayURL), before)
+    }
+    #endif
+
     func testDisplayMigrationRemovesEmptyOverlayAndKeepsSettingsValue() throws {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)

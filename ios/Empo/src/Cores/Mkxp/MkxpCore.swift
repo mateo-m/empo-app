@@ -255,12 +255,8 @@ struct MkxpCore: GameCore {
     }
 
     /// Older builds kept the engine settings in `game_settings.json`.
-    /// Moving them rebuilds `mkxp.json`, so the display settings must
-    /// leave that file first.
     private static func migrateOldSettings(in container: GameContainer) {
         let stateDirectory = container.empoStateURL
-        guard ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
-        else { return }
         ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
             stateDirectory: stateDirectory,
             gameDirectory: container.gameURL

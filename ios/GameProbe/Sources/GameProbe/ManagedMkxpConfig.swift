@@ -512,15 +512,22 @@ public enum ManagedMkxpConfig {
         return legacyGameSettingsKeys.contains { json[$0] != nil }
     }
 
-    /// One-time migration. Build a sparse overlay from the legacy
-    /// `game_settings.json` engine keys. Replace `EmpoState/mkxp.json`.
-    /// Strip those keys from the sidecar.
+    /// One-time migration. Moves the display settings out of the
+    /// overlay first. Then builds a sparse overlay from the legacy
+    /// `game_settings.json` engine keys, replaces
+    /// `EmpoState/mkxp.json` with it, and strips those keys from the
+    /// sidecar. When the strip fails, the old overlay comes back, so
+    /// the overlay is never rebuilt over edits made after a
+    /// migration.
     @discardableResult
     public static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
         gameDirectory: URL
     ) -> Bool {
         _ = gameDirectory
+        guard migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory) else {
+            return false
+        }
         let settingsURL = stateDirectory.appendingPathComponent(settingsFilename)
         guard let data = try? Data(contentsOf: settingsURL),
             var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -532,24 +539,26 @@ public enum ManagedMkxpConfig {
             return true
         }
 
-        let overrides = legacyValues(from: json)
-        guard writeSparseOverlay(overrides, to: stateDirectory) else {
+        let overlayURL = overlayConfigURL(in: stateDirectory)
+        let previousOverlay = try? Data(contentsOf: overlayURL)
+        guard writeSparseOverlay(legacyValues(from: json), to: stateDirectory) else {
             return false
         }
 
         for key in legacyGameSettingsKeys {
             json.removeValue(forKey: key)
         }
-        guard let cleaned = try? JSONSerialization.data(
-            withJSONObject: json,
-            options: [.prettyPrinted, .sortedKeys]
-        ) else {
-            return false
-        }
         do {
+            let cleaned = try JSONSerialization.data(
+                withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
             try cleaned.write(to: settingsURL, options: .atomic)
             return true
         } catch {
+            if let previousOverlay {
+                try? previousOverlay.write(to: overlayURL, options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(at: overlayURL)
+            }
             return false
         }
     }
