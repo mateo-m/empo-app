@@ -917,6 +917,31 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
     }
 
+    #if canImport(Darwin)
+    func testLegacyMigrationKeepsTheNewOverlayAndRunsAgainWhenTheStripFails() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let settingsURL = stateDir.appendingPathComponent("game_settings.json")
+        try #"{ "fontScale": 2.0 }"#.write(
+            to: stateDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try #"{ "renderScale": "x2" }"#.write(to: settingsURL, atomically: true, encoding: .utf8)
+        // An immutable file cannot be replaced, so the strip fails.
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: settingsURL.path)
+        defer {
+            try? FileManager.default.setAttributes(
+                [.immutable: false], ofItemAtPath: settingsURL.path)
+        }
+
+        XCTAssertFalse(
+            ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
+                stateDirectory: stateDir, gameDirectory: gameDir))
+
+        XCTAssertEqual(try readOverlayConfig(stateDir)["enableHires"] as? Bool, true)
+        XCTAssertTrue(ManagedMkxpConfig.gameSettingsContainsLegacyEngineKeys(at: stateDir))
+    }
+    #endif
+
     func testDisplayMigrationRemovesEmptyOverlayAndKeepsSettingsValue() throws {
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
