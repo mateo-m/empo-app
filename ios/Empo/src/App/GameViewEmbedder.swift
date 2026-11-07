@@ -38,6 +38,8 @@ enum GameViewEmbedder {
     }
 
     /// The core has no event for "the game window exists", so this polls.
+    /// `UIWindow.didBecomeVisibleNotification` comes too early: the PSDK
+    /// core shows its window before `gamecore_getGameWindow` returns it.
     static func embedWithRetry() {
         retryTask?.cancel()
         if embedIfNeeded() { return }
