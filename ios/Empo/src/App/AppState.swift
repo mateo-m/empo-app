@@ -23,6 +23,8 @@ class AppState {
     var selectedGame: GameEntry?
     private(set) var launchedSettings: LaunchedSettings?
     var errorMessage: String?
+    /// True while `errorMessage` says that a game did not start.
+    var launchFailed = false
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
     /// The core blocks its game thread until the user dismisses
     /// RootView's info alert. The game then
@@ -75,15 +77,17 @@ class AppState {
         session.delegate = self
     }
 
-    func selectGame(_ game: GameEntry) {
+    /// True when the game resumes or starts to launch. The library
+    /// opens the loading screen only then.
+    func selectGame(_ game: GameEntry) -> Bool {
         let pauseManager = PauseManager.shared
         if let paused = pauseManager.pausedGame, paused.id == game.id {
             resumePausedGame()
-            return
+            return true
         }
 
         guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil, launchTask == nil
-        else { return }
+        else { return false }
         // The hard stop of 7.6 ends a restore in flight before the
         // launch moves saves, makes folders, or reads the settings.
         // The hold starts before the task, because a restore that
@@ -99,6 +103,7 @@ class AppState {
             guard phase == nil, PauseManager.shared.pausedGame == nil else { return }
             launch(game)
         }
+        return true
     }
 
     private func launch(_ game: GameEntry) {
@@ -106,6 +111,7 @@ class AppState {
         do {
             start = try GameStart(game: game)
         } catch {
+            launchFailed = true
             errorMessage = error.localizedDescription
             return
         }
@@ -190,7 +196,8 @@ class AppState {
     @ObservationIgnored private var quitOnPause = false
     @ObservationIgnored private var quitTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
-    @ObservationIgnored private var launchTask: Task<Void, Never>?
+    private var launchTask: Task<Void, Never>?
+    var isLaunching: Bool { launchTask != nil }
 
     /// Pauses the game, so the library comes back the same way, and
     /// kills it once the core says it paused. The game is never marked

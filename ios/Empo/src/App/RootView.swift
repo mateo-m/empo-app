@@ -268,6 +268,7 @@ struct RootView: View {
     }
 
     private var errorAlertTitle: Text {
+        if appState.launchFailed { return Text("Can't start the game") }
         guard engineHung || appState.phase != nil else { return Text("Last session ended early") }
         return appState.canEndStuckGame ? Text("The game stopped") : Text("Restart Empo")
     }
@@ -289,6 +290,7 @@ struct RootView: View {
     private func dismissErrorAlert() {
         if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
         appState.errorMessage = nil
+        appState.launchFailed = false
     }
 
     private var showInfoAlert: Binding<Bool> {

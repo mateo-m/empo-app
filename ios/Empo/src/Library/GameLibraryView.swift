@@ -187,6 +187,9 @@ struct GameLibraryView: View {
                             sourceID: source.transitionID(for: game.id),
                             in: heroNamespace))
             }
+            .onChange(of: appState.isLaunching) { _, launching in
+                if !launching, appState.phase == nil { path = NavigationPath() }
+            }
             .onChange(of: appState.phase) { _, newPhase in
                 handleAppPhaseChange(newPhase)
             }
@@ -1224,8 +1227,7 @@ struct GameLibraryView: View {
         if let warning = library.launchWarning(for: game) {
             warnedLaunch = WarnedLaunch(game: game, warning: warning)
         } else {
-            appState.selectGame(game)
-            push(game)
+            if appState.selectGame(game) { push(game) }
         }
     }
 
@@ -1244,8 +1246,7 @@ struct GameLibraryView: View {
     }
 
     private func continueDespiteLaunchWarning(_ game: GameEntry) {
-        appState.selectGame(game)
-        push(game)
+        if appState.selectGame(game) { push(game) }
     }
 
     private func requestStopImport(_ id: String) {
