@@ -291,14 +291,13 @@ struct ControllerSetupSheet: View {
         }
         .padding(20)
         .frame(width: 380)
-        // The button list behind the sheet would light up at each press.
         .onAppear {
-            ControllerPressListener.shared.end()
+            ControllerPressListener.shared.setupSheetAppeared()
             setup.start()
         }
         .onDisappear {
             setup.stop()
-            ControllerPressListener.shared.begin()
+            ControllerPressListener.shared.setupSheetDisappeared()
         }
     }
 }
