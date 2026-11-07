@@ -115,9 +115,6 @@ extension BackupStateStore {
     private enum SchedulerKey: String {
         /// The consecutive runs lost to a force quit, per 7.10.
         case interruptedRunTally = "interrupted-run-tally"
-        /// The notifications already posted, per 7.11. A key that
-        /// leaves the list arms its cause again.
-        case notificationLedger = "notification-ledger"
     }
 
     private func schedulerValue(_ key: SchedulerKey) throws -> String? {
@@ -144,17 +141,28 @@ extension BackupStateStore {
         try setSchedulerValue(String(tally.count), for: .interruptedRunTally)
     }
 
+    // MARK: - The notifications already posted, per SPEC 7.11
+
     public func notificationLedger() throws -> BackupNotificationLedger {
-        guard let text = try schedulerValue(.notificationLedger), !text.isEmpty else {
-            return BackupNotificationLedger()
-        }
+        let rows = try database.query("SELECT cause, targetId FROM posted_notification")
         return BackupNotificationLedger(
-            postedKeys: Set(text.split(separator: "\n").map(String.init)))
+            posted: Set(
+                rows.compactMap { row in
+                    BackupFailFastCause(rawValue: row[0].string ?? "").map {
+                        BackupNotificationLedger.Posted(cause: $0, targetId: row[1].string)
+                    }
+                }))
     }
 
     public func saveNotificationLedger(_ ledger: BackupNotificationLedger) throws {
-        try setSchedulerValue(
-            ledger.postedKeys.sorted().joined(separator: "\n"), for: .notificationLedger)
+        try database.transaction {
+            try database.run("DELETE FROM posted_notification")
+            for entry in ledger.posted {
+                try database.run(
+                    "INSERT INTO posted_notification (cause, targetId) VALUES (?, ?)",
+                    [.text(entry.cause.rawValue), entry.targetId.map { .text($0) } ?? .null])
+            }
+        }
     }
 
     // MARK: - The partial-path clock of SPEC 7.2

@@ -115,6 +115,10 @@ final class BackupStateStoreTests: XCTestCase {
             INSERT INTO run_record VALUES ('open', 'target-a', 900, NULL, 'failed', 0, 0, 'closed early');
             INSERT INTO run_record VALUES ('done', 'target-a', 800, 860, 'partial', 10, 2, NULL);
             INSERT INTO pending_deletion VALUES ('target-a', 'gone', 700, '["bucket"]');
+            INSERT INTO scheduler_state VALUES (
+                'notification-ledger',
+                'device-storage-low' || char(10) || 'sign-in-dead@target-a' || char(10)
+                    || 'target-blocked@removed');
             """)
         try raw.setUserVersion(5)
         raw.close()
@@ -157,6 +161,12 @@ final class BackupStateStoreTests: XCTestCase {
             StalenessClock(
                 targetId: "target-a", gameKey: "abc", lastSuccessAt: Date(timeIntervalSince1970: 500)))
         XCTAssertNil(try store.staleness(targetId: "target-b", gameKey: "other"))
+        XCTAssertEqual(
+            try store.notificationLedger(),
+            BackupNotificationLedger(posted: [
+                .init(cause: .deviceStorageLow, targetId: nil),
+                .init(cause: .signInDead, targetId: "target-a"),
+            ]))
         let reopened = try BackupStateStore(url: databaseURL)
         defer { reopened.close() }
         XCTAssertEqual(reopened.openOutcome, .opened)
@@ -639,6 +649,21 @@ final class BackupStateStoreTests: XCTestCase {
         _ = ledger.post(causes: [.deviceStorageLow], targetId: "t2")
         try store.saveNotificationLedger(ledger)
         XCTAssertEqual(try store.notificationLedger(), ledger)
+    }
+
+    func testRemovingATargetArmsItsNotificationsAgain() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        var ledger = BackupNotificationLedger()
+        _ = ledger.post(causes: [.signInDead, .deviceStorageLow], targetId: "icloud-drive")
+        try store.saveNotificationLedger(ledger)
+
+        try store.removeTarget(targetId: "icloud-drive")
+
+        var after = try store.notificationLedger()
+        XCTAssertEqual(
+            after.post(causes: [.signInDead, .deviceStorageLow], targetId: "icloud-drive"),
+            [.signInDead])
     }
 
     func testThePartialTallyReplacesRatherThanMerges() throws {

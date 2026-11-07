@@ -180,7 +180,35 @@ public final class BackupStateStore {
             DROP TABLE staleness;
             ALTER TABLE staleness_v6 RENAME TO staleness;
             """)
+        try movePostedNotifications(database)
         try database.setUserVersion(schemaVersion)
+    }
+
+    /// Version 5 kept each posted notification as `<cause>@<target
+    /// id>` text, and a removed target left its keys behind. Only the
+    /// keys of a target the store still knows move.
+    private static func movePostedNotifications(_ database: SQLiteDatabase) throws {
+        try database.execute("CREATE TABLE posted_notification (cause TEXT NOT NULL, targetId TEXT)")
+        let legacyKey = "notification-ledger"
+        let text =
+            try database.query(
+                "SELECT value FROM scheduler_state WHERE key = ?", [.text(legacyKey)]
+            ).first?[0].string ?? ""
+        var known = Set<String>()
+        for table in try targetScopedTables(in: database) where table != "posted_notification" {
+            for row in try database.query("SELECT DISTINCT targetId FROM \(table)") {
+                if let id = row[0].string { known.insert(id) }
+            }
+        }
+        for key in text.split(separator: "\n") {
+            let parts = key.split(separator: "@", maxSplits: 1).map(String.init)
+            let targetId = parts.count == 2 ? parts[1] : nil
+            if let targetId, !known.contains(targetId) { continue }
+            try database.run(
+                "INSERT INTO posted_notification (cause, targetId) VALUES (?, ?)",
+                [.text(parts[0]), targetId.map { .text($0) } ?? .null])
+        }
+        try database.run("DELETE FROM scheduler_state WHERE key = ?", [.text(legacyKey)])
     }
 
     /// The write-ahead log leaves two files beside the database. A
@@ -282,6 +310,10 @@ public final class BackupStateStore {
             key TEXT NOT NULL PRIMARY KEY,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS posted_notification (
+            cause TEXT NOT NULL,
+            targetId TEXT
+        );
         CREATE TABLE IF NOT EXISTS partial_tally (
             targetId TEXT NOT NULL,
             gameKey TEXT NOT NULL,
@@ -300,7 +332,7 @@ public final class BackupStateStore {
     /// is covered without an edit here. `removeTarget` must leave no
     /// row behind, and a hand-kept list is one merge away from
     /// missing a table.
-    private func targetScopedTables() throws -> [String] {
+    private static func targetScopedTables(in database: SQLiteDatabase) throws -> [String] {
         let rows = try database.query(
             """
             SELECT m.name FROM sqlite_master AS m
@@ -334,7 +366,7 @@ public final class BackupStateStore {
     /// makes this a `DELETE WHERE` instead of an `rm`, which is the
     /// price 6.2 names.
     public func removeTarget(targetId: String) throws {
-        try delete(targetId: targetId, from: try targetScopedTables())
+        try delete(targetId: targetId, from: try Self.targetScopedTables(in: database))
     }
 
     private func delete(targetId: String, from tables: [String]) throws {
