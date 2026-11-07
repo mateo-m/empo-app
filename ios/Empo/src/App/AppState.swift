@@ -50,19 +50,25 @@ class AppState {
 
     var pendingCrashRecovery: Bool { session.pendingCrashRecovery }
 
+    /// Only the newest check may set `updateStatus`: an older check can
+    /// finish last.
+    @ObservationIgnored private var updateCheckGeneration = 0
+
     func checkForUpdatesIfStale() async {
-        guard UpdateChecker.isSideloadBuild else { return }
-        updateStatus = .checking
-        let result = await UpdateChecker.checkIfStale()
-        withAnimation(Motion.standard) {
-            updateStatus = result
-        }
+        await checkForUpdates(UpdateChecker.checkIfStale)
     }
 
     func checkForUpdatesNow() async {
+        await checkForUpdates(UpdateChecker.checkNow)
+    }
+
+    private func checkForUpdates(_ check: () async -> UpdateChecker.Status) async {
         guard UpdateChecker.isSideloadBuild else { return }
+        updateCheckGeneration += 1
+        let generation = updateCheckGeneration
         updateStatus = .checking
-        let result = await UpdateChecker.checkNow()
+        let result = await check()
+        guard generation == updateCheckGeneration else { return }
         withAnimation(Motion.standard) {
             updateStatus = result
         }
