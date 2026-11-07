@@ -10,7 +10,7 @@ struct PlayerView: View {
     var layout: ControlsLayout
     @Environment(\.pauseManager) private var pauseManager
     @Environment(\.appSettings) private var settings
-    @State private var editMode = false
+    private var editMode: Bool { layout.editSessionActive }
     /// Mirrored here so entering edit mode with the preference on
     /// can round the layout immediately (the toggle itself lives in
     /// PlayerEditToolbar).
@@ -374,7 +374,7 @@ struct PlayerView: View {
             // library -> resume (engine state is process-static).
             actions.runtime.bind(container: layout.currentContainer)
             applyBindings()
-            input.start(overlayHidden: $controlsHidden, editMode: $editMode)
+            input.start(overlayHidden: $controlsHidden, editMode: { layout.editSessionActive })
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
@@ -395,6 +395,13 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
+            // A pause from edit mode removes this view. The next
+            // player view starts outside edit mode, so the session
+            // ends here, the same as Done.
+            if editMode {
+                layout.save()
+                layout.endEditSession()
+            }
             ChromeHitRegions.removeAll()
             input.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
@@ -760,20 +767,21 @@ struct PlayerView: View {
             controlsHidden = false
             input.noteManualOverlayToggle()
         }
-        withAnimation(Motion.snappy) {
-            editMode.toggle()
-        }
         if keyboardMode {
             toggleKeyboard()
         }
-        if editMode {
-            layout.beginEditSession()
+        if entering {
+            withAnimation(Motion.snappy) {
+                layout.beginEditSession()
+            }
         } else {
             // Save BEFORE ending the session: the ambient auto-create
             // branch only fires inside an edit session, and sheet-only
             // edits commit exactly here.
             layout.save()
-            layout.endEditSession()
+            withAnimation(Motion.snappy) {
+                layout.endEditSession()
+            }
             resetToolbarIdleTimer()
         }
     }

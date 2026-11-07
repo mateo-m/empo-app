@@ -401,7 +401,8 @@ class ControlsLayout {
     private static let maxEditUndoDepth = 50
 
     private var editUndoStack: [OrientedControls] = []
-    private var editSessionActive = false
+    /// The edit mode of the player and of the profile editor.
+    private(set) var editSessionActive = false
 
     var canUndo: Bool { editSessionActive && !editUndoStack.isEmpty }
 
@@ -794,11 +795,9 @@ class ControlsLayout {
         if currentGameID != nil {
             save()
         }
-        editSessionActive = false
         // A failed save() can leave screen edits behind. They must
         // not leak into the next game's first save.
-        screenEdits.removeAll()
-        activeScreenDrag = nil
+        endEditSession()
         clearEditUndoStack()
         staggerGeneration += 1
         currentGameID = newGameID

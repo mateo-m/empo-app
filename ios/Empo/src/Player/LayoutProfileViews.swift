@@ -488,7 +488,6 @@ struct LayoutProfileEditorView: View {
             .onChange(of: editingOrientation) { _, new in
                 layout.editorSave()
                 layout.setOrientation(new)
-                layout.beginEditSession()
                 diskScreen = LayoutProfilesManager.store.readScreen(currentName)
             }
 

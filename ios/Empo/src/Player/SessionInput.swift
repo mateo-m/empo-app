@@ -56,7 +56,7 @@ final class SessionInput {
         controller.hasHadControllerThisSession || keyboard.hasHadKeyboardThisSession
     }
 
-    func start(overlayHidden: Binding<Bool>, editMode: Binding<Bool>) {
+    func start(overlayHidden: Binding<Bool>, editMode: @escaping () -> Bool) {
         overlay.bind(hidden: overlayHidden, editMode: editMode)
         controller.start()
         keyboard.start()
