@@ -38,13 +38,7 @@ struct PlayerView: View {
     @State private var input = SessionInput()
     @State private var controlsVisible: Bool = true
 
-    @State private var showAddSheet = false
-    @State private var showResetConfirm = false
-    @State private var editingButton: ButtonModel?
-    @State private var editingActionButton: ActionButtonModel?
-    @State private var editingDPad = false
-    @State private var draggingDPad = false
-    @State private var draggingButtonID: UUID?
+    @State private var editDialog: ControlsEditDialog?
 
     /// More-menu sheet (toolbar -> ellipsis button). Houses pause /
     /// cheats / fast-forward / debug-overlay so the toolbar itself
@@ -145,11 +139,7 @@ struct PlayerView: View {
                         controlsMinY: controlsMinY,
                         editMode: editMode,
                         safeArea: controlsSafeArea,
-                        editingButton: $editingButton,
-                        editingActionButton: $editingActionButton,
-                        editingDPad: $editingDPad,
-                        draggingDPad: $draggingDPad,
-                        draggingButtonID: $draggingButtonID
+                        editDialog: $editDialog
                     )
                 }
 
@@ -180,8 +170,7 @@ struct PlayerView: View {
                         safeArea: controlsSafeArea,
                         geoSize: geo.size,
                         layout: layout,
-                        showAddSheet: $showAddSheet,
-                        showResetConfirm: $showResetConfirm,
+                        editDialog: $editDialog,
                         onDone: { toggleEditMode() }
                     )
                     // Fade while the screen gizmo drags, so the
@@ -467,11 +456,7 @@ struct PlayerView: View {
         .controlsEditDialogs(
             layout: layout,
             actions: actions,
-            showAddSheet: $showAddSheet,
-            showResetConfirm: $showResetConfirm,
-            editingButton: $editingButton,
-            editingActionButton: $editingActionButton,
-            editingDPad: $editingDPad
+            dialog: $editDialog
         )
     }
 

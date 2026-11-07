@@ -107,8 +107,7 @@ struct PlayerEditToolbar: View {
     let safeArea: EdgeInsets
     let geoSize: CGSize
     var layout: ControlsLayout
-    @Binding var showAddSheet: Bool
-    @Binding var showResetConfirm: Bool
+    @Binding var editDialog: ControlsEditDialog?
     let onDone: () -> Void
 
     /// Shared with PlayerControlsOverlay's drag pipeline, so the
@@ -217,7 +216,7 @@ struct PlayerEditToolbar: View {
     private var actionsRow: some View {
         HStack(spacing: Spacing.md) {
             IconButton("plus", label: "Add button", style: .outline, size: .sm, tint: .white) {
-                showAddSheet = true
+                editDialog = .addButton
             }
 
             IconButton(
@@ -251,7 +250,7 @@ struct PlayerEditToolbar: View {
             IconButton(
                 "arrow.counterclockwise", label: "Reset layout", style: .outline, size: .sm, tint: .brand
             ) {
-                showResetConfirm = true
+                editDialog = .resetConfirm
             }
 
             Button {

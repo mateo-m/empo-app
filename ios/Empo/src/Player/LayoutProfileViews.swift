@@ -399,12 +399,7 @@ struct LayoutProfileEditorView: View {
     @State private var layout: ControlsLayout
     @State private var actions = PlayerActionRegistry()
     @State private var editingOrientation: ControlsOrientation = .portrait
-    @State private var showAddSheet = false
-    @State private var editingButton: ButtonModel?
-    @State private var editingActionButton: ActionButtonModel?
-    @State private var editingDPad = false
-    @State private var draggingDPad = false
-    @State private var draggingButtonID: UUID?
+    @State private var editDialog: ControlsEditDialog?
 
     init(profileName: String) {
         self.profileName = profileName
@@ -498,17 +493,13 @@ struct LayoutProfileEditorView: View {
                 editMode: true,
                 placeholderRect: placeholderGameRect,
                 forcedOverlay: screenRegion?.overlay,
-                editingButton: $editingButton,
-                editingActionButton: $editingActionButton,
-                editingDPad: $editingDPad,
-                draggingDPad: $draggingDPad,
-                draggingButtonID: $draggingButtonID
+                editDialog: $editDialog
             ) { size, gameRect in
                 screenGizmoLayers(size: size, gameRect: gameRect)
             }
 
             HStack(spacing: Spacing.xl) {
-                Button("Add button") { showAddSheet = true }
+                Button("Add button") { editDialog = .addButton }
                 Button {
                     layout.undoLastEdit()
                 } label: {
@@ -555,14 +546,10 @@ struct LayoutProfileEditorView: View {
             // The editor's registry has no game, so it reports fast
             // forward as off.
             actions: nil,
-            showAddSheet: $showAddSheet,
-            // Reset is a per-game concept (unpin, or back to the
-            // ambient chain). The editor has neither. Rename and
-            // delete live in the profiles list.
-            showResetConfirm: .constant(false),
-            editingButton: $editingButton,
-            editingActionButton: $editingActionButton,
-            editingDPad: $editingDPad
+            // The editor has no reset: reset is a per-game concept
+            // (unpin, or back to the ambient chain). Rename and delete
+            // live in the profiles list.
+            dialog: $editDialog
         )
     }
 
@@ -702,11 +689,7 @@ struct EditorCanvasShell<UnderControls: View>: View {
     var placeholderRect: CGRect?
     /// The profile's overlay choice, forwarded to the zone split.
     var forcedOverlay: Bool?
-    var editingButton: Binding<ButtonModel?> = .constant(nil)
-    var editingActionButton: Binding<ActionButtonModel?> = .constant(nil)
-    var editingDPad: Binding<Bool> = .constant(false)
-    var draggingDPad: Binding<Bool> = .constant(false)
-    var draggingButtonID: Binding<UUID?> = .constant(nil)
+    var editDialog: Binding<ControlsEditDialog?> = .constant(nil)
     /// The read-only viewer turns hit testing off entirely, so no
     /// touch reaches the controls and nothing can write.
     var hitTesting = true
@@ -762,11 +745,7 @@ struct EditorCanvasShell<UnderControls: View>: View {
                     editMode: editMode,
                     safeArea: safeArea,
                     isPreview: true,
-                    editingButton: editingButton,
-                    editingActionButton: editingActionButton,
-                    editingDPad: editingDPad,
-                    draggingDPad: draggingDPad,
-                    draggingButtonID: draggingButtonID
+                    editDialog: editDialog
                 )
             }
             .allowsHitTesting(hitTesting)
