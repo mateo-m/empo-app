@@ -18,9 +18,8 @@ enum BackupNetwork {
         set { UserDefaults.standard.set(newValue, forKey: DefaultsKey.backupOverCellular) }
     }
 
-    /// One run over cellular, per 7.4. `BackupScheduler` sets it from
-    /// the press when that run starts and clears it when the run
-    /// ends, and it never changes the stored switch.
+    /// One run over cellular, per 7.4. It never changes the stored
+    /// switch.
     ///
     /// The background session fixes its configuration at creation,
     /// so the per-request flags of `BackupTransferSession.request`
