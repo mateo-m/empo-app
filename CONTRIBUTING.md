@@ -72,8 +72,10 @@ For device builds, swap `iphonesimulator` for `iphoneos` and create a gitignored
 ```sh
 SIM=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
 xcodebuild test -project ios/Empo/Empo.xcodeproj -scheme Empo \
-  -destination "id=$SIM" -only-testing:EmpoTests CODE_SIGNING_ALLOWED=NO
+  -destination "id=$SIM" -only-testing:EmpoTests CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 ```
+
+The tests sign the app ad hoc. The Simulator gives the keychain and StoreKit only to a signed app, so with `CODE_SIGNING_ALLOWED=NO` the backup sign-in and Plus tests fail.
 
 ## Notable hacks
 
