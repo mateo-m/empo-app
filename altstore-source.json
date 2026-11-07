@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.11.0",
+          "buildVersion": "828",
+          "date": "2026-11-07",
+          "localizedDescription": "New\n• Give games the Empo version in $userAgentVersion\n• Add a setting to respect silent mode\n• Let players import a sound set for MIDI music\n• Pick a MIDI sound set for each game\n• Back up saves and games to iCloud Drive, Dropbox, and Google Drive\n• Announce backups, MIDI music, and silent mode in What's new\n• Give games the launcher version in $userAgentVersion\n• Play MIDI with a static FluidSynth and a bundled SoundFont\n\nFixed\n• Move sheet actions into the iPhone Duo side column\n• Keep the backup and layout profile rows in text colors, not brand orange\n• Keep an imported game from reaching files outside its folder\n• Finish the Patreon sign-in with a call that the app signs\n• The black screen after PikaTaxi in Pokémon Insurgence\n• Find a file written after launch when an older file has the same name\n• Track the main branch of litergss2\n\nOther changes\n• Run pull requests on GitHub Macs with a build cache\n• Update AppAuth, swift-crypto, SDL, and web tools\n• Bump version to 0.11.0 (build 825)\n• Add Backups and Empo Plus pages and fix the Patreon links\n• Update the core and ANGLE pins\n• Reorganize What's new",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.11.0/Empo-ios.ipa",
+          "size": 99776387,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.10.4",
           "buildVersion": "802",
           "date": "2026-11-03",
