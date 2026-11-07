@@ -27,6 +27,7 @@ final class ICloudDriveGate {
     private var containerURL: URL?
     private var watch: ICloudUploadWatch?
     private var didObserve = false
+    private var identityChanges = 0
 
     private init() {}
 
@@ -43,6 +44,7 @@ final class ICloudDriveGate {
     /// The gate's answer, from the cache or from a fresh probe.
     func availability() async -> ICloudAvailability {
         if let cached = cache.value { return cached }
+        let identityChangesBefore = identityChanges
 
         // Read 1, on the main thread. This actor is the main actor.
         let hasIdentityToken = FileManager.default.ubiquityIdentityToken != nil
@@ -55,6 +57,8 @@ final class ICloudDriveGate {
         let answer = ICloudDrive.availability(
             hasIdentityToken: hasIdentityToken, containerURL: containerURL,
             hasAppleAccount: hasIdentityToken ? nil : await Self.hasAppleAccount())
+        // The reads above are of the account from before the change.
+        guard identityChanges == identityChangesBefore else { return await availability() }
         cache.record(answer)
         self.containerURL = containerURL
         return answer
@@ -104,6 +108,7 @@ final class ICloudDriveGate {
     /// The user signed in or out of iCloud. The next read probes
     /// again, and the target stays.
     private func identityDidChange() {
+        identityChanges += 1
         cache.identityDidChange()
         containerURL = nil
         watch?.stop()
