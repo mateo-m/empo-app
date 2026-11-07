@@ -222,11 +222,10 @@ final class BackupsScreenTests: XCTestCase {
         ]
         let since = failedAt.addingTimeInterval(-22 * 86_400)
         let games = [
-            GameFreshness(gameKey: "g1"),
-            GameFreshness(
+            LateGame(
                 gameKey: "g2", level: .stale, targetId: "a", cause: .waitingForWiFi,
                 unprotectedSince: since.addingTimeInterval(86_400)),
-            GameFreshness(
+            LateGame(
                 gameKey: "g3", level: .banner, targetId: "b", cause: .waitingForWiFi,
                 unprotectedSince: since),
         ]
@@ -238,11 +237,11 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertEqual(status?.isHealthy, false)
 
         let one = BackupsScreenStatusRules.status(
-            of: targets, games: [games[1]], lastSuccessText: "on 4 March")
+            of: targets, games: [games[0]], lastSuccessText: "on 4 March")
         XCTAssertEqual(one?.line, "1 game not backed up")
 
         let fresh = BackupsScreenStatusRules.status(
-            of: targets, games: [games[0]], lastSuccessText: "on 4 March")
+            of: targets, games: [], lastSuccessText: "on 4 March")
         XCTAssertEqual(fresh?.line, "All games backed up")
     }
 
@@ -251,7 +250,7 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowFacts(descriptor: target(id: "a", label: "Dropbox"), failure: .needsSignIn)
         ]
         let games = [
-            GameFreshness(
+            LateGame(
                 gameKey: "g1", level: .banner, targetId: "a", cause: .needsSignIn,
                 unprotectedSince: failedAt)
         ]

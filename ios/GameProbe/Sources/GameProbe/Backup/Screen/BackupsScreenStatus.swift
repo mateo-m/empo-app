@@ -37,7 +37,7 @@ public enum BackupsScreenStatusRules {
     /// same state break the tie on the target id. `lastSuccessText`
     /// is the newest run in the caller's words, such as "today".
     public static func status(
-        of targets: [TargetRowFacts], games: [GameFreshness] = [],
+        of targets: [TargetRowFacts], games: [LateGame] = [],
         lastSuccessText: String? = nil
     ) -> BackupsScreenStatus? {
         guard !targets.isEmpty else { return nil }
@@ -61,11 +61,12 @@ public enum BackupsScreenStatusRules {
                 targetId: worst.targetId, isHealthy: false)
         }
         if let late = Staleness.worstGame(of: games) {
-            let count = games.filter { $0.level != .fresh }.count
+            let count = games.count
             let label = rows.first { $0.targetId == late.targetId }?.title
             return BackupsScreenStatus(
-                line: count == 1 ? screenText("1 game not backed up") : screenText("%lld games not backed up", count),
-                detail: (late.cause ?? .waitingForARun).line(targetLabel: label),
+                line: count == 1
+                    ? screenText("1 game not backed up") : screenText("%lld games not backed up", count),
+                detail: late.cause.line(targetLabel: label),
                 targetId: late.targetId, isHealthy: false)
         }
         let backedUp = Set(targets.filter { $0.lastSuccessText != nil }.map(\.descriptor.id))

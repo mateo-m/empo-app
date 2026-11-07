@@ -44,7 +44,7 @@ enum GameBackupStatusReader {
                 targets: targets,
                 isRunning: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
                 now: now),
-            freshness: Staleness.worst(gameKey: gameKey, of: targets.map(\.freshness), now: now),
+            late: Staleness.worst(gameKey: gameKey, of: targets.map(\.freshness), now: now),
             lastSuccessAt: GameBackupStatusRules.lastSuccessAt(of: targets))
     }
 }
@@ -52,6 +52,6 @@ enum GameBackupStatusReader {
 /// One game's backup state, read once.
 struct GameBackupRead {
     var status: GameBackupStatus
-    var freshness: GameFreshness
+    var late: LateGame?
     var lastSuccessAt: Date?
 }
