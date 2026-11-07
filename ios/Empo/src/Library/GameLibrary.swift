@@ -158,7 +158,13 @@ class GameLibrary {
         reload(initialLoad: true)
     }
 
+    /// Counts the reloads. Only the newest reload may apply its scan: an
+    /// older scan can finish last, and it holds older data.
+    private var reloadGeneration = 0
+
     func reload(initialLoad: Bool = false) {
+        reloadGeneration += 1
+        let generation = reloadGeneration
         let cleanupInvalid =
             initialLoad
             ? UserDefaults.standard.bool(forKey: DefaultsKey.cleanupInvalidGames)
@@ -195,7 +201,8 @@ class GameLibrary {
                     )
                 }
                 await MainActor.run {
-                    GameLibrary.shared.applyScanResults(quick, scanStartedAt: scanStartedAt)
+                    GameLibrary.shared.applyScanResults(
+                        quick, scanStartedAt: scanStartedAt, generation: generation)
                 }
             }
 
@@ -207,7 +214,8 @@ class GameLibrary {
                 )
             }
             await MainActor.run {
-                GameLibrary.shared.applyScanResults(scanned, scanStartedAt: scanStartedAt)
+                GameLibrary.shared.applyScanResults(
+                    scanned, scanStartedAt: scanStartedAt, generation: generation)
             }
         }
     }
@@ -218,7 +226,8 @@ class GameLibrary {
     /// scan no longer sees, append newcomers. Marks the initial scan
     /// complete since any applied pass answers the emptiness
     /// question.
-    private func applyScanResults(_ scanned: [GameSnapshot], scanStartedAt: Date) {
+    private func applyScanResults(_ scanned: [GameSnapshot], scanStartedAt: Date, generation: Int) {
+        guard generation == reloadGeneration else { return }
         // A scan that raced an import registration can still carry
         // an entry for a container whose import task now owns it
         // (an in-place update's container exists on disk for the
@@ -274,29 +283,27 @@ class GameLibrary {
     /// Merge a single just-imported container into `games` without
     /// rescanning the whole library. Falls back to a full reload if
     /// the snapshot can't be built (metadata missing, etc.).
-    func mergeImportedGame(container: GameContainer) {
+    func mergeImportedGame(container: GameContainer) async {
         let importID = container.id
-        Task.detached {
-            let snapshot = GameCatalog.buildSnapshot(from: container)
-            await MainActor.run {
-                let lib = GameLibrary.shared
-                guard let snapshot else {
-                    lib.reload()
-                    return
-                }
-                lib.localMutationDates[importID] = Date()
-                if let model = lib.games.first(where: { $0.id == importID }) {
-                    // No animation here. The card keeps its cell and
-                    // only its status changes, from importing to
-                    // ready. An animated flip makes LazyVGrid lay the
-                    // departing importing card out in the first free
-                    // cell after the live ones, which slides the grey
-                    // card down the screen before it fades.
-                    model.apply(snapshot)
-                } else {
-                    withAnimation { lib.games.append(GameEntry(snapshot)) }
-                }
-            }
+        let startedAt = Date()
+        let snapshot = await Task.detached { GameCatalog.buildSnapshot(from: container) }.value
+        // A delete that landed while the snapshot was built wins.
+        if let mutated = localMutationDates[importID], mutated > startedAt { return }
+        guard let snapshot else {
+            reload()
+            return
+        }
+        localMutationDates[importID] = Date()
+        if let model = games.first(where: { $0.id == importID }) {
+            // No animation here. The card keeps its cell and
+            // only its status changes, from importing to
+            // ready. An animated flip makes LazyVGrid lay the
+            // departing importing card out in the first free
+            // cell after the live ones, which slides the grey
+            // card down the screen before it fades.
+            model.apply(snapshot)
+        } else {
+            withAnimation { games.append(GameEntry(snapshot)) }
         }
     }
 

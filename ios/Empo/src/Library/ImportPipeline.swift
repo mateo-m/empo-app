@@ -835,8 +835,19 @@ extension GameLibrary {
         cancelledImports.withLock { $0.contains(id) }
     }
 
+    /// Does nothing when the import is gone: a flag with no import to
+    /// consume it would cancel a later import of the same folder.
     nonisolated func cancelImport(_ id: String) {
-        cancelledImports.withLock { _ = $0.insert(id) }
+        inFlightImports.withLock { inFlight in
+            if inFlight.contains(id) { cancelledImports.withLock { _ = $0.insert(id) } }
+        }
+    }
+
+    nonisolated func endInFlightImport(_ id: String) {
+        inFlightImports.withLock { inFlight in
+            _ = inFlight.remove(id)
+            cancelledImports.withLock { _ = $0.remove(id) }
+        }
     }
 
     nonisolated func clearCancellation(_ id: String) {
@@ -882,7 +893,7 @@ extension GameLibrary {
         let isReplacement = replacingImports.withLock { $0.remove(importID) != nil }
         if isReplacement {
             if let resolvedContainer {
-                mergeImportedGame(container: resolvedContainer)
+                Task { await mergeImportedGame(container: resolvedContainer) }
             }
             return
         }
@@ -1073,7 +1084,7 @@ extension GameLibrary {
             func failSelection(_ sel: GameLibrary.BatchSelection, _ error: Error) {
                 failures.append((sel, error))
                 active.removeAll { $0.importID == sel.importID }
-                self.inFlightImports.withLock { _ = $0.remove(sel.importID) }
+                self.endInFlightImport(sel.importID)
                 Task { @MainActor in
                     GameLibrary.shared.abandonImport(
                         importID: sel.importID, container: containers[sel.importID])
@@ -1428,13 +1439,14 @@ extension GameLibrary {
                     }
 
                     committed = true
-                    self.inFlightImports.withLock { _ = $0.remove(sel.importID) }
                     active.removeAll { $0.importID == sel.importID }
                     self.updateCardProgress(sel.importID, 1.0)
 
-                    await MainActor.run {
-                        GameLibrary.shared.mergeImportedGame(container: container)
-                    }
+                    // The import stays registered until the card is
+                    // ready, so a delete in between cannot take the
+                    // path of a finished import.
+                    await GameLibrary.shared.mergeImportedGame(container: container)
+                    self.endInFlightImport(sel.importID)
                 }
 
                 await finishBatch(failures)
