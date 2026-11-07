@@ -28,7 +28,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: 0.11.0
-    CURRENT_PROJECT_VERSION: 825
+    CURRENT_PROJECT_VERSION: 828
     # The Dropbox app key of SPEC 9.2. A PKCE client holds no secret,
     # so the key is public and lives here. It builds the callback
     # scheme `db-<key>` in Info.plist. An empty key hides Dropbox from

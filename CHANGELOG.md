@@ -19,6 +19,7 @@
 ### Chores
 
 - Update AppAuth, swift-crypto, SDL, and web tools (#242) ([`62b6c6a`](https://github.com/mateo-m/empo-app/commit/62b6c6a1c8077dab1c3dda20156913cb6abea48f))
+- Bump version to 0.11.0 (build 825) ([`7fd87d5`](https://github.com/mateo-m/empo-app/commit/7fd87d5066700937102450a4790bf082cfac98df))
 
 ### Documentation
 
