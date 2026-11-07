@@ -599,6 +599,27 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(try store.dirtyGames().map(\.targetId), ["target-2"])
     }
 
+    func testAClosedStreamLeavesNoInterruptedRunRecordThatNamesIt() async throws {
+        let other = "Second Quest"
+        try makeGameTree(gameName)
+        try makeGameTree(other)
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let watcher = InterruptedRunWatcher(stateURL: stateURL)
+        let engine = try makeEngine(makeTarget(), observer: watcher, stateURL: stateURL)
+
+        _ = await engine.run(request(games: [game(gameName), game(other)]))
+
+        let seen = await watcher.seen
+        let games = [key(gameName), key(other)]
+        let uploads = seen.filter { $0.event == "uploads" && games.contains($0.stream) }
+        XCTAssertEqual(uploads.count, 2)
+        let firstStream = try XCTUnwrap(uploads.first?.stream)
+        XCTAssertTrue(
+            seen.contains { $0.event == "confirmed" && $0.record == firstStream },
+            "the first stream wrote no record")
+        XCTAssertNil(uploads.last?.record)
+    }
+
     func testARunThatFindsNothingNewCountsAsASuccess() async throws {
         try await assertARunWithNoChangeCountsAsASuccess { _ in }
     }
@@ -1303,7 +1324,7 @@ final class SnapshotEngineTests: XCTestCase {
             namespaceId: namespaceId,
             stream: BackupStream(key: key(gameName)),
             snapshotId: snapshotId,
-            scope: .wholeGame,
+            choice: .restore(.wholeGame),
             destination: MemberSource(container: container(gameName)),
             freeSpaceBytes: .max)
         let running = Task { await engine.run(restore) }
@@ -1347,7 +1368,7 @@ final class SnapshotEngineTests: XCTestCase {
                 namespaceId: namespaceId,
                 stream: BackupStream(key: key(gameName)),
                 snapshotId: snapshotId,
-                scope: .wholeGame,
+                choice: .restore(.wholeGame),
                 destination: MemberSource(container: container(gameName)),
                 freeSpaceBytes: .max))
 
@@ -1385,7 +1406,7 @@ final class SnapshotEngineTests: XCTestCase {
                 namespaceId: namespaceId,
                 stream: BackupStream(key: key(gameName)),
                 snapshotId: snapshotId,
-                scope: .wholeGame,
+                choice: .restore(.wholeGame),
                 destination: MemberSource(container: container(gameName)),
                 freeSpaceBytes: .max))
 
@@ -1422,12 +1443,100 @@ final class SnapshotEngineTests: XCTestCase {
                 namespaceId: namespaceId,
                 stream: BackupStream(key: key(gameName)),
                 snapshotId: snapshotId,
-                scope: .wholeGame,
+                choice: .replaceTheTree,
                 destination: MemberSource(container: container(gameName)),
                 localFiles: try localFiles(of: gameName),
                 freeSpaceBytes: .max,
-                replacesTheTree: true,
                 mode: .full))
+    }
+
+    private func replaceRequest(_ snapshotId: String) throws -> RestoreRequest {
+        RestoreRequest(
+            targetId: targetId,
+            root: "",
+            namespaceId: namespaceId,
+            stream: BackupStream(key: key(gameName)),
+            snapshotId: snapshotId,
+            choice: .replaceTheTree,
+            destination: MemberSource(container: container(gameName)),
+            localFiles: try localFiles(of: gameName),
+            freeSpaceBytes: .max,
+            mode: .full)
+    }
+
+    func testAReplaceThatCannotMoveTheTreeLeavesNoRestoreRecord() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let request = try replaceRequest(snapshotId)
+        // A folder with no write right refuses the move of `Game/`.
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: container(gameName).path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: container(gameName).path)
+        }
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot
+        ).run(request)
+
+        guard case .failed = outcome else {
+            return XCTFail("the replace did not fail: \(outcome)")
+        }
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertNil(try store.intent(kind: .interruptedRestore))
+    }
+
+    func testAResumedReplaceDoesNotMoveTheHalfRestoredTreeAside() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+
+        // The format file, the manifest, and the first blob pass, so
+        // one file lands in the new `Game/`. The second blob holds.
+        let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
+        let latch = TransferLatch(holdFrom: reads + 2)
+        await target.setLatch(latch)
+        let first = try replaceRequest(snapshotId)
+        let engine = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let running = Task { await engine.run(first) }
+        let arrived = await latch.waitForArrivals(reads + 2)
+        XCTAssertTrue(arrived)
+        running.cancel()
+        await latch.open()
+        guard case .stopped = await running.value else {
+            return XCTFail("the first try did not stop")
+        }
+        await target.setLatch(nil)
+        let foldersAfterTheStop = Set(try fm.contentsOfDirectory(atPath: container(gameName).path))
+        let store = try BackupStateStore(url: stateURL)
+        guard case .restore(.replaceTheTree, let moved?) = try store.intent(kind: .interruptedRestore)?.work
+        else {
+            store.close()
+            return XCTFail("the record does not name the moved tree")
+        }
+        store.close()
+
+        let second = try replaceRequest(snapshotId)
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot
+        ).run(second)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the resume did not finish: \(outcome)")
+        }
+        XCTAssertEqual(result.replacedTreeName, moved)
+        XCTAssertEqual(try gameText("save1.dat", in: moved), "played after the backup")
+        XCTAssertEqual(
+            Set(try fm.contentsOfDirectory(atPath: container(gameName).path)), foldersAfterTheStop)
     }
 
     private func gameText(_ path: String, in tree: String = "Game") throws -> String {
@@ -1747,5 +1856,38 @@ actor RunPlanRecorder: BackupRunObserver {
         if plannedAtFirstConfirm == nil { plannedAtFirstConfirm = plan.plannedBytes }
         confirmCount += 1
         plan.confirm(streamKey: streamKey, bytes: bytes)
+    }
+}
+
+/// Reads the interrupted-run record at each upload start and each
+/// confirmed blob.
+private actor InterruptedRunWatcher: BackupRunObserver {
+    struct Sighting: Sendable {
+        var event: String
+        var stream: String
+        var record: String?
+    }
+
+    let stateURL: URL
+    var seen: [Sighting] = []
+
+    init(stateURL: URL) {
+        self.stateURL = stateURL
+    }
+
+    func runPlanned(streamKey: String, bytes: Int64) {}
+
+    func runUploads(streamKey: String) {
+        seen.append(Sighting(event: "uploads", stream: streamKey, record: recordGameKey()))
+    }
+
+    func runConfirmed(streamKey: String, bytes: Int64) {
+        seen.append(Sighting(event: "confirmed", stream: streamKey, record: recordGameKey()))
+    }
+
+    private func recordGameKey() -> String? {
+        guard let store = try? BackupStateStore(url: stateURL) else { return nil }
+        defer { store.close() }
+        return (try? store.intent(kind: .interruptedRun))?.gameKey
     }
 }

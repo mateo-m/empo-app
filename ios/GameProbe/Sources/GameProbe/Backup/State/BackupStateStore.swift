@@ -146,6 +146,7 @@ public final class BackupStateStore {
                 ) AS t;
             DROP TABLE dirty_game;
             ALTER TABLE dirty_game_v6 RENAME TO dirty_game;
+            ALTER TABLE intent_record ADD COLUMN movedAsideTree TEXT;
             """)
         try database.setUserVersion(schemaVersion)
     }
@@ -245,6 +246,7 @@ public final class BackupStateStore {
             remainingBytes INTEGER NOT NULL,
             restoreScope TEXT,
             replacesTree INTEGER NOT NULL,
+            movedAsideTree TEXT,
             createdAt REAL NOT NULL,
             asked INTEGER NOT NULL
         );
@@ -261,7 +263,6 @@ public final class BackupStateStore {
         );
         CREATE INDEX IF NOT EXISTS run_record_startedAt ON run_record (startedAt);
         """
-
 
     // MARK: - Deleting a target and a namespace
 

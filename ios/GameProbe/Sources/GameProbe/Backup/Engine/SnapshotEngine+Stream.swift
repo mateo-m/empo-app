@@ -287,12 +287,12 @@ extension SnapshotEngine {
         save(
             try store.saveIntent(
                 BackupIntentRecord(
-                    kind: .interruptedRun,
                     targetId: targetId,
                     gameKey: run.key,
                     snapshotId: run.snapshotId,
-                    uploadedBytes: run.confirmedBytes,
-                    remainingBytes: max(0, run.plannedBytes - run.confirmedBytes),
+                    work: .run(
+                        uploadedBytes: run.confirmedBytes,
+                        remainingBytes: max(0, run.plannedBytes - run.confirmedBytes)),
                     createdAt: now)),
             "the interrupted-run record of \(run.key)")
     }
@@ -342,6 +342,9 @@ extension SnapshotEngine {
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: run.key),
             "the end of the checkpoint of \(run.key)")
+        save(
+            try store.clearInterruptedRun(targetId: targetId, streamKey: run.key),
+            "the end of the interrupted-run record of \(run.key)")
         if !run.missedMember {
             save(
                 try store.clearDirty(
@@ -372,6 +375,9 @@ extension SnapshotEngine {
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: stream.key),
             "the end of the checkpoint of \(stream.key)")
+        save(
+            try store.clearInterruptedRun(targetId: targetId, streamKey: stream.key),
+            "the end of the interrupted-run record of \(stream.key)")
         if isComplete {
             save(
                 try store.clearDirty(

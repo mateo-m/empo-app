@@ -1,5 +1,21 @@
 import Foundation
 
+/// What one restore writes, per 11.7 and 11.12.
+public enum RestoreChoice: Equatable, Sendable {
+    /// Writes the files of the scope into the tree as it is.
+    case restore(RestoreScope)
+    /// "Use only this backup": moves `Game/` aside, then writes the
+    /// whole game.
+    case replaceTheTree
+
+    public var scope: RestoreScope {
+        switch self {
+        case .restore(let scope): return scope
+        case .replaceTheTree: return .wholeGame
+        }
+    }
+}
+
 /// One restore, as the engine needs it.
 ///
 /// The planner of ticket 014's pure half decides what happens. This
@@ -16,7 +32,7 @@ public struct RestoreRequest: Sendable {
     /// The stream the snapshot belongs to, per 5.3.
     public var stream: BackupStream
     public var snapshotId: String
-    public var scope: RestoreScope
+    public var choice: RestoreChoice
     /// Where each named root of the manifest writes on this device.
     public var destination: MemberSource
     /// Every file the local tree already holds under those roots,
@@ -24,9 +40,6 @@ public struct RestoreRequest: Sendable {
     public var localFiles: [RestoreLocalFile]
     public var localVersionMarker: SnapshotManifest.VersionMarker?
     public var freeSpaceBytes: Int64
-    /// The replace choice of 11.12. Only "Use only this backup"
-    /// sets it.
-    public var replacesTheTree: Bool
     /// The game's mode, which gates proven coverage.
     public var mode: BackupMode
 
@@ -37,12 +50,11 @@ public struct RestoreRequest: Sendable {
         namespaceId: String,
         stream: BackupStream,
         snapshotId: String,
-        scope: RestoreScope,
+        choice: RestoreChoice,
         destination: MemberSource,
         localFiles: [RestoreLocalFile] = [],
         localVersionMarker: SnapshotManifest.VersionMarker? = nil,
         freeSpaceBytes: Int64,
-        replacesTheTree: Bool = false,
         mode: BackupMode = .slim
     ) {
         self.restoreId = restoreId
@@ -51,12 +63,11 @@ public struct RestoreRequest: Sendable {
         self.namespaceId = namespaceId
         self.stream = stream
         self.snapshotId = snapshotId
-        self.scope = scope
+        self.choice = choice
         self.destination = destination
         self.localFiles = localFiles
         self.localVersionMarker = localVersionMarker
         self.freeSpaceBytes = freeSpaceBytes
-        self.replacesTheTree = replacesTheTree
         self.mode = mode
     }
 
@@ -71,7 +82,7 @@ public struct RestoreRequest: Sendable {
     /// after the plan and before the first write, so the plan must not
     /// count on a file in it.
     var plannedLocalFiles: [RestoreLocalFile] {
-        guard replacesTheTree else { return localFiles }
+        guard choice == .replaceTheTree else { return localFiles }
         let tree = BackupSetRules.gameDirectoryName + "/"
         return localFiles.filter { $0.root != .container || !$0.path.hasPrefix(tree) }
     }

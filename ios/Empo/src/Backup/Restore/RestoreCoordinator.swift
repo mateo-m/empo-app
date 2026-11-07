@@ -179,12 +179,11 @@ final class RestoreCoordinator {
             namespaceId: row.namespaceId,
             stream: Self.stream(of: row),
             snapshotId: row.snapshotId,
-            scope: scope,
+            choice: replacesTheTree ? .replaceTheTree : .restore(scope),
             destination: destination,
             localFiles: localFiles,
             localVersionMarker: container.map(GameIdentities.versionMarker(for:)),
             freeSpaceBytes: Self.freeSpaceBytes,
-            replacesTheTree: replacesTheTree,
             mode: manifest.mode)
 
         let store: BackupStateStore
@@ -319,7 +318,8 @@ final class RestoreCoordinator {
         }
         guard let descriptor = BackupTargets.load().first(where: { $0.id == record.targetId }),
             let provider = await BackupTargets.provider(for: descriptor),
-            let snapshotId = record.snapshotId
+            let snapshotId = record.snapshotId,
+            case .restore(let choice, _) = record.work
         else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
 
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
@@ -335,8 +335,7 @@ final class RestoreCoordinator {
         }
         return await restore(
             row, into: container, provider: provider, descriptor: descriptor,
-            scope: record.restoreScope ?? .savesAndSettings,
-            replacesTheTree: record.replacesTheTree)
+            scope: choice.scope, replacesTheTree: choice == .replaceTheTree)
     }
 
     /// An import that stopped, per 12.6. The staged package is still
@@ -353,14 +352,14 @@ final class RestoreCoordinator {
             let source = try? PackageSource(
                 zip: staged.zipURL(localRoot: localRoot), packageId: packageId),
             let snapshotId = record.snapshotId,
+            case .restore(let choice, _) = record.work,
             let row = PackageSource.rows(of: source.manifest, packageId: packageId)
                 .first(where: { $0.snapshotId == snapshotId })
         else { return .failed(String(localized: "The backup file isn't on this device any more.")) }
 
         return await restore(
             row, into: GameIdentities.match(row.identity), package: source,
-            scope: record.restoreScope ?? .savesAndSettings,
-            replacesTheTree: record.replacesTheTree)
+            scope: choice.scope, replacesTheTree: choice == .replaceTheTree)
     }
 
     /// Applies one answer. The caller resumes the restore itself when

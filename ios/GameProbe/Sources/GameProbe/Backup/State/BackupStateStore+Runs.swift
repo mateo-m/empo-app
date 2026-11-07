@@ -257,12 +257,24 @@ extension BackupStateStore {
     // MARK: - Intent records
 
     public func saveIntent(_ intent: BackupIntentRecord) throws {
+        var uploadedBytes: Int64 = 0
+        var remainingBytes: Int64 = 0
+        var choice: RestoreChoice?
+        var movedAsideTree: String?
+        switch intent.work {
+        case .run(let uploaded, let remaining):
+            uploadedBytes = uploaded
+            remainingBytes = remaining
+        case .restore(let restoreChoice, let moved):
+            choice = restoreChoice
+            movedAsideTree = moved
+        }
         try database.run(
             """
             INSERT INTO intent_record
                 (kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
-                 restoreScope, replacesTree, createdAt, asked)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 restoreScope, replacesTree, movedAsideTree, createdAt, asked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (kind) DO UPDATE SET
                 targetId = excluded.targetId,
                 gameKey = excluded.gameKey,
@@ -271,6 +283,7 @@ extension BackupStateStore {
                 remainingBytes = excluded.remainingBytes,
                 restoreScope = excluded.restoreScope,
                 replacesTree = excluded.replacesTree,
+                movedAsideTree = excluded.movedAsideTree,
                 createdAt = excluded.createdAt,
                 asked = excluded.asked
             """,
@@ -278,10 +291,11 @@ extension BackupStateStore {
                 .text(intent.kind.rawValue), .text(intent.targetId),
                 intent.gameKey.map { .text($0) } ?? .null,
                 intent.snapshotId.map { .text($0) } ?? .null,
-                .integer(intent.uploadedBytes),
-                .integer(intent.remainingBytes),
-                intent.restoreScope.map { .text($0.rawValue) } ?? .null,
-                .integer(intent.replacesTheTree ? 1 : 0),
+                .integer(uploadedBytes),
+                .integer(remainingBytes),
+                choice.map { .text($0.scope.rawValue) } ?? .null,
+                .integer(choice == .replaceTheTree ? 1 : 0),
+                movedAsideTree.map { .text($0) } ?? .null,
                 .real(intent.createdAt.timeIntervalSince1970),
                 .integer(intent.asked ? 1 : 0),
             ])
@@ -291,7 +305,7 @@ extension BackupStateStore {
         let rows = try database.query(
             """
             SELECT targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
-                   restoreScope, replacesTree, createdAt, asked
+                   restoreScope, replacesTree, movedAsideTree, createdAt, asked
             FROM intent_record WHERE kind = ?
             """,
             [.text(kind.rawValue)])
@@ -300,18 +314,24 @@ extension BackupStateStore {
             let uploadedBytes = row[3].int64,
             let remainingBytes = row[4].int64,
             let replacesTree = row[6].int64,
-            let createdAt = row[7].double,
-            let asked = row[8].int64
+            let createdAt = row[8].double,
+            let asked = row[9].int64
         else { return nil }
+        let work: BackupIntentRecord.Work
+        switch kind {
+        case .interruptedRun:
+            work = .run(uploadedBytes: uploadedBytes, remainingBytes: remainingBytes)
+        case .interruptedRestore:
+            guard let scope = row[5].string.flatMap(RestoreScope.init(rawValue:)) else { return nil }
+            work = .restore(
+                replacesTree != 0 ? .replaceTheTree : .restore(scope),
+                movedAsideTree: row[7].string)
+        }
         return BackupIntentRecord(
-            kind: kind,
             targetId: targetId,
             gameKey: row[1].string,
             snapshotId: row[2].string,
-            uploadedBytes: uploadedBytes,
-            remainingBytes: remainingBytes,
-            restoreScope: row[5].string.flatMap(RestoreScope.init(rawValue:)),
-            replacesTheTree: replacesTree != 0,
+            work: work,
             createdAt: Date(timeIntervalSince1970: createdAt),
             asked: asked != 0)
     }
@@ -326,5 +346,13 @@ extension BackupStateStore {
     public func clearIntent(kind: BackupIntentKind) throws {
         try database.run(
             "DELETE FROM intent_record WHERE kind = ?", [.text(kind.rawValue)])
+    }
+
+    /// Clears the interrupted-run record only when it names this
+    /// stream, so a closed stream leaves no record that names it.
+    public func clearInterruptedRun(targetId: String, streamKey: String) throws {
+        try database.run(
+            "DELETE FROM intent_record WHERE kind = ? AND targetId = ? AND gameKey = ?",
+            [.text(BackupIntentKind.interruptedRun.rawValue), .text(targetId), .text(streamKey)])
     }
 }

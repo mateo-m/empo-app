@@ -106,6 +106,10 @@ final class BackupStateStoreTests: XCTestCase {
             INSERT INTO target_status (targetId) VALUES ('target-a');
             INSERT INTO staleness (targetId, gameKey) VALUES ('target-b', 'other');
             INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES ('abc', 1000, 'play session');
+            INSERT INTO intent_record (
+                kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
+                restoreScope, replacesTree, createdAt, asked)
+            VALUES ('interrupted-restore', 'target-a', 'abc', 'snap', 0, 0, 'whole-game', 1, 1000, 0);
             """)
         try raw.setUserVersion(5)
         raw.close()
@@ -124,6 +128,9 @@ final class BackupStateStoreTests: XCTestCase {
                     targetId: "target-b", gameKey: "abc",
                     markedAt: Date(timeIntervalSince1970: 1000)),
             ])
+        XCTAssertEqual(
+            try store.intent(kind: .interruptedRestore)?.work,
+            .restore(.replaceTheTree, movedAsideTree: nil))
         let reopened = try BackupStateStore(url: databaseURL)
         defer { reopened.close() }
         XCTAssertEqual(reopened.openOutcome, .opened)
@@ -421,11 +428,11 @@ final class BackupStateStoreTests: XCTestCase {
     func testTheIntentRecordsSurviveACloseAndAReopen() throws {
         let records = [
             BackupIntentRecord(
-                kind: .interruptedRun, targetId: targetId, gameKey: "def",
-                uploadedBytes: 250 * 1024 * 1024, createdAt: now),
+                targetId: targetId, gameKey: "def",
+                work: .run(uploadedBytes: 250 * 1024 * 1024, remainingBytes: 1024), createdAt: now),
             BackupIntentRecord(
-                kind: .interruptedRestore, targetId: targetId, gameKey: "ghi",
-                createdAt: now),
+                targetId: targetId, gameKey: "ghi",
+                work: .restore(.replaceTheTree, movedAsideTree: "Game (replaced)"), createdAt: now),
         ]
 
         let first = try BackupStateStore(url: databaseURL)
@@ -441,29 +448,44 @@ final class BackupStateStoreTests: XCTestCase {
         }
     }
 
+    func testARestoreRecordKeepsItsScope() throws {
+        let store = try makeStore()
+        defer { store.close() }
+        let record = BackupIntentRecord(
+            targetId: targetId, gameKey: "jkl",
+            work: .restore(.restore(.savesAndSettings), movedAsideTree: nil), createdAt: now)
+
+        try store.saveIntent(record)
+
+        XCTAssertEqual(try store.intent(kind: .interruptedRestore), record)
+    }
+
     func testTheResumeQuestionFloorIs100MB() {
         XCTAssertEqual(BackupIntentRecord.resumeQuestionFloorBytes, 100 * 1024 * 1024)
     }
 
     func testAnInterruptedRunUnderTheFloorRecoversSilently() {
         let record = BackupIntentRecord(
-            kind: .interruptedRun, targetId: targetId,
-            uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes - 1, createdAt: now)
+            targetId: targetId,
+            work: .run(uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes - 1, remainingBytes: 0),
+            createdAt: now)
 
         XCTAssertFalse(record.asksAtNextLaunch)
     }
 
     func testAnInterruptedRunAtTheFloorAsks() {
         let record = BackupIntentRecord(
-            kind: .interruptedRun, targetId: targetId,
-            uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes, createdAt: now)
+            targetId: targetId,
+            work: .run(uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes, remainingBytes: 0),
+            createdAt: now)
 
         XCTAssertTrue(record.asksAtNextLaunch)
     }
 
     func testAnInterruptedRestoreAsksWhateverItsSize() {
         let record = BackupIntentRecord(
-            kind: .interruptedRestore, targetId: targetId, uploadedBytes: 0, createdAt: now)
+            targetId: targetId, work: .restore(.restore(.wholeGame), movedAsideTree: nil),
+            createdAt: now)
 
         XCTAssertTrue(record.asksAtNextLaunch)
     }
@@ -472,8 +494,8 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try BackupStateStore(url: databaseURL)
         try store.saveIntent(
             BackupIntentRecord(
-                kind: .interruptedRun, targetId: targetId,
-                uploadedBytes: 250 * 1024 * 1024, createdAt: now))
+                targetId: targetId,
+                work: .run(uploadedBytes: 250 * 1024 * 1024, remainingBytes: 0), createdAt: now))
         XCTAssertEqual(try store.intent(kind: .interruptedRun)?.asksAtNextLaunch, true)
 
         try store.markIntentAsked(kind: .interruptedRun)
@@ -489,9 +511,12 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
         try store.saveIntent(
-            BackupIntentRecord(kind: .interruptedRun, targetId: targetId, createdAt: now))
+            BackupIntentRecord(
+                targetId: targetId, work: .run(uploadedBytes: 0, remainingBytes: 0), createdAt: now))
         try store.saveIntent(
-            BackupIntentRecord(kind: .interruptedRestore, targetId: targetId, createdAt: now))
+            BackupIntentRecord(
+                targetId: targetId, work: .restore(.restore(.wholeGame), movedAsideTree: nil),
+                createdAt: now))
 
         try store.clearIntent(kind: .interruptedRun)
 
@@ -714,7 +739,8 @@ final class BackupStateStoreTests: XCTestCase {
                 outcome: .success))
         try store.saveIntent(
             BackupIntentRecord(
-                kind: .interruptedRun, targetId: targetId, gameKey: gameKey, createdAt: now))
+                targetId: targetId, gameKey: gameKey,
+                work: .run(uploadedBytes: 0, remainingBytes: 0), createdAt: now))
         try store.savePartialTally(
             ["Game/Save0.rvdata2": 2], targetId: targetId, gameKey: gameKey)
 

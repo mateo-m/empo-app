@@ -410,8 +410,7 @@ final class PackageTests: XCTestCase {
             gameKey: BackupKeys.gameKey(containerFolderName: "Quest"),
             snapshotId: PackageSource.snapshotId(
                 streamKey: BackupKeys.gameKey(containerFolderName: "Quest"), exportedAt: stamp),
-            scope: .wholeGame,
-            replacesTheTree: false,
+            choice: .restore(.wholeGame),
             at: stamp)
 
         XCTAssertEqual(record.kind, .interruptedRestore)

@@ -161,11 +161,9 @@ final class RunProgressTests: XCTestCase {
 
     private func interrupted(uploaded: Int64, asked: Bool = false) -> BackupIntentRecord {
         BackupIntentRecord(
-            kind: .interruptedRun,
             targetId: "a",
             gameKey: gameKey,
-            uploadedBytes: uploaded,
-            remainingBytes: 2_800,
+            work: .run(uploadedBytes: uploaded, remainingBytes: 2_800),
             createdAt: start,
             asked: asked)
     }
@@ -219,9 +217,8 @@ final class RunProgressTests: XCTestCase {
     func testTheRestoreSideKeepsTheScopeTheUserChose() {
         let record = RestoreResumeQuestion.record(
             targetId: "a", gameKey: gameKey, snapshotId: "s1",
-            scope: .savesAndSettings, replacesTheTree: false, at: start)
-        XCTAssertEqual(record.restoreScope, .savesAndSettings)
-        XCTAssertFalse(record.replacesTheTree)
+            choice: .restore(.savesAndSettings), at: start)
+        XCTAssertEqual(record.work, .restore(.restore(.savesAndSettings), movedAsideTree: nil))
         XCTAssertTrue(RestoreResumeQuestion.asks(record))
     }
 
