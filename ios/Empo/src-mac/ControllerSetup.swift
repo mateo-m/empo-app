@@ -146,7 +146,11 @@ final class ControllerSetup {
     func start() {
         guard listener == nil else { return }
         // SDL sends the input events of a joystick only while it is open.
-        joystick = SDL_OpenJoystick(controller.id)
+        guard let opened = SDL_OpenJoystick(controller.id) else {
+            NSLog("[controller-setup] cannot open the controller")
+            return
+        }
+        joystick = opened
         listener = SDLControllers.shared.addListener { [weak self] in self?.handle($0) }
     }
 
@@ -167,6 +171,7 @@ final class ControllerSetup {
 
     func back() {
         guard stepIndex > 0 else { return }
+        saveFailed = false
         stepIndex -= 1
         if let step { inputs[step.id] = nil }
     }
