@@ -32,8 +32,7 @@ struct RestoreSnapshotSheet: View {
     @State private var outcome: RestoreOutcome?
     private var isRestoring: Bool { restoring != nil }
     @State private var restoring: Task<Void, Never>?
-    @State private var showsTheMarkerSheet = false
-    @State private var showsTheAttachSheet = false
+    @State private var sheets = SheetQueue<Sheet>()
     /// The game the attach of 11.11 named, so the question of 11.10
     /// compares against that game's tree and not against none.
     @State private var attachedGame: GameContainer?
@@ -51,17 +50,26 @@ struct RestoreSnapshotSheet: View {
             }
         }
         .interactiveDismissDisabled(isRestoring)
-        .sheet(isPresented: $showsTheAttachSheet) {
-            AttachGameSheet(snapshot: row.identity) { game in
-                attachedGame = game
-                press()
-            }
-        }
-        .sheet(isPresented: $showsTheMarkerSheet) {
-            VersionMarkerSheetView(gameName: gameName) { action in
-                run(scope: action.scope, replacesTheTree: action.replacesTheTree)
-            }
-        }
+        .sheet(
+            item: $sheets.presented, onDismiss: { sheets.closed() },
+            content: { sheet in
+                switch sheet {
+                case .attach:
+                    AttachGameSheet(snapshot: row.identity) { game in
+                        attachedGame = game
+                        press()
+                    }
+                case .marker:
+                    VersionMarkerSheetView(gameName: gameName) { action in
+                        run(scope: action.scope, replacesTheTree: action.replacesTheTree)
+                    }
+                }
+            })
+    }
+
+    private enum Sheet: String, Identifiable {
+        case attach, marker
+        var id: String { rawValue }
     }
 
     private var question: some View {
@@ -95,7 +103,7 @@ struct RestoreSnapshotSheet: View {
             }
             SheetPrimaryButton(buttonTitle) {
                 if attaches {
-                    showsTheAttachSheet = true
+                    sheets.show(.attach)
                 } else {
                     press()
                 }
@@ -123,7 +131,7 @@ struct RestoreSnapshotSheet: View {
         if VersionMarkerSheet.shows(
             mode: row.mode, scope: scope, markerDiffers: markerDiffers)
         {
-            showsTheMarkerSheet = true
+            sheets.show(.marker)
             return
         }
         run(scope: scope, replacesTheTree: false)

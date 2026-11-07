@@ -14,11 +14,8 @@ struct TargetDetailScreen: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var showsEveryGame = false
-    @State private var showsRemoveSheet = false
-    @State private var signInOutcome: PermissionCheckOutcomeSheet?
+    @State private var sheets = SheetQueue<TargetDetailSheet>()
     @State private var signInFailure: String?
-    @State private var signsInThroughTheForm = false
-    @State private var showsPlus = false
     @State private var gameNames: [String: String] = [:]
 
     private var item: BackupTargetItem? {
@@ -40,31 +37,35 @@ struct TargetDetailScreen: View {
             }
         }
         .navigationTitle(item?.descriptor.displayName ?? "")
-        .sheet(isPresented: $showsPlus) { PlusSheet() }
         .signInFailureAlert($signInFailure)
         .navigationBarTitleDisplayMode(.inline)
         .task { gameNames = BackupGameNames().namesByGameKey() }
-        .sheet(isPresented: $showsRemoveSheet, onDismiss: leaveIfRemoved) {
-            if let item {
-                RemoveTargetSheet(item: item) { deletesBackups in
-                    await model.remove(targetId: targetId, deleteBackups: deletesBackups)
+        .sheet(item: $sheets.presented, onDismiss: sheetClosed) { sheet in
+            switch sheet {
+            case .plus:
+                PlusSheet()
+            case .remove:
+                if let item {
+                    RemoveTargetSheet(item: item) { deletesBackups in
+                        await model.remove(targetId: targetId, deleteBackups: deletesBackups)
+                    }
                 }
-            }
-        }
-        .sheet(isPresented: $signsInThroughTheForm) {
-            if let item {
-                TargetSignInSheet(target: item.descriptor) { descriptor, result in
-                    signInOutcome = PermissionCheckOutcomeSheet(target: descriptor, result: result)
-                    Task { await model.refresh() }
+            case .signIn:
+                if let item {
+                    TargetSignInSheet(target: item.descriptor) { descriptor, result in
+                        sheets.show(
+                            .permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
+                        Task { await model.refresh() }
+                    }
                 }
+            case .permission(let outcome):
+                PermissionCheckSheet(target: outcome.target, result: outcome.result)
             }
-        }
-        .sheet(item: $signInOutcome) { outcome in
-            PermissionCheckSheet(target: outcome.target, result: outcome.result)
         }
     }
 
-    private func leaveIfRemoved() {
+    private func sheetClosed() {
+        guard case .remove = sheets.closed() else { return }
         if model.items?.contains(where: { $0.id == targetId }) == false { dismiss() }
     }
 
@@ -102,11 +103,11 @@ struct TargetDetailScreen: View {
                 case .signIn:
                     Button("Sign in again") {
                         if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
-                            signsInThroughTheForm = true
+                            sheets.show(.signIn)
                         } else {
                             Task {
                                 switch await model.signInAgain(item) {
-                                case .checked(let outcome): signInOutcome = outcome
+                                case .checked(let outcome): sheets.show(.permission(outcome))
                                 case .failed(let line): signInFailure = line
                                 case nil: break
                                 }
@@ -120,7 +121,7 @@ struct TargetDetailScreen: View {
                     Button("Try again") { model.backUpNow() }
                 case .getPlus:
                     Button {
-                        showsPlus = true
+                        sheets.show(.plus)
                     } label: {
                         Text("Get Empo Plus").frame(maxWidth: .infinity)
                     }
@@ -267,7 +268,7 @@ struct TargetDetailScreen: View {
 
     private var removeSection: some View {
         Section {
-            Button("Remove location", role: .destructive) { showsRemoveSheet = true }
+            Button("Remove location", role: .destructive) { sheets.show(.remove) }
         }
     }
 }
@@ -342,5 +343,21 @@ private struct SizeLimitPicker: View {
                     isCustom = true
                 }
             })
+    }
+}
+
+private enum TargetDetailSheet: Identifiable {
+    case plus
+    case remove
+    case signIn
+    case permission(PermissionCheckOutcomeSheet)
+
+    var id: String {
+        switch self {
+        case .plus: "plus"
+        case .remove: "remove"
+        case .signIn: "sign-in"
+        case .permission(let outcome): "permission-" + outcome.id
+        }
     }
 }
