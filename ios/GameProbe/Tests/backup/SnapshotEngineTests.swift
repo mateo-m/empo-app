@@ -1220,6 +1220,41 @@ final class SnapshotEngineTests: XCTestCase {
             "Alpha's manifests are still there: \(left)")
     }
 
+    func testAPendingDeletionThatFailsDoesNotStopTheNextOne() async throws {
+        try makeGameTree("Alpha")
+        try makeGameTree("Bravo")
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        _ = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+
+        await target.addFault(FakeTargetFault(operation: .delete, error: .offline))
+        let firstAsk = clock.now
+        for name in ["Alpha", "Bravo"] {
+            _ = await engine.deleteBackups(
+                BackupDeleteRequest(
+                    descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId,
+                    gameKey: key(name)))
+            clock.advance(60)
+        }
+        await target.removeFaults()
+        await target.addFault(
+            FakeTargetFault(operation: .delete, error: .offline, pathContains: key("Alpha")))
+
+        _ = await engine.run(request(games: []))
+
+        let left = manifestPaths(target)
+        XCTAssertTrue(
+            left.allSatisfy { $0.hasPrefix(paths.prefix(of: .game(key: key("Alpha")))) },
+            "Bravo's manifests are still there: \(left)")
+        XCTAssertFalse(left.isEmpty)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertEqual(
+            try store.pendingDeletions(targetId: descriptor.id),
+            [PendingDeletion(targetId: descriptor.id, gameKey: key("Alpha"), requestedAt: firstAsk)])
+    }
+
     // MARK: - The one-off full snapshot, per 5.15
 
     func testAOneOffFullSnapshotUploadsTheWholeTreeAndLeavesTheModeAlone() async throws {

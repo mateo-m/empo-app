@@ -139,19 +139,11 @@ public struct PendingDeletion: Equatable, Sendable {
     public var targetId: String
     public var gameKey: String
     public var requestedAt: Date
-    /// The `Rescued Saves` buckets the delete covers, per 5.13.
-    public var rescuedBuckets: [String]
 
-    public init(
-        targetId: String,
-        gameKey: String,
-        requestedAt: Date,
-        rescuedBuckets: [String] = []
-    ) {
+    public init(targetId: String, gameKey: String, requestedAt: Date) {
         self.targetId = targetId
         self.gameKey = gameKey
         self.requestedAt = requestedAt
-        self.rescuedBuckets = rescuedBuckets
     }
 }
 

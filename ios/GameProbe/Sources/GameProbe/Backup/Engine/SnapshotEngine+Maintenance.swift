@@ -294,8 +294,9 @@ extension SnapshotEngine {
             // The manifests are gone, so a failed sweep leaves only
             // blobs that no manifest names. The sweep of a later run
             // takes them.
-            let swept = (try? await sweepNamespace(
-                paths: paths, deviceId: request.deviceId, targetId: targetId)) ?? []
+            let swept =
+                (try? await sweepNamespace(
+                    paths: paths, deviceId: request.deviceId, targetId: targetId)) ?? []
             return .deleted(snapshotIds: ids, sweptPaths: swept)
         } catch {
             // The local delete always proceeds. The choice becomes a
@@ -303,11 +304,7 @@ extension SnapshotEngine {
             // successful run.
             save(
                 try store.addPendingDeletion(
-                    PendingDeletion(
-                        targetId: targetId,
-                        gameKey: request.gameKey,
-                        requestedAt: now,
-                        rescuedBuckets: request.rescuedBuckets.map(\.lastPathComponent))),
+                    PendingDeletion(targetId: targetId, gameKey: request.gameKey, requestedAt: now)),
                 "the pending deletion of \(request.gameKey)")
             return .pending
         }
@@ -333,13 +330,12 @@ extension SnapshotEngine {
         let targetId = context.request.descriptor.id
         let pending = (try? store.pendingDeletions(targetId: targetId)) ?? []
         for deletion in pending {
-            let outcome = await deleteBackups(
+            _ = await deleteBackups(
                 BackupDeleteRequest(
                     descriptor: context.request.descriptor,
                     namespaceId: context.paths.namespaceId,
                     deviceId: context.request.deviceId,
                     gameKey: deletion.gameKey))
-            guard case .deleted = outcome else { return }
         }
     }
 }

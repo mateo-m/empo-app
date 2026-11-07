@@ -112,6 +112,7 @@ final class BackupStateStoreTests: XCTestCase {
             VALUES ('interrupted-restore', 'target-a', 'abc', 'snap', 0, 0, 'whole-game', 1, 1000, 0);
             INSERT INTO run_record VALUES ('open', 'target-a', 900, NULL, 'failed', 0, 0, 'closed early');
             INSERT INTO run_record VALUES ('done', 'target-a', 800, 860, 'partial', 10, 2, NULL);
+            INSERT INTO pending_deletion VALUES ('target-a', 'gone', 700, '["bucket"]');
             """)
         try raw.setUserVersion(5)
         raw.close()
@@ -142,6 +143,12 @@ final class BackupStateStoreTests: XCTestCase {
                     id: "done", targetId: "target-a", startedAt: Date(timeIntervalSince1970: 800),
                     end: BackupRunEnd(outcome: .partial, finishedAt: Date(timeIntervalSince1970: 860)),
                     uploadedBytes: 10, gameCount: 2),
+            ])
+        XCTAssertEqual(
+            try store.pendingDeletions(targetId: "target-a"),
+            [
+                PendingDeletion(
+                    targetId: "target-a", gameKey: "gone", requestedAt: Date(timeIntervalSince1970: 700))
             ])
         let reopened = try BackupStateStore(url: databaseURL)
         defer { reopened.close() }
@@ -392,10 +399,12 @@ final class BackupStateStoreTests: XCTestCase {
         let deletion = PendingDeletion(
             targetId: targetId,
             gameKey: "abc",
-            requestedAt: now,
-            rescuedBuckets: ["Yume Nikki (rescued)"])
+            requestedAt: now)
 
         try store.addPendingDeletion(deletion)
+        var again = deletion
+        again.requestedAt = now.addingTimeInterval(3600)
+        try store.addPendingDeletion(again)
 
         XCTAssertEqual(try store.pendingDeletions(targetId: targetId), [deletion])
         try store.clearPendingDeletion(targetId: targetId, gameKey: "abc")

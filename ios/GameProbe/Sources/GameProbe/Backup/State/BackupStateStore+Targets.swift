@@ -10,37 +10,31 @@ extension BackupStateStore {
     public func addPendingDeletion(_ deletion: PendingDeletion) throws {
         try database.run(
             """
-            INSERT INTO pending_deletion
-                (targetId, gameKey, requestedAt, rescuedBuckets)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT (targetId, gameKey) DO UPDATE SET
-                requestedAt = excluded.requestedAt,
-                rescuedBuckets = excluded.rescuedBuckets
+            INSERT INTO pending_deletion (targetId, gameKey, requestedAt)
+            VALUES (?, ?, ?)
+            ON CONFLICT (targetId, gameKey) DO NOTHING
             """,
             [
                 .text(deletion.targetId), .text(deletion.gameKey),
                 .real(deletion.requestedAt.timeIntervalSince1970),
-                .text(Self.encodeList(deletion.rescuedBuckets)),
             ])
     }
 
     public func pendingDeletions(targetId: String) throws -> [PendingDeletion] {
         let rows = try database.query(
             """
-            SELECT gameKey, requestedAt, rescuedBuckets FROM pending_deletion
+            SELECT gameKey, requestedAt FROM pending_deletion
             WHERE targetId = ? ORDER BY requestedAt, gameKey
             """,
             [.text(targetId)])
         return rows.compactMap { row in
             guard let gameKey = row[0].string,
-                let requestedAt = row[1].double,
-                let buckets = row[2].string
+                let requestedAt = row[1].double
             else { return nil }
             return PendingDeletion(
                 targetId: targetId,
                 gameKey: gameKey,
-                requestedAt: Date(timeIntervalSince1970: requestedAt),
-                rescuedBuckets: Self.decodeList(buckets))
+                requestedAt: Date(timeIntervalSince1970: requestedAt))
         }
     }
 
