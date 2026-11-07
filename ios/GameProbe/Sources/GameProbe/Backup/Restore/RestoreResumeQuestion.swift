@@ -11,8 +11,6 @@ public enum RestoreStopReason: String, Error, Codable, Sendable, CaseIterable, E
     case outOfSpace = "out-of-space"
     /// The target or the network failed.
     case targetFailed = "target-failed"
-    /// The process died.
-    case processDied = "process-died"
 }
 
 /// The resume question of SPEC 11.9 and 6.5.
@@ -82,24 +80,20 @@ public enum RestoreResumeQuestion {
         return record.asksAtNextLaunch
     }
 
-    /// The record an interrupted restore leaves. It carries the
-    /// scope and the replace choice, so a resume repeats the restore
-    /// the user asked for and never a wider one.
+    /// The record an interrupted restore leaves.
     public static func record(
         targetId: String,
         gameKey: String?,
         snapshotId: String,
-        scope: RestoreScope,
-        replacesTheTree: Bool,
+        choice: RestoreChoice,
+        movedAsideTree: String? = nil,
         at date: Date
     ) -> BackupIntentRecord {
         BackupIntentRecord(
-            kind: .interruptedRestore,
             targetId: targetId,
             gameKey: gameKey,
             snapshotId: snapshotId,
-            restoreScope: scope,
-            replacesTheTree: replacesTheTree,
+            work: .restore(choice, movedAsideTree: movedAsideTree),
             createdAt: date)
     }
 

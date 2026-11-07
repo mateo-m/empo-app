@@ -66,7 +66,8 @@ public enum BackupNotificationRule {
         case .signInDead:
             return screenText("Sign in to %@ again. Your backups are waiting.", targetLabel)
         case .targetBlocked:
-            return screenText("%@ is full. Free up space on it, or raise its storage limit in Empo.", targetLabel)
+            return screenText(
+                "%@ is full. Free up space on it, or raise its storage limit in Empo.", targetLabel)
         case .deviceStorageLow:
             return screenText("%@ storage is low. Free up space to keep backing up.", deviceName)
         }
@@ -76,8 +77,9 @@ public enum BackupNotificationRule {
     /// 7.11 and 5.12. It heals itself, so a notification would
     /// report a problem that is not one.
     public static let writerSplitLine =
-        screenText("Another device also backs up to this location. This device now keeps its own "
-        + "backups there, and both keep their history.")
+        screenText(
+            "Another device also backs up to this location. This device now keeps its own "
+                + "backups there, and both keep their history.")
 
     /// Whether to ask for notification permission now.
     ///
@@ -99,17 +101,27 @@ public enum BackupNotificationRule {
 /// device, because three targets on one full phone are one problem.
 public struct BackupNotificationLedger: Equatable, Sendable {
 
-    /// The causes already posted, as `<cause>@<target id>` for a
-    /// target cause and `<cause>` alone for the device cause. A key
-    /// that leaves the set arms the cause again.
-    public private(set) var postedKeys: Set<String>
+    /// One cause already posted. The device cause has no target.
+    public struct Posted: Hashable, Sendable {
+        public var cause: BackupFailFastCause
+        public var targetId: String?
 
-    public init(postedKeys: Set<String> = []) {
-        self.postedKeys = postedKeys
+        public init(cause: BackupFailFastCause, targetId: String?) {
+            self.cause = cause
+            self.targetId = targetId
+        }
     }
 
-    private static func key(_ cause: BackupFailFastCause, targetId: String) -> String {
-        cause == .deviceStorageLow ? cause.rawValue : "\(cause.rawValue)@\(targetId)"
+    /// The causes already posted. An entry that leaves the set arms
+    /// its cause again.
+    public private(set) var posted: Set<Posted>
+
+    public init(posted: Set<Posted> = []) {
+        self.posted = posted
+    }
+
+    private static func key(_ cause: BackupFailFastCause, targetId: String) -> Posted {
+        Posted(cause: cause, targetId: cause == .deviceStorageLow ? nil : targetId)
     }
 
     /// Takes what one run found on one target and returns what to
@@ -124,12 +136,9 @@ public struct BackupNotificationLedger: Equatable, Sendable {
         for cause in BackupFailFastCause.allCases {
             let key = Self.key(cause, targetId: targetId)
             if causes.contains(cause) {
-                if !postedKeys.contains(key) {
-                    postedKeys.insert(key)
-                    toPost.append(cause)
-                }
+                if posted.insert(key).inserted { toPost.append(cause) }
             } else {
-                postedKeys.remove(key)
+                posted.remove(key)
             }
         }
         return toPost

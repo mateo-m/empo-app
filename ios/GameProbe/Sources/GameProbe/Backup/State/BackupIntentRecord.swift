@@ -19,58 +19,60 @@ public struct BackupIntentRecord: Equatable, Sendable {
     /// next launch, per 6.5.
     public static let resumeQuestionFloorBytes: Int64 = 100 * 1024 * 1024
 
-    public var kind: BackupIntentKind
+    /// What the interrupted work had done.
+    public enum Work: Equatable, Sendable {
+        /// `uploadedBytes` reached the target. `remainingBytes` is
+        /// what the frozen run plan of 13.2 still had to upload, and
+        /// the resume question of 13.18 names it.
+        case run(uploadedBytes: Int64, remainingBytes: Int64)
+        /// A resume takes the same action, so it never widens what
+        /// the user chose, per 11.7. `movedAsideTree` is the folder
+        /// name that `Game/` took, so a resume does not move the
+        /// half-restored tree aside again.
+        case restore(RestoreChoice, movedAsideTree: String?)
+    }
+
     public var targetId: String
     /// The game the run or the restore was on. The preferences stream
     /// of 5.3 has no game, so this is `nil` there.
     public var gameKey: String?
     public var snapshotId: String?
-    /// What reached the target before the interruption.
-    public var uploadedBytes: Int64
-    /// What the frozen run plan of 13.2 still had to upload. The
-    /// resume question of 13.18 names it.
-    public var remainingBytes: Int64
-    /// What the interrupted restore covered, per 11.7. A resume
-    /// takes the same scope, so it never widens what the user chose.
-    public var restoreScope: RestoreScope?
-    /// The replace choice of 11.12 the interrupted restore carried.
-    public var replacesTheTree: Bool
+    public var work: Work
     public var createdAt: Date
     /// The user already saw the question for this record. The same
     /// interruption never asks twice, per 6.5.
     public var asked: Bool
 
     public init(
-        kind: BackupIntentKind,
         targetId: String,
         gameKey: String? = nil,
         snapshotId: String? = nil,
-        uploadedBytes: Int64 = 0,
-        remainingBytes: Int64 = 0,
-        restoreScope: RestoreScope? = nil,
-        replacesTheTree: Bool = false,
+        work: Work,
         createdAt: Date,
         asked: Bool = false
     ) {
-        self.kind = kind
         self.targetId = targetId
         self.gameKey = gameKey
         self.snapshotId = snapshotId
-        self.uploadedBytes = uploadedBytes
-        self.remainingBytes = remainingBytes
-        self.restoreScope = restoreScope
-        self.replacesTheTree = replacesTheTree
+        self.work = work
         self.createdAt = createdAt
         self.asked = asked
+    }
+
+    public var kind: BackupIntentKind {
+        switch work {
+        case .run: return .interruptedRun
+        case .restore: return .interruptedRestore
+        }
     }
 
     /// Whether the next launch shows the question for this record.
     public var asksAtNextLaunch: Bool {
         if asked { return false }
-        switch kind {
-        case .interruptedRun:
+        switch work {
+        case .run(let uploadedBytes, _):
             return uploadedBytes >= Self.resumeQuestionFloorBytes
-        case .interruptedRestore:
+        case .restore:
             return true
         }
     }

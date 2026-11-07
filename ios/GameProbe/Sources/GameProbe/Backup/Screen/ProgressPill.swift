@@ -40,10 +40,17 @@ public enum ProgressPill {
             return screenText("%@ asked Empo to wait.", targetLabel)
         case .readOnlyFormat(.newerFormatVersion):
             return screenText("%@ needs a newer version of Empo.", targetLabel)
-        case .readOnlyFormat(.unreadableFormat), .needsSignIn, .blocked, .full, .quotaShortfall, .rejected, .writerConflict,
+        case .readOnlyFormat(.unreadableFormat), .needsSignIn, .blocked, .full, .quotaShortfall, .rejected,
+            .writerConflict,
             .gameStarted, .paused:
             return nil
         }
+    }
+
+    /// How a run ended. A stop keeps its line on screen longer.
+    public enum End: Equatable, Sendable {
+        case finished(at: Date)
+        case stopped(at: Date)
     }
 
     /// Whether the pill is on screen.
@@ -53,16 +60,18 @@ public enum ProgressPill {
     /// anyway.
     public static func shows(
         startedAt: Date?,
-        finishedAt: Date?,
+        end: End?,
         hasUploads: Bool,
         gameIsPlaying: Bool,
-        stopped: Bool = false,
         now: Date
     ) -> Bool {
         guard let startedAt, hasUploads, !gameIsPlaying else { return false }
         guard now.timeIntervalSince(startedAt) >= showAfter else { return false }
-        guard let finishedAt else { return true }
-        return now.timeIntervalSince(finishedAt) < (stopped ? hideAfterStop : hideAfter)
+        switch end {
+        case nil: return true
+        case .finished(let at): return now.timeIntervalSince(at) < hideAfter
+        case .stopped(let at): return now.timeIntervalSince(at) < hideAfterStop
+        }
     }
 
     /// `leftText` carries the remaining bytes in the words the caller

@@ -111,16 +111,15 @@ public final class ZipWriter {
     ) throws(ZipFailure) -> Entry {
         guard paths.insert(path).inserted else { throw ZipFailure.duplicatePath(path) }
 
-        let deflates = Self.deflates(path: path, size: size)
+        var body = DeflateBody(deflates: Self.deflates(path: path, size: size))
         let start = offset
         let name = Array(path.utf8)
-        try write(localHeader(name: name, modifiedAt: modifiedAt, deflates: deflates))
+        try write(localHeader(name: name, modifiedAt: modifiedAt, deflates: body.isDeflating))
 
         var crc: UInt32 = 0
         var hasher = ContentHash.Stream()
         var uncompressed: Int64 = 0
         var compressed: Int64 = 0
-        var body = DeflateBody(deflates: deflates)
 
         do {
             try source { chunk in
@@ -357,50 +356,52 @@ public final class ZipWriter {
 /// The compressor of one entry, which is either DEFLATE or nothing.
 private struct DeflateBody {
 
-    private(set) var isDeflating: Bool
     #if canImport(Compression)
-    private var stream: DeflateStream?
-    #else
-    private var buffered = Data()
-    #endif
+    private let stream: DeflateStream?
+
+    /// An encoder that fails to open leaves the entry stored.
+    var isDeflating: Bool { stream != nil }
 
     init(deflates: Bool) {
-        #if canImport(Compression)
         stream = deflates ? DeflateStream.encoder() : nil
-        isDeflating = deflates && stream != nil
-        #else
+    }
+
+    mutating func push(_ chunk: Data) throws -> Data {
+        guard let stream else { return chunk }
+        var out = Data()
+        try stream.push(chunk) { out.append($0) }
+        return out
+    }
+
+    mutating func finish() throws -> Data {
+        guard let stream else { return Data() }
+        var out = Data()
+        try stream.finish { out.append($0) }
+        return out
+    }
+    #else
+    let isDeflating: Bool
+    private var buffered = Data()
+
+    init(deflates: Bool) {
         isDeflating = deflates
-        #endif
     }
 
     mutating func push(_ chunk: Data) throws -> Data {
         guard isDeflating else { return chunk }
-        #if canImport(Compression)
-        guard let stream else { throw ZipFailure.compressionFailed("") }
-        var out = Data()
-        try stream.push(chunk) { out.append($0) }
-        return out
-        #else
         buffered.append(chunk)
         return Data()
-        #endif
     }
 
     mutating func finish() throws -> Data {
         guard isDeflating else { return Data() }
-        #if canImport(Compression)
-        guard let stream else { throw ZipFailure.compressionFailed("") }
-        var out = Data()
-        try stream.finish { out.append($0) }
-        return out
-        #else
         guard let out = RawDeflate.deflate(buffered) else {
             throw ZipFailure.compressionFailed("")
         }
         buffered = Data()
         return out
-        #endif
     }
+    #endif
 }
 
 extension Data {

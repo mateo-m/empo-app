@@ -118,7 +118,6 @@ final class BackupPass: BackupRunning {
 
         var conflicts = WriterConflicts.read(
             applicationSupport: BackupRoot.layout.applicationSupport)
-        let answer = conflicts.answer(for: descriptor.id)
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
@@ -132,8 +131,7 @@ final class BackupPass: BackupRunning {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerResolution: answer?.resolution,
-            splitNamespaceId: answer?.splitNamespaceId,
+            writerAnswer: conflicts.answer(for: descriptor.id),
             syncGroupId: SyncStore.state().groupId)
 
         // The engine takes the store over. `SQLiteDatabase` closes
@@ -143,7 +141,9 @@ final class BackupPass: BackupRunning {
             provider: provider, store: store, localRoot: BackupRoot.layout.root,
             observer: BackupRunMonitor.shared,
             note: { BackupLog.line("SnapshotEngine", $0) })
+        BackupRunMonitor.shared.liveRunId = request.runId
         let result = await engine.run(request)
+        BackupRunMonitor.shared.liveRunId = nil
         log(
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"

@@ -214,7 +214,9 @@ public struct ICloudDownloadProgress: Sendable {
 
     public static let stallLimit: TimeInterval = 60
 
-    private var percent: Double = -1
+    /// The highest reading so far. The first reading only sets it,
+    /// so the clock still counts from the start.
+    private var percent: Double?
     private var movedAt: Date
 
     public init(startedAt: Date) {
@@ -224,8 +226,12 @@ public struct ICloudDownloadProgress: Sendable {
     /// Records one reading. It answers false when the download has
     /// not moved for `stallLimit`.
     public mutating func record(percent: Double, at now: Date) -> Bool {
-        if percent > self.percent {
-            if self.percent >= 0 { movedAt = now }
+        if let last = self.percent {
+            if percent > last {
+                movedAt = now
+                self.percent = percent
+            }
+        } else {
             self.percent = percent
         }
         return timeLeft(at: now) > 0

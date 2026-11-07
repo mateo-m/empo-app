@@ -106,9 +106,8 @@ final class BackupsScreenModel {
             let row = TargetRowFacts(
                 descriptor: descriptor,
                 reach: descriptor.provider == .iCloudDrive ? iCloudReach : .open,
-                failure: status?.failure,
-                failedAt: status?.failedAt,
-                failedAtText: (status?.failedAt).map(BackupText.when) ?? "",
+                failure: status?.lastFailure?.failure,
+                failedAtText: (status?.lastFailure?.at).map(BackupText.when) ?? "",
                 supportsBackgroundTransfer: capabilities?.supportsBackgroundTransfer ?? true,
                 lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs),
                 hasPlus: EmpoPlus.shared.hasPlus)
@@ -141,14 +140,14 @@ final class BackupsScreenModel {
         let active = Set(descriptors.filter { !$0.isPaused }.map(\.id))
         self.facts = facts
         lastSuccessText = runs.first { run in
-            run.outcome == .success && active.contains(run.targetId)
-        }?.finishedAt.map(BackupText.day)
+            run.end?.outcome == .success && active.contains(run.targetId)
+        }?.end.map { BackupText.day($0.finishedAt) }
         await readTheNotificationPermission()
     }
 
     private static func lastSuccess(of targetId: String, in runs: [BackupRunRecord]) -> String? {
-        let last = runs.first { $0.targetId == targetId && $0.outcome == .success }
-        return last?.finishedAt.map(BackupText.ago)
+        let last = runs.first { $0.targetId == targetId && $0.end?.outcome == .success }
+        return last?.end.map { BackupText.ago($0.finishedAt) }
     }
 
     // MARK: - "Back up now", per 13.11

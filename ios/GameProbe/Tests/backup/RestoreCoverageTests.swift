@@ -143,17 +143,16 @@ final class RestoreCoverageTests: XCTestCase {
     func testAnInterruptedRestoreAsksWhateverItsSize() {
         let record = RestoreResumeQuestion.record(
             targetId: "target-1", gameKey: "key", snapshotId: "snap",
-            scope: .wholeGame, replacesTheTree: false, at: stamp)
+            choice: .restore(.wholeGame), at: stamp)
 
         XCTAssertEqual(record.kind, .interruptedRestore)
-        XCTAssertEqual(record.uploadedBytes, 0)
         XCTAssertTrue(RestoreResumeQuestion.asks(record))
     }
 
     func testTheSameInterruptionAsksOnceAndNeverTwice() {
         var record = RestoreResumeQuestion.record(
             targetId: "target-1", gameKey: "key", snapshotId: "snap",
-            scope: .wholeGame, replacesTheTree: false, at: stamp)
+            choice: .restore(.wholeGame), at: stamp)
         XCTAssertTrue(RestoreResumeQuestion.asks(record))
 
         record.asked = true
@@ -162,7 +161,7 @@ final class RestoreCoverageTests: XCTestCase {
 
     func testAnInterruptedRunIsNotARestoreQuestion() {
         let run = BackupIntentRecord(
-            kind: .interruptedRun, targetId: "target-1", uploadedBytes: 200 * 1024 * 1024,
+            targetId: "target-1", work: .run(uploadedBytes: 200 * 1024 * 1024, remainingBytes: 0),
             createdAt: stamp)
 
         XCTAssertFalse(RestoreResumeQuestion.asks(run))
@@ -195,11 +194,11 @@ final class RestoreCoverageTests: XCTestCase {
         try store.saveIntent(
             RestoreResumeQuestion.record(
                 targetId: "target-1", gameKey: "key", snapshotId: "snap-1",
-                scope: .wholeGame, replacesTheTree: false, at: stamp))
+                choice: .restore(.wholeGame), at: stamp))
         try store.saveIntent(
             RestoreResumeQuestion.record(
                 targetId: "target-1", gameKey: "key", snapshotId: "snap-2",
-                scope: .wholeGame, replacesTheTree: false,
+                choice: .restore(.wholeGame),
                 at: stamp.addingTimeInterval(60)))
 
         let record = try store.intent(kind: .interruptedRestore)

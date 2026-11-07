@@ -73,37 +73,40 @@ extension BackupStateStore {
 
     // MARK: - Dirty flags
 
-    public func markDirty(gameKey: String, reason: String, at date: Date) throws {
-        try database.run(
-            """
-            INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES (?, ?, ?)
-            ON CONFLICT (gameKey) DO UPDATE SET
-                markedAt = excluded.markedAt, reason = excluded.reason
-            """,
-            [.text(gameKey), .real(date.timeIntervalSince1970), .text(reason)])
+    /// Marks the game on each target in `targetIds`.
+    public func markDirty(gameKey: String, targetIds: [String], at date: Date) throws {
+        try database.transaction {
+            for targetId in targetIds {
+                try database.run(
+                    """
+                    INSERT INTO dirty_game (targetId, gameKey, markedAt) VALUES (?, ?, ?)
+                    ON CONFLICT (targetId, gameKey) DO UPDATE SET markedAt = excluded.markedAt
+                    """,
+                    [.text(targetId), .text(gameKey), .real(date.timeIntervalSince1970)])
+            }
+        }
     }
 
     public func dirtyGames() throws -> [DirtyMark] {
         let rows = try database.query(
-            "SELECT gameKey, markedAt, reason FROM dirty_game ORDER BY markedAt, gameKey")
+            "SELECT targetId, gameKey, markedAt FROM dirty_game ORDER BY markedAt, gameKey, targetId")
         return rows.compactMap { row in
-            guard let gameKey = row[0].string,
-                let markedAt = row[1].double,
-                let reason = row[2].string
+            guard let targetId = row[0].string,
+                let gameKey = row[1].string,
+                let markedAt = row[2].double
             else { return nil }
             return DirtyMark(
-                gameKey: gameKey,
-                markedAt: Date(timeIntervalSince1970: markedAt),
-                reason: reason)
+                targetId: targetId, gameKey: gameKey,
+                markedAt: Date(timeIntervalSince1970: markedAt))
         }
     }
 
     /// A mark after `date` came from a play the run did not read, so
     /// it stays for the next pass.
-    public func clearDirty(gameKey: String, markedUpTo date: Date) throws {
+    public func clearDirty(targetId: String, gameKey: String, markedUpTo date: Date) throws {
         try database.run(
-            "DELETE FROM dirty_game WHERE gameKey = ? AND markedAt <= ?",
-            [.text(gameKey), .real(date.timeIntervalSince1970)])
+            "DELETE FROM dirty_game WHERE targetId = ? AND gameKey = ? AND markedAt <= ?",
+            [.text(targetId), .text(gameKey), .real(date.timeIntervalSince1970)])
     }
 
     // MARK: - The scheduler's own state, per SPEC 7.10 and 7.11
@@ -112,9 +115,6 @@ extension BackupStateStore {
     private enum SchedulerKey: String {
         /// The consecutive runs lost to a force quit, per 7.10.
         case interruptedRunTally = "interrupted-run-tally"
-        /// The notifications already posted, per 7.11. A key that
-        /// leaves the list arms its cause again.
-        case notificationLedger = "notification-ledger"
     }
 
     private func schedulerValue(_ key: SchedulerKey) throws -> String? {
@@ -141,17 +141,28 @@ extension BackupStateStore {
         try setSchedulerValue(String(tally.count), for: .interruptedRunTally)
     }
 
+    // MARK: - The notifications already posted, per SPEC 7.11
+
     public func notificationLedger() throws -> BackupNotificationLedger {
-        guard let text = try schedulerValue(.notificationLedger), !text.isEmpty else {
-            return BackupNotificationLedger()
-        }
+        let rows = try database.query("SELECT cause, targetId FROM posted_notification")
         return BackupNotificationLedger(
-            postedKeys: Set(text.split(separator: "\n").map(String.init)))
+            posted: Set(
+                rows.compactMap { row in
+                    BackupFailFastCause(rawValue: row[0].string ?? "").map {
+                        BackupNotificationLedger.Posted(cause: $0, targetId: row[1].string)
+                    }
+                }))
     }
 
     public func saveNotificationLedger(_ ledger: BackupNotificationLedger) throws {
-        try setSchedulerValue(
-            ledger.postedKeys.sorted().joined(separator: "\n"), for: .notificationLedger)
+        try database.transaction {
+            try database.run("DELETE FROM posted_notification")
+            for entry in ledger.posted {
+                try database.run(
+                    "INSERT INTO posted_notification (cause, targetId) VALUES (?, ?)",
+                    [.text(entry.cause.rawValue), entry.targetId.map { .text($0) } ?? .null])
+            }
+        }
     }
 
     // MARK: - The partial-path clock of SPEC 7.2
@@ -212,10 +223,11 @@ extension BackupStateStore {
             [
                 .text(run.id), .text(run.targetId),
                 .real(run.startedAt.timeIntervalSince1970),
-                run.finishedAt.map { .real($0.timeIntervalSince1970) } ?? .null,
-                .text(run.outcome.rawValue), .integer(run.uploadedBytes),
+                run.end.map { .real($0.finishedAt.timeIntervalSince1970) } ?? .null,
+                run.end.map { .text($0.outcome.rawValue) } ?? .null,
+                .integer(run.uploadedBytes),
                 .integer(Int64(run.gameCount)),
-                run.detail.map { .text($0) } ?? .null,
+                run.end?.detail.map { .text($0) } ?? .null,
             ])
         let cutoff = run.startedAt.addingTimeInterval(-BackupRunRecord.retention)
         try database.run(
@@ -235,31 +247,48 @@ extension BackupStateStore {
             guard let id = row[0].string,
                 let targetId = row[1].string,
                 let startedAt = row[2].double,
-                let outcome = row[4].string.flatMap(BackupRunOutcome.init(rawValue:)),
                 let uploadedBytes = row[5].int64,
                 let gameCount = row[6].int64
             else { return nil }
+            var end: BackupRunEnd?
+            if let finishedAt = row[3].double {
+                guard let outcome = row[4].string.flatMap(BackupRunOutcome.init(rawValue:))
+                else { return nil }
+                end = BackupRunEnd(
+                    outcome: outcome, finishedAt: Date(timeIntervalSince1970: finishedAt),
+                    detail: row[7].string)
+            }
             return BackupRunRecord(
                 id: id,
                 targetId: targetId,
                 startedAt: Date(timeIntervalSince1970: startedAt),
-                finishedAt: row[3].double.map { Date(timeIntervalSince1970: $0) },
-                outcome: outcome,
+                end: end,
                 uploadedBytes: uploadedBytes,
-                gameCount: Int(gameCount),
-                detail: row[7].string)
+                gameCount: Int(gameCount))
         }
     }
 
     // MARK: - Intent records
 
     public func saveIntent(_ intent: BackupIntentRecord) throws {
+        var uploadedBytes: Int64 = 0
+        var remainingBytes: Int64 = 0
+        var choice: RestoreChoice?
+        var movedAsideTree: String?
+        switch intent.work {
+        case .run(let uploaded, let remaining):
+            uploadedBytes = uploaded
+            remainingBytes = remaining
+        case .restore(let restoreChoice, let moved):
+            choice = restoreChoice
+            movedAsideTree = moved
+        }
         try database.run(
             """
             INSERT INTO intent_record
                 (kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
-                 restoreScope, replacesTree, createdAt, asked)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 restoreScope, replacesTree, movedAsideTree, createdAt, asked)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (kind) DO UPDATE SET
                 targetId = excluded.targetId,
                 gameKey = excluded.gameKey,
@@ -268,6 +297,7 @@ extension BackupStateStore {
                 remainingBytes = excluded.remainingBytes,
                 restoreScope = excluded.restoreScope,
                 replacesTree = excluded.replacesTree,
+                movedAsideTree = excluded.movedAsideTree,
                 createdAt = excluded.createdAt,
                 asked = excluded.asked
             """,
@@ -275,10 +305,11 @@ extension BackupStateStore {
                 .text(intent.kind.rawValue), .text(intent.targetId),
                 intent.gameKey.map { .text($0) } ?? .null,
                 intent.snapshotId.map { .text($0) } ?? .null,
-                .integer(intent.uploadedBytes),
-                .integer(intent.remainingBytes),
-                intent.restoreScope.map { .text($0.rawValue) } ?? .null,
-                .integer(intent.replacesTheTree ? 1 : 0),
+                .integer(uploadedBytes),
+                .integer(remainingBytes),
+                choice.map { .text($0.scope.rawValue) } ?? .null,
+                .integer(choice == .replaceTheTree ? 1 : 0),
+                movedAsideTree.map { .text($0) } ?? .null,
                 .real(intent.createdAt.timeIntervalSince1970),
                 .integer(intent.asked ? 1 : 0),
             ])
@@ -288,7 +319,7 @@ extension BackupStateStore {
         let rows = try database.query(
             """
             SELECT targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
-                   restoreScope, replacesTree, createdAt, asked
+                   restoreScope, replacesTree, movedAsideTree, createdAt, asked
             FROM intent_record WHERE kind = ?
             """,
             [.text(kind.rawValue)])
@@ -297,18 +328,24 @@ extension BackupStateStore {
             let uploadedBytes = row[3].int64,
             let remainingBytes = row[4].int64,
             let replacesTree = row[6].int64,
-            let createdAt = row[7].double,
-            let asked = row[8].int64
+            let createdAt = row[8].double,
+            let asked = row[9].int64
         else { return nil }
+        let work: BackupIntentRecord.Work
+        switch kind {
+        case .interruptedRun:
+            work = .run(uploadedBytes: uploadedBytes, remainingBytes: remainingBytes)
+        case .interruptedRestore:
+            guard let scope = row[5].string.flatMap(RestoreScope.init(rawValue:)) else { return nil }
+            work = .restore(
+                replacesTree != 0 ? .replaceTheTree : .restore(scope),
+                movedAsideTree: row[7].string)
+        }
         return BackupIntentRecord(
-            kind: kind,
             targetId: targetId,
             gameKey: row[1].string,
             snapshotId: row[2].string,
-            uploadedBytes: uploadedBytes,
-            remainingBytes: remainingBytes,
-            restoreScope: row[5].string.flatMap(RestoreScope.init(rawValue:)),
-            replacesTheTree: replacesTree != 0,
+            work: work,
             createdAt: Date(timeIntervalSince1970: createdAt),
             asked: asked != 0)
     }
@@ -323,5 +360,13 @@ extension BackupStateStore {
     public func clearIntent(kind: BackupIntentKind) throws {
         try database.run(
             "DELETE FROM intent_record WHERE kind = ?", [.text(kind.rawValue)])
+    }
+
+    /// Clears the interrupted-run record only when it names this
+    /// stream, so a closed stream leaves no record that names it.
+    public func clearInterruptedRun(targetId: String, streamKey: String) throws {
+        try database.run(
+            "DELETE FROM intent_record WHERE kind = ? AND targetId = ? AND gameKey = ?",
+            [.text(BackupIntentKind.interruptedRun.rawValue), .text(targetId), .text(streamKey)])
     }
 }

@@ -212,6 +212,38 @@ final class TransferGateTests: XCTestCase {
         }
     }
 
+    func testACancelledWaiterLeavesTheQueueAtOnceAndTakesNoSlot() async throws {
+        let gate = TransferGate(limit: 1)
+        let latch = TransferLatch()
+        let holder = Task { try? await gate.transfer { await latch.wait() } }
+        let arrived = await latch.waitForArrivals(1)
+        XCTAssertTrue(arrived, "the first transfer must hold the slot")
+
+        let ran = AttemptCounter()
+        let ended = expectation(description: "the cancelled waiter ends")
+        let waiter = Task {
+            defer { ended.fulfill() }
+            try await gate.transfer { _ = await ran.next() }
+        }
+        waiter.cancel()
+        await fulfillment(of: [ended], timeout: 5)
+
+        do {
+            try await waiter.value
+            XCTFail("a cancelled waiter must not run its body")
+        } catch {
+            XCTAssertEqual(error as? BackupProviderError, .offline)
+        }
+        let waiterRan = await ran.count
+        XCTAssertEqual(waiterRan, 0)
+
+        await latch.open()
+        await holder.value
+        try await gate.transfer { _ = await ran.next() }
+        let afterRan = await ran.count
+        XCTAssertEqual(afterRan, 1, "the slot is free again after the holder ends")
+    }
+
     func testATransferThatThrottlesGivesItsSlotUpWhileItWaits() async {
         let clock = ProbingClock()
         let gate = TransferGate(limit: 1, attempts: 2, clock: clock)

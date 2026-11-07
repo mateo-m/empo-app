@@ -14,6 +14,22 @@ public enum BackupRunOutcome: String, Codable, Sendable, CaseIterable, Equatable
     case cancelled
 }
 
+/// How a run ended, written once when the run reaches its end.
+public struct BackupRunEnd: Equatable, Sendable {
+
+    public var outcome: BackupRunOutcome
+    public var finishedAt: Date
+    /// The failure line, when there is one. The screens of section 13
+    /// show it.
+    public var detail: String?
+
+    public init(outcome: BackupRunOutcome, finishedAt: Date, detail: String? = nil) {
+        self.outcome = outcome
+        self.finishedAt = finishedAt
+        self.detail = detail
+    }
+}
+
 /// One row of the run history of SPEC 6.6.
 ///
 /// There is one global list. No per-target list and no per-game list,
@@ -26,32 +42,26 @@ public struct BackupRunRecord: Equatable, Sendable {
     public var id: String
     public var targetId: String
     public var startedAt: Date
-    public var finishedAt: Date?
-    public var outcome: BackupRunOutcome
+    /// `nil` until the run writes its end. A process that stops
+    /// mid-run leaves the row with no end.
+    public var end: BackupRunEnd?
     public var uploadedBytes: Int64
     /// How many games the run covered.
     public var gameCount: Int
-    /// The failure line, when there is one. The screens of section 13
-    /// show it.
-    public var detail: String?
 
     public init(
         id: String,
         targetId: String,
         startedAt: Date,
-        finishedAt: Date? = nil,
-        outcome: BackupRunOutcome,
+        end: BackupRunEnd? = nil,
         uploadedBytes: Int64 = 0,
-        gameCount: Int = 0,
-        detail: String? = nil
+        gameCount: Int = 0
     ) {
         self.id = id
         self.targetId = targetId
         self.startedAt = startedAt
-        self.finishedAt = finishedAt
-        self.outcome = outcome
+        self.end = end
         self.uploadedBytes = uploadedBytes
         self.gameCount = gameCount
-        self.detail = detail
     }
 }

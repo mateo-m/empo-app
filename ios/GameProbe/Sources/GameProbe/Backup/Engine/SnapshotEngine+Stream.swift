@@ -38,23 +38,29 @@ extension SnapshotEngine {
         let plannedBytes: Int64
         let scannedAt: Date
 
-        var result: StreamResult
+        var uploadedBytes: Int64 = 0
+        var uploadedBlobCount = 0
+        var partialPaths: [String] = []
         var entries: [SnapshotManifest.Entry]
         /// Every blob this stream put on the target, from the
         /// checkpoint of 6.5 and from this run.
         var confirmed: [String: BlobCompression]
-        /// The puts that came back pending, per 8.5.
-        var pendingPaths: [String] = []
-        /// The blobs of `pendingPaths`. The checkpoint leaves them
-        /// out, so a later run never names a blob the target did not
-        /// confirm.
-        var pendingHashes: Set<String> = []
+        /// The puts that came back pending, per 8.5, as the target
+        /// path by blob hash. The checkpoint leaves them out, so a
+        /// later run never names a blob the target did not confirm.
+        var pending: [String: String] = [:]
         /// A member the manifest cannot hold. The game keeps its
         /// dirty mark and does not count as backed up.
         var missedMember = false
         var confirmedBytes: Int64 = 0
 
         var key: String { stream.key }
+
+        func result(_ outcome: StreamOutcome) -> StreamResult {
+            StreamResult(
+                streamKey: stream.key, outcome: outcome, uploadedBytes: uploadedBytes,
+                uploadedBlobCount: uploadedBlobCount, partialPaths: partialPaths)
+        }
 
         init(
             stream: BackupStream,
@@ -82,7 +88,6 @@ extension SnapshotEngine {
             self.snapshotId = snapshotId
             self.scannedAt = scannedAt
             self.plannedBytes = plan.changedBytes
-            self.result = StreamResult(streamKey: stream.key, outcome: .blobsOnly)
             self.entries = plan.reused
             self.confirmed = confirmed
         }
@@ -115,7 +120,7 @@ extension SnapshotEngine {
                 return
             }
         }
-        context.uploadedBytes += run.result.uploadedBytes
+        context.uploadedBytes += run.uploadedBytes
         try await close(run, in: context)
     }
 
@@ -125,10 +130,8 @@ extension SnapshotEngine {
         _ run: StreamRun, _ noRoom: NoRoom, neededBytes: Int64, in context: RunContext
     ) {
         let missing = QuotaCheck.Shortfall(neededBytes: neededBytes, freeBytes: noRoom.freeBytes)
-        context.uploadedBytes += run.result.uploadedBytes
-        run.result.outcome = .failed(reason: QuotaCheck.blockedLine(missing))
-        context.streams.append(run.result)
-        try? markAttempt(targetId: context.request.descriptor.id, gameKey: run.key)
+        context.uploadedBytes += run.uploadedBytes
+        context.streams.append(run.result(.failed(reason: QuotaCheck.blockedLine(missing))))
         if let earlier = context.shortfall {
             context.shortfall = QuotaCheck.Shortfall(
                 neededBytes: earlier.neededBytes + missing.missingBytes,
@@ -166,7 +169,6 @@ extension SnapshotEngine {
         guard route != .notEnoughSpace else {
             context.streams.append(
                 StreamResult(streamKey: stream.key, outcome: .notEnoughLocalSpace))
-            try? markAttempt(targetId: targetId, gameKey: stream.key)
             return nil
         }
 
@@ -229,13 +231,10 @@ extension SnapshotEngine {
             let uploaded = try await uploadBlob(context, file: staged.file, hash: staged.hash)
             entry.hash = uploaded.hash
             entry.compression = uploaded.compression
-            run.result.uploadedBytes += uploaded.bytes
-            run.result.uploadedBlobCount += 1
+            run.uploadedBytes += uploaded.bytes
+            run.uploadedBlobCount += 1
             run.confirmed[uploaded.hash] = uploaded.compression
-            if uploaded.isPending {
-                run.pendingPaths.append(uploaded.path)
-                run.pendingHashes.insert(uploaded.hash)
-            }
+            if uploaded.isPending { run.pending[uploaded.hash] = uploaded.path }
             readTheFile = uploaded.readTheFile
         }
         // The plan counts the member, so the progress counts the
@@ -264,7 +263,7 @@ extension SnapshotEngine {
             }
         }
 
-        if entry.partial { run.result.partialPaths.append(member.path) }
+        if entry.partial { run.partialPaths.append(member.path) }
         if let kept { run.entries.append(kept) } else { run.missedMember = true }
         save(
             try store.saveCheckpoint(
@@ -272,10 +271,10 @@ extension SnapshotEngine {
                     targetId: targetId,
                     gameKey: run.key,
                     snapshotId: run.snapshotId,
-                    uploadedBytes: run.result.uploadedBytes,
+                    uploadedBytes: run.uploadedBytes,
                     pendingPaths: run.plan.changed.dropFirst(index + 1).map(\.path),
                     confirmedBlobs: run.confirmed
-                        .filter { !run.pendingHashes.contains($0.key) }
+                        .filter { run.pending[$0.key] == nil }
                         .map { ConfirmedBlob(hash: $0.key, compression: $0.value) }
                         .sorted { $0.hash < $1.hash },
                     updatedAt: now)),
@@ -287,12 +286,12 @@ extension SnapshotEngine {
         save(
             try store.saveIntent(
                 BackupIntentRecord(
-                    kind: .interruptedRun,
                     targetId: targetId,
                     gameKey: run.key,
                     snapshotId: run.snapshotId,
-                    uploadedBytes: run.confirmedBytes,
-                    remainingBytes: max(0, run.plannedBytes - run.confirmedBytes),
+                    work: .run(
+                        uploadedBytes: run.confirmedBytes,
+                        remainingBytes: max(0, run.plannedBytes - run.confirmedBytes)),
                     createdAt: now)),
             "the interrupted-run record of \(run.key)")
     }
@@ -315,9 +314,8 @@ extension SnapshotEngine {
         }
 
         // A blob still pending leaves the manifest for the next run.
-        guard try await waitForConfirmations(run.pendingPaths) else {
-            context.streams.append(run.result)
-            try? markAttempt(targetId: targetId, gameKey: run.key)
+        guard try await waitForConfirmations(run.pending.values.sorted()) else {
+            context.streams.append(run.result(.blobsOnly))
             return
         }
 
@@ -342,22 +340,26 @@ extension SnapshotEngine {
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: run.key),
             "the end of the checkpoint of \(run.key)")
+        save(
+            try store.clearInterruptedRun(targetId: targetId, streamKey: run.key),
+            "the end of the interrupted-run record of \(run.key)")
         if !run.missedMember {
             save(
-                try store.clearDirty(gameKey: run.key, markedUpTo: run.scannedAt),
+                try store.clearDirty(
+                    targetId: targetId, gameKey: run.key, markedUpTo: run.scannedAt),
                 "the end of the dirty mark of \(run.key)")
         }
         markSuccess(
             targetId: targetId, gameKey: run.key, manifest: manifest, scannedAt: run.scannedAt,
             isComplete: !run.missedMember)
 
-        run.result.outcome = .wroteSnapshot(snapshotId: run.snapshotId)
+        var result = run.result(.wroteSnapshot(snapshotId: run.snapshotId))
         // Step 4 of 5.8, inline at the end of the stream that just
         // closed, per 5.10.
-        run.result.prunedSnapshotIds = await prune(
+        result.prunedSnapshotIds = await prune(
             context, stream: run.stream, kind: run.kind,
             preset: context.request.retentionPreset)
-        context.streams.append(run.result)
+        context.streams.append(result)
     }
 
     /// The last manifest already holds the files the run read, so the
@@ -371,9 +373,13 @@ extension SnapshotEngine {
         save(
             try store.clearCheckpoint(targetId: targetId, gameKey: stream.key),
             "the end of the checkpoint of \(stream.key)")
+        save(
+            try store.clearInterruptedRun(targetId: targetId, streamKey: stream.key),
+            "the end of the interrupted-run record of \(stream.key)")
         if isComplete {
             save(
-                try store.clearDirty(gameKey: stream.key, markedUpTo: scannedAt),
+                try store.clearDirty(
+                    targetId: targetId, gameKey: stream.key, markedUpTo: scannedAt),
                 "the end of the dirty mark of \(stream.key)")
         }
         markSuccess(

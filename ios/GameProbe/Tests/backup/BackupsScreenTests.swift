@@ -35,7 +35,7 @@ final class BackupsScreenTests: XCTestCase {
                 descriptor: target(), failure: .rejected(message: "too big"), hasPlus: false),
             TargetRowFacts(descriptor: target(), failure: .rejected(message: "too big")),
             TargetRowFacts(descriptor: target(), failure: .full(reason: "no room")),
-            TargetRowFacts(descriptor: target(), failure: .unreachable(), failedAt: failedAt),
+            TargetRowFacts(descriptor: target(), failure: .unreachable()),
             TargetRowFacts(descriptor: target()),
         ]
     }
@@ -120,7 +120,7 @@ final class BackupsScreenTests: XCTestCase {
         let row = TargetRowRules.row(
             TargetRowFacts(
                 descriptor: target(label: "Homelab", accountHint: "homelab.lan"),
-                failure: .unreachable(), failedAt: failedAt,
+                failure: .unreachable(),
                 failedAtText: "yesterday at 14:03"))
         XCTAssertEqual(row.stateLine, "Couldn't connect yesterday at 14:03")
         XCTAssertEqual(row.action, .tryAgain)
@@ -131,7 +131,7 @@ final class BackupsScreenTests: XCTestCase {
         let lines = [UnreachableCause.serverError, .busy].map { cause in
             TargetRowRules.row(
                 TargetRowFacts(
-                    descriptor: target(), failure: .unreachable(cause), failedAt: failedAt,
+                    descriptor: target(), failure: .unreachable(cause),
                     failedAtText: "at 14:03")
             ).stateLine
         }
@@ -222,11 +222,10 @@ final class BackupsScreenTests: XCTestCase {
         ]
         let since = failedAt.addingTimeInterval(-22 * 86_400)
         let games = [
-            GameFreshness(gameKey: "g1"),
-            GameFreshness(
+            LateGame(
                 gameKey: "g2", level: .stale, targetId: "a", cause: .waitingForWiFi,
                 unprotectedSince: since.addingTimeInterval(86_400)),
-            GameFreshness(
+            LateGame(
                 gameKey: "g3", level: .banner, targetId: "b", cause: .waitingForWiFi,
                 unprotectedSince: since),
         ]
@@ -238,11 +237,11 @@ final class BackupsScreenTests: XCTestCase {
         XCTAssertEqual(status?.isHealthy, false)
 
         let one = BackupsScreenStatusRules.status(
-            of: targets, games: [games[1]], lastSuccessText: "on 4 March")
+            of: targets, games: [games[0]], lastSuccessText: "on 4 March")
         XCTAssertEqual(one?.line, "1 game not backed up")
 
         let fresh = BackupsScreenStatusRules.status(
-            of: targets, games: [games[0]], lastSuccessText: "on 4 March")
+            of: targets, games: [], lastSuccessText: "on 4 March")
         XCTAssertEqual(fresh?.line, "All games backed up")
     }
 
@@ -251,7 +250,7 @@ final class BackupsScreenTests: XCTestCase {
             TargetRowFacts(descriptor: target(id: "a", label: "Dropbox"), failure: .needsSignIn)
         ]
         let games = [
-            GameFreshness(
+            LateGame(
                 gameKey: "g1", level: .banner, targetId: "a", cause: .needsSignIn,
                 unprotectedSince: failedAt)
         ]
@@ -310,7 +309,7 @@ final class BackupsScreenTests: XCTestCase {
     func testRemoveRefusesACheckedDeleteBoxOnAnUnreachableTarget() {
         let unreachable = target(label: "Dropbox")
         let answer = TargetRemovalRules.answer(
-            deleteBackups: true, state: .unreachable(at: failedAt), target: unreachable)
+            deleteBackups: true, state: .unreachable(), target: unreachable)
         guard case .refuse(let refusal) = answer else {
             return XCTFail("a checked box on an unreachable target must refuse")
         }
@@ -323,7 +322,7 @@ final class BackupsScreenTests: XCTestCase {
     func testAnUncheckedBoxRemovesEvenWhenTheTargetIsUnreachable() {
         XCTAssertEqual(
             TargetRemovalRules.answer(
-                deleteBackups: false, state: .unreachable(at: failedAt), target: target()),
+                deleteBackups: false, state: .unreachable(), target: target()),
             .remove)
     }
 
@@ -393,14 +392,12 @@ final class BackupsScreenTests: XCTestCase {
     func testNotNowMarksNothingAndNeverReturnsByItself() {
         let effect = BackupNotificationAsk.effect(of: .notNow)
         XCTAssertFalse(effect.showsTheSystemPrompt)
-        XCTAssertFalse(effect.marksThePromptSpent)
         XCTAssertFalse(effect.showsTheSheetAgain)
     }
 
     func testTurnOnSpendsTheOneChanceAtTheSystemPrompt() {
         let effect = BackupNotificationAsk.effect(of: .turnOn)
         XCTAssertTrue(effect.showsTheSystemPrompt)
-        XCTAssertTrue(effect.marksThePromptSpent)
         XCTAssertFalse(effect.showsTheSheetAgain)
     }
 

@@ -10,37 +10,31 @@ extension BackupStateStore {
     public func addPendingDeletion(_ deletion: PendingDeletion) throws {
         try database.run(
             """
-            INSERT INTO pending_deletion
-                (targetId, gameKey, requestedAt, rescuedBuckets)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT (targetId, gameKey) DO UPDATE SET
-                requestedAt = excluded.requestedAt,
-                rescuedBuckets = excluded.rescuedBuckets
+            INSERT INTO pending_deletion (targetId, gameKey, requestedAt)
+            VALUES (?, ?, ?)
+            ON CONFLICT (targetId, gameKey) DO NOTHING
             """,
             [
                 .text(deletion.targetId), .text(deletion.gameKey),
                 .real(deletion.requestedAt.timeIntervalSince1970),
-                .text(Self.encodeList(deletion.rescuedBuckets)),
             ])
     }
 
     public func pendingDeletions(targetId: String) throws -> [PendingDeletion] {
         let rows = try database.query(
             """
-            SELECT gameKey, requestedAt, rescuedBuckets FROM pending_deletion
+            SELECT gameKey, requestedAt FROM pending_deletion
             WHERE targetId = ? ORDER BY requestedAt, gameKey
             """,
             [.text(targetId)])
         return rows.compactMap { row in
             guard let gameKey = row[0].string,
-                let requestedAt = row[1].double,
-                let buckets = row[2].string
+                let requestedAt = row[1].double
             else { return nil }
             return PendingDeletion(
                 targetId: targetId,
                 gameKey: gameKey,
-                requestedAt: Date(timeIntervalSince1970: requestedAt),
-                rescuedBuckets: Self.decodeList(buckets))
+                requestedAt: Date(timeIntervalSince1970: requestedAt))
         }
     }
 
@@ -53,43 +47,30 @@ extension BackupStateStore {
     // MARK: - Staleness clocks
 
     public func saveStaleness(_ clock: StalenessClock) throws {
-        func value(_ date: Date?) -> SQLiteValue {
-            date.map { .real($0.timeIntervalSince1970) } ?? .null
-        }
         try database.run(
             """
-            INSERT INTO staleness
-                (targetId, gameKey, lastSuccessAt, lastAttemptAt, partialSince)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO staleness (targetId, gameKey, lastSuccessAt)
+            VALUES (?, ?, ?)
             ON CONFLICT (targetId, gameKey) DO UPDATE SET
-                lastSuccessAt = excluded.lastSuccessAt,
-                lastAttemptAt = excluded.lastAttemptAt,
-                partialSince = excluded.partialSince
+                lastSuccessAt = excluded.lastSuccessAt
             """,
             [
                 .text(clock.targetId), .text(clock.gameKey),
-                value(clock.lastSuccessAt), value(clock.lastAttemptAt),
-                value(clock.partialSince),
+                .real(clock.lastSuccessAt.timeIntervalSince1970),
             ])
     }
 
     public func staleness(targetId: String, gameKey: String) throws -> StalenessClock? {
         let rows = try database.query(
             """
-            SELECT lastSuccessAt, lastAttemptAt, partialSince FROM staleness
-            WHERE targetId = ? AND gameKey = ?
+            SELECT lastSuccessAt FROM staleness WHERE targetId = ? AND gameKey = ?
             """,
             [.text(targetId), .text(gameKey)])
-        guard let row = rows.first else { return nil }
-        func date(_ value: SQLiteValue) -> Date? {
-            value.double.map { Date(timeIntervalSince1970: $0) }
-        }
+        guard let lastSuccessAt = rows.first?[0].double else { return nil }
         return StalenessClock(
             targetId: targetId,
             gameKey: gameKey,
-            lastSuccessAt: date(row[0]),
-            lastAttemptAt: date(row[1]),
-            partialSince: date(row[2]))
+            lastSuccessAt: Date(timeIntervalSince1970: lastSuccessAt))
     }
 
     // MARK: - What the target row shows, per SPEC 13.5
@@ -102,23 +83,25 @@ extension BackupStateStore {
     public func targetStatus(targetId: String) throws -> TargetStatusRecord? {
         let rows = try database.query(
             """
-            SELECT failureKind, failureDetail, failedAt, quotaUsed, quotaLimit, quotaAt
+            SELECT failureKind, failureDetail, failedAt, quotaUsed, quotaLimit
             FROM target_status WHERE targetId = ?
             """,
             [.text(targetId)])
         guard let row = rows.first else { return nil }
-        func date(_ value: SQLiteValue) -> Date? {
-            value.double.map { Date(timeIntervalSince1970: $0) }
+        var lastFailure: TargetFailureRecord?
+        if let failure = TargetFailure(kind: row[0].string, detail: row[1].string ?? ""),
+            let failedAt = row[2].double
+        {
+            lastFailure = TargetFailureRecord(
+                failure: failure, at: Date(timeIntervalSince1970: failedAt))
         }
         let quota = row[3].int64.map {
             QuotaReading(usedBytes: $0, limitBytes: row[4].int64)
         }
         return TargetStatusRecord(
             targetId: targetId,
-            failure: TargetFailure(kind: row[0].string, detail: row[1].string ?? ""),
-            failedAt: date(row[2]),
-            quota: quota,
-            quotaAt: date(row[5]))
+            lastFailure: lastFailure,
+            quota: quota)
     }
 
     /// Writes the failure the last run left, or clears it after a
@@ -144,22 +127,18 @@ extension BackupStateStore {
     /// Writes the space query answer of 9.7. The add check, the
     /// re-sign-in check and the end of a run write it. Empo never
     /// polls a quota on its own.
-    public func recordTargetQuota(
-        targetId: String, reading: QuotaReading?, at date: Date
-    ) throws {
+    public func recordTargetQuota(targetId: String, reading: QuotaReading?) throws {
         let used: SQLiteValue = reading.map { .integer($0.usedBytes) } ?? .null
         let limit: SQLiteValue = reading?.limitBytes.map { .integer($0) } ?? .null
-        let when: SQLiteValue = reading == nil ? .null : .real(date.timeIntervalSince1970)
         try database.run(
             """
-            INSERT INTO target_status (targetId, quotaUsed, quotaLimit, quotaAt)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO target_status (targetId, quotaUsed, quotaLimit)
+            VALUES (?, ?, ?)
             ON CONFLICT (targetId) DO UPDATE SET
                 quotaUsed = excluded.quotaUsed,
-                quotaLimit = excluded.quotaLimit,
-                quotaAt = excluded.quotaAt
+                quotaLimit = excluded.quotaLimit
             """,
-            [.text(targetId), used, limit, when])
+            [.text(targetId), used, limit])
     }
 
     /// What Empo holds on one target, per game, biggest first.

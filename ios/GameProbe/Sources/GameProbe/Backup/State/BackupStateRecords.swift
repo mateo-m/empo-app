@@ -119,18 +119,17 @@ public struct SnapshotLedgerEntry: Equatable, Sendable {
     }
 }
 
-/// A game whose files changed since its last snapshot, per SPEC 6.2.
-/// The app-background pass picks these up.
+/// A game whose files changed since its last snapshot on one target,
+/// per SPEC 6.2. The app-background pass picks these up.
 public struct DirtyMark: Equatable, Sendable {
+    public var targetId: String
     public var gameKey: String
     public var markedAt: Date
-    /// What made the game dirty. Ticket 007 owns the triggers.
-    public var reason: String
 
-    public init(gameKey: String, markedAt: Date, reason: String) {
+    public init(targetId: String, gameKey: String, markedAt: Date) {
+        self.targetId = targetId
         self.gameKey = gameKey
         self.markedAt = markedAt
-        self.reason = reason
     }
 }
 
@@ -140,19 +139,11 @@ public struct PendingDeletion: Equatable, Sendable {
     public var targetId: String
     public var gameKey: String
     public var requestedAt: Date
-    /// The `Rescued Saves` buckets the delete covers, per 5.13.
-    public var rescuedBuckets: [String]
 
-    public init(
-        targetId: String,
-        gameKey: String,
-        requestedAt: Date,
-        rescuedBuckets: [String] = []
-    ) {
+    public init(targetId: String, gameKey: String, requestedAt: Date) {
         self.targetId = targetId
         self.gameKey = gameKey
         self.requestedAt = requestedAt
-        self.rescuedBuckets = rescuedBuckets
     }
 }
 
@@ -162,49 +153,41 @@ public struct StalenessClock: Equatable, Sendable {
     public var targetId: String
     public var gameKey: String
     /// The last run that closed a whole snapshot.
-    public var lastSuccessAt: Date?
-    /// The last run that tried, whatever it ended as.
-    public var lastAttemptAt: Date?
-    /// When the game first went partial, per 7.2. A partial snapshot
-    /// does not stop this clock.
-    public var partialSince: Date?
+    public var lastSuccessAt: Date
 
-    public init(
-        targetId: String,
-        gameKey: String,
-        lastSuccessAt: Date? = nil,
-        lastAttemptAt: Date? = nil,
-        partialSince: Date? = nil
-    ) {
+    public init(targetId: String, gameKey: String, lastSuccessAt: Date) {
         self.targetId = targetId
         self.gameKey = gameKey
         self.lastSuccessAt = lastSuccessAt
-        self.lastAttemptAt = lastAttemptAt
-        self.partialSince = partialSince
+    }
+}
+
+/// The failure the last run of a target left, and when.
+public struct TargetFailureRecord: Equatable, Sendable {
+    public var failure: TargetFailure
+    public var at: Date
+
+    public init(failure: TargetFailure, at: Date) {
+        self.failure = failure
+        self.at = at
     }
 }
 
 /// What the target row of SPEC 13.5 shows between runs.
 public struct TargetStatusRecord: Equatable, Sendable {
     public var targetId: String
-    public var failure: TargetFailure?
-    public var failedAt: Date?
+    public var lastFailure: TargetFailureRecord?
     /// The last space query answer, per 9.7. Empo never polls it.
     public var quota: QuotaReading?
-    public var quotaAt: Date?
 
     public init(
         targetId: String,
-        failure: TargetFailure? = nil,
-        failedAt: Date? = nil,
-        quota: QuotaReading? = nil,
-        quotaAt: Date? = nil
+        lastFailure: TargetFailureRecord? = nil,
+        quota: QuotaReading? = nil
     ) {
         self.targetId = targetId
-        self.failure = failure
-        self.failedAt = failedAt
+        self.lastFailure = lastFailure
         self.quota = quota
-        self.quotaAt = quotaAt
     }
 }
 

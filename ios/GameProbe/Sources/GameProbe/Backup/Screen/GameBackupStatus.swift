@@ -172,7 +172,7 @@ public enum GameBackupStatusRules {
         // The ladder of 7.1 decides who is late, so the line, the
         // card badge, and the library banner never disagree.
         let late = enabled.filter { Staleness.level(of: $0.freshness, now: now) != .fresh }
-        let worstId = Staleness.worst(of: late.map(\.freshness), now: now).targetId
+        let worstId = Staleness.worst(of: late.map(\.freshness), now: now)?.targetId
         if let worst = late.first(where: { $0.targetId == worstId }) {
             return GameBackupStatus(
                 state: .stale(days: days(since: worst.lastSuccessAt, now: now)),

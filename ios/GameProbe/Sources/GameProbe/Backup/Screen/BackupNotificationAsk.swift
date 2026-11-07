@@ -11,17 +11,11 @@ public struct BackupNotificationAskEffect: Equatable, Sendable {
 
     /// Whether Empo opens the system prompt now.
     public var showsTheSystemPrompt: Bool
-    /// Whether Empo records that it spent its one chance at the
-    /// system prompt.
-    public var marksThePromptSpent: Bool
     /// Whether this sheet may come back by itself.
     public var showsTheSheetAgain: Bool
 
-    public init(
-        showsTheSystemPrompt: Bool, marksThePromptSpent: Bool, showsTheSheetAgain: Bool
-    ) {
+    public init(showsTheSystemPrompt: Bool, showsTheSheetAgain: Bool) {
         self.showsTheSystemPrompt = showsTheSystemPrompt
-        self.marksThePromptSpent = marksThePromptSpent
         self.showsTheSheetAgain = showsTheSheetAgain
     }
 }
@@ -61,12 +55,10 @@ public enum BackupNotificationAsk {
         switch answer {
         case .notNow:
             return BackupNotificationAskEffect(
-                showsTheSystemPrompt: false, marksThePromptSpent: false,
-                showsTheSheetAgain: false)
+                showsTheSystemPrompt: false, showsTheSheetAgain: false)
         case .turnOn:
             return BackupNotificationAskEffect(
-                showsTheSystemPrompt: true, marksThePromptSpent: true,
-                showsTheSheetAgain: false)
+                showsTheSystemPrompt: true, showsTheSheetAgain: false)
         }
     }
 

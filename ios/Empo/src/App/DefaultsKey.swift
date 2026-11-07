@@ -57,11 +57,6 @@ enum DefaultsKey {
     /// launch, per SPEC 7.11. Bool.
     static let backupNotificationsAsked = PreferenceKeys.backupNotificationsAsked.name
 
-    /// Empo spent its one chance at the system notification prompt.
-    /// Only "Turn on" on the sheet of SPEC 13.19 sets it. "Not now"
-    /// marks nothing, so the one chance stays unspent. Bool.
-    static let backupNotificationPromptSpent = PreferenceKeys.backupNotificationPromptSpent.name
-
     // MARK: - Disclaimer
 
     static let disclaimerAcknowledgedVersion = PreferenceKeys.disclaimerAcknowledgedVersion.name

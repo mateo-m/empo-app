@@ -83,7 +83,7 @@ public actor RestoreEngine {
 
         let plan = RestorePlanner.plan(
             manifest: manifest,
-            scope: request.scope,
+            scope: request.choice.scope,
             localFiles: request.plannedLocalFiles,
             localVersionMarker: request.localVersionMarker,
             stagedBlobHashes: stagedBlobHashes())
@@ -108,27 +108,37 @@ public actor RestoreEngine {
         paths: BackupNamespacePaths,
         fanOutWidth: Int
     ) async -> RestoreOutcome {
+        let gameKey = request.stream == .preferences ? nil : request.stream.key
+        var result = RestoreResult(partialPathCount: plan.partialPaths.count)
+        var replaced: URL?
+        if request.choice == .replaceTheTree, let tree = request.gameTreeURL {
+            if let earlier = movedAsideTree(of: request, gameKey: gameKey) {
+                // An earlier try of this restore moved `Game/` aside.
+                // The tree there now is half restored, so it stays.
+                let url = tree.deletingLastPathComponent()
+                    .appendingPathComponent(earlier, isDirectory: true)
+                replaced = fm.fileExists(atPath: url.path) ? url : nil
+            } else {
+                do {
+                    replaced = try moveTheTreeAside(tree)
+                } catch {
+                    return .failed(
+                        screenText("Empo couldn't move the current game files aside. Nothing changed."))
+                }
+            }
+            result.replacedTreeName = replaced?.lastPathComponent
+        }
+
         // The record goes in before the first byte lands, so a
         // process that dies mid-restore leaves one, per 6.5.
         try? store.saveIntent(
             RestoreResumeQuestion.record(
                 targetId: request.targetId,
-                gameKey: request.stream == .preferences ? nil : request.stream.key,
+                gameKey: gameKey,
                 snapshotId: request.snapshotId,
-                scope: request.scope,
-                replacesTheTree: request.replacesTheTree,
+                choice: request.choice,
+                movedAsideTree: replaced?.lastPathComponent,
                 at: now))
-
-        var result = RestoreResult(partialPathCount: plan.partialPaths.count)
-        var replaced: URL?
-        if request.replacesTheTree, let tree = request.gameTreeURL {
-            do {
-                replaced = try moveTheTreeAside(tree)
-                result.replacedTreeName = replaced?.lastPathComponent
-            } catch {
-                return .failed(screenText("Empo couldn't move the current game files aside. Nothing changed."))
-            }
-        }
 
         for step in plan.steps {
             guard !Task.isCancelled else {
@@ -211,8 +221,10 @@ public actor RestoreEngine {
             guard let bytes = RestoreStaging.zlibBytes(at: staged, entry: entry) else {
                 throw BlobCodec.Failure.corruptZlibStream
             }
-            try BlobCodec.decode(bytes, algorithm: .zlib, maxBytes: RestoreStaging.inflatedSizeLimit(of: entry))
-                .write(to: destination, options: .atomic)
+            try BlobCodec.decode(
+                bytes, algorithm: .zlib, maxBytes: RestoreStaging.inflatedSizeLimit(of: entry)
+            )
+            .write(to: destination, options: .atomic)
         }
     }
 
@@ -265,6 +277,18 @@ public actor RestoreEngine {
     }
 
     // MARK: - The replace path, per 11.12
+
+    /// The folder an earlier try of this same restore moved `Game/`
+    /// to, from its record.
+    private func movedAsideTree(of request: RestoreRequest, gameKey: String?) -> String? {
+        guard let record = try? store.intent(kind: .interruptedRestore),
+            record.targetId == request.targetId,
+            record.snapshotId == request.snapshotId,
+            record.gameKey == gameKey,
+            case .restore(.replaceTheTree, let moved) = record.work
+        else { return nil }
+        return moved
+    }
 
     /// Moves `Game/` to a hidden sibling and answers where it went.
     private func moveTheTreeAside(_ tree: URL) throws -> URL? {

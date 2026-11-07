@@ -26,8 +26,10 @@ final class WriterConflictsTests: XCTestCase {
         state.answer(targetId: "t1", resolution: .split)
 
         XCTAssertNil(state.questions["t1"])
-        XCTAssertEqual(state.answer(for: "t1")?.resolution, .split)
-        XCTAssertEqual(state.answer(for: "t1")?.splitNamespaceId?.count, 32)
+        guard case .split(let namespaceId) = state.answer(for: "t1") else {
+            return XCTFail("no split answer")
+        }
+        XCTAssertEqual(namespaceId.count, 32)
     }
 
     func testTheTakeOverAnswerNamesNoNamespace() {
@@ -35,7 +37,7 @@ final class WriterConflictsTests: XCTestCase {
 
         state.answer(targetId: "t1", resolution: .takeOver)
 
-        XCTAssertEqual(state.answer(for: "t1"), .init(resolution: .takeOver))
+        XCTAssertEqual(state.answer(for: "t1"), .takeOver)
     }
 
     func testASplitRunSpendsTheAnswerAndShowsTheLine() {
@@ -56,6 +58,31 @@ final class WriterConflictsTests: XCTestCase {
 
         XCTAssertNil(state.answer(for: "t1"))
         XCTAssertNil(state.questions["t1"])
+    }
+
+    func testASavedAnswerKeepsItsShapeOnDisk() throws {
+        let decoder = JSONDecoder()
+        let split = Data(#"{"resolution":"split","splitNamespaceId":"ns-9"}"#.utf8)
+        let takeOver = Data(#"{"resolution":"take-over"}"#.utf8)
+
+        XCTAssertEqual(
+            try decoder.decode(WriterConflicts.Answer.self, from: split),
+            .split(namespaceId: "ns-9"))
+        XCTAssertEqual(try decoder.decode(WriterConflicts.Answer.self, from: takeOver), .takeOver)
+        XCTAssertEqual(
+            try JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(WriterConflicts.Answer.split(namespaceId: "ns-9")))
+                as? [String: String],
+            ["resolution": "split", "splitNamespaceId": "ns-9"])
+    }
+
+    func testASavedSplitWithNoNamespaceGetsANewOne() throws {
+        let saved = Data(#"{"resolution":"split"}"#.utf8)
+
+        let answer = try JSONDecoder().decode(WriterConflicts.Answer.self, from: saved)
+
+        guard case .split(let namespaceId) = answer else { return XCTFail("no split answer") }
+        XCTAssertEqual(namespaceId.count, 32)
     }
 
     func testTheStateSurvivesAJSONRoundTrip() throws {
