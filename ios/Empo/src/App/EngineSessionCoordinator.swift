@@ -235,8 +235,11 @@ final class EngineSessionCoordinator {
         heldKeys.hold(scancode, by: holder)
     }
 
-    func releaseKey(scancode: Int32, by holder: KeyHolder) {
-        heldKeys.release(scancode, by: holder)
+    func releaseKey(
+        scancode: Int32, by holder: KeyHolder,
+        notBefore minimum: Duration = HeldKeys<KeyHolder>.minimumHold
+    ) {
+        heldKeys.release(scancode, by: holder, notBefore: minimum)
     }
 
     /// Input paths call this when they lose the release edges: a
@@ -245,12 +248,8 @@ final class EngineSessionCoordinator {
         heldKeys.release { $0.source == source }
     }
 
-    func injectKey(scancode: Int32, pressed: Bool) {
-        heldKeys.inject(scancode, pressed: pressed)
-    }
-
     func injectKeyTap(scancode: Int32, holdMilliseconds: Int = 50) {
-        heldKeys.tap(scancode, holdMilliseconds: holdMilliseconds)
+        heldKeys.tap(scancode, holdMilliseconds: holdMilliseconds, by: .touch("tap"))
     }
 
     private func registerBridgeCallbacks() {

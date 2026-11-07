@@ -46,14 +46,56 @@ final class HeldKeysTests: XCTestCase {
         XCTAssertEqual(events, [Event(scancode: 40, pressed: true), Event(scancode: 40, pressed: false)])
     }
 
-    func testAPressCancelsTheWaitingRelease() async throws {
+    func testAHolderThatHoldsAgainCancelsItsWaitingRelease() async throws {
         let keys = makeKeys()
-        keys.inject(40, pressed: true)
-        keys.inject(40, pressed: false)
-        keys.inject(40, pressed: true)
+        keys.hold(40, by: "touch")
+        keys.release(40, by: "touch")
+        keys.hold(40, by: "touch")
 
         try await Task.sleep(for: HeldKeys<String>.minimumHold * 3)
-        XCTAssertEqual(events, [Event(scancode: 40, pressed: true), Event(scancode: 40, pressed: true)])
+        XCTAssertEqual(events, [Event(scancode: 40, pressed: true)])
+
+        keys.release(40, by: "touch")
+        XCTAssertEqual(events, [Event(scancode: 40, pressed: true), Event(scancode: 40, pressed: false)])
+    }
+
+    func testATapOnAHeldKeySendsNoEvent() async throws {
+        let keys = makeKeys()
+        keys.hold(40, by: "touch")
+        try await Task.sleep(for: HeldKeys<String>.minimumHold)
+
+        keys.tap(40, holdMilliseconds: 10, by: "tap")
+        try await Task.sleep(for: HeldKeys<String>.minimumHold * 2)
+        XCTAssertEqual(events, [Event(scancode: 40, pressed: true)])
+
+        keys.release(40, by: "touch")
+        XCTAssertEqual(events, [Event(scancode: 40, pressed: true), Event(scancode: 40, pressed: false)])
+    }
+
+    func testATapReleasesAfterItsHoldTime() async throws {
+        let keys = makeKeys()
+        keys.tap(40, holdMilliseconds: 150, by: "tap")
+
+        try await Task.sleep(for: .milliseconds(60))
+        XCTAssertEqual(events, [Event(scancode: 40, pressed: true)])
+
+        try await Task.sleep(for: .milliseconds(240))
+        XCTAssertEqual(events, [Event(scancode: 40, pressed: true), Event(scancode: 40, pressed: false)])
+    }
+
+    func testClearCancelsTheWaitingTapRelease() async throws {
+        let keys = makeKeys()
+        keys.tap(40, holdMilliseconds: 50, by: "tap")
+        keys.clear()
+        keys.hold(40, by: "touch")
+
+        try await Task.sleep(for: HeldKeys<String>.minimumHold * 3)
+        XCTAssertEqual(
+            events,
+            [
+                Event(scancode: 40, pressed: true), Event(scancode: 40, pressed: false),
+                Event(scancode: 40, pressed: true),
+            ])
     }
 
     func testReleaseWhereDropsOnlyTheMatchingHolders() {

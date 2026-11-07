@@ -40,7 +40,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                 fastForwardMultiplier: { Int(core.getFastForwardMultiplier()) },
                 setFastForwardMultiplier: { core.setFastForwardMultiplier(Int32($0)) },
                 setCheatsEnabled: { core.setCheatsEnabled($0) },
-                tapKey: { keys.tap($0, holdMilliseconds: $1) }))
+                tapKey: { keys.tap($0, holdMilliseconds: $1, by: .touch("tap")) }))
         controllers = ControllerInputManager(keys: keys)
     }
 

@@ -174,6 +174,7 @@ struct PlayerControlsOverlay: View {
     private func actionButton(button: ButtonModel, index: Int, displayPosition: CGPoint?) -> some View {
         editableControl(
             ActionButton(
+                id: button.id,
                 label: button.label,
                 scancode: button.scancode,
                 size: button.size,

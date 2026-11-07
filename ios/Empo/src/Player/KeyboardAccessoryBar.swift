@@ -63,7 +63,6 @@ final class KeyboardAccessoryKeyState {
     /// Holder per held scancode. The bar never presses one scancode
     /// from two keys, so scancode is a sufficient map key.
     private var held: [Int32: KeyHolder] = [:]
-    private var pressStarts: [Int32: ContinuousClock.Instant] = [:]
 
     /// Floor for a key's hold time. Heavy scenes poll input well
     /// below 40 fps. A shorter press can fall between two polls, and
@@ -73,28 +72,16 @@ final class KeyboardAccessoryKeyState {
     func press(_ key: AccessoryKey) {
         let holder = KeyHolder.touch("acckey:\(key.id)")
         held[key.scancode] = holder
-        pressStarts[key.scancode] = .now
         EngineSessionCoordinator.shared.holdKey(scancode: key.scancode, by: holder)
     }
 
     /// Releases the key. The hold stays alive until the `tapHold`
-    /// floor has passed.
+    /// floor has passed. A new press of the key before that cancels
+    /// the waiting release.
     func release(_ key: AccessoryKey) {
         guard let holder = held.removeValue(forKey: key.scancode) else { return }
-        let started = pressStarts.removeValue(forKey: key.scancode)
-
-        let elapsed = started.map { ContinuousClock.now - $0 } ?? Self.tapHold
-        let remaining = Self.tapHold - elapsed
-        guard remaining > .zero else {
-            EngineSessionCoordinator.shared.releaseKey(scancode: key.scancode, by: holder)
-            return
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: remaining)
-            // After a releaseAll the holder is already gone and this
-            // release is a no-op at the coordinator.
-            EngineSessionCoordinator.shared.releaseKey(scancode: key.scancode, by: holder)
-        }
+        EngineSessionCoordinator.shared.releaseKey(
+            scancode: key.scancode, by: holder, notBefore: Self.tapHold)
     }
 
     /// One full press for a tap key: press now, release after the
@@ -124,7 +111,6 @@ final class KeyboardAccessoryKeyState {
         for (scancode, holder) in held where scancodes.contains(scancode) {
             EngineSessionCoordinator.shared.releaseKey(scancode: scancode, by: holder)
             held.removeValue(forKey: scancode)
-            pressStarts.removeValue(forKey: scancode)
             latched.remove(scancode)
         }
     }
@@ -137,7 +123,6 @@ final class KeyboardAccessoryKeyState {
             EngineSessionCoordinator.shared.releaseKey(scancode: scancode, by: holder)
         }
         held.removeAll()
-        pressStarts.removeAll()
         latched.removeAll()
     }
 }

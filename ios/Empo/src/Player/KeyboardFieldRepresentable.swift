@@ -46,6 +46,9 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         field.inputAccessoryView = KeyboardAccessoryHostView(excludedScancodes: excludedScancodes)
         field.text = " "  // keep a space so backspace works
         field.delegate = context.coordinator
+        field.onDeleteBackward = { [weak field, coordinator = context.coordinator] in
+            coordinator.typeBackspace(from: field)
+        }
         return field
     }
 
@@ -93,7 +96,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // case into a scancode injection explicitly.
             let field = textField as? TCKeyboardField
             if string.isEmpty && range.length > 0 {
-                type([.key(Int32(GAMECORE_SCANCODE_BACKSPACE), shifted: false)], from: field)
+                typeBackspace(from: field)
                 textField.text = " "
                 return false
             }
@@ -136,6 +139,10 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             return false
         }
 
+        func typeBackspace(from field: TCKeyboardField?) {
+            type([.key(Int32(GAMECORE_SCANCODE_BACKSPACE), shifted: false)], from: field)
+        }
+
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
             type([.key(Int32(GAMECORE_SCANCODE_RETURN), shifted: false)], from: textField as? TCKeyboardField)
             return false
@@ -172,6 +179,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             Task { @MainActor in
                 let engine = EngineSessionCoordinator.shared
                 let shift = Int32(GAMECORE_SCANCODE_LSHIFT)
+                let holder = KeyHolder.touch("softkey")
                 while !pending.isEmpty {
                     let batch = pending
                     let stop = stops
@@ -182,11 +190,11 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                             text.withCString { gamecore_pushTextInput($0) }
                             await Task.yield()
                         case .key(let scancode, let shifted):
-                            if shifted { engine.injectKey(scancode: shift, pressed: true) }
-                            engine.injectKey(scancode: scancode, pressed: true)
+                            if shifted { engine.holdKey(scancode: shift, by: holder) }
+                            engine.holdKey(scancode: scancode, by: holder)
                             try? await Task.sleep(for: .milliseconds(50))
-                            engine.injectKey(scancode: scancode, pressed: false)
-                            if shifted { engine.injectKey(scancode: shift, pressed: false) }
+                            engine.releaseKey(scancode: scancode, by: holder)
+                            if shifted { engine.releaseKey(scancode: shift, by: holder) }
                             try? await Task.sleep(for: .milliseconds(50))
                         }
                     }
