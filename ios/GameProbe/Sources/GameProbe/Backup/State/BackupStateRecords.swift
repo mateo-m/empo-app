@@ -119,18 +119,17 @@ public struct SnapshotLedgerEntry: Equatable, Sendable {
     }
 }
 
-/// A game whose files changed since its last snapshot, per SPEC 6.2.
-/// The app-background pass picks these up.
+/// A game whose files changed since its last snapshot on one target,
+/// per SPEC 6.2. The app-background pass picks these up.
 public struct DirtyMark: Equatable, Sendable {
+    public var targetId: String
     public var gameKey: String
     public var markedAt: Date
-    /// What made the game dirty. Ticket 007 owns the triggers.
-    public var reason: String
 
-    public init(gameKey: String, markedAt: Date, reason: String) {
+    public init(targetId: String, gameKey: String, markedAt: Date) {
+        self.targetId = targetId
         self.gameKey = gameKey
         self.markedAt = markedAt
-        self.reason = reason
     }
 }
 

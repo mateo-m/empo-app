@@ -162,16 +162,17 @@ final class BackupScheduler {
     /// engine terminates and the session is over.
     func playSessionDidEnd(game: GameEntry?) {
         if let container = game?.container {
-            markDirty(container: container, reason: "play session")
+            markDirty(container: container)
         }
         Task { await runUnderTheGrant(.sessionEndOrBackground) }
     }
 
     /// Marks a game for the next backbone pass, which scans dirty
     /// games alone.
-    func markDirty(container: GameContainer, reason: String) {
+    func markDirty(container: GameContainer) {
         let gameKey = BackupKeys.gameKey(containerFolderName: container.folderName)
-        try? store?.markDirty(gameKey: gameKey, reason: reason, at: Date())
+        try? store?.markDirty(
+            gameKey: gameKey, targetIds: BackupTargets.load().map(\.id), at: Date())
     }
 
     private func runUnderTheGrant(_ trigger: BackupTrigger) async {

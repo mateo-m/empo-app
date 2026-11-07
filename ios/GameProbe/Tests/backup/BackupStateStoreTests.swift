@@ -60,13 +60,13 @@ final class BackupStateStoreTests: XCTestCase {
 
         XCTAssertEqual(store.openOutcome, .created)
         XCTAssertTrue(store.needsRebuildFromTarget)
-        try store.markDirty(gameKey: "abc", reason: "import", at: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().count, 1)
     }
 
     func testReopeningTheSameSchemaKeepsTheRowsAndNeedsNoRebuild() throws {
         let first = try BackupStateStore(url: databaseURL)
-        try first.markDirty(gameKey: "abc", reason: "import", at: now)
+        try first.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         first.close()
 
         let second = try BackupStateStore(url: databaseURL)
@@ -79,26 +79,152 @@ final class BackupStateStoreTests: XCTestCase {
 
     func testAnOlderSchemaVersionRebuildsAndStaysUsable() throws {
         let first = try BackupStateStore(url: databaseURL)
-        try first.markDirty(gameKey: "abc", reason: "import", at: now)
+        try first.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         first.close()
 
-        // Put the file back on an older version, the way a downgrade
-        // and an upgrade both leave it.
+        // Version 5 migrates, so the oldest version without a
+        // migration is 4.
         let raw = try SQLiteDatabase(url: databaseURL)
-        try raw.setUserVersion(BackupStateStore.schemaVersion - 1)
+        try raw.setUserVersion(4)
         raw.close()
 
         let store = try BackupStateStore(url: databaseURL)
         defer { store.close() }
 
-        XCTAssertEqual(
-            store.openOutcome,
-            .rebuilt(.schemaVersion(found: BackupStateStore.schemaVersion - 1)))
+        XCTAssertEqual(store.openOutcome, .rebuilt(.schemaVersion(found: 4)))
         XCTAssertTrue(store.needsRebuildFromTarget)
         XCTAssertEqual(try store.dirtyGames(), [])
-        try store.markDirty(gameKey: "def", reason: "runtime watch", at: now)
+        try store.markDirty(gameKey: "def", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["def"])
     }
+
+    func testVersion5KeepsEachDirtyMarkForEveryTargetItKnows() throws {
+        let raw = try SQLiteDatabase(url: databaseURL)
+        try raw.execute(Self.version5Schema)
+        try raw.execute(
+            """
+            INSERT INTO target_status (targetId) VALUES ('target-a');
+            INSERT INTO staleness (targetId, gameKey) VALUES ('target-b', 'other');
+            INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES ('abc', 1000, 'play session');
+            """)
+        try raw.setUserVersion(5)
+        raw.close()
+
+        let store = try BackupStateStore(url: databaseURL)
+        defer { store.close() }
+
+        XCTAssertEqual(store.openOutcome, .opened)
+        XCTAssertEqual(
+            try store.dirtyGames(),
+            [
+                DirtyMark(
+                    targetId: "target-a", gameKey: "abc",
+                    markedAt: Date(timeIntervalSince1970: 1000)),
+                DirtyMark(
+                    targetId: "target-b", gameKey: "abc",
+                    markedAt: Date(timeIntervalSince1970: 1000)),
+            ])
+        let reopened = try BackupStateStore(url: databaseURL)
+        defer { reopened.close() }
+        XCTAssertEqual(reopened.openOutcome, .opened)
+    }
+
+    /// The schema of version 5, as devices hold it.
+    private static let version5Schema = """
+        CREATE TABLE IF NOT EXISTS uploaded_manifest (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            manifest BLOB NOT NULL,
+            uploadedAt REAL NOT NULL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS run_checkpoint (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            uploadedBytes INTEGER NOT NULL,
+            pendingPaths TEXT NOT NULL,
+            confirmedBlobs TEXT NOT NULL,
+            updatedAt REAL NOT NULL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS snapshot_ledger (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            createdAt REAL NOT NULL,
+            oneOff INTEGER NOT NULL,
+            PRIMARY KEY (targetId, gameKey, snapshotId)
+        );
+        CREATE TABLE IF NOT EXISTS target_status (
+            targetId TEXT NOT NULL PRIMARY KEY,
+            failureKind TEXT,
+            failureDetail TEXT,
+            failedAt REAL,
+            quotaUsed INTEGER,
+            quotaLimit INTEGER,
+            quotaAt REAL
+        );
+        CREATE TABLE IF NOT EXISTS target_maintenance (
+            targetId TEXT NOT NULL PRIMARY KEY,
+            lastSweepAt REAL
+        );
+        CREATE TABLE IF NOT EXISTS dirty_game (
+            gameKey TEXT NOT NULL PRIMARY KEY,
+            markedAt REAL NOT NULL,
+            reason TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS pending_deletion (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            requestedAt REAL NOT NULL,
+            rescuedBuckets TEXT NOT NULL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS staleness (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            lastSuccessAt REAL,
+            lastAttemptAt REAL,
+            partialSince REAL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS run_record (
+            id TEXT NOT NULL PRIMARY KEY,
+            targetId TEXT NOT NULL,
+            startedAt REAL NOT NULL,
+            finishedAt REAL,
+            outcome TEXT NOT NULL,
+            uploadedBytes INTEGER NOT NULL,
+            gameCount INTEGER NOT NULL,
+            detail TEXT
+        );
+        CREATE TABLE IF NOT EXISTS intent_record (
+            kind TEXT NOT NULL PRIMARY KEY,
+            targetId TEXT NOT NULL,
+            gameKey TEXT,
+            snapshotId TEXT,
+            uploadedBytes INTEGER NOT NULL,
+            remainingBytes INTEGER NOT NULL,
+            restoreScope TEXT,
+            replacesTree INTEGER NOT NULL,
+            createdAt REAL NOT NULL,
+            asked INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS scheduler_state (
+            key TEXT NOT NULL PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS partial_tally (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            path TEXT NOT NULL,
+            runs INTEGER NOT NULL,
+            PRIMARY KEY (targetId, gameKey, path)
+        );
+        CREATE INDEX IF NOT EXISTS run_record_startedAt ON run_record (startedAt);
+        """
 
     func testANewerSchemaVersionRebuildsToo() throws {
         // The cache is never truth, per 6.3, so a file from a newer
@@ -125,7 +251,7 @@ final class BackupStateStoreTests: XCTestCase {
 
         XCTAssertEqual(store.openOutcome, .rebuilt(.corrupt))
         XCTAssertTrue(store.needsRebuildFromTarget)
-        try store.markDirty(gameKey: "abc", reason: "import", at: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
 
@@ -136,7 +262,7 @@ final class BackupStateStoreTests: XCTestCase {
         defer { store.close() }
 
         XCTAssertEqual(store.openOutcome, .created)
-        try store.markDirty(gameKey: "abc", reason: "import", at: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
 
@@ -212,20 +338,31 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
 
-        try store.markDirty(gameKey: "abc", reason: "mode change", at: now)
-        try store.markDirty(gameKey: "def", reason: "runtime watch", at: now)
-        try store.clearDirty(gameKey: "abc", markedUpTo: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
+        try store.markDirty(gameKey: "def", targetIds: [targetId], at: now)
+        try store.clearDirty(targetId: targetId, gameKey: "abc", markedUpTo: now)
 
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["def"])
-        XCTAssertEqual(try store.dirtyGames().first?.reason, "runtime watch")
+    }
+
+    func testClearingOneTargetKeepsTheMarkOfTheOther() throws {
+        let store = try makeStore()
+        defer { store.close() }
+
+        try store.markDirty(gameKey: "abc", targetIds: ["target-a", "target-b"], at: now)
+        try store.clearDirty(targetId: "target-a", gameKey: "abc", markedUpTo: now)
+
+        XCTAssertEqual(
+            try store.dirtyGames(), [DirtyMark(targetId: "target-b", gameKey: "abc", markedAt: now)])
     }
 
     func testADirtyMarkAfterTheScanStays() throws {
         let store = try makeStore()
         defer { store.close() }
 
-        try store.markDirty(gameKey: "abc", reason: "play session", at: now)
-        try store.clearDirty(gameKey: "abc", markedUpTo: now.addingTimeInterval(-1))
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
+        try store.clearDirty(
+            targetId: targetId, gameKey: "abc", markedUpTo: now.addingTimeInterval(-1))
 
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }

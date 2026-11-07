@@ -344,7 +344,8 @@ extension SnapshotEngine {
             "the end of the checkpoint of \(run.key)")
         if !run.missedMember {
             save(
-                try store.clearDirty(gameKey: run.key, markedUpTo: run.scannedAt),
+                try store.clearDirty(
+                    targetId: targetId, gameKey: run.key, markedUpTo: run.scannedAt),
                 "the end of the dirty mark of \(run.key)")
         }
         markSuccess(
@@ -373,7 +374,8 @@ extension SnapshotEngine {
             "the end of the checkpoint of \(stream.key)")
         if isComplete {
             save(
-                try store.clearDirty(gameKey: stream.key, markedUpTo: scannedAt),
+                try store.clearDirty(
+                    targetId: targetId, gameKey: stream.key, markedUpTo: scannedAt),
                 "the end of the dirty mark of \(stream.key)")
         }
         markSuccess(

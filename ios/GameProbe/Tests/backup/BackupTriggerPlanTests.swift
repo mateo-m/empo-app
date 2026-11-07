@@ -10,7 +10,7 @@ final class BackupTriggerPlanTests: XCTestCase {
 
     private func dirty(_ keys: [String]) -> [DirtyMark] {
         keys.map {
-            DirtyMark(gameKey: $0, markedAt: Date(timeIntervalSince1970: 1), reason: "watched")
+            DirtyMark(targetId: "target-1", gameKey: $0, markedAt: Date(timeIntervalSince1970: 1))
         }
     }
 

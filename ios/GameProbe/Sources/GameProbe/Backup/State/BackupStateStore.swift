@@ -44,7 +44,7 @@ public enum BackupStateRebuild: Equatable, Sendable {
 public final class BackupStateStore {
 
     /// The schema this build writes. Raise it when a table changes.
-    public static let schemaVersion: Int32 = 5
+    public static let schemaVersion: Int32 = 6
 
     /// What the open did. `needsRebuildFromTarget` reads it.
     public let openOutcome: BackupStateOpen
@@ -103,6 +103,10 @@ public final class BackupStateStore {
         if version == schemaVersion {
             return (database, .opened)
         }
+        if version == 5 {
+            try database.transaction { try migrateFrom5(database) }
+            return (database, .opened)
+        }
         // No migration path. The cache is never truth, per 6.3, so
         // dropping it is cheaper to write and cheaper to trust than a
         // migration for every version pair.
@@ -111,6 +115,39 @@ public final class BackupStateStore {
         }
         try createSchema(in: database)
         return (database, .rebuilt(.schemaVersion(found: version)))
+    }
+
+    /// No target can give back the rows of version 5 that change
+    /// here, so they move and are not dropped.
+    private static func migrateFrom5(_ database: SQLiteDatabase) throws {
+        // A version 5 mark was for every target. It goes to each
+        // target this store knows.
+        try database.execute(
+            """
+            CREATE TABLE dirty_game_v6 (
+                targetId TEXT NOT NULL,
+                gameKey TEXT NOT NULL,
+                markedAt REAL NOT NULL,
+                PRIMARY KEY (targetId, gameKey)
+            );
+            INSERT INTO dirty_game_v6 (targetId, gameKey, markedAt)
+                SELECT t.targetId, d.gameKey, d.markedAt FROM dirty_game AS d
+                CROSS JOIN (
+                    SELECT targetId FROM uploaded_manifest
+                    UNION SELECT targetId FROM run_checkpoint
+                    UNION SELECT targetId FROM snapshot_ledger
+                    UNION SELECT targetId FROM target_status
+                    UNION SELECT targetId FROM target_maintenance
+                    UNION SELECT targetId FROM pending_deletion
+                    UNION SELECT targetId FROM staleness
+                    UNION SELECT targetId FROM run_record
+                    UNION SELECT targetId FROM intent_record
+                    UNION SELECT targetId FROM partial_tally
+                ) AS t;
+            DROP TABLE dirty_game;
+            ALTER TABLE dirty_game_v6 RENAME TO dirty_game;
+            """)
+        try database.setUserVersion(schemaVersion)
     }
 
     /// The write-ahead log leaves two files beside the database. A
@@ -169,9 +206,10 @@ public final class BackupStateStore {
             lastSweepAt REAL
         );
         CREATE TABLE IF NOT EXISTS dirty_game (
-            gameKey TEXT NOT NULL PRIMARY KEY,
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
             markedAt REAL NOT NULL,
-            reason TEXT NOT NULL
+            PRIMARY KEY (targetId, gameKey)
         );
         CREATE TABLE IF NOT EXISTS pending_deletion (
             targetId TEXT NOT NULL,

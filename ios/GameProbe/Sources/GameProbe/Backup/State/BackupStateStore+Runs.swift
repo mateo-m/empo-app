@@ -73,37 +73,40 @@ extension BackupStateStore {
 
     // MARK: - Dirty flags
 
-    public func markDirty(gameKey: String, reason: String, at date: Date) throws {
-        try database.run(
-            """
-            INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES (?, ?, ?)
-            ON CONFLICT (gameKey) DO UPDATE SET
-                markedAt = excluded.markedAt, reason = excluded.reason
-            """,
-            [.text(gameKey), .real(date.timeIntervalSince1970), .text(reason)])
+    /// Marks the game on each target in `targetIds`.
+    public func markDirty(gameKey: String, targetIds: [String], at date: Date) throws {
+        try database.transaction {
+            for targetId in targetIds {
+                try database.run(
+                    """
+                    INSERT INTO dirty_game (targetId, gameKey, markedAt) VALUES (?, ?, ?)
+                    ON CONFLICT (targetId, gameKey) DO UPDATE SET markedAt = excluded.markedAt
+                    """,
+                    [.text(targetId), .text(gameKey), .real(date.timeIntervalSince1970)])
+            }
+        }
     }
 
     public func dirtyGames() throws -> [DirtyMark] {
         let rows = try database.query(
-            "SELECT gameKey, markedAt, reason FROM dirty_game ORDER BY markedAt, gameKey")
+            "SELECT targetId, gameKey, markedAt FROM dirty_game ORDER BY markedAt, gameKey, targetId")
         return rows.compactMap { row in
-            guard let gameKey = row[0].string,
-                let markedAt = row[1].double,
-                let reason = row[2].string
+            guard let targetId = row[0].string,
+                let gameKey = row[1].string,
+                let markedAt = row[2].double
             else { return nil }
             return DirtyMark(
-                gameKey: gameKey,
-                markedAt: Date(timeIntervalSince1970: markedAt),
-                reason: reason)
+                targetId: targetId, gameKey: gameKey,
+                markedAt: Date(timeIntervalSince1970: markedAt))
         }
     }
 
     /// A mark after `date` came from a play the run did not read, so
     /// it stays for the next pass.
-    public func clearDirty(gameKey: String, markedUpTo date: Date) throws {
+    public func clearDirty(targetId: String, gameKey: String, markedUpTo date: Date) throws {
         try database.run(
-            "DELETE FROM dirty_game WHERE gameKey = ? AND markedAt <= ?",
-            [.text(gameKey), .real(date.timeIntervalSince1970)])
+            "DELETE FROM dirty_game WHERE targetId = ? AND gameKey = ? AND markedAt <= ?",
+            [.text(targetId), .text(gameKey), .real(date.timeIntervalSince1970)])
     }
 
     // MARK: - The scheduler's own state, per SPEC 7.10 and 7.11

@@ -96,12 +96,6 @@ public enum BackupThreshold {
 /// A mode change, per SPEC 3.9.
 public enum BackupModeChange {
 
-    /// The reason a mode change writes into the dirty flag of 6.2.
-    /// The app-background pass then picks the game up, because a
-    /// player who chooses full mode expects the new files to upload
-    /// before the nightly pass.
-    public static let dirtyReason = "mode-change"
-
     /// The intent with the new mode.
     ///
     /// The change is reversible in both directions. A change from

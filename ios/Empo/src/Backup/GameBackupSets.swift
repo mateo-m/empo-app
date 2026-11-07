@@ -86,8 +86,7 @@ enum GameBackupSets {
 
     /// Writes the mode into `EmpoState/backup.json` and answers
     /// whether the game became dirty, per 3.9. The caller marks the
-    /// game dirty in `state.sqlite` with
-    /// `BackupModeChange.dirtyReason`.
+    /// game dirty in `state.sqlite`.
     @discardableResult
     static func setMode(_ mode: BackupMode, for container: GameContainer) throws -> Bool {
         let stateURL = container.empoStateURL

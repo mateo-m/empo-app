@@ -132,8 +132,7 @@ final class BackupSheetModel {
             await load()
             return
         }
-        BackupScheduler.shared.markDirty(
-            container: container, reason: BackupModeChange.dirtyReason)
+        BackupScheduler.shared.markDirty(container: container)
         await load()
     }
 

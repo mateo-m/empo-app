@@ -565,7 +565,7 @@ final class SnapshotEngineTests: XCTestCase {
         clock.advance(3 * 86_400)
         try touch(root)
         let player = try BackupStateStore(url: stateURL)
-        try player.markDirty(gameKey: key(gameName), reason: "play session", at: clock.now)
+        try player.markDirty(gameKey: key(gameName), targetIds: [targetId], at: clock.now)
         player.close()
         let scannedAt = clock.now
         let next = await engine.run(request(games: [game(gameName)]))
@@ -579,6 +579,24 @@ final class SnapshotEngineTests: XCTestCase {
             lastSuccessAt.timeIntervalSince1970, scannedAt.timeIntervalSince1970, accuracy: 0.001,
             file: file, line: line)
         XCTAssertEqual(try store.dirtyGames(), [], file: file, line: line)
+    }
+
+    func testOneTargetThatFinishesKeepsTheMarkOfTheOtherTarget() async throws {
+        try makeGameTree(gameName)
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let player = try BackupStateStore(url: stateURL)
+        try player.markDirty(gameKey: key(gameName), targetIds: [targetId, "target-2"], at: clock.now)
+        player.close()
+        let engine = try makeEngine(makeTarget(), stateURL: stateURL)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        guard case .wroteSnapshot? = result.stream(key(gameName))?.outcome else {
+            return XCTFail("the run wrote no snapshot")
+        }
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertEqual(try store.dirtyGames().map(\.targetId), ["target-2"])
     }
 
     func testARunThatFindsNothingNewCountsAsASuccess() async throws {
@@ -1582,7 +1600,7 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(arrived)
         clock.advance(60)
         let player = try BackupStateStore(url: stateURL)
-        try player.markDirty(gameKey: key(gameName), reason: "play session", at: clock.now)
+        try player.markDirty(gameKey: key(gameName), targetIds: [targetId], at: clock.now)
         player.close()
         await latch.open()
         let result = await running.value
