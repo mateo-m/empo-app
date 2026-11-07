@@ -181,7 +181,7 @@ final class RestoreCoordinator {
         // The downloads ride the background session and survive on
         // their own. The grant covers the hash check and the copy
         // between two of them once the user has left the app.
-        await withTaskCancellationHandler {
+        _ = await withTaskCancellationHandler {
             await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
         } onCancel: {
             task.cancel()
