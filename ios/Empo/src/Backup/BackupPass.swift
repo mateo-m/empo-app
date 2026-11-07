@@ -123,7 +123,6 @@ final class BackupPass: BackupRunning {
 
         var conflicts = WriterConflicts.read(
             applicationSupport: BackupRoot.layout.applicationSupport)
-        let answer = conflicts.answer(for: descriptor.id)
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
@@ -137,8 +136,7 @@ final class BackupPass: BackupRunning {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerResolution: answer?.resolution,
-            splitNamespaceId: answer?.splitNamespaceId,
+            writerAnswer: conflicts.answer(for: descriptor.id),
             syncGroupId: SyncStore.state().groupId)
 
         // The engine takes the store over. `SQLiteDatabase` closes

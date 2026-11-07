@@ -90,15 +90,12 @@ public actor SnapshotEngine {
         /// A split moves the run to a new namespace, per 5.12.
         var paths: BackupNamespacePaths
         var fanOutWidth = FormatDescriptor.version1FanOutWidth
-        var didSplit = false
         var uploadedBytes: Int64 = 0
         var streams: [StreamResult] = []
-        /// The quota the run read before its first upload.
+        /// The last quota reading of the run. The first upload reads
+        /// it, and the run reads it again after its uploads.
         var quota: QuotaReading?
-        /// What the target has left for this run's blobs, or `nil`
-        /// where no number governs. The first upload reads it.
-        var room: Int64?
-        var hasReadTheRoom = false
+        var room = Room.notRead
         /// What the games the run skipped for room still need.
         var shortfall: QuotaCheck.Shortfall?
 
@@ -106,6 +103,16 @@ public actor SnapshotEngine {
             self.request = request
             self.paths = paths
         }
+
+        var didSplit: Bool { paths.namespaceId != request.namespaceId }
+    }
+
+    /// What the target has left for this run's blobs. The first
+    /// upload reads it.
+    enum Room {
+        case notRead
+        case noLimit
+        case left(Int64)
     }
 
     /// Runs every stream of the request against the target.
@@ -307,13 +314,11 @@ public actor SnapshotEngine {
                 "the namespace state of a place with no claim")
             try await writeClaim(context)
         case .conflict(let claim):
-            guard let resolution = context.request.writerResolution else {
+            guard let answer = context.request.writerAnswer else {
                 throw BackupRunStop.writerConflict(claim)
             }
-            if resolution == .split {
-                let fresh = context.request.splitNamespaceId ?? BackupKeys.makeNamespaceId()
+            if case .split(let fresh) = answer {
                 context.paths = context.paths.inNamespace(fresh)
-                context.didSplit = true
                 // No namespace may reference another's blobs, per
                 // 5.12, so the split starts from a full upload.
                 save(
@@ -712,19 +717,19 @@ public actor SnapshotEngine {
 
     /// Takes the room for one blob out of what the target has left.
     func claimRoom(_ context: RunContext, bytes: Int64) async throws {
-        if !context.hasReadTheRoom {
-            if provider.capabilities.canQueryQuota, context.quota == nil {
+        if case .notRead = context.room {
+            if provider.capabilities.canQueryQuota {
                 context.quota = try? await provider.quota()
             }
-            context.room = QuotaCheck.freeBytes(
+            let free = QuotaCheck.freeBytes(
                 reading: context.quota,
                 capBytes: context.request.descriptor.capBytes,
                 storedBytes: storedBytes(targetId: context.request.descriptor.id))
-            context.hasReadTheRoom = true
+            context.room = free.map(Room.left) ?? .noLimit
         }
-        guard let room = context.room else { return }
+        guard case .left(let room) = context.room else { return }
         guard bytes <= room else { throw NoRoom(blobBytes: bytes, freeBytes: room) }
-        context.room = room - bytes
+        context.room = .left(room - bytes)
     }
 
     /// What Empo holds on the target now, the number the cap of 5.14

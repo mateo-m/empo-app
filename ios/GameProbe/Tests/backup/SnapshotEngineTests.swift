@@ -158,8 +158,7 @@ final class SnapshotEngineTests: XCTestCase {
         games: [BackupRunGame],
         trigger: BackupTrigger = .manual,
         preferences: LibraryBackupSetRequest? = nil,
-        writerResolution: WriterClaimResolution? = nil,
-        splitNamespaceId: String? = nil,
+        writerAnswer: WriterConflicts.Answer? = nil,
         capBytes: Int64? = nil
     ) -> BackupRunRequest {
         var target = descriptor
@@ -174,8 +173,7 @@ final class SnapshotEngineTests: XCTestCase {
             deviceModel: "iPhone17,1",
             preferences: preferences,
             games: games,
-            writerResolution: writerResolution,
-            splitNamespaceId: splitNamespaceId)
+            writerAnswer: writerAnswer)
     }
 
     /// Waits until `count` transfers reach the latch.
@@ -833,7 +831,7 @@ final class SnapshotEngineTests: XCTestCase {
         clock.advance(3_600)
         let result = await engine.run(
             request(
-                games: [game(gameName)], writerResolution: .split, splitNamespaceId: "ns-2"))
+                games: [game(gameName)], writerAnswer: .split(namespaceId: "ns-2")))
 
         XCTAssertTrue(result.didSplit)
         XCTAssertEqual(result.namespaceId, "ns-2")
