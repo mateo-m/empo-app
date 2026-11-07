@@ -186,14 +186,16 @@ static void onFrameRendered(void *userdata) {
 
 static BOOL gSceneActive;
 static BOOL gSceneHasSize;
-static BOOL gRunPending;
+// The core runs at most once in a process. A second runApp would start
+// a second game on top of the first.
+static enum { CoreRunNotAsked, CoreRunWaiting, CoreRunStarted } gRun;
 
 // A core may hold the main thread until the game ends, so it runs from
 // a run loop callout and not from a block on the main queue
 // (GameCore.h). Its caller runs on the main queue, after every call
 // that came before runApp.
 static void runCore(void) {
-    gRunPending = NO;
+    gRun = CoreRunStarted;
     CFRunLoopRef mainLoop = CFRunLoopGetMain();
     CFRunLoopPerformBlock(mainLoop, kCFRunLoopCommonModes, ^{
       gamecore_run_app(*_NSGetArgc(), *_NSGetArgv());
@@ -205,7 +207,7 @@ static void runCore(void) {
 // engine reads the size of its window once, at start, so a core that
 // starts at 0x0 can draw nothing for the whole game.
 static void runCoreWhenReady(void) {
-    if (gRunPending && gSceneActive && gSceneHasSize) {
+    if (gRun == CoreRunWaiting && gSceneActive && gSceneHasSize) {
         runCore();
     }
 }
@@ -280,7 +282,11 @@ void EmpoGameProcessSceneHasSize(void) {
 
 - (void)runApp {
     onMain(^{
-      gRunPending = YES;
+      if (gRun != CoreRunNotAsked) {
+          NSLog(@"[game-process] the core already runs, so runApp does nothing");
+          return;
+      }
+      gRun = CoreRunWaiting;
       runCoreWhenReady();
     });
 }
