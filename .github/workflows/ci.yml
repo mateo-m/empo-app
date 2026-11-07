@@ -166,7 +166,9 @@ jobs:
   # run reports every failure.
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    # SwiftLint's Linux build needs libxml2.so.2, and Ubuntu 26.04 does not
+    # have it.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
