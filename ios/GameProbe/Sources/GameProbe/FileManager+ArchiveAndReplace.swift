@@ -5,8 +5,8 @@ import Foundation
 
 extension FileManager {
     /// Moves `target` to `archive`, then `replacement` to `target`.
-    /// When the second move fails, `target` moves back, so a file
-    /// always has the name `target`.
+    /// When the second move fails, the helper tries to move `target`
+    /// back, and then throws the error of the second move.
     func archive(_ target: URL, to archive: URL, replacingWith replacement: URL) throws {
         try moveItem(at: target, to: archive)
         do {
