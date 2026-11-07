@@ -7856,64 +7856,6 @@
         }
       }
     },
-    "Add Dropbox, Google Drive, or your own server in Backups." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Füg Dropbox, Google Drive oder deinen eigenen Server unter „Backups“ hinzu."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Añade Dropbox, Google Drive o tu propio servidor en Copias de seguridad."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajoute Dropbox, Google Drive ou ton propre serveur dans Copies de secours."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aggiungi Dropbox, Google Drive o un tuo server in Backup."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「バックアップ」でDropbox、Google Drive、または自分のサーバを追加できます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "백업에서 Dropbox, Google Drive 또는 내 서버를 추가하세요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adicione o Dropbox, o Google Drive ou seu próprio servidor em Backups."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добавьте Dropbox, Google Drive или свой сервер в разделе «Резервные копии»."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在“备份”中添加 Dropbox、Google Drive 或你自己的服务器。"
-          }
-        }
-      }
-    },
     "Add Fast Forward to the Game menu while you play. When it's on, the game runs at the speed below." : {
       "localizations" : {
         "de" : {
@@ -15928,6 +15870,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按键覆盖在游戏上"
+          }
+        }
+      }
+    },
+    "Copy this game's saves to a service you already use." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiere die Spielstände dieses Spiels zu einem Dienst, den du schon nutzt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia las partidas de este juego a un servicio que ya uses."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copie les parties de ce jeu vers un service que tu utilises déjà."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copia i salvataggi di questo gioco su un servizio che usi già."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲームのセーブデータを、普段使っているサービスにコピーします。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 게임의 세이브를 이미 쓰고 있는 서비스에 복사하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copie os saves deste jogo para um serviço que você já usa."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Копируйте сохранения этой игры в сервис, которым вы уже пользуетесь."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把这个游戏的存档复制到你已经在用的服务。"
           }
         }
       }
@@ -31243,6 +31243,64 @@
         }
       }
     },
+    "Get extra features and support Empo." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hol dir zusätzliche Funktionen und unterstütze Empo."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consigue funciones extra y apoya Empo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profite de fonctions en plus et soutiens Empo."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ottieni funzioni in più e sostieni Empo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加機能が使えるようになり、Empoを応援できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 기능을 쓰고 Empo를 응원하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ganhe recursos extras e apoie o Empo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Получите дополнительные функции и поддержите Empo."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "获得额外功能，并支持 Empo。"
+          }
+        }
+      }
+    },
     "Get Info" : {
       "localizations" : {
         "de" : {
@@ -34556,6 +34614,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "摇杆"
+          }
+        }
+      }
+    },
+    "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewahre Kopien deiner Spielstände in iCloud Drive, Dropbox, Google Drive oder auf deinem eigenen Server auf."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarda copias de tus partidas en iCloud Drive, Dropbox, Google Drive o en tu propio servidor."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Garde des copies de tes parties dans iCloud Drive, Dropbox, Google Drive ou sur ton propre serveur."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserva copie dei tuoi salvataggi su iCloud Drive, Dropbox, Google Drive o sul tuo server."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "セーブデータのコピーをiCloud Drive、Dropbox、Google Drive、または自分のサーバーに保存できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "세이브 사본을 iCloud Drive, Dropbox, Google Drive 또는 내 서버에 보관하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guarde cópias dos seus saves no iCloud Drive, no Dropbox, no Google Drive ou no seu próprio servidor."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Храните копии сохранений в iCloud Drive, Dropbox, Google Drive или на своём сервере."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把存档的副本保存在 iCloud Drive、Dropbox、Google Drive 或你自己的服务器上。"
           }
         }
       }
@@ -59955,6 +60071,64 @@
         }
       }
     },
+    "Thank you for supporting Empo" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Danke, dass du Empo unterstützt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gracias por apoyar Empo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merci de soutenir Empo"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grazie per il tuo sostegno a Empo"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empoを応援していただき、ありがとうございます"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo를 응원해 주셔서 고마워요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obrigado por apoiar o Empo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Спасибо, что поддерживаете Empo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "感谢你支持 Empo"
+          }
+        }
+      }
+    },
     "That layout profile is gone, so this game is using the Empo default." : {
       "localizations" : {
         "de" : {
@@ -70827,60 +71001,60 @@
         }
       }
     },
-    "You have Empo %@" : {
+    "You have Empo %@.\nAdd Dropbox, Google Drive, or your own server in Backups." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Du hast Empo %@"
+            "value" : "Du hast Empo %@.\nFüg Dropbox, Google Drive oder deinen eigenen Server unter „Backups“ hinzu."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tienes Empo %@"
+            "value" : "Tienes Empo %@.\nAñade Dropbox, Google Drive o tu propio servidor en Copias de seguridad."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Tu as Empo %@"
+            "value" : "Tu as Empo %@.\nAjoute Dropbox, Google Drive ou ton propre serveur dans Copies de secours."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hai Empo %@"
+            "value" : "Hai Empo %@.\nAggiungi Dropbox, Google Drive o un tuo server in Backup."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo %@をご利用中です"
+            "value" : "Empo %@をご利用中です。\n「バックアップ」でDropbox、Google Drive、または自分のサーバを追加できます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Empo %@를 쓰고 있어요"
+            "value" : "Empo %@를 쓰고 있어요.\n백업에서 Dropbox, Google Drive 또는 내 서버를 추가하세요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Você tem o Empo %@"
+            "value" : "Você tem o Empo %@.\nAdicione o Dropbox, o Google Drive ou seu próprio servidor em Backups."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "У вас Empo %@"
+            "value" : "У вас Empo %@.\nДобавьте Dropbox, Google Drive или свой сервер в разделе «Резервные копии»."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "你已拥有 Empo %@"
+            "value" : "你已拥有 Empo %@。\n在“备份”中添加 Dropbox、Google Drive 或你自己的服务器。"
           }
         }
       }
@@ -72481,65 +72655,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "游戏音乐的声音。"
-          }
-        }
-      }
-    },
-    "With Empo %@" : {
-      "comment" : "Heading above the items in the What's new sheet that only Empo Plus members get. %@ is the word Plus, the name of the subscription. Keep it after Empo.",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mit Empo %@"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Con Empo %@"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Avec Empo %@"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Con Empo %@"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empo %@で使える機能"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empo %@ 전용"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Com o Empo %@"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "С Empo %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empo %@ 专享"
           }
         }
       }

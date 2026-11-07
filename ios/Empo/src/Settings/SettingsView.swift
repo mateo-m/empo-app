@@ -29,6 +29,17 @@ struct SettingsView: View {
                     settingsHeader
 
                     Section {
+                        SettingsNavigationRow(
+                            title: Text("Empo \(plusWord)"),
+                            description:
+                                "Get extra features and support Empo."
+                        ) {
+                            PlusScreen()
+                        }
+                        .plusShine()
+                    }
+
+                    Section {
                         LanguagePicker()
 
                         SettingsPicker(
@@ -123,14 +134,6 @@ struct SettingsView: View {
                         ) {
                             BackupsScreen()
                         }
-                        SettingsNavigationRow(
-                            title: Text("Empo \(plusWord)"),
-                            description:
-                                "Back up to Dropbox, Google Drive, and your own server."
-                        ) {
-                            PlusScreen()
-                        }
-                        .plusShine()
                     }
 
                     Section {
