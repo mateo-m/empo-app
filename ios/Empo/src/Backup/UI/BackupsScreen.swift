@@ -9,28 +9,13 @@ import SwiftUI
 struct BackupsScreen: View {
 
     @State private var model = BackupsScreenModel()
-    @State private var showsAddSheet = false
-    @State private var signingIn: BackupTargetItem?
-    @State private var showsPlus = false
     @State private var signInFailure: String?
-    /// SwiftUI drops a sheet asked for while another one is up, and
-    /// keeps its flag set, so no later sheet opens either. The next
-    /// one waits here until `onDismiss` of the one that is up.
-    @State private var followUp: AddedTargetSheet?
-    @State private var nextFollowUps: [AddedTargetSheet] = []
-    /// The games the ask of 3.5 still waits on, per the press below.
-    @State private var waiting: [BackupModeAsk] = []
+    @State private var sheets = SheetQueue<BackupsSheet>()
     @AppStorage(DefaultsKey.backupOverCellular) private var overCellular = false
     @State private var retention = BackupSettings.retention
-    @State private var exports = false
-    @State private var showsTheZipPicker = false
-    @State private var picked: PickedPackage?
     /// The package a launch found waiting for its save, per 12.5.
     @State private var unsavedPackage: PackageRecord?
-    @State private var savesAgain: PackageRecord?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The join ask of 10.4, once the user presses the row.
-    @State private var joinAsk: SyncJoinPrompt?
     @State private var looksForAGroup = false
 
     var body: some View {
@@ -64,39 +49,38 @@ struct BackupsScreen: View {
         }
         .task { readTheUnsavedPackage() }
         .refreshable { await model.refresh() }
-        .sheet(isPresented: $showsPlus) { PlusSheet() }
         .signInFailureAlert($signInFailure)
         .onChange(of: EmpoPlus.shared.hasPlus) { Task { await model.refresh() } }
-        .sheet(isPresented: $exports) {
+        .sheet(item: $sheets.presented, onDismiss: sheetClosed, content: content)
+    }
+
+    @ViewBuilder private func content(_ sheet: BackupsSheet) -> some View {
+        switch sheet {
+        case .plus:
+            PlusSheet()
+        case .export:
             PackageExportSheet(source: .library)
-        }
-        .sheet(isPresented: $showsTheZipPicker) {
+        case .zipPicker:
             PackageZipPicker { url in
-                showsTheZipPicker = false
-                picked = PickedPackage(url: url)
+                sheets.showNext(.importPackage(PickedPackage(url: url)))
+                sheets.presented = nil
             }
-        }
-        .sheet(item: $picked) { file in
+        case .importPackage(let file):
             PackageImportSheet(picked: file.url)
-        }
-        .sheet(
-            item: $savesAgain, onDismiss: readTheUnsavedPackage,
-            content: { record in
-                PackageExportSheet(source: .library, model: PackageExportModel(waiting: record))
-            }
-        )
-        .sheet(isPresented: $showsAddSheet) {
+        case .saveAgain(let record):
+            PackageExportSheet(source: .library, model: PackageExportModel(waiting: record))
+        case .add:
             AddTargetSheet(
                 iCloudReach: model.iCloudReach,
                 hasICloudDrive: (model.items ?? []).contains { $0.descriptor.provider == .iCloudDrive }
             ) { descriptor, result in
-                show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
+                sheets.show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
                 Task {
                     await model.refresh()
                     let asksAboutNotifications = model.asksAboutNotifications()
                     if result.allowsAdd {
                         if let scan = await model.freshInstall(after: descriptor) {
-                            show(
+                            sheets.show(
                                 .freshInstall(
                                     FreshInstallItem(
                                         model: FreshInstallModel(descriptor: descriptor, scan: scan))))
@@ -104,74 +88,54 @@ struct BackupsScreen: View {
                             await model.readTheAdoptBanners(of: descriptor.id)
                         }
                     }
-                    if asksAboutNotifications { show(.notificationAsk) }
+                    if asksAboutNotifications { sheets.show(.notificationAsk) }
                 }
             }
-        }
-        .sheet(item: $signingIn) { item in
+        case .signIn(let item):
             TargetSignInSheet(target: item.descriptor) { descriptor, result in
-                show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
+                sheets.show(.permission(PermissionCheckOutcomeSheet(target: descriptor, result: result)))
                 Task { await model.refresh() }
             }
-        }
-        .sheet(
-            item: $followUp,
-            onDismiss: showTheNextSheet,
-            content: { sheet in
-                switch sheet {
-                case .permission(let outcome):
-                    PermissionCheckSheet(target: outcome.target, result: outcome.result)
-                case .freshInstall(let item):
-                    FreshInstallSheet(model: item.model)
-                        .onDisappear {
-                            // A cancel before the confirm tap leaves the
-                            // question of 11.5 open, so the banner asks it.
-                            guard !item.model.hasAnsweredTheAdopt else { return }
-                            Task { await model.readTheAdoptBanners(of: item.model.descriptor.id) }
-                        }
-                case .notificationAsk:
-                    NotificationAskSheet { answer in
-                        Task { await model.answerTheNotificationSheet(answer) }
-                    }
+        case .permission(let outcome):
+            PermissionCheckSheet(target: outcome.target, result: outcome.result)
+        case .freshInstall(let item):
+            FreshInstallSheet(model: item.model)
+                .onDisappear {
+                    // A cancel before the confirm tap leaves the
+                    // question of 11.5 open, so the banner asks it.
+                    guard !item.model.hasAnsweredTheAdopt else { return }
+                    Task { await model.readTheAdoptBanners(of: item.model.descriptor.id) }
                 }
+        case .notificationAsk:
+            NotificationAskSheet { answer in
+                Task { await model.answerTheNotificationSheet(answer) }
             }
-        )
-        .sheet(item: firstAsk) { ask in
+        case .firstAsk(let ask):
             FirstBackupAskSheet(
                 model: BackupSheetModel(container: ask.container, gameName: ask.gameName),
                 ask: ask.ask)
-        }
-        .sheet(item: $joinAsk) { prompt in
+        case .join(let prompt):
             SyncJoinSheet(ask: prompt.ask) { group in SyncJoin.join(group) }
         }
     }
 
-    private func show(_ sheet: AddedTargetSheet) {
-        nextFollowUps.append(sheet)
-        showTheNextSheet()
-    }
-
-    private func showTheNextSheet() {
-        guard followUp == nil, let next = nextFollowUps.min() else { return }
-        nextFollowUps.removeAll { $0 == next }
-        followUp = next
+    private func sheetClosed() {
+        switch sheets.closed() {
+        case .saveAgain:
+            readTheUnsavedPackage()
+        case .firstAsk:
+            // Each answer, and each dismissal, moves to the next game.
+            // The run starts after the last one, because a dismissal is
+            // an answer the user chose not to give.
+            if !sheets.holds(where: \.isFirstAsk) { startTheRun() }
+        default:
+            break
+        }
     }
 
     /// The package a failed or cancelled save left behind, per 12.5.
     private func readTheUnsavedPackage() {
         unsavedPackage = PackageRecord.waitingForASave(localRoot: BackupRoot.layout.root)
-    }
-
-    /// The queue of asks. Each answer, and each dismissal, moves to
-    /// the next game. The run starts once the queue empties, because
-    /// a dismissal is an answer the user chose not to give.
-    private var firstAsk: Binding<BackupModeAsk?> {
-        Binding(
-            get: { waiting.first },
-            set: { _ in
-                if !waiting.isEmpty { waiting.removeFirst() }
-                if waiting.isEmpty { startTheRun() }
-            })
     }
 
     // MARK: - The empty state, per 13.14
@@ -183,7 +147,7 @@ struct BackupsScreen: View {
             } description: {
                 Text("Add a place to keep copies of your saves, like iCloud Drive or your own server.")
             } actions: {
-                Button("Add a location") { showsAddSheet = true }
+                Button("Add a location") { sheets.show(.add) }
                     .buttonStyle(PrimaryButtonStyle(size: .md))
             }
         }
@@ -223,8 +187,11 @@ struct BackupsScreen: View {
     /// of 3.5 before it starts the run, because a run skips such a
     /// game.
     private func press() async {
-        waiting = await model.gamesWaitingForTheAsk()
-        guard waiting.isEmpty else { return }
+        let waiting = await model.gamesWaitingForTheAsk()
+        guard waiting.isEmpty else {
+            waiting.forEach { sheets.show(.firstAsk($0)) }
+            return
+        }
         startTheRun()
     }
 
@@ -318,7 +285,7 @@ struct BackupsScreen: View {
                 }
             }
             Button {
-                showsAddSheet = true
+                sheets.show(.add)
             } label: {
                 Label("Add a location", systemImage: "plus.circle.fill")
             }
@@ -333,10 +300,10 @@ struct BackupsScreen: View {
             await model.setPaused(false, targetId: item.id)
         case .signIn:
             if BackupTargetAdd.signsInThroughTheForm(item.descriptor.provider) {
-                signingIn = item
+                sheets.show(.signIn(item))
             } else {
                 switch await model.signInAgain(item) {
-                case .checked(let outcome): show(.permission(outcome))
+                case .checked(let outcome): sheets.show(.permission(outcome))
                 case .failed(let line): signInFailure = line
                 case nil: break
                 }
@@ -344,7 +311,7 @@ struct BackupsScreen: View {
         case .tryAgain:
             model.backUpNow()
         case .getPlus:
-            showsPlus = true
+            sheets.show(.plus)
         }
     }
 
@@ -393,13 +360,13 @@ struct BackupsScreen: View {
 
     private var fileSection: some View {
         Section {
-            Button("Export all saves") { exports = true }
+            Button("Export all saves") { sheets.show(.export) }
                 .disabled(!fileDoorsOpen)
-            Button("Import a backup") { showsTheZipPicker = true }
+            Button("Import a backup") { sheets.show(.zipPicker) }
                 .disabled(!fileDoorsOpen)
             if let unsavedPackage {
                 Button(PackageSaveChoice.question(fileName: unsavedPackage.fileName)) {
-                    savesAgain = unsavedPackage
+                    sheets.show(.saveAgain(unsavedPackage))
                 }
             }
         } footer: {
@@ -442,7 +409,7 @@ struct BackupsScreen: View {
         Task {
             let ask = await SyncJoin.ask()
             looksForAGroup = false
-            joinAsk = SyncJoinPrompt(ask: ask)
+            sheets.show(.join(SyncJoinPrompt(ask: ask)))
         }
     }
 }
@@ -460,32 +427,40 @@ struct PermissionCheckOutcomeSheet: Identifiable {
     var id: String { target.id }
 }
 
-/// The sheets that follow an added location, in the order they open:
-/// the permission check, the fresh-install restore, then the
-/// notification ask.
-private enum AddedTargetSheet: Identifiable, Comparable {
+private enum BackupsSheet: Identifiable {
+    case plus
+    case export
+    case zipPicker
+    case importPackage(PickedPackage)
+    case saveAgain(PackageRecord)
+    case add
+    case signIn(BackupTargetItem)
     case permission(PermissionCheckOutcomeSheet)
     case freshInstall(FreshInstallItem)
     case notificationAsk
+    case firstAsk(BackupModeAsk)
+    case join(SyncJoinPrompt)
 
     var id: String {
         switch self {
-        case .permission(let outcome): return "permission-" + outcome.id
-        case .freshInstall(let item): return "fresh-install-" + item.id
-        case .notificationAsk: return "notification-ask"
+        case .plus: "plus"
+        case .export: "export"
+        case .zipPicker: "zip-picker"
+        case .importPackage(let file): "import-" + file.id
+        case .saveAgain(let record): "save-again-" + record.id
+        case .add: "add"
+        case .signIn(let item): "sign-in-" + item.id
+        case .permission(let outcome): "permission-" + outcome.id
+        case .freshInstall(let item): "fresh-install-" + item.id
+        case .notificationAsk: "notification-ask"
+        case .firstAsk(let ask): "first-ask-" + ask.id
+        case .join(let prompt): "join-" + prompt.id.uuidString
         }
     }
 
-    private var rank: Int {
-        switch self {
-        case .permission: return 0
-        case .freshInstall: return 1
-        case .notificationAsk: return 2
-        }
+    var isFirstAsk: Bool {
+        if case .firstAsk = self { true } else { false }
     }
-
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
-    static func < (lhs: Self, rhs: Self) -> Bool { lhs.rank < rhs.rank }
 }
 
 extension View {

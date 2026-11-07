@@ -247,6 +247,9 @@ final class BackupsScreenModel {
     /// would leave the secret and the rows with no row to remove
     /// them from.
     func remove(targetId: String, deleteBackups: Bool) async -> String? {
+        // A pass in flight holds the provider and writes rows for each
+        // target it covers.
+        await BackupScheduler.shared.stopTheRun()
         if deleteBackups {
             do {
                 try await deleteThisDeviceNamespace(targetId: targetId)
@@ -263,6 +266,7 @@ final class BackupsScreenModel {
             try SyncStore.update { $0.forget(targetId: targetId) }
             updateTheConflicts { $0.forget(targetId: targetId) }
             try BackupKeychain.removeSecret(targetId: targetId)
+            BackupTargets.forget(targetId: targetId)
             try BackupTargets.update { $0.removeAll { $0.id == targetId } }
         } catch {
             BackupLog.line("BackupsScreenModel", "removing \(targetId) failed: \(error)")

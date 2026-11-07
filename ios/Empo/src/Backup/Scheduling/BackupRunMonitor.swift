@@ -22,7 +22,9 @@ final class BackupRunMonitor: BackupRunObserver {
     private(set) var queue: [BackupRunGameRow] = []
     /// The games the pass in flight covers, per 13.17. A game in
     /// this set locks what writes its container.
-    private(set) var runningGameKeys: Set<String> = []
+    private(set) var runningGameKeys: Set<String> = [] {
+        didSet { BackupBadges.shared.invalidate() }
+    }
     /// Why staging is not running, per 7.5 and 7.6, or `nil` while
     /// nothing holds it. The scheduler writes it at each gate.
     var pause: StagingPause?
@@ -57,27 +59,26 @@ final class BackupRunMonitor: BackupRunObserver {
 
     // MARK: - What the pass reports
 
-    /// The pass starts and names what it covers.
-    func runStarts(names: [String: String], progress: Progress? = nil, targetCount: Int = 0) {
+    /// The scheduler opened its gates and the pass starts.
+    func runBegins() {
+        clearThePass()
+        startedAt = Date()
+        finishedAt = nil
+        networkHold = BackupNetwork.holdLine
+        now = Date()
+        startTheTicker()
+    }
+
+    /// The pass names what it covers.
+    func runCovers(names: [String: String], progress: Progress? = nil, targetCount: Int = 0) {
         namesByKey = names
         self.progress = progress
         self.targetCount = targetCount
-        targetsDone = 0
-        inFlightBytes = 0
-        inFlightBlobBytes = 0
         runningGameKeys = Set(names.keys)
-        plan = BackupRunPlan()
-        startedAt = Date()
-        finishedAt = nil
-        stopLine = nil
-        stagingKey = nil
-        networkHold = BackupNetwork.holdLine
-        now = Date()
         queue =
             names
             .map { BackupRunGameRow(gameKey: $0.key, name: $0.value) }
             .sorted { $0.name < $1.name }
-        startTheTicker()
     }
 
     func targetEnds() {
@@ -97,19 +98,34 @@ final class BackupRunMonitor: BackupRunObserver {
         report()
     }
 
-    func runEnds() {
+    func runEnds(cancelled: Bool) {
         // A cancelled run did not complete, so the pill hides instead
         // of saying "Backup complete".
-        if Task.isCancelled {
+        if cancelled {
             startedAt = nil
             ticker?.cancel()
             ticker = nil
+            clearThePass()
         } else {
             finishedAt = Date()
+            runningGameKeys = []
+            progress = nil
         }
         now = Date()
-        runningGameKeys = []
+    }
+
+    private func clearThePass() {
+        namesByKey = [:]
         progress = nil
+        targetCount = 0
+        targetsDone = 0
+        inFlightBytes = 0
+        inFlightBlobBytes = 0
+        runningGameKeys = []
+        plan = BackupRunPlan()
+        queue = []
+        stopLine = nil
+        stagingKey = nil
     }
 
     nonisolated func runStages(streamKey: String) async {

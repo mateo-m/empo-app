@@ -10,12 +10,24 @@ struct BackupSheet: View {
     @Bindable var model: BackupSheetModel
 
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmation: LeftoverConfirmation?
-    @State private var deletes: LeftoverKind?
-    @State private var exports = false
+    @State private var sheets = SheetQueue<Sheet>()
 
     /// Which leftover row the confirmation belongs to.
     private enum LeftoverKind { case trees, files }
+
+    private enum Sheet: Identifiable {
+        case leftovers(LeftoverConfirmation, LeftoverKind)
+        case export
+        case ask(PendingWriteAsk)
+
+        var id: String {
+            switch self {
+            case .leftovers(let confirmation, _): "leftovers-" + confirmation.id
+            case .export: "export"
+            case .ask(let ask): "ask-" + ask.id
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -45,29 +57,33 @@ struct BackupSheet: View {
                 dismiss()
             }
             .task { await model.load() }
-            .sheet(item: $confirmation) { sheet in
-                LeftoverDeleteSheet(confirmation: sheet) {
-                    let trees = deletes == .trees
-                    Task {
-                        if trees {
-                            await model.deleteTheTrees()
-                        } else {
-                            await model.deleteTheFiles()
+            .onChange(of: model.pendingAsk?.id) {
+                if let ask = model.pendingAsk { sheets.show(.ask(ask)) }
+            }
+            .sheet(
+                item: $sheets.presented, onDismiss: { sheets.closed() },
+                content: { sheet in
+                    switch sheet {
+                    case .leftovers(let confirmation, let kind):
+                        LeftoverDeleteSheet(confirmation: confirmation) {
+                            Task {
+                                switch kind {
+                                case .trees: await model.deleteTheTrees()
+                                case .files: await model.deleteTheFiles()
+                                }
+                            }
                         }
+                    case .export:
+                        PackageExportSheet(source: .game(model.container))
+                    case .ask(let ask):
+                        OversizedWriteAskSheet(path: ask.path, sizeBytes: ask.sizeBytes) { joins in
+                            Task { await model.answerTheAsk(path: ask.path, joins: joins) }
+                        }
+                        // A swipe would close the ask with no answer, and the
+                        // write would wait for one with no sheet to give it.
+                        .interactiveDismissDisabled()
                     }
-                }
-            }
-            .sheet(isPresented: $exports) {
-                PackageExportSheet(source: .game(model.container))
-            }
-            .sheet(item: $model.pendingAsk) { ask in
-                OversizedWriteAskSheet(path: ask.path, sizeBytes: ask.sizeBytes) { joins in
-                    Task { await model.answerTheAsk(path: ask.path, joins: joins) }
-                }
-                // A swipe would close the ask with no answer, and the
-                // write would wait for one with no sheet to give it.
-                .interactiveDismissDisabled()
-            }
+                })
         }
         .tint(.brand)
     }
@@ -187,7 +203,7 @@ struct BackupSheet: View {
     }
 
     private var exportButton: some View {
-        Button("Export backup") { exports = true }
+        Button("Export backup") { sheets.show(.export) }
             .disabled(!model.locks.canExport)
     }
 
@@ -202,10 +218,10 @@ struct BackupSheet: View {
                             sizeText: BackupText.bytes(model.leftovers.treeBytes)),
                         role: .destructive
                     ) {
-                        deletes = .trees
-                        confirmation = RestoreLeftovers.replacedTreeConfirmation(
+                        let confirmation = RestoreLeftovers.replacedTreeConfirmation(
                             gameName: model.gameName,
                             sizeText: BackupText.bytes(model.leftovers.treeBytes))
+                        sheets.show(.leftovers(confirmation, .trees))
                     }
                     .disabled(!model.locks.canDeleteLeftovers)
                 }
@@ -216,10 +232,10 @@ struct BackupSheet: View {
                             sizeText: BackupText.bytes(model.leftovers.fileBytes)),
                         role: .destructive
                     ) {
-                        deletes = .files
-                        confirmation = RestoreLeftovers.displacedCopiesConfirmation(
+                        let confirmation = RestoreLeftovers.displacedCopiesConfirmation(
                             count: model.leftovers.files.count,
                             sizeText: BackupText.bytes(model.leftovers.fileBytes))
+                        sheets.show(.leftovers(confirmation, .files))
                     }
                     .disabled(!model.locks.canDeleteLeftovers)
                 }

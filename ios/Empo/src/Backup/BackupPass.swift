@@ -32,17 +32,14 @@ final class BackupPass: BackupRunning {
 
         let (games, names) = await gamesInScope(scope)
         BackupGameNames.remember(names)
-        BackupRunMonitor.shared.runStarts(
+        BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
         var rows: [BackupPassTarget] = []
         var didFinish = true
         var stopNeedsTheUser = false
 
         for descriptor in targets {
-            guard !Task.isCancelled else {
-                BackupRunMonitor.shared.runEnds()
-                return BackupPassResult(targets: rows)
-            }
+            guard !Task.isCancelled else { return BackupPassResult(targets: rows) }
             // A game wins everything, per 7.6. The session end runs
             // the backbone pass, which takes the rest.
             guard !BackupDeviceConditions.isSessionLive else {
@@ -65,7 +62,6 @@ final class BackupPass: BackupRunning {
             guard !Task.isCancelled else {
                 // A pause. The target row and the notices stay as
                 // they were, because the run proved nothing.
-                BackupRunMonitor.shared.runEnds()
                 return BackupPassResult(didFinish: false, targets: rows)
             }
             BackupRunMonitor.shared.targetEnds()
@@ -99,7 +95,6 @@ final class BackupPass: BackupRunning {
                 BackupPassTarget(id: descriptor.id, label: descriptor.displayName, causes: causes))
         }
 
-        BackupRunMonitor.shared.runEnds()
         return BackupPassResult(didFinish: didFinish, targets: rows)
     }
 

@@ -86,10 +86,8 @@ final class BackupBadges {
     /// screen, where the target row of 13.5 carries the fix.
     func pressTheBanner() {
         guard let banner else { return }
-        if banner.action == .allowThisRunOverCellular {
-            BackupNetwork.allowsThisRunOverCellular = true
-        }
-        BackupScheduler.shared.pressBackUpNow(.library)
+        BackupScheduler.shared.pressBackUpNow(
+            .library, overCellular: banner.action == .allowThisRunOverCellular)
     }
 
     /// Whether the banner's action leads to the Backups screen

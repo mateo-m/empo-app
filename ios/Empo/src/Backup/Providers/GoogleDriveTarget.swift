@@ -156,7 +156,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         do {
             return try await lookup.value
         } catch {
-            rootFolder = nil
+            if rootFolder == lookup { rootFolder = nil }
             throw error as? BackupProviderError ?? .offline
         }
     }
@@ -482,16 +482,18 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     /// Drive answers 404 for an id that someone deleted outside Empo,
     /// such as the `Empo Backups` folder removed in the Drive web app.
     /// The cached ids then name nothing, so it drops them and runs the
-    /// call once more with fresh lookups.
+    /// call once more with fresh lookups. A lookup that another call
+    /// already started again stays.
     private func lookingUpAgainOnNotFound<T>(
         path: String?, _ call: () async throws(BackupProviderError) -> T
     ) async throws(BackupProviderError) -> T {
+        let lookup = rootFolder
         do throws(BackupProviderError) {
             return try await call()
         } catch .notFound {
             BackupLog.line("GoogleDriveTarget", "Drive answered 404, so it looks up the ids again")
             if let path { identifiers[path] = nil }
-            rootFolder = nil
+            if let lookup, rootFolder == lookup { rootFolder = nil }
             return try await call()
         }
     }

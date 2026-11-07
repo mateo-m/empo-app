@@ -35,14 +35,11 @@ enum BackupNotifier {
         UNUserNotificationCenter.current().delegate = presenter
     }
 
-    /// Opens the system prompt and records that Empo spent its one
-    /// chance at it.
+    /// Opens the system prompt.
     ///
     /// iOS gives an app one chance, so the sheet of 13.19 decides.
-    /// Only "Turn on" reaches this. "Not now" marks nothing and
-    /// calls nothing.
+    /// Only "Turn on" reaches this. "Not now" calls nothing.
     static func spendTheSystemPrompt() async {
-        UserDefaults.standard.set(true, forKey: DefaultsKey.backupNotificationPromptSpent)
         _ = try? await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound])
     }
