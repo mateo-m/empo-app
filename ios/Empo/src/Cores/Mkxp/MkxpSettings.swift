@@ -222,7 +222,7 @@ final class MkxpSettingsState: CoreSettings {
 
     /// The Ruby version the core boots for this game: 18, 19, 30 or 31.
     var effectiveRubyVersion: Int {
-        settings.rubyVersionOverride ?? profile.rubyVersion
+        settings.rubyVersionOverride ?? profile.ruby.code
     }
 }
 
@@ -416,7 +416,7 @@ struct MkxpEngineSection: View {
     }
 
     private var autoDetectLabel: String {
-        let pick = RubyVersionPick.from(state.profile.rubyVersion)
+        let pick = RubyVersionPick.from(state.profile.ruby.code)
         guard pick != .auto else { return String(localized: "Auto-detect") }
         return String(
             localized: "Auto-detect (\(pick.displayLabel))",
@@ -424,7 +424,7 @@ struct MkxpEngineSection: View {
     }
 
     private var autoDetectCompatLabel: String {
-        let resolved: CompatibilityPick = state.profile.modernRubyScripts ? .modern : .legacy
+        let resolved: CompatibilityPick = state.profile.ruby.modernScripts ? .modern : .legacy
         return String(
             localized: "Auto-detect (\(resolved.displayLabel))",
             comment: "Picker option. The placeholder is the choice Empo detected for this game.")

@@ -40,13 +40,34 @@ public enum GameScriptProfile {
         /// The scan also reads the Pokemon Essentials plugin code in
         /// `Data/PluginScripts.rxdata`.
         case pluginScripts = "plugin-scripts"
+        /// Modern grammar outranks a bundled Ruby 1.8 or 1.9 DLL, and
+        /// only a Ruby 3.1 game has a syntax transform.
+        case oneRubyChoice = "one-ruby-choice"
     }
 
-    public static let currentSchema: Schema = .pluginScripts
+    public static let currentSchema: Schema = .oneRubyChoice
+
+    /// The Ruby that runs the game. Only Ruby 3.1 has the syntax
+    /// transform, so only Ruby 3.1 has a legacy or modern mode.
+    public enum Ruby: Codable, Equatable, Sendable {
+        case ruby18
+        case ruby19
+        case ruby31(convertLegacy: Bool)
+
+        /// 18, 19 or 31.
+        public var code: Int {
+            switch self {
+            case .ruby18: 18
+            case .ruby19: 19
+            case .ruby31: 31
+            }
+        }
+
+        public var modernScripts: Bool { self == .ruby31(convertLegacy: false) }
+    }
 
     public struct Result {
-        public let rubyVersion: Int
-        public let modernRubyScripts: Bool
+        public let ruby: Ruby
         public let grammar: RubyScriptGrammarSniffer.Result
     }
 
@@ -56,23 +77,20 @@ public enum GameScriptProfile {
         let fm = FileManager.default
         let grammar = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
         let runtime = BundledRubyRuntime.scan(gameDirectory: gameDirectory, fm: fm)
-        let rubyVersion = detectRubyVersion(
-            gameDirectory: gameDirectory,
-            grammar: grammar,
-            runtime: runtime,
-            fm: fm
-        )
-        let modern = detectModernRubyScripts(
-            grammar: grammar,
-            runtime: runtime,
-            packedScripts: RubyScriptGrammarSniffer.hasPackedScriptArchive(
-                in: gameDirectory, fm: fm)
-        )
-        return Result(
-            rubyVersion: rubyVersion,
-            modernRubyScripts: modern,
-            grammar: grammar
-        )
+        let ruby: Ruby
+        switch detectRubyVersion(gameDirectory: gameDirectory, grammar: grammar, runtime: runtime, fm: fm) {
+        case 18: ruby = .ruby18
+        case 19: ruby = .ruby19
+        default:
+            let modern = detectModernRubyScripts(
+                grammar: grammar,
+                runtime: runtime,
+                packedScripts: RubyScriptGrammarSniffer.hasPackedScriptArchive(
+                    in: gameDirectory, fm: fm)
+            )
+            ruby = .ruby31(convertLegacy: !modern)
+        }
+        return Result(ruby: ruby, grammar: grammar)
     }
 
     /// Every file that `analyze` can read. Saves sit beside these files,
@@ -85,7 +103,9 @@ public enum GameScriptProfile {
                 at: gameDirectory.appendingPathComponent(folder),
                 includingPropertiesForKeys: nil,
                 options: [.skipsHiddenFiles])) ?? [])
-                .filter { names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased()) }
+                .filter {
+                    names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased())
+                }
         }
         return files(
             in: "", named: ["Game.ini"] + scripts,
@@ -102,7 +122,9 @@ public enum GameScriptProfile {
         runtime: BundledRubyRuntime,
         fm: FileManager
     ) -> Int {
-        if let bundledRuby = runtime.dispatchVersion {
+        // Ruby 1.8 and 1.9 cannot parse modern grammar, so modern
+        // source outranks a bundled 1.8 or 1.9 DLL.
+        if grammar != .modern, let bundledRuby = runtime.dispatchVersion {
             return bundledRuby
         }
 

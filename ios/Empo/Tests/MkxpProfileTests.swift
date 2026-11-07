@@ -14,16 +14,16 @@ final class MkxpProfileTests: XCTestCase {
         try FileManager.default.createDirectory(
             at: script.deletingLastPathComponent(), withIntermediateDirectories: true)
         try "x = 1\n".write(to: script, atomically: true, encoding: .utf8)
-        XCTAssertFalse(MkxpProfile.load(for: container).modernRubyScripts)
+        XCTAssertFalse(MkxpProfile.load(for: container).ruby.modernScripts)
 
         let stored = container.metadataURL.appendingPathComponent("mkxp-profile.json")
         var profile = try JSONDecoder().decode(MkxpProfile.self, from: Data(contentsOf: stored))
-        profile.modernRubyScripts = true
+        profile.ruby = .ruby31(convertLegacy: false)
         try JSONEncoder().encode(profile).write(to: stored)
-        XCTAssertTrue(MkxpProfile.load(for: container).modernRubyScripts)
+        XCTAssertTrue(MkxpProfile.load(for: container).ruby.modernScripts)
 
         try "x = 1\ny = 2\n".write(to: script, atomically: true, encoding: .utf8)
-        XCTAssertFalse(MkxpProfile.load(for: container).modernRubyScripts)
+        XCTAssertFalse(MkxpProfile.load(for: container).ruby.modernScripts)
     }
 
     func testTheRGSSVersionComesFromAnyINIFile() throws {
