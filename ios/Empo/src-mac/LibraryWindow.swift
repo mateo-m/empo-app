@@ -184,8 +184,10 @@ private struct LibraryAlerts: ViewModifier {
             )
             .modifier(
                 StopValidationAlert(
-                    isPresented: $model.showsStopValidation,
-                    onStop: model.stopImport)
+                    isPresented: isPresented($model.importToStop),
+                    onStop: { [importToStop = model.importToStop] in
+                        if let importToStop { model.library.cancelPendingImport(importToStop) }
+                    })
             )
             .modifier(InvalidGameAlert(reason: $model.invalidReason))
             .alert(
