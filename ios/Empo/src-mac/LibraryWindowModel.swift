@@ -15,7 +15,6 @@ final class LibraryWindowModel {
     var showsImporter = false
     var showsInspector = false
     var gameToDelete: GameEntry?
-    /// The game whose import the stop question is about.
     var importToStop: String?
     var invalidReason: String?
     var launchFailure: LaunchFailure?
