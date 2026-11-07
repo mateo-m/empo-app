@@ -1768,10 +1768,8 @@ class ControlsLayout {
                         comment: "Name of a layout profile that Empo makes when several games share edits."))
                 if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
                     target = shared
+                    record.renameProfile(from: profile, to: shared)
                     record.sharedProfiles.insert(shared)
-                    for (gameID, entry) in record.games where entry.profile == profile {
-                        record.games[gameID]?.profile = shared
-                    }
                 }
             }
             store.writePin(.profile(target), forGameFolder: container.url)
