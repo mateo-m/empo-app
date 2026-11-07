@@ -38,6 +38,18 @@ final class SaveRecoveryLedgerTests: XCTestCase {
             ])
     }
 
+    func testRecordsThatChangedWhileTheSheetShowedStay() {
+        let shown = SaveRecoveryLedger.merging(
+            [], name: "Nova", directory: "Data/Nova", files: ["Game.rxdata"], date: day)
+        var ledger = SaveRecoveryLedger.merging(
+            shown, name: "Nova", directory: "Data/Nova", files: ["Game1.rxdata"], date: day)
+        ledger = SaveRecoveryLedger.merging(
+            ledger, name: "Anil", directory: "Data/Anil", files: ["Game.rxdata"], date: day)
+
+        XCTAssertEqual(SaveRecoveryLedger.removing(shown, from: ledger), ledger)
+        XCTAssertEqual(SaveRecoveryLedger.removing(ledger, from: ledger), [])
+    }
+
     func testMergingWithNothingNewReturnsTheInputUnchanged() {
         let ledger = [
             SaveRecoveryLedger.Record(
