@@ -39,8 +39,9 @@ final class SessionInput {
 
     /// True while the game asks for text. The keyboard passes keys
     /// through unmapped, so the player types what they typed.
-    var textInputActive = false {
-        didSet { keyboard.textInputActive = textInputActive }
+    var textInputActive: Bool {
+        get { keyboard.textInputActive }
+        set { keyboard.textInputActive = newValue }
     }
 
     /// The remap screen is frontmost: read edges, inject nothing.
