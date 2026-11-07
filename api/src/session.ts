@@ -24,10 +24,18 @@ export interface Finish {
   signature: string;
 }
 
+// held: a sign-in code waits for the app to finish it.
+// claimed: a finish took the code and did not end yet.
+// started: a new session waits for the device list to add it.
+// signed-in: the device list has the session.
+type Phase = "held" | "claimed" | "started" | "signed-in";
+
 export type SessionRequest =
   | { action: "start"; renewal: string; refreshToken: string; device: string }
   | ({ action: "hold"; code: string; refreshToken: string; device: string } & Held)
   | ({ action: "finish" } & Finish)
+  | { action: "release" }
+  | { action: "confirm" }
   | ({ action: "renew" } & Signed)
   | ({ action: "sign-out" } & Signed)
   | { action: "evict" }
@@ -57,20 +65,29 @@ export class PatreonSession {
     const body = (await request.json()) as SessionRequest;
     switch (body.action) {
       case "start":
-        await this.store(body.refreshToken, body.renewal, { device: body.device, time: 0 });
+        await this.store(
+          body.refreshToken,
+          body.renewal,
+          { phase: "started", device: body.device, time: 0 },
+          heldLifetimeMs,
+        );
         return new Response(null, { status: 204 });
       case "hold": {
         const held: Held = { userId: body.userId, pass: body.pass, replace: body.replace };
         await this.store(
           body.refreshToken,
           body.code,
-          { device: body.device, held, expires: Date.now() + heldLifetimeMs },
+          { phase: "held", device: body.device, held, expires: Date.now() + heldLifetimeMs },
           heldLifetimeMs,
         );
         return new Response(null, { status: 204 });
       }
       case "finish":
         return this.state.blockConcurrencyWhile(() => this.finish(body));
+      case "release":
+        return this.state.blockConcurrencyWhile(() => this.move("claimed", "held"));
+      case "confirm":
+        return this.state.blockConcurrencyWhile(() => this.move("started", "signed-in", unusedLifetimeMs));
       case "renew":
       case "sign-out":
         // Patreon refresh tokens are single use. This holds every other
@@ -79,8 +96,10 @@ export class PatreonSession {
       case "evict":
         await this.end();
         return new Response(null, { status: 204 });
-      case "alive":
-        return new Response(null, { status: (await this.state.storage.get("device")) ? 204 : 404 });
+      case "alive": {
+        const phase = await this.phase();
+        return new Response(null, { status: phase === "started" || phase === "signed-in" ? 204 : 404 });
+      }
     }
   }
 
@@ -94,8 +113,7 @@ export class PatreonSession {
     try {
       const device = await this.state.storage.get<string>("device");
       const lastTime = (await this.state.storage.get<number>("time")) ?? 0;
-      const held = await this.state.storage.get<Held>("held");
-      if (held || !device || !(await signedByDevice(device, `${request.action} ${request.time}`, request.signature))) {
+      if ((await this.phase()) !== "signed-in" || !device || !(await signedByDevice(device, `${request.action} ${request.time}`, request.signature))) {
         return signedOut();
       }
       // An old time is a repeated call, or a device clock that went
@@ -110,7 +128,7 @@ export class PatreonSession {
       const refreshToken = keys && sealed ? await open(sealed, keys.seal) : null;
       if (!refreshToken) return signedOut();
       const tokens = await token(this.env, { grant_type: "refresh_token", refresh_token: refreshToken });
-      await this.store(tokens.refresh_token, request.renewal, { time: request.time });
+      await this.store(tokens.refresh_token, request.renewal, { phase: "signed-in", time: request.time });
       return Response.json({ accessToken: tokens.access_token });
     } catch (error) {
       if (error instanceof SignedOut) {
@@ -128,7 +146,7 @@ export class PatreonSession {
       const held = await this.state.storage.get<Held>("held");
       // An alarm can run late, so the alarm alone does not end the code.
       const expires = (await this.state.storage.get<number>("expires")) ?? 0;
-      if (!held || !device || !(await signedByDevice(device, `finish ${request.code}`, request.signature))) {
+      if ((await this.phase()) !== "held" || !held || !device || !(await signedByDevice(device, `finish ${request.code}`, request.signature))) {
         return signedOut();
       }
       if (Date.now() >= expires) {
@@ -138,13 +156,34 @@ export class PatreonSession {
       const keys = await renewalKeys(request.code);
       const sealed = await this.state.storage.get<string>("refreshToken");
       const refreshToken = keys && sealed ? await open(sealed, keys.seal) : null;
-      await this.end();
-      if (!refreshToken) return signedOut();
+      if (!refreshToken) {
+        await this.end();
+        return signedOut();
+      }
+      // The code stays until the device list has the new session, so a
+      // failed step can release the code for one more finish.
+      await this.state.storage.put({ phase: "claimed" });
       return Response.json({ ...held, device, refreshToken });
     } catch (error) {
       console.error(error);
       return Response.json({ error: "server" }, { status: 502 });
     }
+  }
+
+  private async move(from: Phase, to: Phase, lifetimeMs?: number): Promise<Response> {
+    if ((await this.phase()) !== from) return new Response(null, { status: 404 });
+    await this.state.storage.put({ phase: to });
+    if (lifetimeMs) await this.state.storage.setAlarm(Date.now() + lifetimeMs);
+    return new Response(null, { status: 204 });
+  }
+
+  // A session that an older version stored has no phase key.
+  private async phase(): Promise<Phase | undefined> {
+    const phase = await this.state.storage.get<Phase>("phase");
+    if (phase) return phase;
+    if (await this.state.storage.get<Held>("held")) return "held";
+    if (await this.state.storage.get<string>("device")) return "signed-in";
+    return undefined;
   }
 
   private async store(
