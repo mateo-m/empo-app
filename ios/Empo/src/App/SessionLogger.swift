@@ -56,6 +56,7 @@ final class SessionLogger {
     /// Restarts the wall-clock timer after a pause or background
     /// flush. It does not append another line to session-history.log.
     func resumeSessionTiming(for game: GameEntry) {
+        guard sessionStartTime == nil else { return }
         activeGame = game
         sessionStartTime = Date()
         startPeriodicFlush()

@@ -244,8 +244,8 @@ struct RootView: View {
                 // Re-create the crash marker, so the next launch still
                 // detects a crash after resume.
                 appState.restoreCrashMarkerForForeground()
-                appState.resumeSessionTimingAfterBackground()
             }
+            appState.resumeSessionTimingAfterBackground()
         }
         .onChange(of: appState.errorMessage) { _, message in
             if message != nil {

@@ -345,9 +345,10 @@ class AppState {
     }
 
     /// Restarts the session timer after the app returns from the
-    /// background while the game is still in the `.playing` phase.
+    /// background. A paused game has no timer.
     func resumeSessionTimingAfterBackground() {
-        session.resumeSessionTiming(for: activeSessionGame)
+        guard PauseManager.shared.pausedGame == nil else { return }
+        session.resumeSessionTiming(for: selectedGame)
     }
 }
 
