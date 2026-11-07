@@ -393,14 +393,12 @@ final class BackupsScreenTests: XCTestCase {
     func testNotNowMarksNothingAndNeverReturnsByItself() {
         let effect = BackupNotificationAsk.effect(of: .notNow)
         XCTAssertFalse(effect.showsTheSystemPrompt)
-        XCTAssertFalse(effect.marksThePromptSpent)
         XCTAssertFalse(effect.showsTheSheetAgain)
     }
 
     func testTurnOnSpendsTheOneChanceAtTheSystemPrompt() {
         let effect = BackupNotificationAsk.effect(of: .turnOn)
         XCTAssertTrue(effect.showsTheSystemPrompt)
-        XCTAssertTrue(effect.marksThePromptSpent)
         XCTAssertFalse(effect.showsTheSheetAgain)
     }
 

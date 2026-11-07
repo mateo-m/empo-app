@@ -42,7 +42,6 @@ enum BackupNotifier {
     /// Only "Turn on" reaches this. "Not now" marks nothing and
     /// calls nothing.
     static func spendTheSystemPrompt() async {
-        UserDefaults.standard.set(true, forKey: DefaultsKey.backupNotificationPromptSpent)
         _ = try? await UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound])
     }
