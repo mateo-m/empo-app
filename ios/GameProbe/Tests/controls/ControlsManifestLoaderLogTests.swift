@@ -12,8 +12,9 @@ final class ControlsManifestLoaderLogTests: XCTestCase {
 
     func testLogsNoteThenFindingsWithTheFileOfTheLocation() {
         let outcome = Outcome(
-            result: .init(manifest: ControlsManifest(version: 1, touch: nil), findings: [warning], location: .kirin),
-            note: .rootSkippedBecauseEmpoExists)
+            result: .init(
+                manifest: ControlsManifest(version: 1, touch: nil), findings: [warning], location: .kirin),
+            notes: [.rootSkippedBecauseEmpoExists])
 
         XCTAssertEqual(
             outcome.logLines,
@@ -24,7 +25,7 @@ final class ControlsManifestLoaderLogTests: XCTestCase {
     }
 
     func testLogsRootFileThatIsNotEmpos() {
-        let outcome = Outcome(result: .init(manifest: nil, findings: []), note: .rootUnclaimedNoVersion)
+        let outcome = Outcome(result: .init(manifest: nil, findings: []), notes: [.rootUnclaimedNoVersion])
 
         XCTAssertEqual(
             outcome.logLines,
@@ -32,7 +33,8 @@ final class ControlsManifestLoaderLogTests: XCTestCase {
     }
 
     func testLogsNewerVersion() {
-        let outcome = Outcome(result: .init(manifest: nil, findings: [], ignoredNewerVersion: true, location: .empo))
+        let outcome = Outcome(
+            result: .init(manifest: nil, findings: [], ignoredNewerVersion: true, location: .empo))
 
         XCTAssertEqual(outcome.logLines, ["controls.json: Ignored manifest with version > 1"])
     }
@@ -45,13 +47,14 @@ final class ControlsManifestLoaderLogTests: XCTestCase {
 
         let outcome = try XCTUnwrap(ControlsManifestLoader.load(gameRoot: root))
 
-        XCTAssertEqual(outcome.note, .rootUnclaimedNoVersion)
+        XCTAssertEqual(outcome.notes, [.rootUnclaimedNoVersion])
         XCTAssertNil(outcome.result.manifest)
     }
 
     func testLoaderGivesNoManifestForNewerVersion() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: root.appendingPathComponent("empo"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("empo"), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         try Data(#"{"version": 2}"#.utf8).write(to: root.appendingPathComponent("empo/controls.json"))
 

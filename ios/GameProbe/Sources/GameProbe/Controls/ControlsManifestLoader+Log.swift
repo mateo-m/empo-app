@@ -11,7 +11,7 @@ extension ControlsManifestLoader.Finding {
 extension ControlsManifestLoader.LoadOutcome {
     /// The lines for the game's `controls.json.log`.
     public var logLines: [String] {
-        var lines = note.map { [Self.logLine(for: $0)] } ?? []
+        var lines = notes.map(Self.logLine(for:))
         if result.ignoredNewerVersion {
             lines.append("controls.json: Ignored manifest with version > 1")
         }

@@ -300,7 +300,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .kirin)
         XCTAssertNotNil(outcome?.result.manifest?.touch)
-        XCTAssertNil(outcome?.note)
+        XCTAssertEqual(outcome?.notes, [])
     }
 
     func testLoadEmpoWinsOverKirin() throws {
@@ -317,7 +317,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .empo)
-        XCTAssertEqual(outcome?.note, .kirinSkippedBecauseManifestExists)
+        XCTAssertEqual(outcome?.notes, [.kirinSkippedBecauseManifestExists])
         XCTAssertNotNil(outcome?.result.manifest?.bindings)
     }
 
@@ -333,7 +333,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .root)
-        XCTAssertEqual(outcome?.note, .kirinSkippedBecauseManifestExists)
+        XCTAssertEqual(outcome?.notes, [.kirinSkippedBecauseManifestExists])
         XCTAssertEqual(outcome?.result.manifest?.bindings?.entries[.element("b")], .key("Escape"))
     }
 
@@ -349,7 +349,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .kirin)
-        XCTAssertNil(outcome?.note)
+        XCTAssertEqual(outcome?.notes, [.rootUnclaimedNoVersion])
         XCTAssertNotNil(outcome?.result.manifest?.touch)
     }
 
@@ -401,7 +401,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
-        XCTAssertEqual(outcome?.note, .rootSkippedBecauseEmpoExists)
+        XCTAssertEqual(outcome?.notes, [.rootSkippedBecauseEmpoExists])
     }
 
     // MARK: - Geometry helpers

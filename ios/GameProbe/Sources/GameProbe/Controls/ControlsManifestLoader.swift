@@ -24,7 +24,7 @@ public enum ControlsManifestLoader {
 
     public struct LoadOutcome: Sendable {
         public var result: Result
-        public var note: Note?
+        public var notes: [Note]
 
         public enum Note: Equatable, Sendable {
             case rootSkippedBecauseEmpoExists
@@ -35,9 +35,9 @@ public enum ControlsManifestLoader {
             case rootUnclaimedOversized
         }
 
-        public init(result: Result, note: Note? = nil) {
+        public init(result: Result, notes: [Note] = []) {
             self.result = result
-            self.note = note
+            self.notes = notes
         }
     }
 
@@ -145,17 +145,17 @@ public enum ControlsManifestLoader {
 
         if empoExists {
             let result = loadEmpo(at: empoURL)
-            let note: LoadOutcome.Note? =
+            let notes: [LoadOutcome.Note] =
                 if rootExists {
-                    .rootSkippedBecauseEmpoExists
+                    [.rootSkippedBecauseEmpoExists]
                 } else if kirinExists {
-                    .kirinSkippedBecauseManifestExists
+                    [.kirinSkippedBecauseManifestExists]
                 } else if joiplayExists {
-                    .joiplaySkippedBecauseOtherSourceExists
+                    [.joiplaySkippedBecauseOtherSourceExists]
                 } else {
-                    nil
+                    []
                 }
-            return LoadOutcome(result: result, note: note)
+            return LoadOutcome(result: result, notes: notes)
         }
 
         if rootExists {
@@ -186,7 +186,7 @@ public enum ControlsManifestLoader {
                         code: .v000,
                         path: "",
                         message: "Failed to read controls manifest"
-                    ),
+                    )
                 ],
                 location: .empo
             )
@@ -205,16 +205,16 @@ public enum ControlsManifestLoader {
         joiplayURL: URL
     ) -> LoadOutcome {
         let unclaimed = { (note: LoadOutcome.Note) in
-            if kirinExists {
-                return loadKirin(at: kirinURL, metrics: metrics, joiplayExists: joiplayExists)
-            }
-            if joiplayExists {
-                return loadJoiplay(at: joiplayURL, metrics: metrics)
-            }
-            return LoadOutcome(
-                result: Result(manifest: nil, findings: []),
-                note: note
-            )
+            var outcome =
+                if kirinExists {
+                    loadKirin(at: kirinURL, metrics: metrics, joiplayExists: joiplayExists)
+                } else if joiplayExists {
+                    loadJoiplay(at: joiplayURL, metrics: metrics)
+                } else {
+                    LoadOutcome(result: Result(manifest: nil, findings: []))
+                }
+            outcome.notes.insert(note, at: 0)
+            return outcome
         }
 
         guard let data = try? Data(contentsOf: url) else {
@@ -237,15 +237,15 @@ public enum ControlsManifestLoader {
 
         var result = parse(data: data)
         result.location = .root
-        let note: LoadOutcome.Note? =
+        let notes: [LoadOutcome.Note] =
             if kirinExists {
-                .kirinSkippedBecauseManifestExists
+                [.kirinSkippedBecauseManifestExists]
             } else if joiplayExists {
-                .joiplaySkippedBecauseOtherSourceExists
+                [.joiplaySkippedBecauseOtherSourceExists]
             } else {
-                nil
+                []
             }
-        return LoadOutcome(result: result, note: note)
+        return LoadOutcome(result: result, notes: notes)
     }
 
     private static func loadKirin(
@@ -263,9 +263,9 @@ public enum ControlsManifestLoader {
             findings: findings,
             location: .kirin
         )
-        let note: LoadOutcome.Note? =
-            joiplayExists ? .joiplaySkippedBecauseOtherSourceExists : nil
-        return LoadOutcome(result: result, note: note)
+        let notes: [LoadOutcome.Note] =
+            joiplayExists ? [.joiplaySkippedBecauseOtherSourceExists] : []
+        return LoadOutcome(result: result, notes: notes)
     }
 
     private static func loadJoiplay(at url: URL, metrics: TouchZoneMetrics) -> LoadOutcome {
@@ -292,7 +292,7 @@ public enum ControlsManifestLoader {
                         code: .v001,
                         path: "",
                         message: "Controls manifest exceeds 128 KiB"
-                    ),
+                    )
                 ]
             )
         }
@@ -306,7 +306,7 @@ public enum ControlsManifestLoader {
                         code: .v000,
                         path: "",
                         message: "Controls manifest is not valid UTF-8"
-                    ),
+                    )
                 ]
             )
         }
@@ -329,7 +329,7 @@ public enum ControlsManifestLoader {
                             code: .v000,
                             path: "",
                             message: "Invalid JSON in controls manifest"
-                        ),
+                        )
                     ]
                 )
             }
@@ -345,7 +345,7 @@ public enum ControlsManifestLoader {
                         message: "Invalid JSON in controls manifest: "
                             + "\(error.message) "
                             + "(line \(error.line), column \(error.column))"
-                    ),
+                    )
                 ]
             )
         } catch {
@@ -357,7 +357,7 @@ public enum ControlsManifestLoader {
                         code: .v000,
                         path: "",
                         message: "Invalid JSON in controls manifest"
-                    ),
+                    )
                 ]
             )
         }
@@ -471,7 +471,8 @@ public enum ControlsManifestLoader {
                 }
             case "landscape":
                 if let layout = value as? [String: Any] {
-                    section.landscape = parseTouchLayout(layout, path: "\(path)/landscape", findings: &findings)
+                    section.landscape = parseTouchLayout(
+                        layout, path: "\(path)/landscape", findings: &findings)
                 } else {
                     appendTypeError(findings: &findings, path: "\(path)/landscape", expected: "object")
                 }
@@ -770,7 +771,7 @@ public enum ControlsManifestLoader {
     }
 
     static func validateCoordinate(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(0.0 ... 1.0).contains(value) {
+        if !(0.0...1.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
@@ -783,7 +784,7 @@ public enum ControlsManifestLoader {
     }
 
     static func validateButtonSize(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(40.0 ... 100.0).contains(value) {
+        if !(40.0...100.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
@@ -796,7 +797,7 @@ public enum ControlsManifestLoader {
     }
 
     static func validateDPadSize(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(100.0 ... 200.0).contains(value) {
+        if !(100.0...200.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
@@ -809,7 +810,7 @@ public enum ControlsManifestLoader {
     }
 
     static func validateOpacity(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(0.2 ... 1.0).contains(value) {
+        if !(0.2...1.0).contains(value) {
             findings.append(
                 Finding(
                     severity: .error,
