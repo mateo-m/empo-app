@@ -519,9 +519,7 @@ public enum ManagedMkxpConfig {
     /// overlay first. Then builds a sparse overlay from the legacy
     /// `game_settings.json` engine keys, replaces
     /// `EmpoState/mkxp.json` with it, and strips those keys from the
-    /// sidecar. When the strip fails, the old overlay comes back, so
-    /// the overlay is never rebuilt over edits made after a
-    /// migration.
+    /// sidecar.
     @discardableResult
     public static func migrateLegacyEngineSettingsIfNeeded(
         stateDirectory: URL,
@@ -542,8 +540,6 @@ public enum ManagedMkxpConfig {
             return true
         }
 
-        let overlayURL = overlayConfigURL(in: stateDirectory)
-        let previousOverlay = try? Data(contentsOf: overlayURL)
         guard writeSparseOverlay(legacyValues(from: json), to: stateDirectory) else {
             return false
         }
@@ -557,11 +553,6 @@ public enum ManagedMkxpConfig {
             try cleaned.write(to: settingsURL, options: .atomic)
             return true
         } catch {
-            if let previousOverlay {
-                try? previousOverlay.write(to: overlayURL, options: .atomic)
-            } else {
-                try? FileManager.default.removeItem(at: overlayURL)
-            }
             return false
         }
     }
