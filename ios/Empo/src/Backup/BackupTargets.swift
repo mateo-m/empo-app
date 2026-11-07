@@ -73,6 +73,15 @@ enum BackupTargets {
         }
     }
 
+    /// Drops the provider and the connection this process holds for a
+    /// target, so nothing opens it with a secret that went.
+    static func forget(targetId: String) {
+        DropboxGate.shared.forget(targetId: targetId)
+        GoogleDriveGate.shared.forget(targetId: targetId)
+        S3Gate.shared.forget(targetId: targetId)
+        WebDAVGate.shared.forget(targetId: targetId)
+    }
+
     /// The size threshold of every configured target, which the ask
     /// of 3.5 reads.
     static func thresholds() -> [BackupTargetThreshold] {
