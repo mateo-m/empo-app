@@ -31,13 +31,11 @@ struct GameArtworkView: View {
     var reloadToken: Int = 0
 
     @State private var shimmerPhase: CGFloat = -1
-    @State private var loadedImage: UIImage?
-    /// The path `loadedImage` was decoded from. The fallback in
-    /// `displayedImage` checks it so a surface whose `artworkPath`
-    /// changed (hero card switching games, custom artwork removed)
-    /// can never render the previous path's image while the new
-    /// load is in flight.
-    @State private var loadedPath: String?
+    /// The image with the path it was decoded from. `displayedImage`
+    /// checks the path, so a surface whose `artworkPath` changed (hero
+    /// card switching games, custom artwork removed) never renders the
+    /// previous path's image while the new load is in flight.
+    @State private var loaded: (path: String, image: UIImage)?
 
     var body: some View {
         content
@@ -50,8 +48,7 @@ struct GameArtworkView: View {
             }
             .task(id: "\(reloadToken)|\(artworkPath ?? "")") {
                 guard let path = artworkPath else {
-                    loadedImage = nil
-                    loadedPath = nil
+                    loaded = nil
                     return
                 }
                 let image = await ImageCache.shared.thumbnail(
@@ -61,8 +58,7 @@ struct GameArtworkView: View {
                 // id took over). Without this guard, the superseded
                 // run's late resume would clobber the newer image.
                 guard !Task.isCancelled else { return }
-                loadedImage = image
-                loadedPath = path
+                loaded = image.map { (path: path, image: $0) }
             }
             .onAppear { playShimmer() }
             // The just-imported card is already on screen when its
@@ -128,7 +124,7 @@ struct GameArtworkView: View {
         {
             return cached
         }
-        return loadedPath == path ? loadedImage : nil
+        return loaded?.path == path ? loaded?.image : nil
     }
 
     @ViewBuilder
