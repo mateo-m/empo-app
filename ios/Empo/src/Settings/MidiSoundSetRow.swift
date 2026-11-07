@@ -145,7 +145,9 @@ struct MidiSoundSetPicker: View {
                 .reduce(Text(title)) { Text("\($0), \($1)") })
     }
 
-    private var failure: MidiSoundSetCopies.Failure? { MidiSoundSetCopies.shared.failure(of: soundSet) }
+    private var failure: MidiSoundSetCopies.Failure? {
+        MidiSoundSetCopies.shared.failures[soundSet.folderURL]
+    }
 
     private func failureBinding(_ matches: @escaping (MidiSoundSetCopies.Failure) -> Bool) -> Binding<Bool> {
         Binding {

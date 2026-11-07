@@ -37,10 +37,6 @@ final class MidiSoundSetCopies {
         folders.insert(soundSet.folderURL)
     }
 
-    func failure(of soundSet: MidiSoundSet) -> Failure? {
-        failures[soundSet.folderURL]
-    }
-
     func end(_ soundSet: MidiSoundSet, failure: Failure? = nil) {
         failures[soundSet.folderURL] = failure
         folders.remove(soundSet.folderURL)
