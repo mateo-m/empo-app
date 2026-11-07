@@ -91,7 +91,15 @@ public actor TransferGate {
         while true {
             // The engine reads the cancel from the task and stops the
             // run as paused, whatever error the call throws.
-            if takesSlot, !(await acquire()) { throw BackupProviderError.offline }
+            if takesSlot {
+                guard await acquire() else { throw BackupProviderError.offline }
+                // `release` can hand a slot to a waiter whose cancel
+                // has not dropped it from the queue yet.
+                if Task.isCancelled {
+                    release()
+                    throw BackupProviderError.offline
+                }
+            }
             do {
                 let value = try await body()
                 if takesSlot { release() }

@@ -244,6 +244,27 @@ final class TransferGateTests: XCTestCase {
         XCTAssertEqual(afterRan, 1, "the slot is free again after the holder ends")
     }
 
+    func testACancelledTransferDoesNotRunOnAFreeSlotAndGivesTheSlotBack() async throws {
+        let gate = TransferGate(limit: 1)
+        let ran = AttemptCounter()
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await gate.transfer { _ = await ran.next() }
+        }
+        do {
+            try await cancelled.value
+            XCTFail("a cancelled transfer must not run its body")
+        } catch {
+            XCTAssertEqual(error as? BackupProviderError, .offline)
+        }
+        let cancelledRan = await ran.count
+        XCTAssertEqual(cancelledRan, 0)
+
+        try await gate.transfer { _ = await ran.next() }
+        let afterRan = await ran.count
+        XCTAssertEqual(afterRan, 1, "the cancelled transfer gave its slot back")
+    }
+
     func testATransferThatThrottlesGivesItsSlotUpWhileItWaits() async {
         let clock = ProbingClock()
         let gate = TransferGate(limit: 1, attempts: 2, clock: clock)
