@@ -483,6 +483,22 @@ describe("routes", () => {
     expect((await renew(renewal)).status).toBe(200);
   });
 
+  test("a sign-in code stored without a phase still finishes", async () => {
+    const code = (await callback(phone)).searchParams.get("code")!;
+    for (const state of sessions.values()) state.values.delete("phase");
+    const answer = await post("/patreon/finish", await phone.signFinish(code));
+    expect(answer.status).toBe(200);
+    const { renewal } = (await answer.json()) as { renewal: string };
+    expect((await renew(renewal)).status).toBe(200);
+  });
+
+  test("sessions stored without a phase still count toward the device limit", async () => {
+    const devices = [phone, ...(await Promise.all([1, 2, 3].map(() => Device.make())))];
+    for (const device of devices.slice(0, deviceLimit)) await signIn(device);
+    for (const state of sessions.values()) state.values.delete("phase");
+    expect((await finish(devices[3]!)).status).toBe(409);
+  });
+
   test("a sign-in that nobody finishes deletes itself after 10 minutes", async () => {
     await callback(phone);
     const state = [...sessions.values()][0]!;
