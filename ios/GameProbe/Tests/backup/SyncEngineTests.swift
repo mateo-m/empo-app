@@ -636,7 +636,7 @@ final class SyncEngineTests: XCTestCase {
 
     func testAJoinForgetsTheBindingsTheOldGroupHeld() {
         var state = SyncState(actorId: "actor", groupId: "g1", heldBindingIds: ["a"])
-        state.join("g2", at: stamp)
+        state.join("g2")
         XCTAssertEqual(state.heldBindingIds, [])
     }
 

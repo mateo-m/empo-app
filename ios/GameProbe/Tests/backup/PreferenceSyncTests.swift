@@ -21,7 +21,8 @@ final class PreferenceSyncTests: XCTestCase {
     func testEveryKeyOf101LandsInItsClass() {
         let portable = [
             "theme", "interfaceHaptics", "controllerHaptics", "respectsSilentMode",
-            "controlsEditSnapToGrid", "libraryDisplayMode", "librarySortOption", "showContinuePlaying", "titlePosition",
+            "controlsEditSnapToGrid", "libraryDisplayMode", "librarySortOption", "showContinuePlaying",
+            "titlePosition",
             "cleanupInvalidGames", "controllerMap.global", "layoutProfiles.gameNoticeShown",
             "layoutProfiles.default",
         ]
@@ -112,15 +113,15 @@ final class PreferenceSyncTests: XCTestCase {
 
     func testTheJoinClearsWhatTheOldGroupConfirmed() {
         var state = SyncState(actorId: "actor")
-        state.startAGroup(at: stamp)
+        state.startAGroup()
         let first = state.groupId
         state.confirm(targetId: "t1", heads: ["b", "a"])
         XCTAssertEqual(state.progress(ofTarget: "t1")?.confirmedHeads, ["a", "b"])
 
-        state.startAGroup(at: stamp)
+        state.startAGroup()
         XCTAssertEqual(state.groupId, first, "a device with a group keeps it")
 
-        state.join("f".repeated(32), at: stamp)
+        state.join("f".repeated(32))
         XCTAssertTrue(state.targets.isEmpty)
     }
 
@@ -452,13 +453,24 @@ final class PreferenceSyncTests: XCTestCase {
 
     // MARK: - The state file
 
+    func testAStateFileWithAJoinTimeStillReadsItsGroup() throws {
+        let support = try temporaryDirectory()
+        let saved = #"{"version":1,"actorId":"actor-1","groupId":"g1","joinedAt":1700000000000,"targets":[]}"#
+        try Data(saved.utf8).write(to: support.appendingPathComponent(SyncState.fileName))
+
+        let read = SyncState.read(applicationSupport: support, actorId: "actor-2")
+
+        XCTAssertEqual(read.actorId, "actor-1")
+        XCTAssertEqual(read.groupId, "g1")
+    }
+
     func testTheStateFileKeepsTheActorAndTheProgress() throws {
         let support = try temporaryDirectory()
         var state = SyncState.read(applicationSupport: support, actorId: "actor-1")
         XCTAssertEqual(state.actorId, "actor-1")
         XCTAssertFalse(state.hasJoined)
 
-        state.startAGroup(at: stamp)
+        state.startAGroup()
         state.confirm(targetId: "t1", heads: ["aa"])
         state.saw(namespaceId: "ns-1", at: stamp, sizeBytes: 10, targetId: "t1")
         try state.write(applicationSupport: support)
