@@ -29,9 +29,12 @@ If your WebDAV server uses two-step sign-in, make an app password for Empo.
 
 Each game has one of two modes:
 
-- **The whole game** backs up the game files, the saves, the settings, and the control layouts.
-  You can put the game back as it is now, on any device.
-- **Saves and settings only** backs up the saves, the settings, and the control layouts.
+- **The whole game** backs up the game files, the saves, and the game's settings and control
+  layout. You can put the game back as it is now, on any device.
+- **Saves and settings only** backs up the saves, and the game's settings and control layout.
+
+Empo also backs up your app settings and your layout profiles, apart from the games. You restore
+them separately. See [Restore your app settings](#restore-your-app-settings).
 
 Empo backs up the whole game when the game is smaller than 750 MB. For a larger game, Empo asks you
 once. If you tap **Skip**, Empo does not back up that game until you choose a mode in the game's
@@ -84,12 +87,29 @@ A restore does not delete your current saves. The save from the backup takes the
 Empo renames your current file with a `.empo-displaced.bak` suffix. The Backup sheet lists these
 files under **Left over from a restore**, where you can delete them.
 
-To restore a game that is not on this device, for example a game from your old iPhone, open
-**Settings → Backups**, tap the location, and tap **Devices**. Pick the device, then the game, then
-the backup.
-
 Restoring stays free. If your [Empo Plus](/plus) membership ends, backups to Dropbox, Google Drive,
 S3 storage, and WebDAV servers stop, but you can still restore from them.
+
+## Restore on a new device
+
+1. Install Empo. Do not import games yet.
+2. Open **Settings → Backups**, tap **Add a location**, and add the location that holds your
+   backups.
+3. Empo shows **Restore your backups**, with each game that it found. Tap **Restore**.
+
+Empo shows **Restore your backups** only when you add your first location and the library has no
+games. A game backed up with **Saves and settings only** shows **saves only**. The backup does not
+hold the game files, so import the game first, then restore its saves.
+
+To put a backup from another device into a game that you already imported, open
+**Settings → Backups**, tap the location, and tap **Devices**. Pick the device, the game, and the
+backup. Then tap **Restore into a different game…** and pick the game.
+
+## Restore your app settings
+
+Open **Settings → Backups**, tap the location, tap **Devices**, pick the device, and tap
+**Settings**. Then pick a backup. Empo keeps one undo for 7 days: tap
+**Undo the last settings restore**.
 
 ## Export and import
 
