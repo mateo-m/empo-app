@@ -181,11 +181,14 @@ struct GameLibraryView: View {
                 // to the grid/list item source id since that's the one
                 // always visible in the library.
                 let source = tappedSource[game.id] ?? .item
-                GameLoadingView(game: game, dormant: dormant)
-                    .navigationTransition(
-                        .zoom(
-                            sourceID: source.transitionID(for: game.id),
-                            in: heroNamespace))
+                GameLoadingView(
+                    game: game, dormant: dormant,
+                    mode: appState.isLaunching || appState.phase != nil ? .loading : .resuming
+                )
+                .navigationTransition(
+                    .zoom(
+                        sourceID: source.transitionID(for: game.id),
+                        in: heroNamespace))
             }
             .onChange(of: appState.isLaunching) { _, launching in
                 if !launching, appState.phase == nil { path = NavigationPath() }

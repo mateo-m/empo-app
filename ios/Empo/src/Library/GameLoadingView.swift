@@ -11,12 +11,21 @@ struct GameLoadingView: View {
     /// the pause can pop it and play the zoom in reverse, but it
     /// draws nothing: the Ken Burns pan and the container fill would
     /// otherwise composite over the embedded game view.
-    var dormant: Bool = false
+    let dormant: Bool
     @Environment(\.appState) private var appState
     @Environment(\.engineState) private var engineState
     @Environment(\.pauseManager) private var pauseManager
 
-    private var mode: Mode { pauseManager.pauseSnapshot != nil ? .resuming : .loading }
+    /// Fixed when the view is pushed. A resume leaves the phase nil
+    /// until the zoom ends, and a lost snapshot must not turn it into
+    /// a loading screen.
+    @State private var mode: Mode
+
+    init(game: GameEntry, dormant: Bool, mode: Mode) {
+        self.game = game
+        self.dormant = dormant
+        _mode = State(initialValue: mode)
+    }
 
     @State private var kenBurns = false
     @State private var appearedAt: ContinuousClock.Instant?
