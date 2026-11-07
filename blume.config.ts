@@ -39,6 +39,7 @@ export default defineConfig({
           "/importing-games",
           "/playing",
           "/saves",
+          "/backups",
           "/plus",
           "/troubleshooting",
           "/faq",

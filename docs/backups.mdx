@@ -1,0 +1,107 @@
+---
+title: Backups
+description: Keep copies of your games and saves in iCloud Drive, Dropbox, Google Drive, or on your own server, and restore them on any device.
+sidebar:
+  icon: cloud-upload
+---
+
+Empo can copy your games and saves to a backup location. If you lose your device, or a save goes
+wrong, you can restore the game from a backup, on this device or on another one.
+
+Open **Settings → Backups** to set up backups. To see the backups of one game, touch and hold the
+game, tap **Settings**, then tap **Backup**.
+
+## Add a location
+
+Open **Settings → Backups** and tap **Add a location**.
+
+| Location       | What you need                                                                 |
+| -------------- | ----------------------------------------------------------------------------- |
+| iCloud Drive   | iCloud Drive turned on for Empo. Free.                                        |
+| Dropbox        | A Dropbox account and [Empo Plus](/plus).                                     |
+| Google Drive   | A Google account and [Empo Plus](/plus).                                      |
+| S3 storage     | The address, the bucket, and an access key, and [Empo Plus](/plus). For example Amazon S3, Cloudflare R2, Backblaze B2, or MinIO. |
+| WebDAV server  | The address, a user name, and a password, and [Empo Plus](/plus). For example Nextcloud, ownCloud, Synology, or Koofr. |
+
+If your WebDAV server uses two-step sign-in, make an app password for Empo.
+
+## What Empo backs up
+
+Each game has one of two modes:
+
+- **The whole game** backs up the game files, the saves, the settings, and the control layouts.
+  You can put the game back as it is now, on any device.
+- **Saves and settings only** backs up the saves, the settings, and the control layouts.
+
+Empo backs up the whole game when the game is smaller than 750 MB. For a larger game, Empo asks you
+once. If you tap **Skip**, Empo does not back up that game until you choose a mode in the game's
+settings, under **Backup**.
+
+## When backups run
+
+Empo backs up the games that changed:
+
+- When you stop playing a game.
+- When Empo goes to the background.
+- 30 seconds after you open Empo.
+- At night, when the device charges, if iOS gives Empo the time.
+
+To start a backup yourself, tap **Back up now**.
+
+Empo does not back up while a game runs, while a restore runs, or while the device is too warm.
+Low Power Mode also stops backups, but **Back up now** still works.
+
+By default, Empo backs up only on Wi-Fi. To also use cellular data, turn on **Use cellular data**.
+Low Data Mode always stops backups.
+
+If a game has no backup for 7 days, its library card shows a warning. After 3 weeks, the library
+shows a banner with the cause and a button to fix it. To get a notification when a backup stops,
+tap **Turn on notifications**.
+
+## Old backups
+
+**Keep old backups** sets how many backups Empo keeps for each game:
+
+| Setting  | Keeps                                                               |
+| -------- | ------------------------------------------------------------------- |
+| Less     | The last 5 backups, one a day for 3 days, and one a week for 2 weeks. |
+| Standard | The last 10 backups, one a day for 7 days, and one a week for 4 weeks. |
+| More     | The last 20 backups, one a day for 14 days, and one a week for 8 weeks. |
+
+Empo deletes the older backups during the next backup. Each location can also have a
+**Storage limit**. At the limit, Empo stops adding backups to that location.
+
+To stop backups to one location for a time, open the location and turn on **Pause backups**.
+
+## Restore a game
+
+1. Close the game.
+2. Touch and hold the game, tap **Settings**, then tap **Backup**.
+3. Tap **Restore from backup**, and pick a backup.
+4. Pick **Saves and settings** or **The whole game**, and confirm.
+
+A restore does not delete your current saves. The save from the backup takes the file name, and
+Empo renames your current file with a `.empo-displaced.bak` suffix. The Backup sheet lists these
+files under **Left over from a restore**, where you can delete them.
+
+To restore a game that is not on this device, for example a game from your old iPhone, open
+**Settings → Backups**, tap the location, and tap **Devices**. Pick the device, then the game, then
+the backup.
+
+Restoring stays free. If your [Empo Plus](/plus) membership ends, backups to Dropbox, Google Drive,
+S3 storage, and WebDAV servers stop, but you can still restore from them.
+
+## Export and import
+
+An export is a ZIP file that you keep in the Files app. It does not need a backup location.
+
+- To export one game, open its **Backup** sheet and tap **Export backup**.
+- To export all games, open **Settings → Backups** and tap **Export all saves**.
+- To import, tap **Import a backup** and pick the ZIP file. You can also open the ZIP file in
+  Files and tap **Open in Empo**.
+
+## Sync settings
+
+**Sync settings with another device** keeps your app settings, your controller buttons, and your
+on-screen control layouts the same on your devices. It does not copy your saves. Both devices need
+one backup location that they can both open. Settings sync when Empo opens.
