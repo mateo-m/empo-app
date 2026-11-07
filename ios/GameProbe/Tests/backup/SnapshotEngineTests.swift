@@ -1542,15 +1542,11 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertNil(try store.intent(kind: .interruptedRestore))
     }
 
-    func testAResumedReplaceDoesNotMoveTheHalfRestoredTreeAside() async throws {
-        try makeGameTree(gameName)
-        let target = makeTarget()
-        let backup = try await makeEngine(target).run(
-            request(games: [game(gameName, isOneOff: true)]))
-        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
-        try changeTheSave(of: gameName, to: "played after the backup")
-        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
-
+    /// Stops the first try of a replace after one file landed in the
+    /// new `Game/`, and answers the folder the old tree moved to.
+    private func stopAReplaceHalfWay(
+        _ snapshotId: String, on target: FakeBackupTarget, stateURL: URL
+    ) async throws -> String {
         // The format file, the manifest, and the first blob pass, so
         // one file lands in the new `Game/`. The second blob holds.
         let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
@@ -1564,20 +1560,33 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(arrived)
         running.cancel()
         await latch.open()
-        guard case .stopped = await running.value else {
-            return XCTFail("the first try did not stop")
+        let outcome = await running.value
+        guard case .stopped = outcome else {
+            return try XCTUnwrap(nil, "the first try did not stop: \(outcome)")
         }
         await target.setLatch(nil)
-        let foldersAfterTheStop = Set(try fm.contentsOfDirectory(atPath: container(gameName).path))
         let store = try BackupStateStore(url: stateURL)
-        guard case .restore(.replaceTheTree, let moved?) = try store.intent(kind: .interruptedRestore)?.work
-        else {
-            store.close()
-            return XCTFail("the record does not name the moved tree")
+        defer { store.close() }
+        var moved: String?
+        if case .restore(.replaceTheTree, let name) = try store.intent(kind: .interruptedRestore)?.work {
+            moved = name
         }
-        store.close()
+        return try XCTUnwrap(moved, "the record does not name the moved tree")
+    }
 
-        let second = try replaceRequest(snapshotId)
+    func testAResumedReplaceDoesNotMoveTheHalfRestoredTreeAside() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let moved = try await stopAReplaceHalfWay(snapshotId, on: target, stateURL: stateURL)
+        let foldersAfterTheStop = Set(try fm.contentsOfDirectory(atPath: container(gameName).path))
+
+        var second = try replaceRequest(snapshotId)
+        second.movedAsideTree = moved
         let outcome = await RestoreEngine(
             provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot
         ).run(second)
@@ -1589,6 +1598,52 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(try gameText("save1.dat", in: moved), "played after the backup")
         XCTAssertEqual(
             Set(try fm.contentsOfDirectory(atPath: container(gameName).path)), foldersAfterTheStop)
+    }
+
+    func testANewReplaceAfterAStoppedOneMovesTheCurrentTreeAside() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let moved = try await stopAReplaceHalfWay(snapshotId, on: target, stateURL: stateURL)
+        try changeTheSave(of: gameName, to: "played after the stop")
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot
+        ).run(try replaceRequest(snapshotId))
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the new replace did not finish: \(outcome)")
+        }
+        let replacedTree = try XCTUnwrap(result.replacedTreeName)
+        XCTAssertNotEqual(replacedTree, moved)
+        XCTAssertEqual(try gameText("save1.dat", in: replacedTree), "played after the stop")
+        XCTAssertEqual(try gameText("save1.dat"), "slot one of \(gameName)")
+    }
+
+    func testAResumeMovesTheTreeWhenTheFirstTryDiedBeforeTheMove() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        let moved = "Game (named, not moved yet)"
+
+        var resume = try replaceRequest(snapshotId)
+        resume.movedAsideTree = moved
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
+        ).run(resume)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the resume did not finish: \(outcome)")
+        }
+        XCTAssertEqual(result.replacedTreeName, moved)
+        XCTAssertEqual(try gameText("save1.dat", in: moved), "played after the backup")
+        XCTAssertEqual(try gameText("save1.dat"), "slot one of \(gameName)")
     }
 
     private func gameText(_ path: String, in tree: String = "Game") throws -> String {
