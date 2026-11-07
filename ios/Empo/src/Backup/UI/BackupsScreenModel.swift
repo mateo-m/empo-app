@@ -246,12 +246,14 @@ final class BackupsScreenModel {
     /// would leave the secret and the rows with no row to remove
     /// them from.
     func remove(targetId: String, deleteBackups: Bool) async -> String? {
-        // A pass in flight holds the provider and writes rows for each
-        // target it covers. The other targets still need their pass.
-        let stoppedARun = await BackupScheduler.shared.stopTheRun()
-        defer {
-            if stoppedARun { Task { await BackupScheduler.shared.run(trigger: .foreground) } }
+        // A pass writes rows for each target it covers, so none may run
+        // while the rows and the backups of this target go.
+        await BackupScheduler.shared.withRunsHeld {
+            await removeWhileRunsAreHeld(targetId: targetId, deleteBackups: deleteBackups)
         }
+    }
+
+    private func removeWhileRunsAreHeld(targetId: String, deleteBackups: Bool) async -> String? {
         if deleteBackups {
             do {
                 try await deleteThisDeviceNamespace(targetId: targetId)

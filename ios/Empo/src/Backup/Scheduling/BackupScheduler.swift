@@ -78,6 +78,8 @@ final class BackupScheduler {
     /// Counts the presses of Pause. A press that waits for the pass in
     /// flight drops when Pause comes during its wait.
     private var pauses = 0
+    private var holds = 0
+    private var runAskedDuringHold = false
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
 
     // MARK: - Launch
@@ -245,13 +247,22 @@ final class BackupScheduler {
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
     }
 
-    /// Pauses the pass in flight and returns when it ended. It answers
-    /// whether a pass was in flight.
-    func stopTheRun() async -> Bool {
-        guard let pass = inFlight else { return false }
-        pauseTheRun()
-        _ = await pass.value
-        return true
+    /// Stops the pass in flight and starts no pass until `body` ends.
+    /// A pass it stopped or refused runs again after that.
+    func withRunsHeld<T>(_ body: () async -> T) async -> T {
+        holds += 1
+        if let pass = inFlight {
+            pauseTheRun()
+            _ = await pass.value
+            runAskedDuringHold = true
+        }
+        let result = await body()
+        holds -= 1
+        if holds == 0, runAskedDuringHold {
+            runAskedDuringHold = false
+            Task { await run(trigger: .foreground) }
+        }
+        return result
     }
 
     // MARK: - The resume question of 6.5 and 13.18
@@ -323,6 +334,12 @@ final class BackupScheduler {
                 close(progress)
                 return false
             }
+        }
+
+        guard holds == 0 else {
+            runAskedDuringHold = true
+            close(progress)
+            return false
         }
 
         let conditions = BackupDeviceConditions.now(isManual: trigger == .manual)
