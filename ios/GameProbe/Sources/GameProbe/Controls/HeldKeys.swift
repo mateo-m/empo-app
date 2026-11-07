@@ -17,7 +17,7 @@ public final class HeldKeys<Holder: Hashable> {
     /// Light taps release before the RGSS thread sees the press, so a
     /// release waits until the key was down for at least one frame
     /// (about 16 ms at 60 fps, with headroom).
-    public static var minimumHold: Duration { .milliseconds(50) }
+    public nonisolated static var minimumHold: Duration { .milliseconds(50) }
 
     /// A key the engine sees as down. A holder with a release task
     /// still holds the key until the task ends.
