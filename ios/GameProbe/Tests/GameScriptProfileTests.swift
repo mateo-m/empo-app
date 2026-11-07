@@ -531,6 +531,23 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby.code, 18)
     }
 
+    func testRuby19CallOnTheEndLineOfABlockCommentStaysOnRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "=begin\n=end s.force_encoding('UTF-8')\nx = 1\n".write(
+            to: scripts.appendingPathComponent("Util.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.ruby, .ruby18)
+    }
+
     func testBundledRuby300DLLFoldsTo31() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
