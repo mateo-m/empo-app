@@ -144,6 +144,19 @@ final class ConcatenatedSaveRecoveryTests: XCTestCase {
             ])
     }
 
+    func testFailedMergeKeepsTheOldSaveAtTheCanonicalName() throws {
+        let source = try makeFile("root/UserDataGame.rxdata", "new", mtime: 200)
+        let canonical = try makeFile("shared/Game.rxdata", "old", mtime: 100)
+        let failing = FailingFileManager()
+        failing.failMoveFrom = source
+
+        XCTAssertThrowsError(
+            try ConcatenatedSaveRecovery.merge(source: source, canonical: canonical, fm: failing))
+
+        XCTAssertEqual(try directoryContents("root"), ["UserDataGame.rxdata": "new"])
+        XCTAssertEqual(try directoryContents("shared"), ["Game.rxdata": "old"])
+    }
+
     func testMergeNewerCanonicalStaysAndSourceIsBackedUp() throws {
         let source = try makeFile("root/UserDataGame.rxdata", "stale", mtime: 100)
         let canonical = try makeFile("shared/Game.rxdata", "live", mtime: 200)

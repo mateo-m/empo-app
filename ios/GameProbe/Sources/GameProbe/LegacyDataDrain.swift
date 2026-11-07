@@ -116,8 +116,10 @@ public enum LegacyDataDrain {
             if entryIsDir.boolValue, targetIsDir.boolValue {
                 drainEntries(
                     from: entry, into: target, prefix: relative, outcome: &outcome, fm: fm)
-                if (try? fm.contentsOfDirectory(atPath: entry.path))?.isEmpty == true {
-                    try? fm.removeItem(at: entry)
+                if (try? fm.contentsOfDirectory(atPath: entry.path))?.isEmpty == true,
+                    (try? fm.removeItem(at: entry)) == nil
+                {
+                    outcome.failures.append(relative)
                 }
                 continue
             }
@@ -152,8 +154,7 @@ public enum LegacyDataDrain {
                     fm: fm
                 )
                 do {
-                    try fm.moveItem(at: target, to: archived)
-                    try fm.moveItem(at: entry, to: target)
+                    try fm.archive(target, to: archived, replacingWith: entry)
                     outcome.movedCount += 1
                 } catch {
                     outcome.failures.append(relative)
