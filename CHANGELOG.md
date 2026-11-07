@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.11.0 - 2026-11-07
+
+### Bug Fixes
+
+- Move sheet actions into the iPhone Duo side column (#237) ([`7925256`](https://github.com/mateo-m/empo-app/commit/7925256f8b74bbdd6ab7657c36799b6a242e3f38))
+- Keep the backup and layout profile rows in text colors, not brand orange (#240) ([`41ee259`](https://github.com/mateo-m/empo-app/commit/41ee259bb9e8ccafdff8d3a9c67de84074659319))
+- Keep an imported game from reaching files outside its folder (#246) ([`9d8e4dc`](https://github.com/mateo-m/empo-app/commit/9d8e4dc2160bc2fe8b3ca3c2030f3f3edd3ce8ec))
+- Finish the Patreon sign-in with a call that the app signs (#247) ([`0ece416`](https://github.com/mateo-m/empo-app/commit/0ece41677e30cdea90a15e7e073b8c63db1208b3))
+- The black screen after PikaTaxi in Pokémon Insurgence (mateo-m/mkxp-z-apple-mobile#70) ([`b4148a6`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/b4148a6d208739eb598d74fffcc50c60727701a2))
+- Find a file written after launch when an older file has the same name (mateo-m/mkxp-z-apple-mobile#69) ([`aac5fa4`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/aac5fa41168f3d8311cacedd4528bfe08be4d8df))
+- Track the main branch of litergss2 (mateo-m/psdk-apple-mobile#7) ([`63dce27`](https://github.com/mateo-m/psdk-apple-mobile/commit/63dce272c6d09fa98e0d67952152e1e216a305ab))
+
+### CI
+
+- Run pull requests on GitHub Macs with a build cache (#248) ([`34e3440`](https://github.com/mateo-m/empo-app/commit/34e3440120c3637402d0005056ffd3b0a5d698e1))
+
+### Chores
+
+- Update AppAuth, swift-crypto, SDL, and web tools (#242) ([`62b6c6a`](https://github.com/mateo-m/empo-app/commit/62b6c6a1c8077dab1c3dda20156913cb6abea48f))
+
+### Documentation
+
+- Add Backups and Empo Plus pages and fix the Patreon links (#250) ([`522073e`](https://github.com/mateo-m/empo-app/commit/522073e9405ccaa9c1fcdc8fe01fa1de594105fd))
+
+### Features
+
+- Give games the Empo version in $userAgentVersion (#226) ([`eba5906`](https://github.com/mateo-m/empo-app/commit/eba5906fccaa5c8ecc20aeb5dc7c9cacee0a78c0))
+- Add a setting to respect silent mode (#233) ([`1e58b18`](https://github.com/mateo-m/empo-app/commit/1e58b1886e99801db5e91a1e220693c29137d90d))
+- Let players import a sound set for MIDI music (#234) ([`c0def1a`](https://github.com/mateo-m/empo-app/commit/c0def1a113283528a3cc9420480a10438e7c6050))
+- Pick a MIDI sound set for each game (#236) ([`49e2c35`](https://github.com/mateo-m/empo-app/commit/49e2c359b45ccd28472cff6f1de308d789a73daa))
+- Back up saves and games to iCloud Drive, Dropbox, and Google Drive (#189) ([`9239a49`](https://github.com/mateo-m/empo-app/commit/9239a49d0f4757f8cc41310e4b3da26b4b9ae4c6))
+- Announce backups, MIDI music, and silent mode in What's new (#241) ([`acfb014`](https://github.com/mateo-m/empo-app/commit/acfb0148d2db912e027b2422ae31b9271c778ae4))
+- Give games the launcher version in $userAgentVersion (mateo-m/mkxp-z-apple-mobile#66) ([`983c900`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/983c9005aec7043b58f4e0930f016b41689a84ea))
+- Play MIDI with a static FluidSynth and a bundled SoundFont (mateo-m/mkxp-z-apple-mobile#68) ([`36871c6`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/36871c6ab320f64acd7f2492c8efa95ece4828c0))
+
+### Other
+
+- Update the core and ANGLE pins (#243) ([`3481c65`](https://github.com/mateo-m/empo-app/commit/3481c650b1fea0829ad7742bcb189995106beb15))
+
+### Refactor
+
+- Reorganize What's new (#249) ([`bf002a6`](https://github.com/mateo-m/empo-app/commit/bf002a6ea6bf4e2363c0a5827b0b6c1e9e6dff8d))
+
 ## 0.10.4 - 2026-11-03
 
 ### Features
