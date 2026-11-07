@@ -834,6 +834,7 @@ struct PlayerView: View {
         // playable - users don't need the buttons screaming for
         // attention the moment the snapshot lifts. They'll brighten
         // in as soon as the user taps anywhere.
+        let fading = resumeSnapshot
         withAnimation(Motion.standard) {
             snapshotOpacity = 0
             controlsVisible = true
@@ -843,6 +844,9 @@ struct PlayerView: View {
             // when the user no longer sees it, even if the spring
             // duration changes.
             resumeSnapshot = nil
+            // A pause during the fade gives a new snapshot, which
+            // the next player view shows.
+            guard let fading, pauseManager.pauseSnapshot === fading else { return }
             pauseManager.pauseSnapshot = nil
             pauseManager.snapshotCanFade = false
         }
