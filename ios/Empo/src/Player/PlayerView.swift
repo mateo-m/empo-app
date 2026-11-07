@@ -420,8 +420,8 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
-                onControllerRemap: { showControllerRemap = true },
-                onLayoutProfile: { showLayoutProfilePicker = true },
+                onControllerRemap: { sheetAction = .controllerRemap },
+                onLayoutProfile: { sheetAction = .layoutProfile },
                 onPause: { sheetAction = .pause },
                 onQuit: appState.canQuitGame ? { sheetAction = .quit } : nil,
                 onCheats: actions.isAvailable(EmpoActionCatalog.toggleCheats)
@@ -726,22 +726,25 @@ struct PlayerView: View {
     }
 
     private enum SheetAction {
-        case pause, quit
+        case pause, quit, controllerRemap, layoutProfile
     }
 
-    /// The pause and the quit remove this view. When they run while
-    /// the More sheet is still on screen, SwiftUI can keep the view
-    /// after the game ended, so they wait until the sheet is gone.
     private func applyBindings() {
         input.applyBindings(container: layout.currentContainer, manifest: layout.activeManifest?.bindings)
     }
 
+    /// The pause and the quit remove this view. When they run while
+    /// the More sheet is still on screen, SwiftUI can keep the view
+    /// after the game ended. SwiftUI shows one sheet at a time, so the
+    /// next sheet also waits until the More sheet is gone.
     private func runSheetAction() {
         let action = sheetAction
         sheetAction = nil
         switch action {
         case .pause: appState.requestPause()
         case .quit: appState.quitGame()
+        case .controllerRemap: showControllerRemap = true
+        case .layoutProfile: showLayoutProfilePicker = true
         case nil: break
         }
     }
