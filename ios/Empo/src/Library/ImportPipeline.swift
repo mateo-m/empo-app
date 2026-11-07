@@ -140,11 +140,18 @@ struct ImportPreparedSource: Hashable, Sendable {
     }
 }
 
+/// A source that finished probing, and what the probe found.
+struct ProbedSource {
+    let source: ImportPreparedSource
+    let inventory: ArchiveExtractor.Inventory?
+}
+
 struct ImportPipelineSession {
     enum State {
         case staging
-        case probing
+        case probing(ImportPreparedSource)
         case awaitingChoice(
+            ProbedSource,
             [GameImportValidator.ImportRootChoice],
             updatingChoiceIDs: Set<String>
         )
@@ -152,13 +159,21 @@ struct ImportPipelineSession {
         /// paths) the user already approved in the picker's Update
         /// step - the alert asks only about the others, and
         /// declining drops only the others.
-        case awaitingReplaceConfirmation([PlannedImport], approvedUpdateIDs: Set<String>)
+        case awaitingReplaceConfirmation(
+            ProbedSource, [PlannedImport], approvedUpdateIDs: Set<String>)
         case launching
+
+        var preparedSource: ImportPreparedSource? {
+            switch self {
+            case .staging, .launching: nil
+            case .probing(let source): source
+            case .awaitingChoice(let probed, _, _), .awaitingReplaceConfirmation(let probed, _, _):
+                probed.source
+            }
+        }
     }
 
     let request: QueuedImportRequest
-    var preparedSource: ImportPreparedSource?
-    var probeInventory: ArchiveExtractor.Inventory?
     var state: State
 }
 
@@ -173,7 +188,7 @@ final class ImportPipeline {
 
     var activePrompt: ImportRootPrompt? {
         guard let currentSession else { return nil }
-        guard case .awaitingChoice(let choices, let updatingChoiceIDs) = currentSession.state
+        guard case .awaitingChoice(_, let choices, let updatingChoiceIDs) = currentSession.state
         else { return nil }
         return ImportRootPrompt(
             request: currentSession.request,
@@ -185,7 +200,7 @@ final class ImportPipeline {
     var activeReplacePrompt: ImportReplacePrompt? {
         guard let currentSession else { return nil }
         guard
-            case .awaitingReplaceConfirmation(let plans, let approvedUpdateIDs) =
+            case .awaitingReplaceConfirmation(_, let plans, let approvedUpdateIDs) =
                 currentSession.state
         else {
             return nil
@@ -254,7 +269,7 @@ final class ImportPipeline {
         guard let currentSession else { return }
         guard case .awaitingChoice = currentSession.state else { return }
 
-        currentSession.preparedSource?.cleanup()
+        currentSession.state.preparedSource?.cleanup()
         self.currentSession = nil
         startNextResolutionIfPossible()
     }
@@ -268,9 +283,10 @@ final class ImportPipeline {
         approvedUpdateIDs: Set<String>
     ) {
         guard let currentSession else { return }
-        guard case .awaitingChoice = currentSession.state else { return }
+        guard case .awaitingChoice(let probed, _, _) = currentSession.state else { return }
 
         launchImports(
+            probed,
             choices.map(ImportSelection.init(choice:)),
             for: currentSession.request.id,
             updatesApprovedFor: approvedUpdateIDs
@@ -287,10 +303,11 @@ final class ImportPipeline {
     /// every planned selection proceeds, replacements included.
     func confirmReplace() {
         guard let currentSession else { return }
-        guard case .awaitingReplaceConfirmation(let plans, _) = currentSession.state else {
+        guard case .awaitingReplaceConfirmation(let probed, let plans, _) = currentSession.state
+        else {
             return
         }
-        proceed(with: plans, for: currentSession.request.id)
+        proceed(with: plans, from: probed, for: currentSession.request.id)
     }
 
     /// User declined: only the UNAPPROVED conflicting selections
@@ -299,7 +316,7 @@ final class ImportPipeline {
     func cancelReplace() {
         guard let currentSession else { return }
         guard
-            case .awaitingReplaceConfirmation(let plans, let approvedUpdateIDs) =
+            case .awaitingReplaceConfirmation(let probed, let plans, let approvedUpdateIDs) =
                 currentSession.state
         else {
             return
@@ -310,12 +327,12 @@ final class ImportPipeline {
                 || approvedUpdateIDs.contains(plan.selection.relativePath)
         }
         guard !remaining.isEmpty else {
-            currentSession.preparedSource?.cleanup()
+            probed.source.cleanup()
             self.currentSession = nil
             startNextResolutionIfPossible()
             return
         }
-        proceed(with: remaining, for: currentSession.request.id)
+        proceed(with: remaining, from: probed, for: currentSession.request.id)
     }
 
     func cancelValidation() {
@@ -345,8 +362,7 @@ final class ImportPipeline {
                     return
                 }
 
-                currentSession?.preparedSource = preparedSource
-                currentSession?.state = .probing
+                currentSession?.state = .probing(preparedSource)
 
                 let probeResult = try await ImportPipelineService.probeChoices(for: preparedSource)
                 guard isCurrentSession(request.id) else {
@@ -354,17 +370,19 @@ final class ImportPipeline {
                     return
                 }
 
-                currentSession?.probeInventory = probeResult.inventory
+                let probed = ProbedSource(source: preparedSource, inventory: probeResult.inventory)
                 let choices = probeResult.choices
 
                 if choices.count > 1 {
                     currentSession?.state = .awaitingChoice(
+                        probed,
                         choices,
                         updatingChoiceIDs: Self.updatingChoiceIDs(for: choices)
                     )
                     resolutionTask = nil
                 } else {
                     launchImports(
+                        probed,
                         choices.map(ImportSelection.init(choice:)),
                         for: request.id,
                         updatesApprovedFor: []
@@ -372,14 +390,14 @@ final class ImportPipeline {
                 }
             } catch is CancellationError {
                 guard isCurrentSession(request.id) else { return }
-                currentSession?.preparedSource?.cleanup()
+                currentSession?.state.preparedSource?.cleanup()
                 currentSession = nil
                 resolutionTask = nil
                 startNextResolutionIfPossible()
             } catch {
                 guard isCurrentSession(request.id) else { return }
 
-                currentSession?.preparedSource?.cleanup()
+                currentSession?.state.preparedSource?.cleanup()
                 currentSession = nil
                 resolutionTask = nil
                 presentError(
@@ -413,18 +431,13 @@ final class ImportPipeline {
     /// whose installed status changed while the picker was open)
     /// still raises the confirmation alert.
     private func launchImports(
+        _ probed: ProbedSource,
         _ selections: [ImportSelection],
         for requestID: UUID,
         updatesApprovedFor approvedUpdateIDs: Set<String>
     ) {
         guard var currentSession else { return }
         guard currentSession.request.id == requestID else { return }
-        guard currentSession.preparedSource != nil else {
-            self.currentSession = nil
-            resolutionTask = nil
-            startNextResolutionIfPossible()
-            return
-        }
 
         let plans = planImports(selections)
 
@@ -434,13 +447,13 @@ final class ImportPipeline {
         }
         if needsConfirmation {
             currentSession.state = .awaitingReplaceConfirmation(
-                plans, approvedUpdateIDs: approvedUpdateIDs)
+                probed, plans, approvedUpdateIDs: approvedUpdateIDs)
             self.currentSession = currentSession
             resolutionTask = nil
             return
         }
 
-        proceed(with: plans, for: requestID)
+        proceed(with: plans, from: probed, for: requestID)
     }
 
     /// Resolve each selection to its destination folder name (the
@@ -558,15 +571,9 @@ final class ImportPipeline {
         return plans
     }
 
-    private func proceed(with plans: [PlannedImport], for requestID: UUID) {
+    private func proceed(with plans: [PlannedImport], from probed: ProbedSource, for requestID: UUID) {
         guard var currentSession else { return }
         guard currentSession.request.id == requestID else { return }
-        guard let preparedSource = currentSession.preparedSource else {
-            self.currentSession = nil
-            resolutionTask = nil
-            startNextResolutionIfPossible()
-            return
-        }
 
         currentSession.state = .launching
         self.currentSession = currentSession
@@ -584,9 +591,9 @@ final class ImportPipeline {
         }
 
         startImports(
-            from: preparedSource,
+            from: probed.source,
             archiveName: currentSession.request.archiveName,
-            inventory: currentSession.probeInventory,
+            inventory: probed.inventory,
             plans: plans
         )
 
@@ -657,7 +664,7 @@ final class ImportPipeline {
 
         resolutionTask?.cancel()
         resolutionTask = nil
-        currentSession.preparedSource?.cleanup()
+        currentSession.state.preparedSource?.cleanup()
         self.currentSession = nil
         startNextResolutionIfPossible()
     }
