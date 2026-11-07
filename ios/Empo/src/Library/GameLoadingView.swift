@@ -261,7 +261,7 @@ struct GameLoadingView: View {
         // Suppress the hint once an error alert is presenting or the
         // game ended: the screen already tells the user what to do, so
         // the "if loading is stuck..." line only clutters it.
-        if cancelVisible && appState.errorMessage == nil && !isEnded {
+        if cancelVisible && appState.shownError == nil && !isEnded {
             if appState.canEndStuckGame {
                 Button("Stop Loading") { appState.cancelLoading() }
                     .buttonStyle(.secondary)

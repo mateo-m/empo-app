@@ -238,7 +238,7 @@ struct GameLibraryView: View {
                 _ in
                 takeTheResumeQuestion()
             }
-            .task(id: library.initialScanCompleted && appState.errorMessage == nil) {
+            .task(id: library.initialScanCompleted && appState.shownError == nil) {
                 autoStartGameFromEnvironment()
             }
     }
@@ -1135,7 +1135,7 @@ struct GameLibraryView: View {
         #if DEBUG
         // UIKit refuses a second alert while the "Last session ended
         // early" alert is up, and SwiftUI drops the launch warning.
-        guard !autoStartDone, library.initialScanCompleted, appState.errorMessage == nil,
+        guard !autoStartDone, library.initialScanCompleted, appState.shownError == nil,
             let wanted = ProcessInfo.processInfo.environment["EMPO_AUTOSTART_GAME"],
             let game = library.games.first(where: { $0.title == wanted })
         else { return }

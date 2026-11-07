@@ -15,6 +15,11 @@ enum GamePhase: Equatable {
     case ended(clean: Bool, started: Bool)
 }
 
+struct ShownError: Equatable {
+    let message: String
+    var gameDidNotStart = false
+}
+
 @MainActor @Observable
 class AppState {
     static let shared = AppState()
@@ -22,9 +27,7 @@ class AppState {
     var phase: GamePhase?
     var selectedGame: GameEntry?
     private(set) var launchedSettings: LaunchedSettings?
-    var errorMessage: String?
-    /// True while `errorMessage` says that a game did not start.
-    var launchFailed = false
+    var shownError: ShownError?
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
     /// The core blocks its game thread until the user dismisses
     /// RootView's info alert. The game then
@@ -117,8 +120,7 @@ class AppState {
         do {
             start = try GameStart(game: game)
         } catch {
-            launchFailed = true
-            errorMessage = error.localizedDescription
+            shownError = ShownError(message: error.localizedDescription, gameDidNotStart: true)
             return
         }
         selectedGame = game
@@ -235,7 +237,7 @@ class AppState {
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
-            errorMessage = message
+            shownError = ShownError(message: message)
         }
     }
 
@@ -440,7 +442,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
 
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
-        errorMessage = message
+        shownError = ShownError(message: message)
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {

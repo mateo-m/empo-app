@@ -193,7 +193,7 @@ class AppWindow: UIWindow {
     /// this window, and its scene gets the keys only while it is key.
     override var canBecomeKey: Bool {
         let state = AppState.shared
-        if state.errorMessage != nil { return true }
+        if state.shownError != nil { return true }
         if state.infoMessage != nil { return true }
         if state.phase != .playing { return true }
         if EngineSessionCoordinator.shared.runner != .app { return true }
