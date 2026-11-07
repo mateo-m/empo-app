@@ -60,6 +60,11 @@ git-cliff --config cliff.toml --unreleased --tag "v$VERSION" --context |
             | (.raw_message | test("^chore\\([a-z]+\\): use ")) and ($listed | index($s)) | not))
         | .[0].commits += $core' >"$CONTEXT"
 if [[ -f CHANGELOG.md ]]; then
+    # A cut whose build failed left a section for this version. Write it again.
+    VERSION="$VERSION" perl -0pi -e '
+        $v = quotemeta($ENV{VERSION});
+        s/^## $v - .*?(?=^## \d+\.\d+\.\d+ - |\z)//ms
+    ' CHANGELOG.md
     git-cliff --config cliff.toml --unreleased --from-context "$CONTEXT" --prepend CHANGELOG.md
 else
     git-cliff --config cliff.toml --unreleased --from-context "$CONTEXT" --output CHANGELOG.md

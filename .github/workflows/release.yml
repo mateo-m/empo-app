@@ -126,8 +126,17 @@ jobs:
           case "$BUMP" in
             major | minor | patch)
               LATEST_TAG=$(git tag --list "v*.*.*" --sort=-v:refname | head -n 1)
+              # A cut whose build failed leaves its version on main with
+              # no tag. The next cut releases that version, whatever the
+              # bump says.
+              MAIN_VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
+              NEWER="$(printf '%s\n' "$MAIN_VERSION" "${LATEST_TAG#v}" | sort -V | tail -n 1)"
               if [ -z "$LATEST_TAG" ]; then
                 VERSION="0.1.0"
+              elif [ "$MAIN_VERSION" != "${LATEST_TAG#v}" ] && [ "$NEWER" = "$MAIN_VERSION" ]
+              then
+                VERSION="$MAIN_VERSION"
+                echo "main carries the untagged $VERSION: releasing it again"
               else
                 CURRENT="${LATEST_TAG#v}"
                 MAJOR="${CURRENT%%.*}"
@@ -154,17 +163,9 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # A cut whose build failed leaves its bump on main with no tag.
-          # The next cut builds main again under the same version.
-          MAIN_VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
-          if [ "$MAIN_VERSION" = "$VERSION" ]; then
-            echo "bumped=true" >> "$GITHUB_OUTPUT"
-            echo "main already carries $VERSION: building main again"
-          fi
           echo "Cutting v$VERSION"
 
       - name: Bump version + changelog
-        if: steps.version.outputs.bumped != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -180,13 +181,8 @@ jobs:
         id: commit
         env:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
-          BUMPED: ${{ steps.version.outputs.bumped }}
         run: |
           set -e
-          if [ "$BUMPED" = "true" ]; then
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           VERSION="${{ steps.version.outputs.version }}"
           BUILD=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' ios/Empo/project.yml | head -n 1)
           HEAD="$(git rev-parse HEAD)"
