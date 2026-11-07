@@ -106,11 +106,7 @@ struct RootView: View {
                 // transaction, so it needs a spring of its own.
                 withAnimation(.spring(duration: 0.3, bounce: 0)) {
                     libraryFaded = true
-                }
-                // Slightly longer than GameLoadingView's handoff spring
-                // (0.15–0.30s) so the fade finishes first.
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(400))
+                } completion: {
                     guard appState.phase == .playing else { return }
                     libraryDormant = true
                 }
