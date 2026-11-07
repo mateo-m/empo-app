@@ -55,7 +55,9 @@ final class SnapshotEngineTests: XCTestCase {
         // The blob objects the fake target writes carry the host's
         // own modified time, and the sweep of 5.11 compares them
         // against this clock, so the clock starts where they do.
-        clock = TestClock(Date())
+        // The store keeps a date as seconds since 1970, and a date
+        // with a fraction can come back one bit off.
+        clock = TestClock(Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded()))
     }
 
     override func tearDown() {
