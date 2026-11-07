@@ -17,6 +17,12 @@
         "symbol": "bell.slash",
         "title": "Mute games in silent mode",
         "detail": "Turn on \"Respect silent mode\" in Settings, and games stay quiet when your device is in silent mode."
+      },
+      {
+        "symbol": "heart",
+        "title": "Support Empo",
+        "detail": "I build Empo alone in my spare time. Join Empo %@ to help me keep working on it. It's at the top of Settings.",
+        "plus": true
       }
     ]
   },
