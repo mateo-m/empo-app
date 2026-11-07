@@ -12,10 +12,12 @@ struct EmptyStateView: View {
     static let staggerInterval: TimeInterval = 0.1
     static let elementCount = 3
 
-    @State private var iconAppeared = false
-    @State private var titleAppeared = false
-    @State private var subtitleAppeared = false
+    @State private var appeared = false
     @State private var floating = false
+
+    private func stagger(_ index: Int) -> Animation {
+        Motion.standard.delay(initialDelay + Self.staggerInterval * Double(index))
+    }
 
     var body: some View {
         VStack(spacing: Spacing.lg) {
@@ -26,39 +28,32 @@ struct EmptyStateView: View {
                 .foregroundStyle(.secondary)
                 .offset(y: floating ? -3 : 3)
                 .animation(Motion.float, value: floating)
-                .opacity(iconAppeared ? 1 : 0)
-                .offset(y: iconAppeared ? 0 : 12)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 12)
+                .animation(stagger(0), value: appeared)
             Text(title)
                 .font(.title2)
                 .fontWeight(.bold)
                 .multilineTextAlignment(.center)
                 .centeredMessageWidth()
-                .opacity(titleAppeared ? 1 : 0)
-                .offset(y: titleAppeared ? 0 : 12)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 12)
+                .animation(stagger(1), value: appeared)
             Text(subtitle)
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .centeredMessageWidth()
-                .opacity(subtitleAppeared ? 1 : 0)
-                .offset(y: subtitleAppeared ? 0 : 12)
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 12)
+                .animation(stagger(2), value: appeared)
         }
         .accessibilityElement(children: .combine)
         .onChange(of: revealed, initial: true) {
-            guard revealed, !iconAppeared else { return }
-            let spring = Motion.standard
-            let interval = Self.staggerInterval
-            withAnimation(spring.delay(initialDelay)) {
-                iconAppeared = true
-            }
-            withAnimation(spring.delay(initialDelay + interval)) {
-                titleAppeared = true
-            }
-            withAnimation(spring.delay(initialDelay + interval * 2)) {
-                subtitleAppeared = true
-            }
-            let totalDelay = initialDelay + interval * 2 + 0.3
+            guard revealed, !appeared else { return }
+            appeared = true
+            let totalDelay = initialDelay + Self.staggerInterval * 2 + 0.3
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(totalDelay))
                 floating = true
