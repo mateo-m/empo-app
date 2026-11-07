@@ -128,7 +128,7 @@ export class PatreonSession {
       const refreshToken = keys && sealed ? await open(sealed, keys.seal) : null;
       if (!refreshToken) return signedOut();
       const tokens = await token(this.env, { grant_type: "refresh_token", refresh_token: refreshToken });
-      await this.store(tokens.refresh_token, request.renewal, { phase: "signed-in", time: request.time });
+      await this.store(tokens.refresh_token, request.renewal, { time: request.time });
       return Response.json({ accessToken: tokens.access_token });
     } catch (error) {
       if (error instanceof SignedOut) {
