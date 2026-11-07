@@ -57,7 +57,7 @@ struct BackupSheet: View {
                 dismiss()
             }
             .task { await model.load() }
-            .onChange(of: model.pendingAsk?.id) {
+            .onChange(of: model.pendingAsk?.id, initial: true) {
                 if let ask = model.pendingAsk { sheets.show(.ask(ask)) }
             }
             .sheet(
