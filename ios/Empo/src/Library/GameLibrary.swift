@@ -368,6 +368,15 @@ class GameLibrary {
         return String(localized: "Empo can't read this game's files. Delete it, then import it again.")
     }
 
+    /// True when the game runs, or waits paused, so its folder must stay.
+    static func isInUse(_ game: GameEntry) -> Bool {
+        #if os(macOS)
+        GameLauncher.shared.isPlaying(game)
+        #else
+        AppState.shared.selectedGame?.id == game.id || PauseManager.shared.pausedGame?.id == game.id
+        #endif
+    }
+
     /// Deletes a game, or stops its import. `onFailure` gets an alert
     /// title and message.
     func delete(
@@ -376,9 +385,7 @@ class GameLibrary {
         onFailure: @escaping @MainActor @Sendable (_ title: String, _ message: String) -> Void,
         onSaveRescueFailure: (@MainActor @Sendable (GameEntry) -> Void)? = nil
     ) {
-        #if os(macOS)
-        guard !GameLauncher.shared.isPlaying(game) else { return }
-        #endif
+        guard !Self.isInUse(game) else { return }
         let title = game.title
         deleteGame(
             game, skipSaveRescue: discardingSaves,

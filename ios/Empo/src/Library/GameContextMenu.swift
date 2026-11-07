@@ -52,20 +52,22 @@ struct GameContextMenuModifier: ViewModifier {
                     }
                 }
 
-                if let onSelect {
+                if let onSelect, !GameLibrary.isInUse(game) {
                     Divider()
                     Button(action: onSelect) {
                         Label("Select multiple", systemImage: "checklist")
                     }
                 }
 
-                Divider()
+                if !GameLibrary.isInUse(game) {
+                    Divider()
 
-                Button(role: .destructive) {
-                    gameToDelete = game
-                    showDeleteConfirm = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                    Button(role: .destructive) {
+                        gameToDelete = game
+                        showDeleteConfirm = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
         }

@@ -1032,7 +1032,7 @@ struct GameLibraryView: View {
     /// it dispatches to the existing per-status flow.
     private func handleCardTap(for game: GameEntry) {
         if selectionMode {
-            guard game.status == .ready else { return }
+            guard game.status == .ready, !GameLibrary.isInUse(game) else { return }
             toggleSelection(game.id)
             return
         }
