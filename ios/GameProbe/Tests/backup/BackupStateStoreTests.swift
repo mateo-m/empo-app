@@ -172,6 +172,37 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertEqual(reopened.openOutcome, .opened)
     }
 
+    func testAVersion5MarkOnAnIdThatNeverRunsDoesNotKeepTheGameInEveryPass() throws {
+        let raw = try SQLiteDatabase(url: databaseURL)
+        try raw.execute(Self.version5Schema)
+        try raw.execute(
+            """
+            INSERT INTO target_status (targetId) VALUES ('target-a');
+            INSERT INTO target_status (targetId) VALUES ('checked-not-added');
+            INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES ('abc', 1000, 'play session');
+            INSERT INTO intent_record (
+                kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
+                restoreScope, replacesTree, createdAt, asked)
+            VALUES (
+                'interrupted-restore', '\(PackageSource.targetId(packageId: "pkg"))', 'abc', 'snap',
+                0, 0, 'whole-game', 0, 1000, 0);
+            """)
+        try raw.setUserVersion(5)
+        raw.close()
+
+        let store = try BackupStateStore(url: databaseURL)
+        defer { store.close() }
+        try store.clearDirty(
+            targetId: "target-a", gameKey: "abc", markedUpTo: Date(timeIntervalSince1970: 1000))
+
+        XCTAssertEqual(try store.dirtyGames().count, 2)
+        XCTAssertEqual(
+            BackupTriggerPlan.games(
+                in: .dirtyGames, dirty: try store.dirtyGames(), library: ["abc"],
+                targetIds: ["target-a"]),
+            [])
+    }
+
     /// The schema of version 5, as devices hold it.
     private static let version5Schema = """
         CREATE TABLE IF NOT EXISTS uploaded_manifest (

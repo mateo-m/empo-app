@@ -30,7 +30,7 @@ final class BackupPass: BackupRunning {
             return BackupPassResult(didFinish: true)
         }
 
-        let (games, names) = await gamesInScope(scope)
+        let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
         BackupGameNames.remember(names)
         BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
@@ -180,7 +180,7 @@ final class BackupPass: BackupRunning {
     /// with the name each one shows. The pill and the run block of
     /// 13.2 name the game they upload.
     private func gamesInScope(
-        _ scope: BackupScanScope
+        _ scope: BackupScanScope, targetIds: Set<String>
     ) async -> (games: [BackupRunGame], names: [String: String]) {
         let containers = GameContainer.discover()
         let byKey = Dictionary(
@@ -199,7 +199,8 @@ final class BackupPass: BackupRunning {
             log("\(restoring) sits out, its restore has not finished")
         }
         let keys = BackupTriggerPlan.games(
-            in: scope, dirty: dirty, library: Array(byKey.keys).sorted(), restoring: restoring)
+            in: scope, dirty: dirty, library: Array(byKey.keys).sorted(), targetIds: targetIds,
+            restoring: restoring)
 
         let thresholds = BackupTargets.thresholds()
         var games: [BackupRunGame] = []
