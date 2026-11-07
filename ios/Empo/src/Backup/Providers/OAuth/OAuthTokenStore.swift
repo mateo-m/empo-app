@@ -25,6 +25,9 @@ actor OAuthTokenStore {
     private var tokens: OAuthTokens
     /// The refresh in flight, so callers share one.
     private var refresh: Task<OAuthTokens, Error>?
+    /// Counts the sign-ins. A refresh that started before one belongs
+    /// to the old pair.
+    private var signIns = 0
 
     init(targetId: String, service: Service, tokens: OAuthTokens) {
         self.targetId = targetId
@@ -41,20 +44,29 @@ actor OAuthTokenStore {
     /// A token that is alive now.
     func accessToken() async throws(BackupProviderError) -> String {
         guard tokens.isExpired(at: Date()) else { return tokens.accessToken }
+        return try await refreshed()
+    }
 
+    private func refreshed() async throws(BackupProviderError) -> String {
         let task = refresh ?? startRefresh()
         refresh = task
-        do {
-            let fresh = try await task.value
-            tokens = fresh
+        let signInsBefore = signIns
+        let result = await task.result
+        guard signIns == signInsBefore else { return try await accessToken() }
+        // Every caller that shares the refresh comes here. The first
+        // one keeps the pair.
+        if refresh == task {
             refresh = nil
+            if case .success(let fresh) = result {
+                tokens = fresh
+                try? fresh.write(targetId: targetId)
+            }
+        }
+        switch result {
+        case .success(let fresh):
             return fresh.accessToken
-        } catch let error as BackupProviderError {
-            refresh = nil
-            throw error
-        } catch {
-            refresh = nil
-            throw BackupProviderError.offline
+        case .failure(let error):
+            throw error as? BackupProviderError ?? .offline
         }
     }
 
@@ -82,8 +94,8 @@ actor OAuthTokenStore {
     /// A token other than `rejected`. When another call already
     /// replaced it, that one comes back with no second refresh.
     private func accessToken(replacing rejected: String) async throws(BackupProviderError) -> String {
-        if tokens.accessToken == rejected { tokens.expiresAt = .distantPast }
-        return try await accessToken()
+        guard tokens.accessToken == rejected else { return try await accessToken() }
+        return try await refreshed()
     }
 
     /// Replaces the pair after a sign-in, and drops a refresh that is
@@ -91,13 +103,13 @@ actor OAuthTokenStore {
     func replace(with tokens: OAuthTokens) throws {
         refresh?.cancel()
         refresh = nil
+        signIns += 1
         self.tokens = tokens
         try tokens.write(targetId: targetId)
     }
 
     private func startRefresh() -> Task<OAuthTokens, Error> {
         let service = service
-        let targetId = targetId
         let current = tokens
         return Task {
             guard let refreshToken = current.refreshToken else {
@@ -108,7 +120,6 @@ actor OAuthTokenStore {
             // Dropbox answers a refresh without repeating the refresh
             // token. Losing it here would cost the next sign-in.
             pair.refreshToken = fresh.refreshToken ?? refreshToken
-            try? pair.write(targetId: targetId)
             return pair
         }
     }
