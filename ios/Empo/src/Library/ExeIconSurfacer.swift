@@ -10,8 +10,13 @@ import Foundation
 final class ExeIconSurfacer: @unchecked Sendable {
     private let queue = DispatchQueue(label: "empo.import.exe-icon", qos: .utility)
     private let lock = NSLock()
-    private var locked = false
-    private var hasTentative = false
+    private enum Pick {
+        case none
+        case tentative
+        case locked
+    }
+
+    private var pick = Pick.none
 
     private let container: GameContainer
     private let onSurfaced: @Sendable (String) -> Void
@@ -25,16 +30,18 @@ final class ExeIconSurfacer: @unchecked Sendable {
     func offer(fileURL: URL, filename: String) {
         let isGameExe = filename.lowercased() == "game.exe"
         let shouldProcess: Bool = lock.withLock {
-            if locked { return false }
-            if !isGameExe && hasTentative { return false }
-            return true
+            switch pick {
+            case .none: return true
+            case .tentative: return isGameExe
+            case .locked: return false
+            }
         }
         guard shouldProcess else { return }
         if !isGameExe && ExecutableIconExtractor.isUtilityExecutable(filename: filename) {
             return
         }
         queue.async { [self] in
-            let stillWanted = lock.withLock { !locked || isGameExe }
+            let stillWanted = lock.withLock { pick != .locked || isGameExe }
             guard stillWanted else { return }
             guard let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
                 let pe = PEImage(data: data),
@@ -56,8 +63,11 @@ final class ExeIconSurfacer: @unchecked Sendable {
                 for: sidecarURL.path, maxPixelSize: ImageCache.PixelBudget.cell)
 
             lock.withLock {
-                hasTentative = true
-                if isGameExe { locked = true }
+                if isGameExe {
+                    pick = .locked
+                } else if pick == .none {
+                    pick = .tentative
+                }
             }
             onSurfaced(sidecarURL.path)
         }
