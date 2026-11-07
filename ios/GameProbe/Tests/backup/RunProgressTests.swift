@@ -17,13 +17,15 @@ final class RunProgressTests: XCTestCase {
     }
 
     private func shows(
-        _ plan: BackupRunPlan, at seconds: TimeInterval, ended: TimeInterval? = nil
+        _ plan: BackupRunPlan, at seconds: TimeInterval, ended: TimeInterval? = nil,
+        stopped: Bool = false
     )
         -> Bool
     {
-        ProgressPill.shows(
+        let endedAt = ended.map { start.addingTimeInterval($0) }
+        return ProgressPill.shows(
             startedAt: start,
-            finishedAt: ended.map { start.addingTimeInterval($0) },
+            end: endedAt.map { stopped ? .stopped(at: $0) : .finished(at: $0) },
             hasUploads: plan.hasUploads,
             gameIsPlaying: false,
             now: start.addingTimeInterval(seconds))
@@ -41,10 +43,16 @@ final class RunProgressTests: XCTestCase {
         XCTAssertFalse(shows(plan, at: 35, ended: 30))
     }
 
+    func testAStoppedRunKeepsThePillFifteenSeconds() {
+        let plan = plan(1_000)
+        XCTAssertTrue(shows(plan, at: 44, ended: 30, stopped: true))
+        XCTAssertFalse(shows(plan, at: 45, ended: 30, stopped: true))
+    }
+
     func testThePillHidesWhileAGamePlays() {
         XCTAssertFalse(
             ProgressPill.shows(
-                startedAt: start, finishedAt: nil, hasUploads: true,
+                startedAt: start, end: nil, hasUploads: true,
                 gameIsPlaying: true, now: start.addingTimeInterval(10)))
     }
 

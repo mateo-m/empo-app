@@ -183,10 +183,9 @@ final class BackupRunMonitor: BackupRunObserver {
     var showsPill: Bool {
         ProgressPill.shows(
             startedAt: startedAt,
-            finishedAt: finishedAt,
+            end: finishedAt.map { stopLine == nil ? .finished(at: $0) : .stopped(at: $0) },
             hasUploads: plan.hasUploads,
             gameIsPlaying: BackupDeviceConditions.isSessionLive,
-            stopped: stopLine != nil,
             now: now)
     }
 
