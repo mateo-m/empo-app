@@ -34,20 +34,21 @@ enum RenderScale: String, Codable, CaseIterable, Hashable {
         }
     }
 
-    /// Multiplier written to mkxp.json as `framebufferScalingFactor`.
-    /// `x1` returns 1.0 but the host strips both `enableHires` and
-    /// `framebufferScalingFactor` for that case so the engine falls
-    /// back to its native-resolution path.
-    var framebufferScalingFactor: Double {
+    var mkxp: MkxpRenderScale {
         switch self {
-        case .x1: 1.0
-        case .x2: 2.0
-        case .x4: 4.0
+        case .x1: .native
+        case .x2: .hires(factor: 2.0)
+        case .x4: .hires(factor: 4.0)
         }
     }
 
-    var enableHires: Bool {
-        self != .x1
+    init(_ scale: MkxpRenderScale) {
+        switch scale {
+        case .native: self = .x1
+        case .hires(let factor) where factor < 1.5: self = .x1
+        case .hires(let factor) where factor < 3.0: self = .x2
+        case .hires: self = .x4
+        }
     }
 }
 
@@ -77,7 +78,7 @@ struct MkxpEngineSettings: Equatable {
     private var overlayProvenance: [MkxpEngineField: MkxpValueProvenance] = [:]
 
     init(values: MkxpEngineValues) {
-        self.renderScale = Self.renderScale(from: values)
+        self.renderScale = values.renderScale.map(RenderScale.init)
         self.frameSkip = values.frameSkip
         self.vsync = values.vsync
         self.pathCache = values.pathCache
@@ -99,8 +100,7 @@ struct MkxpEngineSettings: Equatable {
         let defaults = ManagedMkxpConfig.readGameDefaults(from: gameDirectory)
         return MkxpEngineSettings(
             values: MkxpEngineValues(
-                renderScaleEnableHires: defaults.renderScaleEnableHires,
-                renderScaleFramebufferFactor: defaults.renderScaleFramebufferFactor,
+                renderScale: defaults.renderScale,
                 frameSkip: defaults.frameSkip,
                 vsync: defaults.vsync,
                 pathCache: defaults.pathCache,
@@ -126,18 +126,14 @@ struct MkxpEngineSettings: Equatable {
     }
 
     var mkxpValues: MkxpEngineValues {
-        var values = MkxpEngineValues(
+        MkxpEngineValues(
+            renderScale: renderScale?.mkxp,
             frameSkip: frameSkip,
             vsync: vsync,
             pathCache: pathCache,
             fontScale: fontScale,
             solidFonts: solidFonts
         )
-        if let scale = renderScale {
-            values.renderScaleEnableHires = scale.enableHires
-            values.renderScaleFramebufferFactor = scale.framebufferScalingFactor
-        }
-        return values
     }
 
     func save(to stateDirectory: URL) {
@@ -152,16 +148,5 @@ struct MkxpEngineSettings: Equatable {
         if fontScale != other.fontScale { changed.append(String(localized: "Font scale")) }
         if solidFonts != other.solidFonts { changed.append(String(localized: "Solid fonts")) }
         return changed
-    }
-
-    private static func renderScale(from values: MkxpEngineValues) -> RenderScale? {
-        guard let enableHires = values.renderScaleEnableHires else { return nil }
-        guard enableHires else { return .x1 }
-        let factor = values.renderScaleFramebufferFactor ?? 1.0
-        switch factor {
-        case ..<1.5: return .x1
-        case ..<3.0: return .x2
-        default: return .x4
-        }
     }
 }

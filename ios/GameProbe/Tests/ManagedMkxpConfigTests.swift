@@ -73,6 +73,21 @@ final class ManagedMkxpConfigTests: XCTestCase {
         XCTAssertEqual(ManagedMkxpConfig.readGameDefaults(from: gameDir).midiSoundFont, "Audio/BGM/GMGSx.sf2")
     }
 
+    func testRenderScaleReadsTheFactorOnlyInHiresMode() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        let config = gameDir.appendingPathComponent("mkxp.json")
+        func renderScale(_ json: String) throws -> MkxpRenderScale? {
+            try json.write(to: config, atomically: true, encoding: .utf8)
+            return ManagedMkxpConfig.readGameDefaults(from: gameDir).renderScale
+        }
+
+        XCTAssertNil(try renderScale(#"{ "framebufferScalingFactor": 2 }"#))
+        XCTAssertEqual(try renderScale(#"{ "enableHires": false, "framebufferScalingFactor": 2 }"#), .native)
+        XCTAssertEqual(try renderScale(#"{ "enableHires": true }"#), .hires(factor: 1.0))
+        XCTAssertEqual(try renderScale(#"{ "enableHires": true, "framebufferScalingFactor": 2 }"#), .hires(factor: 2.0))
+    }
+
     func testNamedSoundFontIsTheFileThatMkxpJsonNames() throws {
         let gameDir = try makeGame(files: ["Audio/BGM/GMGSx.sf2", "Audio/a.sf2"])
         try """

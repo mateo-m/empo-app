@@ -3,14 +3,20 @@
 
 import Foundation
 
+/// mkxp-z's `enableHires` and `framebufferScalingFactor`. mkxp-z
+/// uses the factor only in hires mode.
+public enum MkxpRenderScale: Equatable, Sendable {
+    case native
+    case hires(factor: Double)
+}
+
 /// The mkxp-z config values that Empo reads and writes. Keys match
-/// mkxp-z's config surface.
+/// mkxp-z's config surface. A nil value is a key that the config does
+/// not set, or that a write leaves as it is.
 public struct MkxpEngineValues: Equatable, Sendable {
     public var smoothScaling: Bool?
     public var fixedAspectRatio: Bool?
-    /// `nil` means native resolution (`enableHires` false, factor stripped).
-    public var renderScaleEnableHires: Bool?
-    public var renderScaleFramebufferFactor: Double?
+    public var renderScale: MkxpRenderScale?
     public var frameSkip: Bool?
     public var vsync: Bool?
     public var pathCache: Bool?
@@ -20,8 +26,7 @@ public struct MkxpEngineValues: Equatable, Sendable {
     public init(
         smoothScaling: Bool? = nil,
         fixedAspectRatio: Bool? = nil,
-        renderScaleEnableHires: Bool? = nil,
-        renderScaleFramebufferFactor: Double? = nil,
+        renderScale: MkxpRenderScale? = nil,
         frameSkip: Bool? = nil,
         vsync: Bool? = nil,
         pathCache: Bool? = nil,
@@ -30,8 +35,7 @@ public struct MkxpEngineValues: Equatable, Sendable {
     ) {
         self.smoothScaling = smoothScaling
         self.fixedAspectRatio = fixedAspectRatio
-        self.renderScaleEnableHires = renderScaleEnableHires
-        self.renderScaleFramebufferFactor = renderScaleFramebufferFactor
+        self.renderScale = renderScale
         self.frameSkip = frameSkip
         self.vsync = vsync
         self.pathCache = pathCache
@@ -44,8 +48,7 @@ public struct MkxpEngineValues: Equatable, Sendable {
 public struct MkxpGameDefaults: Equatable, Sendable {
     public var smoothScaling: Bool?
     public var fixedAspectRatio: Bool?
-    public var renderScaleEnableHires: Bool?
-    public var renderScaleFramebufferFactor: Double?
+    public var renderScale: MkxpRenderScale?
     public var frameSkip: Bool?
     public var vsync: Bool?
     public var pathCache: Bool?
@@ -56,8 +59,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
     public init(
         smoothScaling: Bool? = nil,
         fixedAspectRatio: Bool? = nil,
-        renderScaleEnableHires: Bool? = nil,
-        renderScaleFramebufferFactor: Double? = nil,
+        renderScale: MkxpRenderScale? = nil,
         frameSkip: Bool? = nil,
         vsync: Bool? = nil,
         pathCache: Bool? = nil,
@@ -67,8 +69,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
     ) {
         self.smoothScaling = smoothScaling
         self.fixedAspectRatio = fixedAspectRatio
-        self.renderScaleEnableHires = renderScaleEnableHires
-        self.renderScaleFramebufferFactor = renderScaleFramebufferFactor
+        self.renderScale = renderScale
         self.frameSkip = frameSkip
         self.vsync = vsync
         self.pathCache = pathCache
@@ -79,7 +80,7 @@ public struct MkxpGameDefaults: Equatable, Sendable {
 
     public func defines(_ field: MkxpEngineField) -> Bool {
         switch field {
-        case .renderScale: renderScaleEnableHires != nil
+        case .renderScale: renderScale != nil
         case .frameSkip: frameSkip != nil
         case .vsync: vsync != nil
         case .pathCache: pathCache != nil
@@ -317,8 +318,7 @@ public enum ManagedMkxpConfig {
         return MkxpGameDefaults(
             smoothScaling: values.smoothScaling,
             fixedAspectRatio: values.fixedAspectRatio,
-            renderScaleEnableHires: values.renderScaleEnableHires,
-            renderScaleFramebufferFactor: values.renderScaleFramebufferFactor,
+            renderScale: values.renderScale,
             frameSkip: values.frameSkip,
             vsync: values.vsync,
             pathCache: values.pathCache,
@@ -343,7 +343,8 @@ public enum ManagedMkxpConfig {
         var folders = ["": ShippedSoundFonts.modificationDate(of: gameDirectory) ?? .distantPast]
         guard
             let items = FileManager.default.enumerator(
-                at: gameDirectory, includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+                at: gameDirectory,
+                includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
                 options: [.skipsHiddenFiles])
         else { return ShippedSoundFonts(files: [], folders: folders) }
         let base = gameDirectory.standardizedFileURL.pathComponents.count
@@ -360,7 +361,8 @@ public enum ManagedMkxpConfig {
         let sorted = files.sorted {
             $0.count != $1.count
                 ? $0.count < $1.count
-                : $0.joined(separator: "/").localizedStandardCompare($1.joined(separator: "/")) == .orderedAscending
+                : $0.joined(separator: "/").localizedStandardCompare($1.joined(separator: "/"))
+                    == .orderedAscending
         }
         return ShippedSoundFonts(files: sorted.map { $0.joined(separator: "/") }, folders: folders)
     }
@@ -437,10 +439,11 @@ public enum ManagedMkxpConfig {
             payload[key] = value
         }
 
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: payload,
-            options: [.sortedKeys]
-        ),
+        guard
+            let data = try? JSONSerialization.data(
+                withJSONObject: payload,
+                options: [.sortedKeys]
+            ),
             let json = String(data: data, encoding: .utf8)
         else {
             return nil
@@ -674,16 +677,15 @@ public enum ManagedMkxpConfig {
         if let v = overrides.solidFonts {
             config["solidFonts"] = v ? ["*"] : [] as [String]
         }
-        if let enableHires = overrides.renderScaleEnableHires {
-            if enableHires {
-                config["enableHires"] = true
-                if let factor = overrides.renderScaleFramebufferFactor {
-                    config["framebufferScalingFactor"] = factor
-                }
-            } else {
-                config["enableHires"] = false
-                config.removeValue(forKey: "framebufferScalingFactor")
-            }
+        switch overrides.renderScale {
+        case .native:
+            config["enableHires"] = false
+            config.removeValue(forKey: "framebufferScalingFactor")
+        case .hires(let factor):
+            config["enableHires"] = true
+            config["framebufferScalingFactor"] = factor
+        case nil:
+            break
         }
     }
 
@@ -707,10 +709,13 @@ public enum ManagedMkxpConfig {
     }
 
     private static func values(from config: [String: Any]) -> MkxpEngineValues {
-        let enableHires = config["enableHires"] as? Bool
-        let scalingFactor =
-            (config["framebufferScalingFactor"] as? Double)
-            ?? (config["framebufferScalingFactor"] as? Int).map(Double.init)
+        let renderScale = (config["enableHires"] as? Bool).map { hires -> MkxpRenderScale in
+            guard hires else { return .native }
+            let factor =
+                (config["framebufferScalingFactor"] as? Double)
+                ?? (config["framebufferScalingFactor"] as? Int).map(Double.init)
+            return .hires(factor: factor ?? 1.0)
+        }
 
         let solidFontsArray = config["solidFonts"] as? [String]
         let solidFontsEnabled: Bool? = solidFontsArray.map { !$0.isEmpty }
@@ -718,8 +723,7 @@ public enum ManagedMkxpConfig {
         return MkxpEngineValues(
             smoothScaling: flag(config["smoothScaling"]),
             fixedAspectRatio: config["fixedAspectRatio"] as? Bool,
-            renderScaleEnableHires: enableHires,
-            renderScaleFramebufferFactor: scalingFactor,
+            renderScale: renderScale,
             frameSkip: config["frameSkip"] as? Bool,
             vsync: (config["syncToRefreshrate"] as? Bool)
                 ?? (config["vsync"] as? Bool),
@@ -737,26 +741,16 @@ public enum ManagedMkxpConfig {
     }
 
     private static func legacyValues(from json: [String: Any]) -> MkxpEngineValues {
-        var renderEnableHires: Bool?
-        var renderFactor: Double?
-        if let scale = json["renderScale"] as? String {
-            switch scale {
-            case "x1":
-                renderEnableHires = false
-            case "x2":
-                renderEnableHires = true
-                renderFactor = 2.0
-            case "x4":
-                renderEnableHires = true
-                renderFactor = 4.0
-            default:
-                break
+        let renderScale: MkxpRenderScale? =
+            switch json["renderScale"] as? String {
+            case "x1": .native
+            case "x2": .hires(factor: 2.0)
+            case "x4": .hires(factor: 4.0)
+            default: nil
             }
-        }
 
         return MkxpEngineValues(
-            renderScaleEnableHires: renderEnableHires,
-            renderScaleFramebufferFactor: renderFactor,
+            renderScale: renderScale,
             frameSkip: json["frameSkip"] as? Bool,
             vsync: json["vsync"] as? Bool,
             pathCache: json["pathCache"] as? Bool,
@@ -767,10 +761,11 @@ public enum ManagedMkxpConfig {
 
     @discardableResult
     private static func writeConfig(_ config: [String: Any], to url: URL) -> Bool {
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: config,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
+        guard
+            let data = try? JSONSerialization.data(
+                withJSONObject: config,
+                options: [.prettyPrinted, .sortedKeys]
+            ),
             let jsonString = String(data: data, encoding: .utf8)
         else {
             return false
