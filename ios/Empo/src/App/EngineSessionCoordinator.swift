@@ -204,8 +204,8 @@ final class EngineSessionCoordinator {
         gamecore_requestResume()
     }
 
-    func recordSessionPlayTime(for game: GameEntry?) {
-        sessionLogger.recordSessionPlayTime(for: game)
+    func recordSessionPlayTime() {
+        sessionLogger.recordSessionPlayTime()
     }
 
     func resumeSessionTiming(for game: GameEntry?) {
@@ -320,7 +320,7 @@ final class EngineSessionCoordinator {
     }
 
     private func handleEngineTerminated() {
-        recordSessionPlayTime(for: delegate?.coordinatorActiveSessionGame)
+        recordSessionPlayTime()
         GameSaveWatch.shared.endSession()
         if let container = delegate?.coordinatorSelectedGame?.container {
             crashTracker.removeMarker(for: container)

@@ -170,7 +170,7 @@ class AppState {
     func cancelLoading() {
         guard canEndStuckGame, phase == .loading else { return }
         session.note("The player stopped the loading.")
-        session.recordSessionPlayTime(for: selectedGame)
+        session.recordSessionPlayTime()
         session.killSession(of: selectedGame)
         clearEndedGame()
         phase = nil
@@ -180,7 +180,7 @@ class AppState {
     func endStuckGame() {
         guard canEndStuckGame else { return }
         session.note("The game stopped responding, and Empo ended it.")
-        session.recordSessionPlayTime(for: activeSessionGame)
+        session.recordSessionPlayTime()
         session.killSession(of: activeSessionGame)
         clearEndedGame()
         phase = nil
@@ -257,7 +257,7 @@ class AppState {
         // Pause is the only return-to-library path. Flush play time
         // here so last-played and totals update even though the
         // engine keeps running.
-        session.recordSessionPlayTime(for: activeSessionGame)
+        session.recordSessionPlayTime()
         // The runtime watch of SPEC 3.6 reads here too. The pause is
         // the only way back to the library, so it is the last point
         // the app controls before the user may close it.
@@ -343,7 +343,7 @@ class AppState {
     /// or paused-to-library). Metadata then survives a force-quit.
     func flushSessionPlayTimeForBackground() {
         guard activeSessionGame != nil else { return }
-        session.recordSessionPlayTime(for: activeSessionGame)
+        session.recordSessionPlayTime()
         // Same reason as the play time: the user can close Empo from
         // the app switcher, and no callback follows. A save the game
         // wrote before that must still join the set of SPEC 3.6.
