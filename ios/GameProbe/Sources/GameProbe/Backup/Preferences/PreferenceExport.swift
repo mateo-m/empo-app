@@ -97,12 +97,10 @@ public enum PreferenceKeys {
     /// so they stay where the user set them.
     public static let backupOverCellular = PreferenceEntry("backupOverCellular", .deviceLocal)
     public static let backupRetention = PreferenceEntry("backupRetention", .deviceLocal)
-    /// Both notification keys spend the one system prompt of 7.11,
+    /// The notification key spends the one system prompt of 7.11,
     /// the same way the disclaimer key spends the one disclaimer.
     public static let backupNotificationsAsked = PreferenceEntry(
         "backupNotificationsAsked", .neverStored)
-    public static let backupNotificationPromptSpent = PreferenceEntry(
-        "backupNotificationPromptSpent", .neverStored)
 
     // MARK: - One per install
 
@@ -128,7 +126,7 @@ public enum PreferenceKeys {
         cleanupInvalidGames, pendingDuplicateGameNames, pendingSaveRecoveries, controllerMapGlobal,
         layoutProfilesGameNoticeShown, layoutProfilesDefault, viewportBoundsR, viewportBoundsG,
         viewportBoundsB, viewportBoundsA, backupOverCellular, backupRetention,
-        backupNotificationsAsked, backupNotificationPromptSpent, disclaimerAcknowledgedVersion,
+        backupNotificationsAsked, disclaimerAcknowledgedVersion,
         whatsNewSeenVersion,
         updateCheckerLastCheckedAt, updateCheckerLastKnownLatestVersion,
     ]

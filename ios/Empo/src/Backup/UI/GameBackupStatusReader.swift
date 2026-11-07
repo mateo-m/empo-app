@@ -23,7 +23,7 @@ enum GameBackupStatusReader {
         let interrupted = (try? store?.interruptedRunTally()) ?? InterruptedRunTally()
         let targets = descriptors.map { descriptor in
             let clock = try? store?.staleness(targetId: descriptor.id, gameKey: gameKey)
-            let failure = (try? store?.targetStatus(targetId: descriptor.id))?.failure
+            let failure = (try? store?.targetStatus(targetId: descriptor.id))?.lastFailure?.failure
             let tally =
                 (try? store?.partialTally(targetId: descriptor.id, gameKey: gameKey)) ?? [:]
             var state = GameTargetState(
@@ -44,7 +44,7 @@ enum GameBackupStatusReader {
                 targets: targets,
                 isRunning: BackupRunMonitor.shared.runningGameKeys.contains(gameKey),
                 now: now),
-            freshness: Staleness.worst(gameKey: gameKey, of: targets.map(\.freshness), now: now),
+            late: Staleness.worst(gameKey: gameKey, of: targets.map(\.freshness), now: now),
             lastSuccessAt: GameBackupStatusRules.lastSuccessAt(of: targets))
     }
 }
@@ -52,6 +52,6 @@ enum GameBackupStatusReader {
 /// One game's backup state, read once.
 struct GameBackupRead {
     var status: GameBackupStatus
-    var freshness: GameFreshness
+    var late: LateGame?
     var lastSuccessAt: Date?
 }

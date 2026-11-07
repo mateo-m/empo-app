@@ -63,7 +63,8 @@ final class KeyboardInputManager {
     private var sessionActive = false
     private var resolvedMap: [Int32: ResolvedTarget] = [:]
     /// source scancode -> injected scancode, so a release repeats the
-    /// press-time decision even if the map changed meanwhile.
+    /// press-time decision even if the map or the text input mode
+    /// changed meanwhile.
     private var pressedKeyScancode: [Int32: Int32] = [:]
     private var pressedKeyAction: [Int32: String] = [:]
 
@@ -173,13 +174,12 @@ final class KeyboardInputManager {
 
         guard !suppressInjection else { return }
 
-        // While the game is taking text, the keyboard is a keyboard.
-        if textInputActive {
-            EngineSessionCoordinator.shared.injectKey(scancode: source, pressed: pressed)
-            return
-        }
-
         if pressed {
+            // While the game is taking text, the keyboard is a keyboard.
+            if textInputActive {
+                press(source: source, scancode: source)
+                return
+            }
             switch resolvedMap[source] {
             case .key(let scancode):
                 press(source: source, scancode: scancode)

@@ -34,8 +34,8 @@ final class GameScriptProfileTests: XCTestCase {
     func testModernLooseScriptsRouteToRuby31() {
         let profile = GameScriptProfile.analyze(
             gameDirectory: fixtureURL("modern-loose"))
-        XCTAssertEqual(profile.rubyVersion, 31)
-        XCTAssertTrue(profile.modernRubyScripts)
+        XCTAssertEqual(profile.ruby.code, 31)
+        XCTAssertTrue(profile.ruby.modernScripts)
         if case .modern = profile.grammar {
             // expected
         } else {
@@ -46,7 +46,7 @@ final class GameScriptProfileTests: XCTestCase {
     func testLegacyLooseScriptsStayNonModern() {
         let profile = GameScriptProfile.analyze(
             gameDirectory: fixtureURL("legacy-loose"))
-        XCTAssertFalse(profile.modernRubyScripts)
+        XCTAssertFalse(profile.ruby.modernScripts)
         if case .legacy = profile.grammar {
             // expected
         } else {
@@ -57,7 +57,7 @@ final class GameScriptProfileTests: XCTestCase {
     func testDefStatCallsDoNotReadAsEndlessDefs() {
         let profile = GameScriptProfile.analyze(
             gameDirectory: fixtureURL("legacy-loose-def-stat"))
-        XCTAssertFalse(profile.modernRubyScripts)
+        XCTAssertFalse(profile.ruby.modernScripts)
         XCTAssertEqual(profile.grammar, .legacy)
     }
 
@@ -129,7 +129,7 @@ final class GameScriptProfileTests: XCTestCase {
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .legacy)
-        XCTAssertEqual(profile.rubyVersion, 19)
+        XCTAssertEqual(profile.ruby.code, 19)
     }
 
     func testFrozenStringLiteralCommentsStillCountAsModern() throws {
@@ -208,7 +208,7 @@ final class GameScriptProfileTests: XCTestCase {
         try Data().write(to: dir.appendingPathComponent("Game.rgss2a"))
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
-        XCTAssertEqual(profile.rubyVersion, 18)
+        XCTAssertEqual(profile.ruby.code, 18)
     }
 
     func testRuby19MethodsInXPScriptsRouteToRuby31Legacy() throws {
@@ -226,8 +226,8 @@ final class GameScriptProfileTests: XCTestCase {
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .mixed)
-        XCTAssertEqual(profile.rubyVersion, 31)
-        XCTAssertFalse(profile.modernRubyScripts)
+        XCTAssertEqual(profile.ruby.code, 31)
+        XCTAssertFalse(profile.ruby.modernScripts)
     }
 
     func testRuby19MethodsInVXAceScriptsStayOnRuby19() throws {
@@ -241,7 +241,7 @@ final class GameScriptProfileTests: XCTestCase {
         try "text = text.force_encoding('UTF-8')\n".write(
             to: scripts.appendingPathComponent("Window_Base.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 19)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 19)
     }
 
     func testRuby19CallInsideStringInsertRoutesToRuby31() throws {
@@ -257,7 +257,7 @@ final class GameScriptProfileTests: XCTestCase {
         try "# use respond_to?(:force_encoding)\nx = 1 if defined?(Encoding)\n\ntext = \"#{value.force_encoding(\"UTF-8\")}\"\n".write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallAfterTheSameWordInAStringRoutesToRuby31() throws {
@@ -273,7 +273,7 @@ final class GameScriptProfileTests: XCTestCase {
         try "warn \".force_encoding\"; value.force_encoding(\"UTF-8\")\n".write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallAfterAPostfixGuardRoutesToRuby31() throws {
@@ -293,7 +293,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallUnderANegatedGuardRoutesToRuby31() throws {
@@ -314,7 +314,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallInAHeredocInsertRoutesToRuby31() throws {
@@ -335,7 +335,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallAfterAShiftOrARegexRoutesToRuby31() throws {
@@ -366,7 +366,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("File_Mixins.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallAfterAShiftWithAnEndLineInALaterScriptRoutesToRuby31() throws {
@@ -382,7 +382,7 @@ final class GameScriptProfileTests: XCTestCase {
             "names = %w(\ntoken\n)\n",
         ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallInAHeredocAfterAShiftOnTheSameLineRoutesToRuby18() throws {
@@ -396,7 +396,7 @@ final class GameScriptProfileTests: XCTestCase {
             "text = value <<shift + <<'END'\nstr.force_encoding('UTF-8')\nEND\n"
         ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 18)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 18)
     }
 
     func testRuby19CallAfterACommentInAWindowsScriptRoutesToRuby31() throws {
@@ -412,7 +412,7 @@ final class GameScriptProfileTests: XCTestCase {
         try "# Scene_Movie\r\ncase to\r\nwhen 65001; str.force_encoding('UTF-8')\r\nend\r\n".write(
             to: scripts.appendingPathComponent("Scene_Movie.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallBeforeAGuardedStatementRoutesToRuby31() throws {
@@ -431,7 +431,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallUnderAnOrGuardRoutesToRuby31() throws {
@@ -452,7 +452,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19CallOnAnotherReceiverThanTheGuardRoutesToRuby31() throws {
@@ -473,7 +473,7 @@ final class GameScriptProfileTests: XCTestCase {
         """.write(
             to: scripts.appendingPathComponent("Window_Text.rb"), atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).rubyVersion, 31)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31)
     }
 
     func testRuby19MethodsInCommentsStringsOrGuardsStayOnRuby18() throws {
@@ -528,7 +528,24 @@ final class GameScriptProfileTests: XCTestCase {
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .legacy)
-        XCTAssertEqual(profile.rubyVersion, 18)
+        XCTAssertEqual(profile.ruby.code, 18)
+    }
+
+    func testRuby19CallOnTheEndLineOfABlockCommentStaysOnRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "=begin\n=end s.force_encoding('UTF-8')\nx = 1\n".write(
+            to: scripts.appendingPathComponent("Util.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.ruby, .ruby18)
     }
 
     func testBundledRuby300DLLFoldsTo31() throws {
@@ -541,7 +558,23 @@ final class GameScriptProfileTests: XCTestCase {
         try Data().write(to: dll)
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
-        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertEqual(profile.ruby.code, 31)
+    }
+
+    func testModernScriptsOutrankABundledRuby18DLL() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data().write(to: dir.appendingPathComponent("msvcrt-ruby187.dll"))
+        try pluginScripts([
+            "a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n",
+        ]).write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
     }
 
     /// An old fangame repackaged on a modern mkxp-z build: 1.8-era
@@ -552,8 +585,8 @@ final class GameScriptProfileTests: XCTestCase {
         let profile = GameScriptProfile.analyze(
             gameDirectory: fixtureURL("legacy-compiled-ruby3-dll"))
         XCTAssertEqual(profile.grammar, .legacy)
-        XCTAssertFalse(profile.modernRubyScripts)
-        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertFalse(profile.ruby.modernScripts)
+        XCTAssertEqual(profile.ruby.code, 31)
     }
 
     /// A custom modern engine (Pokemon Flux shape): the real scripts
@@ -564,8 +597,8 @@ final class GameScriptProfileTests: XCTestCase {
         let profile = GameScriptProfile.analyze(
             gameDirectory: fixtureURL("packed-scripts-ruby3-dll"))
         XCTAssertEqual(profile.grammar, .inconclusive)
-        XCTAssertTrue(profile.modernRubyScripts)
-        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertTrue(profile.ruby.modernScripts)
+        XCTAssertEqual(profile.ruby.code, 31)
     }
 
     func testModernPluginCodeOutranksALegacyScriptsFile() throws {
@@ -583,8 +616,8 @@ final class GameScriptProfileTests: XCTestCase {
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .modern)
-        XCTAssertTrue(profile.modernRubyScripts)
-        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertTrue(profile.ruby.modernScripts)
+        XCTAssertEqual(profile.ruby.code, 31)
     }
 
     func testModernPluginCodeCountsWithoutAScriptsFile() throws {
@@ -661,7 +694,7 @@ final class GameScriptProfileTests: XCTestCase {
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .modern)
-        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertEqual(profile.ruby.code, 31)
     }
 
     func testModernPluginCodeCountsBesideAPackedArchive() throws {
@@ -672,7 +705,7 @@ final class GameScriptProfileTests: XCTestCase {
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .modern)
-        XCTAssertEqual(profile.rubyVersion, 31)
+        XCTAssertEqual(profile.ruby.code, 31)
     }
 
     func testLegacyPluginCodeBesideAPackedArchiveIsInconclusive() throws {

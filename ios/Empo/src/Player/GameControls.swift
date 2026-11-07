@@ -39,6 +39,7 @@ import SwiftUI
 /// `EngineSessionCoordinator`. Holding and sliding the finger off the
 /// button does NOT release the key.
 struct ActionButton: View {
+    let id: UUID
     let label: String
     let scancode: Int32
     let size: CGFloat
@@ -59,11 +60,11 @@ struct ActionButton: View {
             ),
             onPress: {
                 EngineSessionCoordinator.shared.holdKey(
-                    scancode: scancode, by: .touch("button:\(label)"))
+                    scancode: scancode, by: .touch("button:\(id)"))
             },
             onRelease: {
                 EngineSessionCoordinator.shared.releaseKey(
-                    scancode: scancode, by: .touch("button:\(label)"))
+                    scancode: scancode, by: .touch("button:\(id)"))
             },
             face: { isPressed in
                 Text(label)

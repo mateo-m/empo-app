@@ -60,13 +60,13 @@ final class BackupStateStoreTests: XCTestCase {
 
         XCTAssertEqual(store.openOutcome, .created)
         XCTAssertTrue(store.needsRebuildFromTarget)
-        try store.markDirty(gameKey: "abc", reason: "import", at: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().count, 1)
     }
 
     func testReopeningTheSameSchemaKeepsTheRowsAndNeedsNoRebuild() throws {
         let first = try BackupStateStore(url: databaseURL)
-        try first.markDirty(gameKey: "abc", reason: "import", at: now)
+        try first.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         first.close()
 
         let second = try BackupStateStore(url: databaseURL)
@@ -79,26 +79,226 @@ final class BackupStateStoreTests: XCTestCase {
 
     func testAnOlderSchemaVersionRebuildsAndStaysUsable() throws {
         let first = try BackupStateStore(url: databaseURL)
-        try first.markDirty(gameKey: "abc", reason: "import", at: now)
+        try first.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         first.close()
 
-        // Put the file back on an older version, the way a downgrade
-        // and an upgrade both leave it.
+        // Version 5 migrates, so the oldest version without a
+        // migration is 4.
         let raw = try SQLiteDatabase(url: databaseURL)
-        try raw.setUserVersion(BackupStateStore.schemaVersion - 1)
+        try raw.setUserVersion(4)
         raw.close()
 
         let store = try BackupStateStore(url: databaseURL)
         defer { store.close() }
 
-        XCTAssertEqual(
-            store.openOutcome,
-            .rebuilt(.schemaVersion(found: BackupStateStore.schemaVersion - 1)))
+        XCTAssertEqual(store.openOutcome, .rebuilt(.schemaVersion(found: 4)))
         XCTAssertTrue(store.needsRebuildFromTarget)
         XCTAssertEqual(try store.dirtyGames(), [])
-        try store.markDirty(gameKey: "def", reason: "runtime watch", at: now)
+        try store.markDirty(gameKey: "def", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["def"])
     }
+
+    func testVersion5KeepsEachDirtyMarkForEveryTargetItKnows() throws {
+        let raw = try SQLiteDatabase(url: databaseURL)
+        try raw.execute(Self.version5Schema)
+        try raw.execute(
+            """
+            INSERT INTO target_status (targetId) VALUES ('target-a');
+            INSERT INTO staleness (targetId, gameKey) VALUES ('target-b', 'other');
+            INSERT INTO staleness (targetId, gameKey, lastSuccessAt, lastAttemptAt)
+                VALUES ('target-a', 'abc', 500, 600);
+            INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES ('abc', 1000, 'play session');
+            INSERT INTO intent_record (
+                kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
+                restoreScope, replacesTree, createdAt, asked)
+            VALUES ('interrupted-restore', 'target-a', 'abc', 'snap', 0, 0, 'whole-game', 1, 1000, 0);
+            INSERT INTO run_record VALUES ('open', 'target-a', 900, NULL, 'failed', 0, 0, 'closed early');
+            INSERT INTO run_record VALUES ('done', 'target-a', 800, 860, 'partial', 10, 2, NULL);
+            INSERT INTO pending_deletion VALUES ('target-a', 'gone', 700, '["bucket"]');
+            INSERT INTO scheduler_state VALUES (
+                'notification-ledger',
+                'device-storage-low' || char(10) || 'sign-in-dead@target-a' || char(10)
+                    || 'target-blocked@removed');
+            """)
+        try raw.setUserVersion(5)
+        raw.close()
+
+        let store = try BackupStateStore(url: databaseURL)
+        defer { store.close() }
+
+        XCTAssertEqual(store.openOutcome, .opened)
+        XCTAssertEqual(
+            try store.dirtyGames(),
+            [
+                DirtyMark(
+                    targetId: "target-a", gameKey: "abc",
+                    markedAt: Date(timeIntervalSince1970: 1000)),
+                DirtyMark(
+                    targetId: "target-b", gameKey: "abc",
+                    markedAt: Date(timeIntervalSince1970: 1000)),
+            ])
+        XCTAssertEqual(
+            try store.intent(kind: .interruptedRestore)?.work,
+            .restore(.replaceTheTree, movedAsideTree: nil))
+        XCTAssertEqual(
+            try store.runHistory(),
+            [
+                BackupRunRecord(
+                    id: "open", targetId: "target-a", startedAt: Date(timeIntervalSince1970: 900)),
+                BackupRunRecord(
+                    id: "done", targetId: "target-a", startedAt: Date(timeIntervalSince1970: 800),
+                    end: BackupRunEnd(outcome: .partial, finishedAt: Date(timeIntervalSince1970: 860)),
+                    uploadedBytes: 10, gameCount: 2),
+            ])
+        XCTAssertEqual(
+            try store.pendingDeletions(targetId: "target-a"),
+            [
+                PendingDeletion(
+                    targetId: "target-a", gameKey: "gone", requestedAt: Date(timeIntervalSince1970: 700))
+            ])
+        XCTAssertEqual(
+            try store.staleness(targetId: "target-a", gameKey: "abc"),
+            StalenessClock(
+                targetId: "target-a", gameKey: "abc", lastSuccessAt: Date(timeIntervalSince1970: 500)))
+        XCTAssertNil(try store.staleness(targetId: "target-b", gameKey: "other"))
+        XCTAssertEqual(
+            try store.notificationLedger(),
+            BackupNotificationLedger(posted: [
+                .init(cause: .deviceStorageLow, targetId: nil),
+                .init(cause: .signInDead, targetId: "target-a"),
+            ]))
+        let reopened = try BackupStateStore(url: databaseURL)
+        defer { reopened.close() }
+        XCTAssertEqual(reopened.openOutcome, .opened)
+    }
+
+    func testAVersion5MarkOnAnIdThatNeverRunsDoesNotKeepTheGameInEveryPass() throws {
+        let raw = try SQLiteDatabase(url: databaseURL)
+        try raw.execute(Self.version5Schema)
+        try raw.execute(
+            """
+            INSERT INTO target_status (targetId) VALUES ('target-a');
+            INSERT INTO target_status (targetId) VALUES ('checked-not-added');
+            INSERT INTO dirty_game (gameKey, markedAt, reason) VALUES ('abc', 1000, 'play session');
+            INSERT INTO intent_record (
+                kind, targetId, gameKey, snapshotId, uploadedBytes, remainingBytes,
+                restoreScope, replacesTree, createdAt, asked)
+            VALUES (
+                'interrupted-restore', '\(PackageSource.targetId(packageId: "pkg"))', 'abc', 'snap',
+                0, 0, 'whole-game', 0, 1000, 0);
+            """)
+        try raw.setUserVersion(5)
+        raw.close()
+
+        let store = try BackupStateStore(url: databaseURL)
+        defer { store.close() }
+        try store.clearDirty(
+            targetId: "target-a", gameKey: "abc", markedUpTo: Date(timeIntervalSince1970: 1000))
+
+        XCTAssertEqual(try store.dirtyGames().count, 2)
+        XCTAssertEqual(
+            BackupTriggerPlan.games(
+                in: .dirtyGames, dirty: try store.dirtyGames(), library: ["abc"],
+                targetIds: ["target-a"]),
+            [])
+    }
+
+    /// The schema of version 5, as devices hold it.
+    private static let version5Schema = """
+        CREATE TABLE IF NOT EXISTS uploaded_manifest (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            manifest BLOB NOT NULL,
+            uploadedAt REAL NOT NULL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS run_checkpoint (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            uploadedBytes INTEGER NOT NULL,
+            pendingPaths TEXT NOT NULL,
+            confirmedBlobs TEXT NOT NULL,
+            updatedAt REAL NOT NULL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS snapshot_ledger (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            snapshotId TEXT NOT NULL,
+            createdAt REAL NOT NULL,
+            oneOff INTEGER NOT NULL,
+            PRIMARY KEY (targetId, gameKey, snapshotId)
+        );
+        CREATE TABLE IF NOT EXISTS target_status (
+            targetId TEXT NOT NULL PRIMARY KEY,
+            failureKind TEXT,
+            failureDetail TEXT,
+            failedAt REAL,
+            quotaUsed INTEGER,
+            quotaLimit INTEGER,
+            quotaAt REAL
+        );
+        CREATE TABLE IF NOT EXISTS target_maintenance (
+            targetId TEXT NOT NULL PRIMARY KEY,
+            lastSweepAt REAL
+        );
+        CREATE TABLE IF NOT EXISTS dirty_game (
+            gameKey TEXT NOT NULL PRIMARY KEY,
+            markedAt REAL NOT NULL,
+            reason TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS pending_deletion (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            requestedAt REAL NOT NULL,
+            rescuedBuckets TEXT NOT NULL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS staleness (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            lastSuccessAt REAL,
+            lastAttemptAt REAL,
+            partialSince REAL,
+            PRIMARY KEY (targetId, gameKey)
+        );
+        CREATE TABLE IF NOT EXISTS run_record (
+            id TEXT NOT NULL PRIMARY KEY,
+            targetId TEXT NOT NULL,
+            startedAt REAL NOT NULL,
+            finishedAt REAL,
+            outcome TEXT NOT NULL,
+            uploadedBytes INTEGER NOT NULL,
+            gameCount INTEGER NOT NULL,
+            detail TEXT
+        );
+        CREATE TABLE IF NOT EXISTS intent_record (
+            kind TEXT NOT NULL PRIMARY KEY,
+            targetId TEXT NOT NULL,
+            gameKey TEXT,
+            snapshotId TEXT,
+            uploadedBytes INTEGER NOT NULL,
+            remainingBytes INTEGER NOT NULL,
+            restoreScope TEXT,
+            replacesTree INTEGER NOT NULL,
+            createdAt REAL NOT NULL,
+            asked INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS scheduler_state (
+            key TEXT NOT NULL PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS partial_tally (
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
+            path TEXT NOT NULL,
+            runs INTEGER NOT NULL,
+            PRIMARY KEY (targetId, gameKey, path)
+        );
+        CREATE INDEX IF NOT EXISTS run_record_startedAt ON run_record (startedAt);
+        """
 
     func testANewerSchemaVersionRebuildsToo() throws {
         // The cache is never truth, per 6.3, so a file from a newer
@@ -125,7 +325,7 @@ final class BackupStateStoreTests: XCTestCase {
 
         XCTAssertEqual(store.openOutcome, .rebuilt(.corrupt))
         XCTAssertTrue(store.needsRebuildFromTarget)
-        try store.markDirty(gameKey: "abc", reason: "import", at: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
 
@@ -136,7 +336,7 @@ final class BackupStateStoreTests: XCTestCase {
         defer { store.close() }
 
         XCTAssertEqual(store.openOutcome, .created)
-        try store.markDirty(gameKey: "abc", reason: "import", at: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
 
@@ -212,20 +412,31 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
 
-        try store.markDirty(gameKey: "abc", reason: "mode change", at: now)
-        try store.markDirty(gameKey: "def", reason: "runtime watch", at: now)
-        try store.clearDirty(gameKey: "abc", markedUpTo: now)
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
+        try store.markDirty(gameKey: "def", targetIds: [targetId], at: now)
+        try store.clearDirty(targetId: targetId, gameKey: "abc", markedUpTo: now)
 
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["def"])
-        XCTAssertEqual(try store.dirtyGames().first?.reason, "runtime watch")
+    }
+
+    func testClearingOneTargetKeepsTheMarkOfTheOther() throws {
+        let store = try makeStore()
+        defer { store.close() }
+
+        try store.markDirty(gameKey: "abc", targetIds: ["target-a", "target-b"], at: now)
+        try store.clearDirty(targetId: "target-a", gameKey: "abc", markedUpTo: now)
+
+        XCTAssertEqual(
+            try store.dirtyGames(), [DirtyMark(targetId: "target-b", gameKey: "abc", markedAt: now)])
     }
 
     func testADirtyMarkAfterTheScanStays() throws {
         let store = try makeStore()
         defer { store.close() }
 
-        try store.markDirty(gameKey: "abc", reason: "play session", at: now)
-        try store.clearDirty(gameKey: "abc", markedUpTo: now.addingTimeInterval(-1))
+        try store.markDirty(gameKey: "abc", targetIds: [targetId], at: now)
+        try store.clearDirty(
+            targetId: targetId, gameKey: "abc", markedUpTo: now.addingTimeInterval(-1))
 
         XCTAssertEqual(try store.dirtyGames().map(\.gameKey), ["abc"])
     }
@@ -236,28 +447,27 @@ final class BackupStateStoreTests: XCTestCase {
         let deletion = PendingDeletion(
             targetId: targetId,
             gameKey: "abc",
-            requestedAt: now,
-            rescuedBuckets: ["Yume Nikki (rescued)"])
+            requestedAt: now)
 
         try store.addPendingDeletion(deletion)
+        var again = deletion
+        again.requestedAt = now.addingTimeInterval(3600)
+        try store.addPendingDeletion(again)
 
         XCTAssertEqual(try store.pendingDeletions(targetId: targetId), [deletion])
         try store.clearPendingDeletion(targetId: targetId, gameKey: "abc")
         XCTAssertEqual(try store.pendingDeletions(targetId: targetId), [])
     }
 
-    func testAStalenessClockRoundTripsWithItsEmptyFields() throws {
+    func testAStalenessClockRoundTrips() throws {
         let store = try makeStore()
         defer { store.close() }
-        let clock = StalenessClock(
-            targetId: targetId, gameKey: "abc",
-            lastSuccessAt: now, lastAttemptAt: now.addingTimeInterval(3600))
+        let clock = StalenessClock(targetId: targetId, gameKey: "abc", lastSuccessAt: now)
 
         try store.saveStaleness(clock)
-        let read = try store.staleness(targetId: targetId, gameKey: "abc")
 
-        XCTAssertEqual(read, clock)
-        XCTAssertNil(read?.partialSince)
+        XCTAssertEqual(try store.staleness(targetId: targetId, gameKey: "abc"), clock)
+        XCTAssertNil(try store.staleness(targetId: targetId, gameKey: "def"))
     }
 
     func testRemovingATargetLeavesTheOtherTargetAlone() throws {
@@ -284,11 +494,11 @@ final class BackupStateStoreTests: XCTestCase {
     func testTheIntentRecordsSurviveACloseAndAReopen() throws {
         let records = [
             BackupIntentRecord(
-                kind: .interruptedRun, targetId: targetId, gameKey: "def",
-                uploadedBytes: 250 * 1024 * 1024, createdAt: now),
+                targetId: targetId, gameKey: "def",
+                work: .run(uploadedBytes: 250 * 1024 * 1024, remainingBytes: 1024), createdAt: now),
             BackupIntentRecord(
-                kind: .interruptedRestore, targetId: targetId, gameKey: "ghi",
-                createdAt: now),
+                targetId: targetId, gameKey: "ghi",
+                work: .restore(.replaceTheTree, movedAsideTree: "Game (replaced)"), createdAt: now),
         ]
 
         let first = try BackupStateStore(url: databaseURL)
@@ -304,29 +514,44 @@ final class BackupStateStoreTests: XCTestCase {
         }
     }
 
+    func testARestoreRecordKeepsItsScope() throws {
+        let store = try makeStore()
+        defer { store.close() }
+        let record = BackupIntentRecord(
+            targetId: targetId, gameKey: "jkl",
+            work: .restore(.restore(.savesAndSettings), movedAsideTree: nil), createdAt: now)
+
+        try store.saveIntent(record)
+
+        XCTAssertEqual(try store.intent(kind: .interruptedRestore), record)
+    }
+
     func testTheResumeQuestionFloorIs100MB() {
         XCTAssertEqual(BackupIntentRecord.resumeQuestionFloorBytes, 100 * 1024 * 1024)
     }
 
     func testAnInterruptedRunUnderTheFloorRecoversSilently() {
         let record = BackupIntentRecord(
-            kind: .interruptedRun, targetId: targetId,
-            uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes - 1, createdAt: now)
+            targetId: targetId,
+            work: .run(uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes - 1, remainingBytes: 0),
+            createdAt: now)
 
         XCTAssertFalse(record.asksAtNextLaunch)
     }
 
     func testAnInterruptedRunAtTheFloorAsks() {
         let record = BackupIntentRecord(
-            kind: .interruptedRun, targetId: targetId,
-            uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes, createdAt: now)
+            targetId: targetId,
+            work: .run(uploadedBytes: BackupIntentRecord.resumeQuestionFloorBytes, remainingBytes: 0),
+            createdAt: now)
 
         XCTAssertTrue(record.asksAtNextLaunch)
     }
 
     func testAnInterruptedRestoreAsksWhateverItsSize() {
         let record = BackupIntentRecord(
-            kind: .interruptedRestore, targetId: targetId, uploadedBytes: 0, createdAt: now)
+            targetId: targetId, work: .restore(.restore(.wholeGame), movedAsideTree: nil),
+            createdAt: now)
 
         XCTAssertTrue(record.asksAtNextLaunch)
     }
@@ -335,8 +560,8 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try BackupStateStore(url: databaseURL)
         try store.saveIntent(
             BackupIntentRecord(
-                kind: .interruptedRun, targetId: targetId,
-                uploadedBytes: 250 * 1024 * 1024, createdAt: now))
+                targetId: targetId,
+                work: .run(uploadedBytes: 250 * 1024 * 1024, remainingBytes: 0), createdAt: now))
         XCTAssertEqual(try store.intent(kind: .interruptedRun)?.asksAtNextLaunch, true)
 
         try store.markIntentAsked(kind: .interruptedRun)
@@ -352,9 +577,12 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
         try store.saveIntent(
-            BackupIntentRecord(kind: .interruptedRun, targetId: targetId, createdAt: now))
+            BackupIntentRecord(
+                targetId: targetId, work: .run(uploadedBytes: 0, remainingBytes: 0), createdAt: now))
         try store.saveIntent(
-            BackupIntentRecord(kind: .interruptedRestore, targetId: targetId, createdAt: now))
+            BackupIntentRecord(
+                targetId: targetId, work: .restore(.restore(.wholeGame), movedAsideTree: nil),
+                createdAt: now))
 
         try store.clearIntent(kind: .interruptedRun)
 
@@ -369,11 +597,11 @@ final class BackupStateStoreTests: XCTestCase {
             id: id,
             targetId: targetId,
             startedAt: now.addingTimeInterval(-daysAgo * 86_400),
-            finishedAt: now.addingTimeInterval(-daysAgo * 86_400 + 60),
-            outcome: outcome,
+            end: BackupRunEnd(
+                outcome: outcome, finishedAt: now.addingTimeInterval(-daysAgo * 86_400 + 60),
+                detail: outcome == .failed ? "the target refused the write" : nil),
             uploadedBytes: 2048,
-            gameCount: 3,
-            detail: outcome == .failed ? "the target refused the write" : nil)
+            gameCount: 3)
     }
 
     func testTheRetentionIs90Days() {
@@ -400,8 +628,8 @@ final class BackupStateStoreTests: XCTestCase {
         try store.recordRun(run("failed", daysAgo: 1, outcome: .failed))
 
         let record = try store.runHistory().first
-        XCTAssertEqual(record?.outcome, .failed)
-        XCTAssertEqual(record?.detail, "the target refused the write")
+        XCTAssertEqual(record?.end?.outcome, .failed)
+        XCTAssertEqual(record?.end?.detail, "the target refused the write")
     }
 
     func testRunHistoryIsOneGlobalListNewestFirst() throws {
@@ -421,12 +649,11 @@ final class BackupStateStoreTests: XCTestCase {
         let store = try makeStore()
         defer { store.close() }
         var record = run("live", daysAgo: 0, outcome: .success)
-        record.finishedAt = nil
+        record.end = nil
         try store.recordRun(record)
+        XCTAssertEqual(try store.runHistory(), [record])
 
-        record.finishedAt = now
-        record.outcome = .failed
-        record.detail = "the network went away"
+        record.end = BackupRunEnd(outcome: .failed, finishedAt: now, detail: "the network went away")
         try store.recordRun(record)
 
         XCTAssertEqual(try store.runHistory(), [record])
@@ -453,6 +680,21 @@ final class BackupStateStoreTests: XCTestCase {
         _ = ledger.post(causes: [.deviceStorageLow], targetId: "t2")
         try store.saveNotificationLedger(ledger)
         XCTAssertEqual(try store.notificationLedger(), ledger)
+    }
+
+    func testRemovingATargetArmsItsNotificationsAgain() throws {
+        let store = try BackupStateStore(url: nil)
+        defer { store.close() }
+        var ledger = BackupNotificationLedger()
+        _ = ledger.post(causes: [.signInDead, .deviceStorageLow], targetId: "icloud-drive")
+        try store.saveNotificationLedger(ledger)
+
+        try store.removeTarget(targetId: "icloud-drive")
+
+        var after = try store.notificationLedger()
+        XCTAssertEqual(
+            after.post(causes: [.signInDead, .deviceStorageLow], targetId: "icloud-drive"),
+            [.signInDead])
     }
 
     func testThePartialTallyReplacesRatherThanMerges() throws {
@@ -484,8 +726,9 @@ final class BackupStateStoreTests: XCTestCase {
         try store.recordTargetFailure(
             targetId: "t1", failure: .blockedByPermissions(reason: "no write right"), at: now)
         let status = try store.targetStatus(targetId: "t1")
-        XCTAssertEqual(status?.failure, .blockedByPermissions(reason: "no write right"))
-        XCTAssertEqual(status?.failedAt, now)
+        XCTAssertEqual(
+            status?.lastFailure,
+            TargetFailureRecord(failure: .blockedByPermissions(reason: "no write right"), at: now))
     }
 
     func testTheStoreKeepsWhyATargetWasUnreachable() throws {
@@ -493,7 +736,7 @@ final class BackupStateStoreTests: XCTestCase {
         defer { store.close() }
         for cause in [UnreachableCause.noAnswer, .serverError, .busy] {
             try store.recordTargetFailure(targetId: "t1", failure: .unreachable(cause), at: now)
-            XCTAssertEqual(try store.targetStatus(targetId: "t1")?.failure, .unreachable(cause))
+            XCTAssertEqual(try store.targetStatus(targetId: "t1")?.lastFailure?.failure, .unreachable(cause))
         }
     }
 
@@ -503,20 +746,32 @@ final class BackupStateStoreTests: XCTestCase {
         try store.recordTargetFailure(targetId: "t1", failure: .unreachable(), at: now)
         try store.recordTargetFailure(targetId: "t1", failure: nil, at: now)
         let status = try store.targetStatus(targetId: "t1")
-        XCTAssertNil(status?.failure)
-        XCTAssertNil(status?.failedAt)
+        XCTAssertNil(status?.lastFailure)
     }
 
     func testTheSpaceQueryAnswerAndTheFailureKeepTheirOwnColumns() throws {
         let store = try BackupStateStore(url: nil)
         defer { store.close() }
         try store.recordTargetQuota(
-            targetId: "t1", reading: QuotaReading(usedBytes: 400, limitBytes: 1_000), at: now)
+            targetId: "t1", reading: QuotaReading(usedBytes: 400, limitBytes: 1_000))
         try store.recordTargetFailure(targetId: "t1", failure: .needsSignIn, at: now)
         let status = try store.targetStatus(targetId: "t1")
         XCTAssertEqual(status?.quota, QuotaReading(usedBytes: 400, limitBytes: 1_000))
-        XCTAssertEqual(status?.quotaAt, now)
-        XCTAssertEqual(status?.failure, .needsSignIn)
+        XCTAssertEqual(status?.lastFailure?.failure, .needsSignIn)
+    }
+
+    func testAFailureOfAnUnknownKindLeavesNoFailureAndNoTime() throws {
+        let first = try BackupStateStore(url: databaseURL)
+        try first.recordTargetFailure(targetId: "t1", failure: .needsSignIn, at: now)
+        first.close()
+        let raw = try SQLiteDatabase(url: databaseURL)
+        try raw.execute("UPDATE target_status SET failureKind = 'a-kind-from-a-newer-build'")
+        raw.close()
+
+        let store = try BackupStateStore(url: databaseURL)
+        defer { store.close() }
+
+        XCTAssertNil(try store.targetStatus(targetId: "t1")?.lastFailure)
     }
 
     func testUsageSumsTheNewestManifestOfEachGameBiggestFirst() throws {
@@ -573,11 +828,12 @@ final class BackupStateStoreTests: XCTestCase {
             StalenessClock(targetId: targetId, gameKey: gameKey, lastSuccessAt: now))
         try store.recordRun(
             BackupRunRecord(
-                id: "r1", targetId: targetId, startedAt: now, finishedAt: now,
-                outcome: .success))
+                id: "r1", targetId: targetId, startedAt: now,
+                end: BackupRunEnd(outcome: .success, finishedAt: now)))
         try store.saveIntent(
             BackupIntentRecord(
-                kind: .interruptedRun, targetId: targetId, gameKey: gameKey, createdAt: now))
+                targetId: targetId, gameKey: gameKey,
+                work: .run(uploadedBytes: 0, remainingBytes: 0), createdAt: now))
         try store.savePartialTally(
             ["Game/Save0.rvdata2": 2], targetId: targetId, gameKey: gameKey)
 

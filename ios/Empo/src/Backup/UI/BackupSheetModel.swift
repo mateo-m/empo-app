@@ -36,7 +36,7 @@ final class BackupSheetModel {
     private(set) var leftovers = GameLeftovers()
     private(set) var hasATarget = false
     /// The first oversized write this game still owes an answer.
-    var pendingAsk: PendingWriteAsk?
+    private(set) var pendingAsk: PendingWriteAsk?
 
     var gameKey: String { BackupKeys.gameKey(containerFolderName: container.folderName) }
 
@@ -132,8 +132,7 @@ final class BackupSheetModel {
             await load()
             return
         }
-        BackupScheduler.shared.markDirty(
-            container: container, reason: BackupModeChange.dirtyReason)
+        BackupScheduler.shared.markDirty(container: container)
         await load()
     }
 

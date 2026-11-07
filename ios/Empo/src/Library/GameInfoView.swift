@@ -314,6 +314,7 @@ struct GameInfoView: View {
                 runtimeRows = await core.infoRows(for: container)
             }
             .onDisappear {
+                finishEditingTitle()
                 if needsLibraryRefresh {
                     library.refreshGameEntry(id: game.id)
                 }

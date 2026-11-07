@@ -149,6 +149,8 @@ final class ControllerPressListener {
 
     @ObservationIgnored private let controllers = ControllerInputManager(keys: HeldKeys(send: { _, _ in }))
     @ObservationIgnored private var lists = 0
+    @ObservationIgnored private var setupSheets = 0
+    private var listening: Bool { lists > 0 && setupSheets == 0 }
 
     private init() {
         controllers.suppressInjection = true
@@ -159,15 +161,23 @@ final class ControllerPressListener {
         }
     }
 
-    func begin() {
-        lists += 1
-        guard lists == 1 else { return }
-        controllers.start()
-        optionalElements = controllers.exposedOptionalElements
-    }
+    func begin() { update { lists += 1 } }
+    func end() { update { lists -= 1 } }
 
-    func end() {
-        lists -= 1
-        if lists == 0 { controllers.stop() }
+    /// The controller setup sheet reads the presses itself, so no list
+    /// lights up while a sheet is open.
+    func setupSheetAppeared() { update { setupSheets += 1 } }
+    func setupSheetDisappeared() { update { setupSheets -= 1 } }
+
+    private func update(_ change: () -> Void) {
+        let wasListening = listening
+        change()
+        guard listening != wasListening else { return }
+        if listening {
+            controllers.start()
+            optionalElements = controllers.exposedOptionalElements
+        } else {
+            controllers.stop()
+        }
     }
 }

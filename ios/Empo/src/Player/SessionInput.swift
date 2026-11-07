@@ -39,8 +39,9 @@ final class SessionInput {
 
     /// True while the game asks for text. The keyboard passes keys
     /// through unmapped, so the player types what they typed.
-    var textInputActive = false {
-        didSet { keyboard.textInputActive = textInputActive }
+    var textInputActive: Bool {
+        get { keyboard.textInputActive }
+        set { keyboard.textInputActive = newValue }
     }
 
     /// The remap screen is frontmost: read edges, inject nothing.
@@ -56,7 +57,7 @@ final class SessionInput {
         controller.hasHadControllerThisSession || keyboard.hasHadKeyboardThisSession
     }
 
-    func start(overlayHidden: Binding<Bool>, editMode: Binding<Bool>) {
+    func start(overlayHidden: Binding<Bool>, editMode: @escaping () -> Bool) {
         overlay.bind(hidden: overlayHidden, editMode: editMode)
         controller.start()
         keyboard.start()

@@ -40,7 +40,7 @@ enum SyncJoin {
     static func join(_ group: DiscoveredSyncGroup) {
         SyncPass.shared.join {
             AutomergeDocumentStore.delete()
-            try? SyncStore.update { $0.join(group.groupId, at: Date()) }
+            try? SyncStore.update { $0.join(group.groupId) }
         }
     }
 
@@ -49,7 +49,7 @@ enum SyncJoin {
     static func startAGroup() {
         try? SyncStore.update { state in
             guard !state.hasJoined else { return }
-            state.startAGroup(at: Date())
+            state.startAGroup()
         }
     }
 }

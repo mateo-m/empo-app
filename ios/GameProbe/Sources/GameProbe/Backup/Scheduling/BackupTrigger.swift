@@ -91,14 +91,17 @@ public enum BackupTriggerPlan {
     /// answers the resume question of 11.9. Its tree is a mix of old
     /// and new files, and a snapshot of that mix would be the newest
     /// backup.
+    ///
+    /// A mark counts only for a target in `targetIds`. A paused target
+    /// keeps its marks until it runs again.
     public static func games(
         in scope: BackupScanScope, dirty: [DirtyMark], library: [String],
-        restoring: String? = nil
+        targetIds: Set<String>, restoring: String? = nil
     ) -> [String] {
         let library = library.filter { $0 != restoring }
         switch scope {
         case .dirtyGames:
-            let marked = Set(dirty.map(\.gameKey))
+            let marked = Set(dirty.filter { targetIds.contains($0.targetId) }.map(\.gameKey))
             return library.filter(marked.contains)
         case .wholeLibrary:
             return library

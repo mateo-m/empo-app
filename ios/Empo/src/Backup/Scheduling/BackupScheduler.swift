@@ -71,15 +71,15 @@ final class BackupScheduler {
     static let interruptedDetail = String(localized: "the run stopped when Empo closed")
 
     private var didStart = false
-    /// Whether a pass is in flight. The manual restore door of
-    /// 11.3 closes while one is, per the third row of that section.
-    private(set) var isRunning = false
     private var foregroundWait: Task<Void, Never>?
     /// The pass in flight, whatever started it, so that Pause stops it.
-    private var runTask: Task<BackupPassResult, Never>?
-    /// A press that came while a pass ran. It starts when that pass
-    /// ends.
-    private var queuedPress: ManualBackupPress?
+    /// `BackupRunMonitor.isRunning` is true for the same span.
+    private var inFlight: Task<BackupPassResult, Never>?
+    /// Counts the presses of Pause. A press that waits for the pass in
+    /// flight drops when Pause comes during its wait.
+    private var pauses = 0
+    private var holds = 0
+    private var runAskedDuringHold = false
     private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
 
     // MARK: - Launch
@@ -128,11 +128,15 @@ final class BackupScheduler {
 
     /// A pause of 7.5 ends when its condition ends, not at the next
     /// trigger.
-    private func conditionsDidChange() {
-        guard let pause = BackupRunMonitor.shared.pause, !isRunning else { return }
-        switch pause {
-        case .gameRunning, .restoreRunning:
+    func conditionsDidChange() {
+        guard let pause = BackupRunMonitor.shared.pause, !BackupRunMonitor.shared.isRunning else {
             return
+        }
+        switch pause {
+        case .gameRunning:
+            return
+        case .restoreRunning:
+            guard !RestoreCoordinator.shared.isRestoring else { return }
         case .heat:
             guard ResourcePolicy.resumesStagingAfterHeat(BackupDeviceConditions.thermalState) else {
                 return
@@ -162,16 +166,17 @@ final class BackupScheduler {
     /// engine terminates and the session is over.
     func playSessionDidEnd(game: GameEntry?) {
         if let container = game?.container {
-            markDirty(container: container, reason: "play session")
+            markDirty(container: container)
         }
         Task { await runUnderTheGrant(.sessionEndOrBackground) }
     }
 
     /// Marks a game for the next backbone pass, which scans dirty
     /// games alone.
-    func markDirty(container: GameContainer, reason: String) {
+    func markDirty(container: GameContainer) {
         let gameKey = BackupKeys.gameKey(containerFolderName: container.folderName)
-        try? store?.markDirty(gameKey: gameKey, reason: reason, at: Date())
+        try? store?.markDirty(
+            gameKey: gameKey, targetIds: BackupTargets.load().map(\.id), at: Date())
     }
 
     private func runUnderTheGrant(_ trigger: BackupTrigger) async {
@@ -198,26 +203,34 @@ final class BackupScheduler {
 
     /// "Back up now", from the Backup sheet of one game or from the
     /// Backups screen. There is no third entry point, per 13.11.
-    func pressBackUpNow(_ press: ManualBackupPress) {
+    ///
+    /// `overCellular` lets this one run use cellular, per 7.4. It
+    /// never changes the stored switch.
+    func pressBackUpNow(_ press: ManualBackupPress, overCellular: Bool = false) {
         // Low Data Mode holds every upload and has no bypass, per
         // 7.4. A continued-processing task would show "Starting" for
         // as long as the hold lasts, so the pass runs without one.
         if BackupNetwork.isConstrained {
             log("manual press in Low Data Mode, the pass runs without a task")
-            startManualRun(press)
+            startManualRun(press, overCellular: overCellular)
             return
         }
-        guard !BackupTaskScheduler.submitManual(press) else { return }
+        guard !BackupTaskScheduler.submitManual(press, overCellular: overCellular) else { return }
         // The system refused the task, so the pass runs in the
         // foreground and hands its uploads to the background session.
-        startManualRun(press)
+        startManualRun(press, overCellular: overCellular)
     }
 
     /// Every manual pass starts here, under the system task or
-    /// without one.
+    /// without one. The task ends when the pass of this press ends.
     @discardableResult
-    func startManualRun(_ press: ManualBackupPress, progress: Progress? = nil) -> Task<Void, Never> {
-        Task { _ = await run(trigger: .manual, press: press, progress: progress) }
+    func startManualRun(
+        _ press: ManualBackupPress, overCellular: Bool = false, progress: Progress? = nil
+    ) -> Task<Void, Never> {
+        Task {
+            _ = await run(
+                trigger: .manual, press: press, overCellular: overCellular, progress: progress)
+        }
     }
 
     /// Pause, from the run block of 13.4 or the Backup sheet of
@@ -229,10 +242,27 @@ final class BackupScheduler {
     /// upload in flight is cancelled too, per 7.5.
     func pauseTheRun() {
         log("the user paused the run")
-        runTask?.cancel()
-        runTask = nil
-        queuedPress = nil
+        pauses += 1
+        inFlight?.cancel()
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
+    }
+
+    /// Stops the pass in flight and starts no pass until `body` ends.
+    /// A pass it stopped or refused runs again after that.
+    func withRunsHeld<T>(_ body: () async -> T) async -> T {
+        holds += 1
+        if let pass = inFlight {
+            pauseTheRun()
+            _ = await pass.value
+            runAskedDuringHold = true
+        }
+        let result = await body()
+        holds -= 1
+        if holds == 0, runAskedDuringHold {
+            runAskedDuringHold = false
+            Task { await run(trigger: .foreground) }
+        }
+        return result
     }
 
     // MARK: - The resume question of 6.5 and 13.18
@@ -287,12 +317,27 @@ final class BackupScheduler {
     func run(
         trigger: BackupTrigger,
         press: ManualBackupPress? = nil,
+        overCellular: Bool = false,
         progress: Progress? = nil
     ) async -> Bool {
-        guard !isRunning else {
-            if let press {
-                queuedPress = queuedPress == nil || queuedPress == press ? press : .library
+        // A press that comes while a pass runs waits for it, then gets
+        // its own pass. Its system task and its cellular grant stay
+        // with it.
+        while let current = inFlight {
+            guard press != nil else {
+                close(progress)
+                return false
             }
+            let pausesBefore = pauses
+            _ = await current.value
+            guard pauses == pausesBefore else {
+                close(progress)
+                return false
+            }
+        }
+
+        guard holds == 0 else {
+            runAskedDuringHold = true
             close(progress)
             return false
         }
@@ -308,6 +353,13 @@ final class BackupScheduler {
             BackupRunMonitor.shared.pause = nil
         }
 
+        guard let runner else {
+            log("%@ has no runner yet", trigger.rawValue)
+            close(progress)
+            return false
+        }
+
+        BackupNetwork.allowsThisRunOverCellular = overCellular
         // The uploads wait inside the transfer daemon, and the stale
         // line says what they wait for. Staging still runs, because
         // the clock of 7.1 runs while Empo's own policy blocks the
@@ -319,33 +371,21 @@ final class BackupScheduler {
             "%@ runs, network %@",
             trigger.rawValue, networkCause == nil ? "clear" : BackupNetwork.waitingLine)
 
-        guard let runner else {
-            log("%@ has no runner yet", trigger.rawValue)
-            close(progress)
-            return false
-        }
-
-        isRunning = true
-        BackupBadges.shared.invalidate()
-        defer {
-            isRunning = false
-            runTask = nil
-            BackupNetwork.allowsThisRunOverCellular = false
-            BackupBadges.shared.invalidate()
-            if let queued = queuedPress {
-                queuedPress = nil
-                startManualRun(queued)
-            }
-        }
+        BackupRunMonitor.shared.runBegins()
         progress?.totalUnitCount = 1
 
         let pass = Task {
-            await runner.runBackup(
+            defer {
+                BackupNetwork.allowsThisRunOverCellular = false
+                BackupRunMonitor.shared.runEnds(cancelled: Task.isCancelled)
+                inFlight = nil
+            }
+            return await runner.runBackup(
                 scope: BackupTriggerPlan.scope(of: trigger, press: press),
                 trigger: trigger,
                 progress: progress)
         }
-        runTask = pass
+        inFlight = pass
         // The system cancels the task of a background grant when the
         // grant expires, and that cancel must reach the pass too.
         let result = await withTaskCancellationHandler {
@@ -394,7 +434,7 @@ final class BackupScheduler {
 
     private func closeTheRunsThatVanished() {
         guard let store else { return }
-        let open = ((try? store.runHistory()) ?? []).filter { $0.finishedAt == nil }
+        let open = ((try? store.runHistory()) ?? []).filter { $0.end == nil }
         guard !open.isEmpty else { return }
 
         // One launch counts one interrupted run, however many targets
@@ -403,8 +443,8 @@ final class BackupScheduler {
 
         // The process died at an unknown time after the start.
         for var row in open {
-            row.finishedAt = row.startedAt
-            row.detail = Self.interruptedDetail
+            row.end = BackupRunEnd(
+                outcome: .failed, finishedAt: row.startedAt, detail: Self.interruptedDetail)
             try? store.recordRun(row)
         }
     }

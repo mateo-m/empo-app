@@ -170,6 +170,15 @@ public struct MigrationRecord: Equatable, Sendable {
         return MigrationRecord(games: games, sharedProfiles: shared)
     }
 
+    public mutating func renameProfile(from oldName: String, to newName: String) {
+        for (gameID, entry) in games where entry.profile == oldName {
+            games[gameID]?.profile = newName
+        }
+        if sharedProfiles.remove(oldName) != nil {
+            sharedProfiles.insert(newName)
+        }
+    }
+
     public func serialize() -> Data {
         var rawGames: [String: [String: Any]] = [:]
         for (id, entry) in games {

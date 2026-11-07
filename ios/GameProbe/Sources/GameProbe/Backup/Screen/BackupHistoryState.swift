@@ -8,14 +8,11 @@ public enum BackupHistoryState: Equatable, Sendable {
     case failed
     case cancelled
 
-    /// The engine writes the row before the first byte moves, so a
-    /// row with no finish time is either the run in flight or a run
-    /// that the process did not live to finish.
-    public static func of(_ run: BackupRunRecord, passStartedAt: Date?) -> Self {
-        if run.finishedAt == nil, let passStartedAt, run.startedAt >= passStartedAt {
-            return .backingUp
-        }
-        switch run.outcome {
+    /// A row with no end is the run in flight, or a run that did
+    /// not write its end.
+    public static func of(_ run: BackupRunRecord, liveRunId: String?) -> Self {
+        guard let end = run.end else { return run.id == liveRunId ? .backingUp : .failed }
+        switch end.outcome {
         case .success: return .success
         case .partial: return .partial
         case .failed: return .failed
@@ -23,7 +20,14 @@ public enum BackupHistoryState: Equatable, Sendable {
         }
     }
 
-    public static let unfinishedLine = screenText("Empo closed before this backup finished.")
+    /// The line under the row. A row with no end that is not the
+    /// live run is a run the process did not live to finish.
+    public static func detail(of run: BackupRunRecord, liveRunId: String?) -> String? {
+        guard let end = run.end else {
+            return run.id == liveRunId ? nil : screenText("Empo closed before this backup finished.")
+        }
+        return end.detail
+    }
 
     public var title: String {
         switch self {

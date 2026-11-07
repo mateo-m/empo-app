@@ -201,9 +201,7 @@ public enum GameTreeUpdate {
             return
         }
         if modificationDate(of: entry, fm: fm) >= modificationDate(of: target, fm: fm) {
-            let archived = displacedURL(near: target, fm: fm)
-            try fm.moveItem(at: target, to: archived)
-            try fm.moveItem(at: entry, to: target)
+            try fm.archive(target, to: displacedURL(near: target, fm: fm), replacingWith: entry)
         } else {
             try displaceIncoming(entry, near: target, fm: fm)
         }
@@ -251,8 +249,7 @@ public enum GameTreeUpdate {
         let parent = target.deletingLastPathComponent()
         let staging = parent.appendingPathComponent(stagingDirectoryName, isDirectory: true)
         let backup = parent.appendingPathComponent(backupDirectoryName, isDirectory: true)
-        try? fm.removeItem(at: staging)
-        try? fm.removeItem(at: backup)
+        sweepInterruptedUpdate(target: target, fm: fm)
 
         do {
             try fm.copyItem(at: target, to: staging)
@@ -279,19 +276,11 @@ public enum GameTreeUpdate {
             // Never sweep blind on failure: after a failed swap the
             // staging and backup trees can be the only copies of
             // the game. Put a tree back at `target` first, then
-            // remove only what is genuinely redundant. The BACKUP
-            // (pre-update tree) is preferred here, unlike crash
-            // recovery: this update is FAILING, and promoting the
-            // merged staging tree would install the new files
-            // behind a failure report, with finalize never run -
-            // a stale script profile over a tree the user was told
-            // did not apply.
+            // remove only what is genuinely redundant.
             if !healthyTreeExists(at: target, fm: fm) {
                 restoreFromDisplacedOriginal(error: error, target: target, fm: fm)
             }
-            _ = restoreMissingTarget(
-                target: target, parent: parent,
-                preferring: [backupDirectoryName, stagingDirectoryName], fm: fm)
+            _ = restoreMissingTarget(target: target, parent: parent, fm: fm)
             if healthyTreeExists(at: target, fm: fm) {
                 try? fm.removeItem(at: staging)
                 try? fm.removeItem(at: backup)
@@ -318,16 +307,7 @@ public enum GameTreeUpdate {
                 backupItemName: backupDirectoryName
             )
         #else
-            try fm.moveItem(at: target, to: backup)
-            do {
-                try fm.moveItem(at: staging, to: target)
-            } catch {
-                // Put the original back so the catch in
-                // `stageAndSwap` sees a healthy tree and only
-                // removes genuinely redundant artifacts.
-                try? fm.moveItem(at: backup, to: target)
-                throw error
-            }
+            try fm.archive(target, to: backup, replacingWith: staging)
         #endif
     }
 
@@ -356,21 +336,16 @@ public enum GameTreeUpdate {
         try? fm.moveItem(at: displaced, to: target)
     }
 
-    /// Shared restore step: when no directory sits at `target`, move
-    /// the best surviving artifact into place, in the caller's
-    /// preference order. Crash recovery prefers staging (fully
-    /// merged - the swap only starts after the merge completes).
-    /// The in-flight failure path prefers the backup (see the
-    /// catch in `stageAndSwap`). A stray non-directory at `target`
-    /// (a crash artifact of unknown origin) is moved aside first,
+    /// When no directory sits at `target`, move a tree into place.
+    /// Prefer the backup (the tree before the update). Use the merged
+    /// staging tree only when no backup exists. A stray non-directory
+    /// at `target` (a crash artifact of unknown origin) is moved aside first,
     /// but only when an artifact exists to restore - otherwise the
     /// file, whatever it is, stays untouched.
     private static func restoreMissingTarget(
-        target: URL, parent: URL,
-        preferring order: [String] = [stagingDirectoryName, backupDirectoryName],
-        fm: FileManager
+        target: URL, parent: URL, fm: FileManager
     ) -> String? {
-        let candidates = order.filter {
+        let candidates = [backupDirectoryName, stagingDirectoryName].filter {
             fm.fileExists(atPath: parent.appendingPathComponent($0).path)
         }
         guard !candidates.isEmpty else { return nil }
@@ -409,9 +384,8 @@ public enum GameTreeUpdate {
     /// can leave the original away from its home. A kill mid-swap
     /// can therefore leave NO tree at `target` while the artifacts
     /// survive. Sweeping blindly at that point would destroy the
-    /// only copies of the game, so this restores first (staging
-    /// wins, backup is the fallback - see `restoreMissingTarget`),
-    /// and only then removes the remaining artifacts. A stray
+    /// only copies of the game, so this restores first (see
+    /// `restoreMissingTarget`), and only then removes the remaining artifacts. A stray
     /// non-directory at `target` does not count as a healthy tree.
     /// With a healthy target this is a plain sweep.
     @discardableResult

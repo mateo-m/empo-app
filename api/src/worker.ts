@@ -106,28 +106,22 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     const answer = await session(body.code, { ...body, action: "finish" });
     if (answer.status === 401) return status(401, { error: "signed_out" });
     if (!answer.ok) throw new Error(`The sign-in did not finish: ${answer.status}`);
-    const held = (await answer.json()) as Held & { device: string; refreshToken: string };
+    const held = (await answer.json()) as Held & { device: string; refreshToken: string; claim: string };
     const renewal = newRenewal();
-    const keys = (await renewalKeys(renewal))!;
-    // The session starts before the device list counts it. A session
-    // that has not started answers 404 to "alive", so a second sign-in
-    // at the same moment would not count this one.
-    const started = await callSession(env, keys.id, {
-      action: "start",
-      renewal,
-      refreshToken: held.refreshToken,
-      device: held.device,
-    });
-    if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
-    const added = await member(held.userId, {
-      action: "add",
-      device: await deviceId(held.device),
-      session: keys.id,
-      replace: held.replace,
-    });
-    if (!added.ok) await callSession(env, keys.id, { action: "evict" });
+    const sessionId = (await renewalKeys(renewal))!.id;
+    let added: Response;
+    try {
+      added = await addSession(held, body.code, renewal, sessionId);
+    } catch (error) {
+      await Promise.allSettled([
+        callSession(env, sessionId, { action: "evict" }),
+        session(body.code, { action: "release", claim: held.claim }),
+      ]);
+      throw error;
+    }
+    // The code is used, and its alarm also deletes it, so a lost call here is no fault.
+    await session(body.code, { action: "evict" }).catch((error) => console.error(error));
     if (added.status === 409) return status(409, { error: "too_many_devices" });
-    if (!added.ok) throw new Error(`The device list did not answer: ${added.status}`);
     return { pass: held.pass, renewal };
   })
   .post("/patreon/renew", { body: signed }, async ({ body, status }) => {
@@ -174,6 +168,40 @@ async function session(renewal: string, request: SessionRequest): Promise<Respon
   const keys = await renewalKeys(renewal);
   if (!keys) return Response.json({ error: "signed_out" }, { status: 401 });
   return callSession(env, keys.id, request);
+}
+
+async function addSession(
+  held: Held & { device: string; refreshToken: string; claim: string },
+  code: string,
+  renewal: string,
+  sessionId: string,
+): Promise<Response> {
+  // The session starts before the device list counts it. A session
+  // that has not started answers 404 to "alive", so a second sign-in
+  // at the same moment would not count this one.
+  const started = await callSession(env, sessionId, {
+    action: "start",
+    renewal,
+    refreshToken: held.refreshToken,
+    device: held.device,
+  });
+  if (!started.ok) throw new Error(`The session did not start: ${started.status}`);
+  const used = await session(code, { action: "use", claim: held.claim });
+  if (!used.ok) throw new Error(`The sign-in code is no longer this finish's: ${used.status}`);
+  const added = await member(held.userId, {
+    action: "add",
+    device: await deviceId(held.device),
+    session: sessionId,
+    replace: held.replace,
+  });
+  if (added.status === 409) {
+    await callSession(env, sessionId, { action: "evict" });
+    return added;
+  }
+  if (!added.ok) throw new Error(`The device list did not answer: ${added.status}`);
+  const confirmed = await callSession(env, sessionId, { action: "confirm" });
+  if (!confirmed.ok) throw new Error(`The session did not confirm: ${confirmed.status}`);
+  return added;
 }
 
 function member(userId: string, request: MemberRequest): Promise<Response> {

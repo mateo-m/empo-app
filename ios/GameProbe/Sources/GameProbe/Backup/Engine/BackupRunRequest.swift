@@ -67,11 +67,7 @@ public struct BackupRunRequest: Sendable {
     public var games: [BackupRunGame]
     /// What the user chose after a writer mismatch, per 5.12. A run
     /// that meets a mismatch with no choice stops and asks.
-    public var writerResolution: WriterClaimResolution?
-    /// The namespace a split writes to. The caller makes it with
-    /// `BackupKeys.makeNamespaceId()` and stores it in the Keychain,
-    /// per 5.2.
-    public var splitNamespaceId: String?
+    public var writerAnswer: WriterConflicts.Answer?
     /// The sync group this device joined, per 10.4. The run carries
     /// it into `device.json`, which is where a second device of the
     /// same person finds the group, per 10.5 step 1.
@@ -89,8 +85,7 @@ public struct BackupRunRequest: Sendable {
         freeSpaceBytes: Int64 = .max,
         preferences: LibraryBackupSetRequest? = nil,
         games: [BackupRunGame] = [],
-        writerResolution: WriterClaimResolution? = nil,
-        splitNamespaceId: String? = nil,
+        writerAnswer: WriterConflicts.Answer? = nil,
         syncGroupId: String? = nil
     ) {
         self.runId = runId
@@ -104,8 +99,7 @@ public struct BackupRunRequest: Sendable {
         self.freeSpaceBytes = freeSpaceBytes
         self.preferences = preferences
         self.games = games
-        self.writerResolution = writerResolution
-        self.splitNamespaceId = splitNamespaceId
+        self.writerAnswer = writerAnswer
         self.syncGroupId = syncGroupId
     }
 }

@@ -90,7 +90,7 @@ struct RootView: View {
                 PlayerView(appState: appState, engineState: engineState, layout: layout)
                     .transition(.identity)
                     .allowsHitTesting(
-                        appState.errorMessage == nil && appState.infoMessage == nil
+                        appState.shownError == nil && appState.infoMessage == nil
                     )
             }
         }
@@ -106,11 +106,7 @@ struct RootView: View {
                 // transaction, so it needs a spring of its own.
                 withAnimation(.spring(duration: 0.3, bounce: 0)) {
                     libraryFaded = true
-                }
-                // Slightly longer than GameLoadingView's handoff spring
-                // (0.15–0.30s) so the fade finishes first.
-                Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(400))
+                } completion: {
                     guard appState.phase == .playing else { return }
                     libraryDormant = true
                 }
@@ -194,12 +190,12 @@ struct RootView: View {
             } else if appState.phase != nil {
                 Text(
                     appState.canEndStuckGame
-                        ? appState.errorMessage
+                        ? appState.shownError?.message
                             ?? String(localized: "Something went wrong while it was running.")
-                        : "\(appState.errorMessage ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
+                        : "\(appState.shownError?.message ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
                 )
             } else {
-                Text(appState.errorMessage ?? "")
+                Text(appState.shownError?.message ?? "")
             }
         }
         .sheet(item: $sharedReport) { report in
@@ -244,11 +240,11 @@ struct RootView: View {
                 // Re-create the crash marker, so the next launch still
                 // detects a crash after resume.
                 appState.restoreCrashMarkerForForeground()
-                appState.resumeSessionTimingAfterBackground()
             }
+            appState.resumeSessionTimingAfterBackground()
         }
-        .onChange(of: appState.errorMessage) { _, message in
-            if message != nil {
+        .onChange(of: appState.shownError) { _, error in
+            if error != nil {
                 AppWindow.setAllowKeyWindow(true)
             } else if appState.phase == .playing, appState.infoMessage == nil {
                 AppWindow.setAllowKeyWindow(false)
@@ -259,15 +255,16 @@ struct RootView: View {
         .onChange(of: appState.infoMessage) { _, message in
             if message != nil {
                 AppWindow.setAllowKeyWindow(true)
-            } else if appState.phase == .playing, appState.errorMessage == nil {
+            } else if appState.phase == .playing, appState.shownError == nil {
                 AppWindow.setAllowKeyWindow(false)
-            } else if appState.phase != .playing, appState.errorMessage == nil {
+            } else if appState.phase != .playing, appState.shownError == nil {
                 AppWindow.setAllowKeyWindow(false)
             }
         }
     }
 
     private var errorAlertTitle: Text {
+        if appState.shownError?.gameDidNotStart == true { return Text("Can't start the game") }
         guard engineHung || appState.phase != nil else { return Text("Last session ended early") }
         return appState.canEndStuckGame ? Text("The game stopped") : Text("Restart Empo")
     }
@@ -280,7 +277,7 @@ struct RootView: View {
 
     private var showErrorAlert: Binding<Bool> {
         Binding(
-            get: { appState.errorMessage != nil },
+            get: { appState.shownError != nil },
             set: { if !$0 { dismissErrorAlert() } }
         )
     }
@@ -288,7 +285,7 @@ struct RootView: View {
     /// Unblocks a core that waits for the error alert to close.
     private func dismissErrorAlert() {
         if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
-        appState.errorMessage = nil
+        appState.shownError = nil
     }
 
     private var showInfoAlert: Binding<Bool> {

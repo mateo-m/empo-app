@@ -52,7 +52,9 @@ public actor TransferGate {
     private let clock: BackupClock
 
     private var inFlight = 0
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// The transfers that wait for a slot, first in first out. The
+    /// answer is false for a waiter that was cancelled.
+    private var waiters: [(id: UUID, continuation: CheckedContinuation<Bool, Never>)] = []
 
     public init(
         limit: Int = TransferGate.maxInFlight,
@@ -87,7 +89,17 @@ public actor TransferGate {
     ) async throws(BackupProviderError) -> T {
         var attempt = 1
         while true {
-            if takesSlot { await acquire() }
+            // The engine reads the cancel from the task and stops the
+            // run as paused, whatever error the call throws.
+            if takesSlot {
+                guard await acquire() else { throw BackupProviderError.offline }
+                // `release` can hand a slot to a waiter whose cancel
+                // has not dropped it from the queue yet.
+                if Task.isCancelled {
+                    release()
+                    throw BackupProviderError.offline
+                }
+            }
             do {
                 let value = try await body()
                 if takesSlot { release() }
@@ -108,24 +120,42 @@ public actor TransferGate {
 
     // MARK: - The slot
 
-    private func acquire() async {
+    /// Answers false, with no slot, when the task is cancelled while
+    /// it waits.
+    private func acquire() async -> Bool {
         if inFlight < limit {
             inFlight += 1
-            return
+            return true
         }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            waiters.append(continuation)
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                if Task.isCancelled {
+                    continuation.resume(returning: false)
+                } else {
+                    waiters.append((id, continuation))
+                }
+            }
+        } onCancel: {
+            Task { await self.dropWaiter(id) }
         }
-        // The slot came from `release`, which handed it over rather
-        // than giving it up. Counting it again here would let a
-        // fifth transfer in between the two steps.
+        // A true answer came from `release`, which handed its slot
+        // over rather than giving it up. Counting it again here would
+        // let a fifth transfer in between the two steps.
+    }
+
+    /// A waiter that `release` already woke holds its slot, and its
+    /// own release gives the slot back.
+    private func dropWaiter(_ id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: index).continuation.resume(returning: false)
     }
 
     private func release() {
         if waiters.isEmpty {
             inFlight -= 1
         } else {
-            waiters.removeFirst().resume()
+            waiters.removeFirst().continuation.resume(returning: true)
         }
     }
 }

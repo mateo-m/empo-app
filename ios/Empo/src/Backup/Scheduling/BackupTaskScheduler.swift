@@ -29,28 +29,34 @@ enum BackupTaskScheduler {
     /// it.
     static var manualPrefix: String { "\(bundleId).backup.manual" }
 
-    /// The press travels in the identifier, so a task that starts
-    /// after Empo restarts still knows what the user asked for. A
-    /// game key is already hex, per `BackupKeys.gameKey`, so it needs
-    /// no escape.
-    static func identifier(for press: ManualBackupPress) -> String {
-        switch press {
-        case .library:
-            return "\(manualPrefix).library"
-        case .game(let gameKey, _):
-            return "\(manualPrefix).game.\(gameKey)"
-        }
+    /// The press and its cellular grant travel in the identifier, so
+    /// a task that starts after Empo restarts still knows what the
+    /// user asked for. A game key is already hex, per
+    /// `BackupKeys.gameKey`, so it needs no escape.
+    static func identifier(for press: ManualBackupPress, overCellular: Bool = false) -> String {
+        let base =
+            switch press {
+            case .library: "\(manualPrefix).library"
+            case .game(let gameKey, _): "\(manualPrefix).game.\(gameKey)"
+            }
+        return overCellular ? base + cellularSuffix : base
     }
+
+    private static let cellularSuffix = ".cellular"
 
     /// Reads the press back out of a task. The name comes from the
     /// title the request carried, which the system keeps.
-    static func press(identifier: String, title: String) -> ManualBackupPress? {
-        if identifier == "\(manualPrefix).library" { return .library }
+    static func press(
+        identifier: String, title: String
+    ) -> (press: ManualBackupPress, overCellular: Bool)? {
+        let overCellular = identifier.hasSuffix(cellularSuffix)
+        let base = overCellular ? String(identifier.dropLast(cellularSuffix.count)) : identifier
+        if base == "\(manualPrefix).library" { return (.library, overCellular) }
         let gamePrefix = "\(manualPrefix).game."
-        guard identifier.hasPrefix(gamePrefix) else { return nil }
-        let gameKey = String(identifier.dropFirst(gamePrefix.count))
+        guard base.hasPrefix(gamePrefix) else { return nil }
+        let gameKey = String(base.dropFirst(gamePrefix.count))
         guard !gameKey.isEmpty else { return nil }
-        return .game(gameKey: gameKey, gameName: title)
+        return (.game(gameKey: gameKey, gameName: title), overCellular)
     }
 
     // MARK: - Registration
@@ -149,9 +155,9 @@ enum BackupTaskScheduler {
     /// system refuses the request, and the caller then runs the pass
     /// in the foreground.
     @discardableResult
-    static func submitManual(_ press: ManualBackupPress) -> Bool {
+    static func submitManual(_ press: ManualBackupPress, overCellular: Bool) -> Bool {
         guard #available(iOS 26.0, *) else { return false }
-        let taskIdentifier = identifier(for: press)
+        let taskIdentifier = identifier(for: press, overCellular: overCellular)
         registerPress(taskIdentifier)
         let request = BGContinuedProcessingTaskRequest(
             identifier: taskIdentifier,
@@ -198,37 +204,48 @@ enum BackupTaskScheduler {
     @available(iOS 26.0, *)
     private static func handleManual(_ task: BGContinuedProcessingTask) {
         BackupLog.line("BackupTaskScheduler", "the manual task started, title \(task.title)")
-        guard let press = press(identifier: task.identifier, title: task.title) else {
+        guard let parsed = press(identifier: task.identifier, title: task.title) else {
             task.setTaskCompleted(success: false)
             return
         }
 
-        let expired = OSAllocatedUnfairLock(initialState: false)
+        // The expiration handler runs on a queue of the system, so it
+        // races the end of the run. The first of the two completes the
+        // task, and the second does nothing.
+        let completed = OSAllocatedUnfairLock(initialState: false)
+        let completeOnce = {
+            let first = completed.withLock { done in
+                defer { done = true }
+                return !done
+            }
+            guard first else { return }
+            task.setTaskCompleted(success: true)
+        }
         Task { @MainActor in
             let subtitle = Task { @MainActor in
                 var last = startingLine
                 for await line in Observations({ BackupRunMonitor.shared.line }) {
-                    guard line != last, !expired.withLock({ $0 }) else { continue }
+                    guard line != last, !completed.withLock({ $0 }) else { continue }
                     last = line
                     task.updateTitle(task.title, subtitle: line)
                 }
             }
-            await BackupScheduler.shared.startManualRun(press, progress: task.progress).value
+            await BackupScheduler.shared.startManualRun(
+                parsed.press, overCellular: parsed.overCellular, progress: task.progress
+            ).value
             subtitle.cancel()
-            guard !expired.withLock({ $0 }) else { return }
             // A run that ends by itself did its work. A target that
             // stopped gets Empo's own notice, and `success: false`
             // here would put the system's "Task failed" next to it.
-            task.setTaskCompleted(success: !Task.isCancelled)
+            completeOnce()
         }
         // The system expires the task on the second trip to the
         // background, progress or not. The run goes on without it,
         // per 7.4 "nothing fails". The uploads live in the background
         // session anyway.
         task.expirationHandler = {
-            expired.withLock { $0 = true }
             BackupLog.line("BackupTaskScheduler", "the system expired the manual task, the run goes on")
-            task.setTaskCompleted(success: true)
+            completeOnce()
         }
     }
 }

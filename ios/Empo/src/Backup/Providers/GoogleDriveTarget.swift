@@ -28,8 +28,10 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     private var committed: Set<String> = []
 
     /// The lookup of the `Empo Backups` folder. Every caller awaits the
-    /// same one, so two calls cannot each create a folder.
-    private var rootFolder: Task<String, any Error>?
+    /// same one, so two calls cannot each create a folder. `number`
+    /// counts the lookups this process started.
+    private var rootFolder: (task: Task<String, any Error>, number: Int)?
+    private var rootFolderLookups = 0
 
     /// The Drive id of each path this process has seen. An update
     /// needs it, because a create with a name Drive already holds
@@ -151,12 +153,18 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     /// client created, so it names no parent. The user may have moved
     /// the folder somewhere else in their Drive, and it still counts.
     private func rootFolderId() async throws(BackupProviderError) -> String {
-        let lookup = rootFolder ?? Task { try await self.findOrCreateRootFolder() }
-        rootFolder = lookup
+        let lookup: (task: Task<String, any Error>, number: Int)
+        if let rootFolder {
+            lookup = rootFolder
+        } else {
+            rootFolderLookups += 1
+            lookup = (Task { try await self.findOrCreateRootFolder() }, rootFolderLookups)
+            rootFolder = lookup
+        }
         do {
-            return try await lookup.value
+            return try await lookup.task.value
         } catch {
-            rootFolder = nil
+            if rootFolder?.number == lookup.number { rootFolder = nil }
             throw error as? BackupProviderError ?? .offline
         }
     }
@@ -482,16 +490,19 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     /// Drive answers 404 for an id that someone deleted outside Empo,
     /// such as the `Empo Backups` folder removed in the Drive web app.
     /// The cached ids then name nothing, so it drops them and runs the
-    /// call once more with fresh lookups.
+    /// call once more with fresh lookups. The call used the lookup in
+    /// flight at its start, or else the next one to start. A lookup
+    /// that another call already started again stays.
     private func lookingUpAgainOnNotFound<T>(
         path: String?, _ call: () async throws(BackupProviderError) -> T
     ) async throws(BackupProviderError) -> T {
+        let lookup = rootFolder?.number ?? rootFolderLookups + 1
         do throws(BackupProviderError) {
             return try await call()
         } catch .notFound {
             BackupLog.line("GoogleDriveTarget", "Drive answered 404, so it looks up the ids again")
             if let path { identifiers[path] = nil }
-            rootFolder = nil
+            if rootFolder?.number == lookup { rootFolder = nil }
             return try await call()
         }
     }

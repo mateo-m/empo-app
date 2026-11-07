@@ -73,8 +73,6 @@ struct MidiSoundSetPicker: View {
     let pick: (Choice) -> Void
 
     @State private var isImporting = false
-    @State private var formatFailed = false
-    @State private var copyFailure: String?
 
     @ViewBuilder private var menuItems: some View {
         // On iOS, a menu drops the accessibility label of an item in a Section.
@@ -147,6 +145,18 @@ struct MidiSoundSetPicker: View {
                 .reduce(Text(title)) { Text("\($0), \($1)") })
     }
 
+    private var failure: MidiSoundSetCopies.Failure? {
+        MidiSoundSetCopies.shared.failures[soundSet.folderURL]
+    }
+
+    private func failureBinding(_ matches: @escaping (MidiSoundSetCopies.Failure) -> Bool) -> Binding<Bool> {
+        Binding {
+            failure.map(matches) ?? false
+        } set: {
+            if !$0 { MidiSoundSetCopies.shared.failures[soundSet.folderURL] = nil }
+        }
+    }
+
     private var isCopying: Bool { MidiSoundSetCopies.shared.isCopying(into: soundSet) }
 
     private var selection: Binding<Option> {
@@ -212,43 +222,42 @@ struct MidiSoundSetPicker: View {
                 importSoundSet(url)
             case .failure(let error):
                 NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
-                copyFailure = error.localizedDescription
+                MidiSoundSetCopies.shared.failures[soundSet.folderURL] = .copy(error.localizedDescription)
             }
         }
         #endif
-        .alert("Can't use this file", isPresented: $formatFailed) {
+        .alert("Can't use this file", isPresented: failureBinding { $0 == .notASoundSet }) {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Pick a SoundFont (.sf2) or a DLS file (.dls).")
         }
         .alert(
             "Couldn't import the sound set",
-            isPresented: Binding {
-                copyFailure != nil
-            } set: {
-                if !$0 { copyFailure = nil }
+            isPresented: failureBinding {
+                if case .copy = $0 { true } else { false }
             },
-            presenting: copyFailure
+            presenting: failure
         ) { _ in
             Button("OK", role: .cancel) {}
-        } message: { message in
-            Text(message)
+        } message: { failure in
+            if case .copy(let message) = failure { Text(message) }
         }
     }
 
     private func importSoundSet(_ url: URL) {
         MidiSoundSetCopies.shared.begin(soundSet)
         Task {
+            var failure: MidiSoundSetCopies.Failure?
             do {
                 try await Task.detached { [soundSet] in try soundSet.replace(with: url) }.value
                 pick(.imported)
             } catch MidiSoundSet.ImportError.notASoundSet {
-                formatFailed = true
+                failure = .notASoundSet
             } catch {
                 NSLog("[MidiSoundSet] Import failed: %@", "\(error)")
-                copyFailure = error.localizedDescription
+                failure = .copy(error.localizedDescription)
             }
-            MidiSoundSetCopies.shared.end(soundSet)
+            MidiSoundSetCopies.shared.end(soundSet, failure: failure)
         }
     }
 }

@@ -12,18 +12,15 @@ import SwiftUI
 @MainActor
 final class OverlayVisibilityController {
     private var state = OverlayVisibility()
-    private var hiddenBinding: Binding<Bool>?
-    private var editModeBinding: Binding<Bool>?
+    private var player: (hidden: Binding<Bool>, editMode: () -> Bool)?
 
-    func bind(hidden: Binding<Bool>, editMode: Binding<Bool>) {
+    func bind(hidden: Binding<Bool>, editMode: @escaping () -> Bool) {
         state = OverlayVisibility()
-        hiddenBinding = hidden
-        editModeBinding = editMode
+        player = (hidden, editMode)
     }
 
     func unbind() {
-        hiddenBinding = nil
-        editModeBinding = nil
+        player = nil
     }
 
     /// Records a fact, then applies the rule. Edit mode keeps the
@@ -31,10 +28,9 @@ final class OverlayVisibilityController {
     /// is arranging it.
     func update(_ change: (inout OverlayVisibility) -> Void) {
         change(&state)
-        guard editModeBinding?.wrappedValue != true else { return }
-        guard let hiddenBinding, let hidden = state.hidden else { return }
-        if hiddenBinding.wrappedValue != hidden {
-            hiddenBinding.wrappedValue = hidden
+        guard let player, !player.editMode(), let hidden = state.hidden else { return }
+        if player.hidden.wrappedValue != hidden {
+            player.hidden.wrappedValue = hidden
         }
     }
 }

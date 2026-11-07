@@ -9,9 +9,7 @@ import os
 /// What the script scan found for one game, stored at
 /// `Metadata/mkxp-profile.json`.
 struct MkxpProfile: Codable {
-    /// 18, 19, 30 or 31.
-    var rubyVersion: Int
-    var modernRubyScripts: Bool
+    var ruby: GameScriptProfile.Ruby
     /// `GameScriptProfile.currentSchema` of the scan that wrote this.
     var schema: String
     /// `inputsDigest` of the files that the scan read.
@@ -30,10 +28,8 @@ struct MkxpProfile: Codable {
         {
             return stored
         }
-        let result = GameScriptProfile.analyze(gameDirectory: container.gameURL)
         let profile = MkxpProfile(
-            rubyVersion: result.rubyVersion,
-            modernRubyScripts: result.modernRubyScripts,
+            ruby: GameScriptProfile.analyze(gameDirectory: container.gameURL).ruby,
             schema: currentSchema,
             inputs: inputs)
         container.ensureMetadataDirectory()

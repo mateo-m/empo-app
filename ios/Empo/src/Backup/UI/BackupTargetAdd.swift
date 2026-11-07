@@ -63,9 +63,10 @@ enum BackupTargetAdd {
             return .failed(signInFailure(error, provider: .dropbox))
         }
         guard let provider = DropboxGate.shared.target(for: descriptor) else {
+            putBack(nil, targetId: descriptor.id)
             return .failed(openFailedLine)
         }
-        return await check(descriptor, provider: provider)
+        return await check(descriptor, provider: provider, secretBefore: nil)
     }
 
     static func googleDrive(presenting screen: UIViewController) async -> Outcome {
@@ -87,9 +88,10 @@ enum BackupTargetAdd {
             return .failed(signInFailure(error, provider: .googleDrive))
         }
         guard let provider = GoogleDriveGate.shared.target(for: descriptor) else {
+            putBack(nil, targetId: descriptor.id)
             return .failed(openFailedLine)
         }
-        return await check(descriptor, provider: provider)
+        return await check(descriptor, provider: provider, secretBefore: nil)
     }
 
     /// `id` is the target that signs in again. A new target takes a
@@ -113,15 +115,11 @@ enum BackupTargetAdd {
                 id: UUID().uuidString, provider: .s3, label: "", root: form["root"] ?? "")
         descriptor.label = form["label"] ?? bucket.name
         descriptor.accountHint = connection.accountHint
+        let before = try? BackupKeychain.secret(targetId: descriptor.id)
         do {
             let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
-            let outcome = await check(descriptor, provider: provider)
-            if existing == nil, !outcome.addedTheLocation {
-                S3Gate.shared.forget(targetId: descriptor.id)
-                try? S3ConnectionStore.remove(targetId: descriptor.id)
-            }
-            return outcome
+            return await check(descriptor, provider: provider, secretBefore: before)
         } catch {
             return .failed(keychainFailedLine)
         }
@@ -178,15 +176,11 @@ enum BackupTargetAdd {
                 id: UUID().uuidString, provider: .webdav, label: "", root: form["root"] ?? "")
         descriptor.label = form["label"] ?? address.host ?? "WebDAV"
         descriptor.accountHint = connection.accountHint
+        let before = try? BackupKeychain.secret(targetId: descriptor.id)
         do {
             let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
-            let outcome = await check(descriptor, provider: provider)
-            if existing == nil, !outcome.addedTheLocation {
-                WebDAVGate.shared.forget(targetId: descriptor.id)
-                try? WebDAVConnectionStore.remove(targetId: descriptor.id)
-            }
-            return outcome
+            return await check(descriptor, provider: provider, secretBefore: before)
         } catch {
             return .failed(keychainFailedLine)
         }
@@ -246,6 +240,7 @@ enum BackupTargetAdd {
             guard let screen = await OAuthSignIn.screenForTheSheet() else {
                 return .failed(noSignInScreenLine)
             }
+            let before = try? BackupKeychain.secret(targetId: target.id)
             do {
                 let signedIn =
                     target.provider == .dropbox
@@ -258,11 +253,31 @@ enum BackupTargetAdd {
                 return .failed(signInFailure(error, provider: target.provider))
             }
             guard let provider = await BackupTargets.provider(for: target) else {
+                putBack(before, targetId: target.id)
                 return .failed(openFailedLine)
             }
-            return await check(target, provider: provider)
+            return await check(target, provider: provider, secretBefore: before)
         case .s3, .webdav:
             return .failed(String(localized: "Enter the password for this location again."))
+        }
+    }
+
+    /// Checks a target whose secret this flow just wrote. A location
+    /// that did not join gets back the secret it had before, or none.
+    private static func check(
+        _ descriptor: TargetDescriptor, provider: some BackupProvider, secretBefore: String?
+    ) async -> Outcome {
+        let outcome = await check(descriptor, provider: provider)
+        if !outcome.addedTheLocation { putBack(secretBefore, targetId: descriptor.id) }
+        return outcome
+    }
+
+    private static func putBack(_ secret: String?, targetId: String) {
+        BackupTargets.forget(targetId: targetId)
+        if let secret {
+            try? BackupKeychain.setSecret(secret, targetId: targetId)
+        } else {
+            try? BackupKeychain.removeSecret(targetId: targetId)
         }
     }
 
@@ -294,7 +309,7 @@ enum BackupTargetAdd {
         }
         if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             try? store.recordTargetQuota(
-                targetId: descriptor.id, reading: result.quota, at: Date())
+                targetId: descriptor.id, reading: result.quota)
             if result.allowsAdd {
                 try? store.recordTargetFailure(
                     targetId: descriptor.id, failure: nil, at: Date())

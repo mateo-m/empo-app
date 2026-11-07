@@ -24,11 +24,11 @@ struct ResumeQuestionAsk: Identifiable {
     }
 
     var detail: String {
-        switch side {
-        case .backupRun:
+        switch record.work {
+        case .run(_, let remainingBytes):
             return BackupResumeQuestion.detail(
                 gameName: gameName, targetLabel: targetLabel,
-                leftText: BackupText.bytes(record.remainingBytes))
+                leftText: BackupText.bytes(remainingBytes))
         case .restore:
             return RestoreResumeQuestion.detail(gameName: gameName, backupText: backupText)
         }

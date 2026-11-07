@@ -21,11 +21,14 @@ struct PlayerControlsOverlay: View {
     /// The out-of-player editor: every action renders as
     /// available and no hit regions are published.
     var isPreview = false
-    @Binding var editingButton: ButtonModel?
-    @Binding var editingActionButton: ActionButtonModel?
-    @Binding var editingDPad: Bool
-    @Binding var draggingDPad: Bool
-    @Binding var draggingButtonID: UUID?
+    @Binding var editDialog: ControlsEditDialog?
+
+    /// The control that owns the drag in flight: `dpadDragKey` or a
+    /// button ID. A second finger on another control waits until it
+    /// ends.
+    @State private var dragOwner: AnyHashable?
+    private static let dpadDragKey: AnyHashable = "dpad"
+    private var draggingDPad: Bool { dragOwner == Self.dpadDragKey }
 
     /// Edit-mode drag snapping. Shared with the edit toolbar's
     /// toggle through UserDefaults, so both surfaces stay in sync.
@@ -39,7 +42,7 @@ struct PlayerControlsOverlay: View {
             // rigid collision owns that case). Everywhere else it
             // runs, so a crushed zone rearranges its controls
             // instead of clamping them into a stack.
-            separate: draggingButtonID == nil && !draggingDPad,
+            separate: dragOwner == nil,
             includeActionButton: { isPreview || editMode || actions.isAvailable($0.action) })
         ZStack {
             editGridOverlay
@@ -129,10 +132,22 @@ struct PlayerControlsOverlay: View {
             // the subview hierarchy's gestures) keeps the control's
             // own input path untouched.
             .gesture(
-                TapGesture().onEnded { editingDPad = true },
+                TapGesture().onEnded { editDialog = .dpad },
                 including: editMode ? .all : .subviews
             )
-            .gesture(dpadDragGesture, including: editMode ? .all : .subviews)
+            .editDrag(
+                including: editMode ? .all : .subviews,
+                onChanged: { value in
+                    guard claimDrag(Self.dpadDragKey) else { return }
+                    let resolved = resolvedDragPosition(
+                        value.location, draggedID: nil, draggedIsDPad: true,
+                        size: layout.dpadSize)
+                    layout.dpadRelativeCenter = CGPoint(
+                        x: resolved.x / geo.size.width,
+                        y: resolved.y / geo.size.height
+                    )
+                },
+                onFinished: { finishDrag(Self.dpadDragKey) })
     }
 
     /// The movement control renders per style. Everything around it
@@ -147,33 +162,29 @@ struct PlayerControlsOverlay: View {
         }
     }
 
-    private var dpadDragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if !draggingDPad {
-                    layout.recordEditSnapshot()
-                    draggingDPad = true
-                    lastDragResolved.removeValue(forKey: dragKey(draggedID: nil))
-                }
-                let resolved = resolvedDragPosition(
-                    value.location, draggedID: nil, draggedIsDPad: true,
-                    size: layout.dpadSize)
-                layout.dpadRelativeCenter = CGPoint(
-                    x: resolved.x / geo.size.width,
-                    y: resolved.y / geo.size.height
-                )
-            }
-            .onEnded { _ in
-                draggingDPad = false
-                lastDragResolved.removeValue(forKey: dragKey(draggedID: nil))
-                layout.save()
-            }
+    /// The first control to move owns the drag and records the undo
+    /// step. Returns false for every other control.
+    private func claimDrag(_ key: AnyHashable) -> Bool {
+        if dragOwner == nil {
+            layout.recordEditSnapshot()
+            dragOwner = key
+            lastDragResolved = nil
+        }
+        return dragOwner == key
+    }
+
+    private func finishDrag(_ key: AnyHashable) {
+        guard dragOwner == key else { return }
+        dragOwner = nil
+        lastDragResolved = nil
+        layout.save()
     }
 
     @ViewBuilder
     private func actionButton(button: ButtonModel, index: Int, displayPosition: CGPoint?) -> some View {
         editableControl(
             ActionButton(
+                id: button.id,
                 label: button.label,
                 scancode: button.scancode,
                 size: button.size,
@@ -185,7 +196,7 @@ struct PlayerControlsOverlay: View {
             position: resolvedPosition(
                 displayPosition, center: button.relativeCenter, size: button.size),
             hitRegionKey: "controls.button.\(button.id.uuidString)",
-            onTapEdit: { editingButton = button },
+            onTapEdit: { editDialog = .button(button.id) },
             onDelete: { layout.removeButton(id: button.id) },
             update: { layout.updateButton(id: button.id, relativeCenter: $0) }
         )
@@ -232,26 +243,18 @@ struct PlayerControlsOverlay: View {
             position: resolvedPosition(
                 displayPosition, center: button.relativeCenter, size: button.size),
             hitRegionKey: "controls.actionButton.\(button.id.uuidString)",
-            onTapEdit: { editingActionButton = button },
+            onTapEdit: { editDialog = .actionButton(button.id) },
             onDelete: { layout.removeActionButton(id: button.id) },
             update: { layout.updateActionButton(id: button.id, relativeCenter: $0) }
         )
     }
 
-    /// Last resolved center of each drag in flight, keyed per
-    /// control (the d-pad uses its own key). The collision solve
-    /// uses it as side memory (no tunneling through an obstacle's
-    /// center), and the clamp+collide loop keeps a control squeezed
-    /// between a wall and a neighbor on its own side instead of
-    /// re-clamping into overlap. Keyed, so two simultaneous finger
-    /// drags cannot clobber each other's memory.
-    @State private var lastDragResolved: [AnyHashable: CGPoint] = [:]
-
-    /// A nil ID always means the d-pad: it is the one draggable
-    /// control without a UUID.
-    private func dragKey(draggedID: UUID?) -> AnyHashable {
-        draggedID.map(AnyHashable.init) ?? AnyHashable("dpad")
-    }
+    /// Last resolved center of the drag in flight. The collision
+    /// solve uses it as side memory (no tunneling through an
+    /// obstacle's center), and the clamp+collide loop keeps a control
+    /// squeezed between a wall and a neighbor on its own side instead
+    /// of re-clamping into overlap.
+    @State private var lastDragResolved: CGPoint?
 
     /// The dragged control's stored center in absolute space. The
     /// side memory seeds from it so the drag's FIRST event already
@@ -287,9 +290,8 @@ struct PlayerControlsOverlay: View {
     private func resolvedDragPosition(
         _ location: CGPoint, draggedID: UUID?, draggedIsDPad: Bool, size: CGFloat
     ) -> CGPoint {
-        let key = dragKey(draggedID: draggedID)
-        if lastDragResolved[key] == nil {
-            lastDragResolved[key] = currentAbsoluteCenter(
+        if lastDragResolved == nil {
+            lastDragResolved = currentAbsoluteCenter(
                 draggedID: draggedID, draggedIsDPad: draggedIsDPad)
         }
         // Snap BEFORE the solve, so clamp and collision run against
@@ -307,7 +309,7 @@ struct PlayerControlsOverlay: View {
             controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
         for _ in 0..<3 {
             center = layout.collisionResolvedCenter(
-                center, previous: lastDragResolved[key], draggedID: draggedID,
+                center, previous: lastDragResolved, draggedID: draggedID,
                 draggedIsDPad: draggedIsDPad,
                 controlSize: size, geoSize: geo.size, safeArea: safeArea,
                 controlsMinY: controlsMinY)
@@ -319,11 +321,11 @@ struct PlayerControlsOverlay: View {
             center, draggedID: draggedID, draggedIsDPad: draggedIsDPad,
             controlSize: size, geoSize: geo.size, safeArea: safeArea,
             controlsMinY: controlsMinY),
-            let held = lastDragResolved[key]
+            let held = lastDragResolved
         {
             return held
         }
-        lastDragResolved[key] = center
+        lastDragResolved = center
         return center
     }
 
@@ -355,7 +357,7 @@ struct PlayerControlsOverlay: View {
         onDelete: @escaping () -> Void,
         update: @escaping (CGPoint) -> Void
     ) -> some View {
-        let isDragging = draggingButtonID == id
+        let isDragging = dragOwner == AnyHashable(id)
         let anchor = UnitPoint(
             x: position.x / geo.size.width, y: position.y / geo.size.height)
         return
@@ -385,37 +387,60 @@ struct PlayerControlsOverlay: View {
             .animation(Motion.snappy, value: isDragging)
             .position(position)
             .transition(.controlAppear(anchor: anchor))
-            .gesture(
-                controlDragGesture(id: id, size: size, update: update),
-                including: editMode ? .all : .subviews)
+            .editDrag(
+                including: editMode ? .all : .subviews,
+                onChanged: { value in
+                    guard claimDrag(id) else { return }
+                    let resolved = resolvedDragPosition(
+                        value.location, draggedID: id, draggedIsDPad: false, size: size)
+                    update(
+                        CGPoint(
+                            x: resolved.x / geo.size.width,
+                            y: resolved.y / geo.size.height
+                        ))
+                },
+                onFinished: { finishDrag(id) }
+            )
+            // An undo can remove the control mid-drag. Its gesture
+            // then never ends, so the drag must end here.
+            .onDisappear { finishDrag(id) }
     }
+}
 
-    /// One drag gesture for both button kinds, on the shared
-    /// clamp+collide pipeline.
-    private func controlDragGesture(
-        id: UUID, size: CGFloat, update: @escaping (CGPoint) -> Void
-    ) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                if draggingButtonID != id {
-                    layout.recordEditSnapshot()
-                    draggingButtonID = id
-                    lastDragResolved.removeValue(
-                        forKey: dragKey(draggedID: id))
-                }
-                let resolved = resolvedDragPosition(
-                    value.location, draggedID: id, draggedIsDPad: false, size: size)
-                update(
-                    CGPoint(
-                        x: resolved.x / geo.size.width,
-                        y: resolved.y / geo.size.height
-                    ))
-            }
-            .onEnded { _ in
-                draggingButtonID = nil
-                lastDragResolved.removeValue(
-                    forKey: dragKey(draggedID: id))
-                layout.save()
+extension View {
+    /// A drag that reports its end also when the system cancels it.
+    /// A cancel skips `onEnded`, but it resets the gesture state.
+    func editDrag(
+        minimumDistance: CGFloat = 10,
+        including mask: GestureMask = .all,
+        onChanged: @escaping (DragGesture.Value) -> Void,
+        onFinished: @escaping () -> Void
+    ) -> some View {
+        modifier(
+            EditDragModifier(
+                minimumDistance: minimumDistance, mask: mask,
+                onChanged: onChanged, onFinished: onFinished))
+    }
+}
+
+private struct EditDragModifier: ViewModifier {
+    let minimumDistance: CGFloat
+    let mask: GestureMask
+    let onChanged: (DragGesture.Value) -> Void
+    let onFinished: () -> Void
+
+    @GestureState private var active = false
+
+    func body(content: Content) -> some View {
+        content
+            .gesture(
+                DragGesture(minimumDistance: minimumDistance)
+                    .updating($active) { _, state, _ in state = true }
+                    .onChanged(onChanged),
+                including: mask
+            )
+            .onChange(of: active) { _, isActive in
+                if !isActive { onFinished() }
             }
     }
 }

@@ -56,6 +56,7 @@ final class SessionLogger {
     /// Restarts the wall-clock timer after a pause or background
     /// flush. It does not append another line to session-history.log.
     func resumeSessionTiming(for game: GameEntry) {
+        guard sessionStartTime == nil else { return }
         activeGame = game
         sessionStartTime = Date()
         startPeriodicFlush()
@@ -64,8 +65,8 @@ final class SessionLogger {
     /// Persists accumulated play time into the game's metadata and
     /// ends the active timing segment. Safe to call when no session
     /// is active (no-op).
-    func recordSessionPlayTime(for game: GameEntry?) {
-        flushPlayTime(for: game, endSession: true)
+    func recordSessionPlayTime() {
+        flushPlayTime(endSession: true)
     }
 
     private func startPeriodicFlush() {
@@ -75,8 +76,7 @@ final class SessionLogger {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(Self.periodicFlushInterval))
                 guard !Task.isCancelled, let self else { return }
-                guard let game = self.activeGame else { return }
-                self.flushPlayTime(for: game, endSession: false)
+                self.flushPlayTime(endSession: false)
             }
         }
     }
@@ -86,11 +86,8 @@ final class SessionLogger {
         periodicFlushTask = nil
     }
 
-    private func flushPlayTime(for game: GameEntry?, endSession: Bool) {
-        guard let game,
-            let container = game.container,
-            let startTime = sessionStartTime
-        else { return }
+    private func flushPlayTime(endSession: Bool) {
+        guard let game = activeGame, let startTime = sessionStartTime else { return }
         let elapsed = Date().timeIntervalSince(startTime)
         if endSession {
             sessionStartTime = nil
@@ -99,7 +96,7 @@ final class SessionLogger {
         } else {
             sessionStartTime = Date()
         }
-        guard elapsed > 1 else { return }
+        guard elapsed > 1, let container = game.container else { return }
 
         var metadata = GameMetadata.load(from: container)
         metadata.totalPlayTime = (metadata.totalPlayTime ?? 0) + elapsed

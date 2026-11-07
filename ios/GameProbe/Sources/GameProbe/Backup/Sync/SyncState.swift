@@ -19,7 +19,6 @@ public struct SyncState: Codable, Equatable, Sendable {
     /// The group this device joined, per 10.4, or `nil` before the
     /// join.
     public var groupId: String?
-    public var joinedAt: Date?
     /// What each target confirmed, per 10.5 step 6.
     public var targets: [SyncTargetProgress]
     /// The targets this device removed. The merged document still
@@ -38,7 +37,6 @@ public struct SyncState: Codable, Equatable, Sendable {
         version: Int = SyncState.currentVersion,
         actorId: String,
         groupId: String? = nil,
-        joinedAt: Date? = nil,
         targets: [SyncTargetProgress] = [],
         removedTargetIds: [String] = [],
         removedPreferenceKeys: [String] = [],
@@ -47,7 +45,6 @@ public struct SyncState: Codable, Equatable, Sendable {
         self.version = version
         self.actorId = actorId
         self.groupId = groupId
-        self.joinedAt = joinedAt
         self.targets = targets
         self.removedTargetIds = removedTargetIds
         self.removedPreferenceKeys = removedPreferenceKeys
@@ -59,7 +56,6 @@ public struct SyncState: Codable, Equatable, Sendable {
         version = try values.decode(Int.self, forKey: .version)
         actorId = try values.decode(String.self, forKey: .actorId)
         groupId = try values.decodeIfPresent(String.self, forKey: .groupId)
-        joinedAt = try values.decodeIfPresent(Date.self, forKey: .joinedAt)
         targets = try values.decode([SyncTargetProgress].self, forKey: .targets)
         removedTargetIds =
             try values.decodeIfPresent([String].self, forKey: .removedTargetIds) ?? []
@@ -88,7 +84,8 @@ public struct SyncState: Codable, Equatable, Sendable {
     }
 
     public mutating func confirm(targetId: String, heads: [String]) {
-        var progress = progress(ofTarget: targetId)
+        var progress =
+            progress(ofTarget: targetId)
             ?? SyncTargetProgress(targetId: targetId)
         progress.confirmedHeads = heads.sorted()
         replace(progress)
@@ -97,7 +94,8 @@ public struct SyncState: Codable, Equatable, Sendable {
     public mutating func saw(
         namespaceId: String, at date: Date, sizeBytes: Int64, targetId: String
     ) {
-        var progress = progress(ofTarget: targetId)
+        var progress =
+            progress(ofTarget: targetId)
             ?? SyncTargetProgress(targetId: targetId)
         progress.seenNamespaces[namespaceId] = date
         progress.seenSizes[namespaceId] = sizeBytes
@@ -126,15 +124,13 @@ public struct SyncState: Codable, Equatable, Sendable {
 
     /// The first device creates the group id when it adds its first
     /// target, per 10.4.
-    public mutating func startAGroup(at date: Date) {
+    public mutating func startAGroup() {
         guard groupId == nil else { return }
         groupId = SyncGroup.makeId()
-        joinedAt = date
     }
 
-    public mutating func join(_ groupId: String, at date: Date) {
+    public mutating func join(_ groupId: String) {
         self.groupId = groupId
-        self.joinedAt = date
         // The new group has its own history, so nothing this device
         // uploaded before counts as confirmed.
         targets = []
@@ -152,7 +148,9 @@ public struct SyncState: Codable, Equatable, Sendable {
     }
 
     /// The saved state, or a fresh one with a new actor identity.
-    public static func read(applicationSupport: URL, actorId: @autoclosure () -> String)
+    public static func read(
+        applicationSupport: URL, actorId: @autoclosure () -> String
+    )
         -> SyncState
     {
         let url = applicationSupport.appendingPathComponent(fileName)

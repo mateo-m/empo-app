@@ -31,7 +31,7 @@ struct SaveRecoveryPresentation: ViewModifier {
             get: { active && prompts.showing == .saveRecovery && !records.isEmpty },
             set: { presented in
                 if !presented {
-                    DataDirectory.clearPendingSaveRecoveries()
+                    DataDirectory.clearSaveRecoveries(shown: records)
                     records = []
                 }
             }

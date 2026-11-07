@@ -44,7 +44,7 @@ public enum BackupStateRebuild: Equatable, Sendable {
 public final class BackupStateStore {
 
     /// The schema this build writes. Raise it when a table changes.
-    public static let schemaVersion: Int32 = 5
+    public static let schemaVersion: Int32 = 6
 
     /// What the open did. `needsRebuildFromTarget` reads it.
     public let openOutcome: BackupStateOpen
@@ -103,14 +103,109 @@ public final class BackupStateStore {
         if version == schemaVersion {
             return (database, .opened)
         }
-        // No migration path. The cache is never truth, per 6.3, so
-        // dropping it is cheaper to write and cheaper to trust than a
-        // migration for every version pair.
+        if version == 5 {
+            try database.transaction { try migrateFrom5(database) }
+            return (database, .opened)
+        }
+        // The cache is never truth, per 6.3, so any other version
+        // rebuilds.
         for table in tables where !table.hasPrefix("sqlite_") {
             try database.execute("DROP TABLE IF EXISTS \"\(table)\"")
         }
         try createSchema(in: database)
         return (database, .rebuilt(.schemaVersion(found: version)))
+    }
+
+    private static func migrateFrom5(_ database: SQLiteDatabase) throws {
+        // A version 5 mark was for every target. It goes to each
+        // target this store knows.
+        try database.execute(
+            """
+            CREATE TABLE dirty_game_v6 (
+                targetId TEXT NOT NULL,
+                gameKey TEXT NOT NULL,
+                markedAt REAL NOT NULL,
+                PRIMARY KEY (targetId, gameKey)
+            );
+            INSERT INTO dirty_game_v6 (targetId, gameKey, markedAt)
+                SELECT t.targetId, d.gameKey, d.markedAt FROM dirty_game AS d
+                CROSS JOIN (
+                    SELECT targetId FROM uploaded_manifest
+                    UNION SELECT targetId FROM run_checkpoint
+                    UNION SELECT targetId FROM snapshot_ledger
+                    UNION SELECT targetId FROM target_status
+                    UNION SELECT targetId FROM target_maintenance
+                    UNION SELECT targetId FROM pending_deletion
+                    UNION SELECT targetId FROM staleness
+                    UNION SELECT targetId FROM run_record
+                    UNION SELECT targetId FROM intent_record
+                    UNION SELECT targetId FROM partial_tally
+                ) AS t;
+            DROP TABLE dirty_game;
+            ALTER TABLE dirty_game_v6 RENAME TO dirty_game;
+            ALTER TABLE intent_record ADD COLUMN movedAsideTree TEXT;
+            CREATE TABLE run_record_v6 (
+                id TEXT NOT NULL PRIMARY KEY,
+                targetId TEXT NOT NULL,
+                startedAt REAL NOT NULL,
+                finishedAt REAL,
+                outcome TEXT,
+                uploadedBytes INTEGER NOT NULL,
+                gameCount INTEGER NOT NULL,
+                detail TEXT
+            );
+            INSERT INTO run_record_v6
+                SELECT id, targetId, startedAt, finishedAt,
+                       CASE WHEN finishedAt IS NULL THEN NULL ELSE outcome END,
+                       uploadedBytes, gameCount,
+                       CASE WHEN finishedAt IS NULL THEN NULL ELSE detail END
+                FROM run_record;
+            DROP TABLE run_record;
+            ALTER TABLE run_record_v6 RENAME TO run_record;
+            CREATE INDEX run_record_startedAt ON run_record (startedAt);
+            ALTER TABLE pending_deletion DROP COLUMN rescuedBuckets;
+            ALTER TABLE target_status DROP COLUMN quotaAt;
+            CREATE TABLE staleness_v6 (
+                targetId TEXT NOT NULL,
+                gameKey TEXT NOT NULL,
+                lastSuccessAt REAL NOT NULL,
+                PRIMARY KEY (targetId, gameKey)
+            );
+            INSERT INTO staleness_v6
+                SELECT targetId, gameKey, lastSuccessAt FROM staleness
+                WHERE lastSuccessAt IS NOT NULL;
+            DROP TABLE staleness;
+            ALTER TABLE staleness_v6 RENAME TO staleness;
+            """)
+        try movePostedNotifications(database)
+        try database.setUserVersion(schemaVersion)
+    }
+
+    /// Version 5 kept each posted notification as `<cause>@<target
+    /// id>` text, and a removed target left its keys behind. Only the
+    /// keys of a target the store still knows move.
+    private static func movePostedNotifications(_ database: SQLiteDatabase) throws {
+        try database.execute("CREATE TABLE posted_notification (cause TEXT NOT NULL, targetId TEXT)")
+        let legacyKey = "notification-ledger"
+        let text =
+            try database.query(
+                "SELECT value FROM scheduler_state WHERE key = ?", [.text(legacyKey)]
+            ).first?[0].string ?? ""
+        var known = Set<String>()
+        for table in try targetScopedTables(in: database) where table != "posted_notification" {
+            for row in try database.query("SELECT DISTINCT targetId FROM \(table)") {
+                if let id = row[0].string { known.insert(id) }
+            }
+        }
+        for key in text.split(separator: "\n") {
+            let parts = key.split(separator: "@", maxSplits: 1).map(String.init)
+            let targetId = parts.count == 2 ? parts[1] : nil
+            if let targetId, !known.contains(targetId) { continue }
+            try database.run(
+                "INSERT INTO posted_notification (cause, targetId) VALUES (?, ?)",
+                [.text(parts[0]), targetId.map { .text($0) } ?? .null])
+        }
+        try database.run("DELETE FROM scheduler_state WHERE key = ?", [.text(legacyKey)])
     }
 
     /// The write-ahead log leaves two files beside the database. A
@@ -161,31 +256,28 @@ public final class BackupStateStore {
             failureDetail TEXT,
             failedAt REAL,
             quotaUsed INTEGER,
-            quotaLimit INTEGER,
-            quotaAt REAL
+            quotaLimit INTEGER
         );
         CREATE TABLE IF NOT EXISTS target_maintenance (
             targetId TEXT NOT NULL PRIMARY KEY,
             lastSweepAt REAL
         );
         CREATE TABLE IF NOT EXISTS dirty_game (
-            gameKey TEXT NOT NULL PRIMARY KEY,
+            targetId TEXT NOT NULL,
+            gameKey TEXT NOT NULL,
             markedAt REAL NOT NULL,
-            reason TEXT NOT NULL
+            PRIMARY KEY (targetId, gameKey)
         );
         CREATE TABLE IF NOT EXISTS pending_deletion (
             targetId TEXT NOT NULL,
             gameKey TEXT NOT NULL,
             requestedAt REAL NOT NULL,
-            rescuedBuckets TEXT NOT NULL,
             PRIMARY KEY (targetId, gameKey)
         );
         CREATE TABLE IF NOT EXISTS staleness (
             targetId TEXT NOT NULL,
             gameKey TEXT NOT NULL,
-            lastSuccessAt REAL,
-            lastAttemptAt REAL,
-            partialSince REAL,
+            lastSuccessAt REAL NOT NULL,
             PRIMARY KEY (targetId, gameKey)
         );
         CREATE TABLE IF NOT EXISTS run_record (
@@ -193,7 +285,7 @@ public final class BackupStateStore {
             targetId TEXT NOT NULL,
             startedAt REAL NOT NULL,
             finishedAt REAL,
-            outcome TEXT NOT NULL,
+            outcome TEXT,
             uploadedBytes INTEGER NOT NULL,
             gameCount INTEGER NOT NULL,
             detail TEXT
@@ -207,12 +299,17 @@ public final class BackupStateStore {
             remainingBytes INTEGER NOT NULL,
             restoreScope TEXT,
             replacesTree INTEGER NOT NULL,
+            movedAsideTree TEXT,
             createdAt REAL NOT NULL,
             asked INTEGER NOT NULL
         );
         CREATE TABLE IF NOT EXISTS scheduler_state (
             key TEXT NOT NULL PRIMARY KEY,
             value TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS posted_notification (
+            cause TEXT NOT NULL,
+            targetId TEXT
         );
         CREATE TABLE IF NOT EXISTS partial_tally (
             targetId TEXT NOT NULL,
@@ -224,7 +321,6 @@ public final class BackupStateStore {
         CREATE INDEX IF NOT EXISTS run_record_startedAt ON run_record (startedAt);
         """
 
-
     // MARK: - Deleting a target and a namespace
 
     /// Every table that files its rows under a target.
@@ -233,7 +329,7 @@ public final class BackupStateStore {
     /// is covered without an edit here. `removeTarget` must leave no
     /// row behind, and a hand-kept list is one merge away from
     /// missing a table.
-    private func targetScopedTables() throws -> [String] {
+    private static func targetScopedTables(in database: SQLiteDatabase) throws -> [String] {
         let rows = try database.query(
             """
             SELECT m.name FROM sqlite_master AS m
@@ -267,7 +363,7 @@ public final class BackupStateStore {
     /// makes this a `DELETE WHERE` instead of an `rm`, which is the
     /// price 6.2 names.
     public func removeTarget(targetId: String) throws {
-        try delete(targetId: targetId, from: try targetScopedTables())
+        try delete(targetId: targetId, from: try Self.targetScopedTables(in: database))
     }
 
     private func delete(targetId: String, from tables: [String]) throws {

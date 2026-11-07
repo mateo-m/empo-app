@@ -81,6 +81,24 @@ final class PackageZipTests: XCTestCase {
         }
     }
 
+    func testTheLocalHeaderNamesTheMethodTheBodyUses() throws {
+        let url = root.appendingPathComponent("methods.zip")
+        let writer = try ZipWriter(creating: url)
+        let entries = [
+            try writer.add(data: randomBytes(4_096), at: "shot.png"),
+            try writer.add(data: Data(repeating: 7, count: 4_096), at: "save.bin"),
+        ]
+        try writer.finish()
+
+        let raw = try Data(contentsOf: url)
+        XCTAssertEqual(entries.map(\.isDeflated), [false, true])
+        for entry in entries {
+            let at = Int(entry.offset) + 8
+            let method = UInt16(raw[at]) | UInt16(raw[at + 1]) << 8
+            XCTAssertEqual(method, entry.isDeflated ? 8 : 0, entry.path)
+        }
+    }
+
     // MARK: - Hostile bytes
 
     /// A ZIP the real writer made, with one field of the central

@@ -7,7 +7,8 @@ final class BackupRunMonitorTests: XCTestCase {
 
     func testAnUploadOutsideThePlanDoesNotMoveTheRing() async {
         let monitor = BackupRunMonitor.shared
-        monitor.runStarts(names: [:], targetCount: 2)
+        monitor.runBegins()
+        monitor.runCovers(names: [:], targetCount: 2)
         await monitor.runPlanned(streamKey: "settings", bytes: 1000)
         await monitor.runUploads(streamKey: "settings")
         await monitor.runConfirmed(streamKey: "settings", bytes: 1000)
@@ -16,12 +17,13 @@ final class BackupRunMonitorTests: XCTestCase {
         // The snapshot file that closes the stream is not in the plan.
         monitor.transferSent(bytes: 4000)
         XCTAssertEqual(monitor.fraction, 0.5)
-        monitor.runEnds()
+        monitor.runEnds(cancelled: false)
     }
 
     func testABlobInFlightMovesTheRingUpToItsOwnSize() async {
         let monitor = BackupRunMonitor.shared
-        monitor.runStarts(names: [:], targetCount: 1)
+        monitor.runBegins()
+        monitor.runCovers(names: [:], targetCount: 1)
         await monitor.runPlanned(streamKey: "game", bytes: 1000)
         await monitor.runUploads(streamKey: "game")
         await monitor.runSendsBlob(bytes: 1000)
@@ -34,6 +36,6 @@ final class BackupRunMonitorTests: XCTestCase {
         // A late report of the same upload lands after the confirm.
         monitor.transferSent(bytes: 1000)
         XCTAssertEqual(monitor.fraction, 1)
-        monitor.runEnds()
+        monitor.runEnds(cancelled: false)
     }
 }

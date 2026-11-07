@@ -32,32 +32,19 @@ struct ScreenRegionGizmo: View {
 
     @State private var draft: CGRect?
     @State private var anchorRect: CGRect?
-    /// GestureState resets when the system CANCELS a drag (an edge
-    /// swipe near the notification shade, an incoming call). The
-    /// onChange below then finishes the drag, because a stuck
-    /// `screenDragActive` would leave the edit toolbar disabled for
-    /// the rest of the session. Move and resize track separately,
-    /// so one gesture ending cannot finish the other's drag. The
-    /// owner token stops a second finger from clobbering the
-    /// in-flight anchor.
-    @GestureState private var moveGestureActive = false
-    @GestureState private var resizeGestureActive = false
+    /// The gesture that owns the drag in flight: 0 for the move
+    /// surface, 1 to 4 for the corners. A second finger cannot
+    /// change the anchor or end the drag.
     @State private var dragOwner: Int?
-    private var gestureActive: Bool { moveGestureActive || resizeGestureActive }
 
     private var rect: CGRect { draft ?? baseRect }
     private var minW: CGFloat { canvasSize.width * ScreenRegionGizmo.minFraction }
     private var minH: CGFloat { canvasSize.height * ScreenRegionGizmo.minFraction }
     private static let minFraction = CGFloat(ScreenRegionFile.minFraction)
-    private static let handleSize: CGFloat = 28
+    private static let moveOwner = 0
 
     var body: some View {
         surfaces
-            .onChange(of: gestureActive) { _, active in
-                if !active, anchorRect != nil {
-                    finishDrag()
-                }
-            }
     }
 
     /// Captures the anchor on the first event of a drag, shrunk
@@ -90,7 +77,10 @@ struct ScreenRegionGizmo: View {
             .frame(width: rect.width, height: rect.height)
             .position(x: rect.midX, y: rect.midY)
             .contentShape(Rectangle())
-            .gesture(moveGesture)
+            .editDrag(
+                minimumDistance: 2, onChanged: moveChanged,
+                onFinished: { finishDrag(owner: Self.moveOwner) }
+            )
             .accessibilityLabel("Game screen position")
             .accessibilityHint("Drag to move the game screen")
 
@@ -120,7 +110,10 @@ struct ScreenRegionGizmo: View {
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
                     .position(corner.point(in: rect, inset: 16))
-                    .gesture(resizeGesture(for: corner))
+                    .editDrag(
+                        minimumDistance: 2, onChanged: { resizeChanged($0, corner: corner) },
+                        onFinished: { finishDrag(owner: corner.owner) }
+                    )
                     .accessibilityLabel(corner.accessibilityLabel)
             }
         }
@@ -128,84 +121,74 @@ struct ScreenRegionGizmo: View {
 
     private static let grabberSide: CGFloat = 22
 
-    private var moveGesture: some Gesture {
-        DragGesture(minimumDistance: 2)
-            .updating($moveGestureActive) { _, state, _ in state = true }
-            .onChanged { value in
-                guard claimDrag(owner: 0), let anchor = anchorRect else { return }
-                var moved = anchor.offsetBy(
-                    dx: value.translation.width, dy: value.translation.height)
-                moved.origin.x = min(
-                    max(allowedRect.minX, moved.origin.x), allowedRect.maxX - moved.width)
-                moved.origin.y = min(
-                    max(allowedRect.minY, moved.origin.y), allowedRect.maxY - moved.height)
-                draft = moved
-                onDragChanged(region(from: moved))
-            }
-            .onEnded { _ in finishDrag() }
+    private func moveChanged(_ value: DragGesture.Value) {
+        guard claimDrag(owner: Self.moveOwner), let anchor = anchorRect else { return }
+        var moved = anchor.offsetBy(
+            dx: value.translation.width, dy: value.translation.height)
+        moved.origin.x = min(
+            max(allowedRect.minX, moved.origin.x), allowedRect.maxX - moved.width)
+        moved.origin.y = min(
+            max(allowedRect.minY, moved.origin.y), allowedRect.maxY - moved.height)
+        draft = moved
+        onDragChanged(region(from: moved))
     }
 
     /// The dragged corner moves. The opposite corner anchors.
-    private func resizeGesture(for corner: Corner) -> some Gesture {
-        DragGesture(minimumDistance: 2)
-            .updating($resizeGestureActive) { _, state, _ in state = true }
-            .onChanged { value in
-                guard claimDrag(owner: 1 + corner.ownerIndex), let anchor = anchorRect
-                else { return }
-                var minX = anchor.minX
-                var minY = anchor.minY
-                var maxX = anchor.maxX
-                var maxY = anchor.maxY
-                switch corner {
-                case .topLeft:
-                    minX += value.translation.width
-                    minY += value.translation.height
-                case .topRight:
-                    maxX += value.translation.width
-                    minY += value.translation.height
-                case .bottomLeft:
-                    minX += value.translation.width
-                    maxY += value.translation.height
-                case .bottomRight:
-                    maxX += value.translation.width
-                    maxY += value.translation.height
-                }
-                // Bounds clamp first, then the minimum size pushes
-                // the MOVING edges back inward.
-                minX = max(allowedRect.minX, minX)
-                minY = max(allowedRect.minY, minY)
-                maxX = min(allowedRect.maxX, maxX)
-                maxY = min(allowedRect.maxY, maxY)
-                switch corner {
-                case .topLeft:
-                    minX = min(minX, maxX - minW)
-                    minY = min(minY, maxY - minH)
-                case .topRight:
-                    maxX = max(maxX, minX + minW)
-                    minY = min(minY, maxY - minH)
-                case .bottomLeft:
-                    minX = min(minX, maxX - minW)
-                    maxY = max(maxY, minY + minH)
-                case .bottomRight:
-                    maxX = max(maxX, minX + minW)
-                    maxY = max(maxY, minY + minH)
-                }
-                let resized = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
-                draft = resized
-                onDragChanged(region(from: resized))
-            }
-            .onEnded { _ in finishDrag() }
+    private func resizeChanged(_ value: DragGesture.Value, corner: Corner) {
+        guard claimDrag(owner: corner.owner), let anchor = anchorRect
+        else { return }
+        var minX = anchor.minX
+        var minY = anchor.minY
+        var maxX = anchor.maxX
+        var maxY = anchor.maxY
+        switch corner {
+        case .topLeft:
+            minX += value.translation.width
+            minY += value.translation.height
+        case .topRight:
+            maxX += value.translation.width
+            minY += value.translation.height
+        case .bottomLeft:
+            minX += value.translation.width
+            maxY += value.translation.height
+        case .bottomRight:
+            maxX += value.translation.width
+            maxY += value.translation.height
+        }
+        // Bounds clamp first, then the minimum size pushes
+        // the MOVING edges back inward.
+        minX = max(allowedRect.minX, minX)
+        minY = max(allowedRect.minY, minY)
+        maxX = min(allowedRect.maxX, maxX)
+        maxY = min(allowedRect.maxY, maxY)
+        switch corner {
+        case .topLeft:
+            minX = min(minX, maxX - minW)
+            minY = min(minY, maxY - minH)
+        case .topRight:
+            maxX = max(maxX, minX + minW)
+            minY = min(minY, maxY - minH)
+        case .bottomLeft:
+            minX = min(minX, maxX - minW)
+            maxY = max(maxY, minY + minH)
+        case .bottomRight:
+            maxX = max(maxX, minX + minW)
+            maxY = max(maxY, minY + minH)
+        }
+        let resized = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        draft = resized
+        onDragChanged(region(from: resized))
     }
 
     private enum Corner: CaseIterable {
         case topLeft, topRight, bottomLeft, bottomRight
 
-        var ownerIndex: Int {
+        var owner: Int {
             switch self {
-            case .topLeft: 0
-            case .topRight: 1
-            case .bottomLeft: 2
-            case .bottomRight: 3
+            case .topLeft: 1
+            case .topRight: 2
+            case .bottomLeft: 3
+            case .bottomRight: 4
             }
         }
 
@@ -239,7 +222,8 @@ struct ScreenRegionGizmo: View {
         }
     }
 
-    private func finishDrag() {
+    private func finishDrag(owner: Int) {
+        guard dragOwner == owner else { return }
         if let draft {
             onDragEnded(region(from: draft))
         }

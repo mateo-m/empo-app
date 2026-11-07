@@ -10,7 +10,7 @@ final class BackupTriggerPlanTests: XCTestCase {
 
     private func dirty(_ keys: [String]) -> [DirtyMark] {
         keys.map {
-            DirtyMark(gameKey: $0, markedAt: Date(timeIntervalSince1970: 1), reason: "watched")
+            DirtyMark(targetId: "target-1", gameKey: $0, markedAt: Date(timeIntervalSince1970: 1))
         }
     }
 
@@ -23,32 +23,43 @@ final class BackupTriggerPlanTests: XCTestCase {
         XCTAssertEqual(scope, .dirtyGames)
         XCTAssertEqual(
             BackupTriggerPlan.games(
-                in: scope, dirty: dirty(["game-c", "game-a"]), library: library),
+                in: scope, dirty: dirty(["game-c", "game-a"]), library: library, targetIds: ["target-1"]),
             ["game-a", "game-c"])
+    }
+
+    func testAMarkOnATargetThatDoesNotRunLeavesTheGameOut() {
+        let paused = [DirtyMark(targetId: "paused", gameKey: "game-b", markedAt: Date())]
+        XCTAssertEqual(
+            BackupTriggerPlan.games(
+                in: .dirtyGames, dirty: dirty(["game-a"]) + paused, library: library,
+                targetIds: ["target-1"]),
+            ["game-a"])
     }
 
     func testTheNightlyPassReturnsTheFullLibrary() {
         let scope = BackupTriggerPlan.scope(of: .nightly)
         XCTAssertEqual(scope, .wholeLibrary)
         XCTAssertEqual(
-            BackupTriggerPlan.games(in: scope, dirty: dirty(["game-a"]), library: library),
+            BackupTriggerPlan.games(
+                in: scope, dirty: dirty(["game-a"]), library: library, targetIds: ["target-1"]),
             library)
     }
 
     func testAGameWithAnUnfinishedRestoreSitsOutOfEveryScope() {
         XCTAssertEqual(
             BackupTriggerPlan.games(
-                in: .wholeLibrary, dirty: [], library: library, restoring: "game-b"),
+                in: .wholeLibrary, dirty: [], library: library, targetIds: ["target-1"],
+                restoring: "game-b"),
             ["game-a", "game-c"])
         XCTAssertEqual(
             BackupTriggerPlan.games(
                 in: .dirtyGames, dirty: dirty(["game-b"]), library: library,
-                restoring: "game-b"),
+                targetIds: ["target-1"], restoring: "game-b"),
             [])
         XCTAssertEqual(
             BackupTriggerPlan.games(
                 in: .oneGame(gameKey: "game-b"), dirty: [], library: library,
-                restoring: "game-b"),
+                targetIds: ["target-1"], restoring: "game-b"),
             [])
     }
 
@@ -65,7 +76,8 @@ final class BackupTriggerPlanTests: XCTestCase {
         let scope = BackupTriggerPlan.scope(of: .manual, press: press)
         XCTAssertEqual(scope, .oneGame(gameKey: "game-b"))
         XCTAssertEqual(
-            BackupTriggerPlan.games(in: scope, dirty: [], library: library), ["game-b"])
+            BackupTriggerPlan.games(in: scope, dirty: [], library: library, targetIds: ["target-1"]),
+            ["game-b"])
     }
 
     func testTheLibraryWidePressCoversEveryGame() {

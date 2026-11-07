@@ -61,7 +61,8 @@ final class DataDirectoryTests: XCTestCase {
 
         XCTAssertEqual(try fm.contentsOfDirectory(atPath: documents.path), [])
         XCTAssertEqual(
-            try String(contentsOf: storage.appendingPathComponent("Data/Game/Save1.rxdata")), "save")
+            try String(contentsOf: storage.appendingPathComponent("Data/Game/Save1.rxdata"), encoding: .utf8),
+            "save")
         XCTAssertEqual(
             try Set(fm.contentsOfDirectory(atPath: storage.appendingPathComponent("Data/Game").path)),
             ["Save1.rxdata", "Save1.rxdata.empo-displaced.bak"])
@@ -79,13 +80,16 @@ final class DataDirectoryTests: XCTestCase {
         XCTAssertEqual(
             try Set(fm.contentsOfDirectory(atPath: documents.path)), ["Data", "Games", "Fonts", "Profiles"])
         XCTAssertEqual(
-            try String(contentsOf: documents.appendingPathComponent("Data/Game/Save1.rxdata")), "save")
+            try String(
+                contentsOf: documents.appendingPathComponent("Data/Game/Save1.rxdata"), encoding: .utf8),
+            "save")
         XCTAssertEqual(try fm.contentsOfDirectory(atPath: storage.path), ["Data"])
         XCTAssertEqual(
             try fm.contentsOfDirectory(atPath: storage.appendingPathComponent("Data/Game").path),
             ["Save1.rxdata"])
         XCTAssertEqual(
-            try String(contentsOf: storage.appendingPathComponent("Data/Game/Save1.rxdata")), "old")
+            try String(contentsOf: storage.appendingPathComponent("Data/Game/Save1.rxdata"), encoding: .utf8),
+            "old")
     }
 
     private func writeOldSaveInStorage() throws {

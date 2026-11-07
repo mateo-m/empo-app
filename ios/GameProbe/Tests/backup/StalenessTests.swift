@@ -70,9 +70,9 @@ final class StalenessTests: XCTestCase {
             targetId: "t1", lastSuccessAt: daysAgo(21), lastPlayedAt: daysAgo(20),
             cause: .waitingForWiFi)
         let freshness = Staleness.worst(gameKey: "g", of: [target], now: now)
-        XCTAssertEqual(freshness.level, .banner)
-        XCTAssertEqual(freshness.cause, .waitingForWiFi)
-        XCTAssertEqual(freshness.cause?.line(targetLabel: "Dropbox"), "Empo is waiting for Wi-Fi.")
+        XCTAssertEqual(freshness?.level, .banner)
+        XCTAssertEqual(freshness?.cause, .waitingForWiFi)
+        XCTAssertEqual(freshness?.cause.line(targetLabel: "Dropbox"), "Empo is waiting for Wi-Fi.")
     }
 
     // MARK: - The worst target
@@ -89,9 +89,9 @@ final class StalenessTests: XCTestCase {
                 cause: .needsSignIn),
         ]
         let freshness = Staleness.worst(gameKey: "g", of: targets, now: now)
-        XCTAssertEqual(freshness.level, .banner)
-        XCTAssertEqual(freshness.targetId, "worst")
-        XCTAssertEqual(freshness.cause, .needsSignIn)
+        XCTAssertEqual(freshness?.level, .banner)
+        XCTAssertEqual(freshness?.targetId, "worst")
+        XCTAssertEqual(freshness?.cause, .needsSignIn)
     }
 
     func testAPausedTargetNeverWinsTheBadge() {
@@ -104,8 +104,8 @@ final class StalenessTests: XCTestCase {
                 cause: .waitingForWiFi),
         ]
         let freshness = Staleness.worst(gameKey: "g", of: targets, now: now)
-        XCTAssertEqual(freshness.level, .stale)
-        XCTAssertEqual(freshness.targetId, "live")
+        XCTAssertEqual(freshness?.level, .stale)
+        XCTAssertEqual(freshness?.targetId, "live")
     }
 
     func testEveryTargetPausedLeavesTheGameFresh() {
@@ -117,9 +117,7 @@ final class StalenessTests: XCTestCase {
                 targetId: "b", isPaused: true, lastSuccessAt: daysAgo(60),
                 lastPlayedAt: daysAgo(50)),
         ]
-        let freshness = Staleness.worst(gameKey: "g", of: targets, now: now)
-        XCTAssertEqual(freshness.level, .fresh)
-        XCTAssertNil(freshness.targetId)
+        XCTAssertNil(Staleness.worst(gameKey: "g", of: targets, now: now))
     }
 
     func testTwoTargetsAtOneLevelBreakTheTieOnTheOlderClock() {
@@ -130,22 +128,22 @@ final class StalenessTests: XCTestCase {
                 targetId: "older", lastSuccessAt: daysAgo(12), lastPlayedAt: daysAgo(11)),
         ]
         XCTAssertEqual(
-            Staleness.worst(gameKey: "g", of: targets, now: now).targetId, "older")
+            Staleness.worst(gameKey: "g", of: targets, now: now)?.targetId, "older")
         XCTAssertEqual(
-            Staleness.worst(gameKey: "g", of: targets.reversed(), now: now).targetId, "older")
+            Staleness.worst(gameKey: "g", of: targets.reversed(), now: now)?.targetId, "older")
     }
 
     // MARK: - The one banner
 
     func testTheLibraryShowsOneBannerAndNotOnePerGame() {
         let games = [
-            GameFreshness(
+            LateGame(
                 gameKey: "a", level: .banner, targetId: "t1", cause: .needsSignIn,
                 unprotectedSince: daysAgo(30)),
-            GameFreshness(
+            LateGame(
                 gameKey: "b", level: .banner, targetId: "t1", cause: .needsSignIn,
                 unprotectedSince: daysAgo(22)),
-            GameFreshness(
+            LateGame(
                 gameKey: "c", level: .stale, targetId: "t1", cause: .waitingForWiFi,
                 unprotectedSince: daysAgo(8)),
         ]
@@ -158,8 +156,9 @@ final class StalenessTests: XCTestCase {
 
     func testNoGamePastTwentyOneDaysMeansNoBanner() {
         let games = [
-            GameFreshness(gameKey: "a", level: .stale, unprotectedSince: daysAgo(8)),
-            GameFreshness(gameKey: "b", level: .fresh),
+            LateGame(
+                gameKey: "a", level: .stale, targetId: "t1", cause: .waitingForARun,
+                unprotectedSince: daysAgo(8))
         ]
         XCTAssertNil(Staleness.libraryBanner(games))
     }

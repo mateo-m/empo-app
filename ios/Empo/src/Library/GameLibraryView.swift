@@ -10,6 +10,11 @@ private struct EmptyStateHeightKey: PreferenceKey {
     }
 }
 
+private enum ImportStop {
+    case one(String)
+    case all
+}
+
 struct GameLibraryView: View {
     var heroNamespace: Namespace.ID
     var splashDismissed: Bool = true
@@ -33,11 +38,9 @@ struct GameLibraryView: View {
     @State private var errorMessage: String?
     @State private var errorTitle = String(localized: "Couldn't delete this game")
     @State private var showErrorAlert = false
-    @State private var showCancelValidationAlert = false
-    /// Nil when the alert stops every import.
-    @State private var importToStop: String?
+    /// What the open "Stop import" alert stops, or nil when it is closed.
+    @State private var importStop: ImportStop?
     @State private var gameToDelete: GameEntry?
-    @State private var showDeleteConfirm = false
     /// Games whose delete aborted because their saves could not
     /// move into `Data/`. A queue, not a slot: a bulk delete can
     /// fail several rescues, and each game gets its own Delete
@@ -181,11 +184,17 @@ struct GameLibraryView: View {
                 // to the grid/list item source id since that's the one
                 // always visible in the library.
                 let source = tappedSource[game.id] ?? .item
-                GameLoadingView(game: game, dormant: dormant)
-                    .navigationTransition(
-                        .zoom(
-                            sourceID: source.transitionID(for: game.id),
-                            in: heroNamespace))
+                GameLoadingView(
+                    game: game, dormant: dormant,
+                    mode: appState.isLaunching || appState.phase != nil ? .loading : .resuming
+                )
+                .navigationTransition(
+                    .zoom(
+                        sourceID: source.transitionID(for: game.id),
+                        in: heroNamespace))
+            }
+            .onChange(of: appState.isLaunching) { _, launching in
+                if !launching, appState.phase == nil { path = NavigationPath() }
             }
             .onChange(of: appState.phase) { _, newPhase in
                 handleAppPhaseChange(newPhase)
@@ -229,7 +238,7 @@ struct GameLibraryView: View {
                 _ in
                 takeTheResumeQuestion()
             }
-            .task(id: library.initialScanCompleted && appState.errorMessage == nil) {
+            .task(id: library.initialScanCompleted && appState.shownError == nil) {
                 autoStartGameFromEnvironment()
             }
     }
@@ -321,9 +330,8 @@ struct GameLibraryView: View {
                     errorMessage: errorMessage,
                     showErrorAlert: $showErrorAlert,
                     gameToDelete: $gameToDelete,
-                    showDeleteConfirm: $showDeleteConfirm,
                     invalidReason: $invalidReason,
-                    showCancelValidationAlert: $showCancelValidationAlert,
+                    showCancelValidationAlert: showStopAlert,
                     showPausedGameAlert: $showPausedGameAlert,
                     gameWithNoCore: $gameWithNoCore,
                     warnedLaunch: $warnedLaunch,
@@ -506,8 +514,7 @@ struct GameLibraryView: View {
                 phase: importPipeline.importButtonPhase,
                 collapsedCenter: hasSensorStrip ? { railSlotCenter(1, in: $0) } : nil,
                 onRequestCancelValidation: {
-                    importToStop = nil
-                    showCancelValidationAlert = true
+                    importStop = .all
                 }
             )
         }
@@ -741,7 +748,6 @@ struct GameLibraryView: View {
             appState: appState,
             onTap: { handleGameTap(game, from: .hero) },
             gameToDelete: $gameToDelete,
-            showDeleteConfirm: $showDeleteConfirm,
             gameForSettings: $gameForSettings,
             gameForInfo: $gameForInfo
         )
@@ -758,7 +764,6 @@ struct GameLibraryView: View {
             appState: appState,
             onTap: { handleGameTap(game, from: .hero) },
             gameToDelete: $gameToDelete,
-            showDeleteConfirm: $showDeleteConfirm,
             gameForSettings: $gameForSettings,
             gameForInfo: $gameForInfo
         )
@@ -796,7 +801,6 @@ struct GameLibraryView: View {
                     onPlay: {},
                     onCancelImport: { requestStopImport(pendingEntry.id) },
                     gameToDelete: $gameToDelete,
-                    showDeleteConfirm: $showDeleteConfirm,
                     gameForSettings: $gameForSettings,
                     gameForInfo: $gameForInfo
                 )
@@ -833,7 +837,6 @@ struct GameLibraryView: View {
                 onPlay: {},
                 onCancelImport: { requestStopImport(pendingEntry.id) },
                 gameToDelete: $gameToDelete,
-                showDeleteConfirm: $showDeleteConfirm,
                 gameForSettings: $gameForSettings,
                 gameForInfo: $gameForInfo
             )
@@ -870,7 +873,6 @@ struct GameLibraryView: View {
                 onStopImport: game.status == .importing
                     ? {
                         gameToDelete = game
-                        showDeleteConfirm = true
                     } : nil
             )
             // Anchor on .topLeading so the badge floats over
@@ -895,11 +897,9 @@ struct GameLibraryView: View {
             onCancelImport: game.isImporting
                 ? {
                     gameToDelete = game
-                    showDeleteConfirm = true
                 } : nil,
             onSelect: selectionMode ? nil : { enterSelectionMode(seedingWith: game.id) },
             gameToDelete: $gameToDelete,
-            showDeleteConfirm: $showDeleteConfirm,
             gameForSettings: $gameForSettings,
             gameForInfo: $gameForInfo
         )
@@ -915,7 +915,6 @@ struct GameLibraryView: View {
                 game: game,
                 onStopImport: {
                     gameToDelete = game
-                    showDeleteConfirm = true
                 }
             )
             .cardShadow()
@@ -925,10 +924,8 @@ struct GameLibraryView: View {
                 onPlay: {},
                 onCancelImport: {
                     gameToDelete = game
-                    showDeleteConfirm = true
                 },
                 gameToDelete: $gameToDelete,
-                showDeleteConfirm: $showDeleteConfirm,
                 gameForSettings: $gameForSettings,
                 gameForInfo: $gameForInfo
             )
@@ -962,7 +959,6 @@ struct GameLibraryView: View {
                 appState: appState,
                 onPlay: { handleGameTap(game, from: .item) },
                 gameToDelete: $gameToDelete,
-                showDeleteConfirm: $showDeleteConfirm,
                 gameForSettings: $gameForSettings,
                 gameForInfo: $gameForInfo
             )
@@ -1012,7 +1008,6 @@ struct GameLibraryView: View {
             onPlay: { handleGameTap(game, from: .item) },
             onSelect: selectionMode ? nil : { enterSelectionMode(seedingWith: game.id) },
             gameToDelete: $gameToDelete,
-            showDeleteConfirm: $showDeleteConfirm,
             gameForSettings: $gameForSettings,
             gameForInfo: $gameForInfo
         )
@@ -1026,7 +1021,7 @@ struct GameLibraryView: View {
     /// it dispatches to the existing per-status flow.
     private func handleCardTap(for game: GameEntry) {
         if selectionMode {
-            guard game.status == .ready else { return }
+            guard game.status == .ready, !GameLibrary.isInUse(game) else { return }
             toggleSelection(game.id)
             return
         }
@@ -1140,7 +1135,7 @@ struct GameLibraryView: View {
         #if DEBUG
         // UIKit refuses a second alert while the "Last session ended
         // early" alert is up, and SwiftUI drops the launch warning.
-        guard !autoStartDone, library.initialScanCompleted, appState.errorMessage == nil,
+        guard !autoStartDone, library.initialScanCompleted, appState.shownError == nil,
             let wanted = ProcessInfo.processInfo.environment["EMPO_AUTOSTART_GAME"],
             let game = library.games.first(where: { $0.title == wanted })
         else { return }
@@ -1224,8 +1219,7 @@ struct GameLibraryView: View {
         if let warning = library.launchWarning(for: game) {
             warnedLaunch = WarnedLaunch(game: game, warning: warning)
         } else {
-            appState.selectGame(game)
-            push(game)
+            if appState.selectGame(game) { push(game) }
         }
     }
 
@@ -1244,20 +1238,25 @@ struct GameLibraryView: View {
     }
 
     private func continueDespiteLaunchWarning(_ game: GameEntry) {
-        appState.selectGame(game)
-        push(game)
+        if appState.selectGame(game) { push(game) }
     }
 
     private func requestStopImport(_ id: String) {
-        importToStop = id
-        showCancelValidationAlert = true
+        importStop = .one(id)
+    }
+
+    private var showStopAlert: Binding<Bool> {
+        Binding(get: { importStop != nil }, set: { if !$0 { importStop = nil } })
     }
 
     private func stopImport() {
-        if let importToStop {
-            library.cancelPendingImport(importToStop)
-        } else {
+        switch importStop {
+        case .one(let id):
+            library.cancelPendingImport(id)
+        case .all:
             importPipeline.cancelValidation()
+        case nil:
+            break
         }
     }
 
@@ -1495,7 +1494,6 @@ private struct LibraryAlertPresentation: ViewModifier {
     let errorMessage: String?
     @Binding var showErrorAlert: Bool
     @Binding var gameToDelete: GameEntry?
-    @Binding var showDeleteConfirm: Bool
     @Binding var invalidReason: String?
     @Binding var showCancelValidationAlert: Bool
     @Binding var showPausedGameAlert: Bool
@@ -1530,7 +1528,9 @@ private struct LibraryAlertPresentation: ViewModifier {
             }
             .modifier(
                 DeleteGameAlerts(
-                    isPresented: $showDeleteConfirm,
+                    isPresented: Binding(
+                        get: { gameToDelete != nil },
+                        set: { if !$0 { gameToDelete = nil } }),
                     game: gameToDelete,
                     saveRescueFailures: $saveRescueFailures,
                     onDelete: onDeleteGame,

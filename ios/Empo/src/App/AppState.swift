@@ -15,6 +15,11 @@ enum GamePhase: Equatable {
     case ended(clean: Bool, started: Bool)
 }
 
+struct ShownError: Equatable {
+    let message: String
+    var gameDidNotStart = false
+}
+
 @MainActor @Observable
 class AppState {
     static let shared = AppState()
@@ -22,7 +27,7 @@ class AppState {
     var phase: GamePhase?
     var selectedGame: GameEntry?
     private(set) var launchedSettings: LaunchedSettings?
-    var errorMessage: String?
+    var shownError: ShownError?
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
     /// The core blocks its game thread until the user dismisses
     /// RootView's info alert. The game then
@@ -48,19 +53,25 @@ class AppState {
 
     var pendingCrashRecovery: Bool { session.pendingCrashRecovery }
 
+    /// Only the newest check may set `updateStatus`: an older check can
+    /// finish last.
+    @ObservationIgnored private var updateCheckGeneration = 0
+
     func checkForUpdatesIfStale() async {
-        guard UpdateChecker.isSideloadBuild else { return }
-        updateStatus = .checking
-        let result = await UpdateChecker.checkIfStale()
-        withAnimation(Motion.standard) {
-            updateStatus = result
-        }
+        await checkForUpdates(UpdateChecker.checkIfStale)
     }
 
     func checkForUpdatesNow() async {
+        await checkForUpdates(UpdateChecker.checkNow)
+    }
+
+    private func checkForUpdates(_ check: () async -> UpdateChecker.Status) async {
         guard UpdateChecker.isSideloadBuild else { return }
+        updateCheckGeneration += 1
+        let generation = updateCheckGeneration
         updateStatus = .checking
-        let result = await UpdateChecker.checkNow()
+        let result = await check()
+        guard generation == updateCheckGeneration else { return }
         withAnimation(Motion.standard) {
             updateStatus = result
         }
@@ -75,15 +86,17 @@ class AppState {
         session.delegate = self
     }
 
-    func selectGame(_ game: GameEntry) {
+    /// True when the game resumes or starts to launch. The library
+    /// opens the loading screen only then.
+    func selectGame(_ game: GameEntry) -> Bool {
         let pauseManager = PauseManager.shared
         if let paused = pauseManager.pausedGame, paused.id == game.id {
             resumePausedGame()
-            return
+            return true
         }
 
         guard phase == nil, pauseManager.pausedGame == nil, resumeTask == nil, launchTask == nil
-        else { return }
+        else { return false }
         // The hard stop of 7.6 ends a restore in flight before the
         // launch moves saves, makes folders, or reads the settings.
         // The hold starts before the task, because a restore that
@@ -99,6 +112,7 @@ class AppState {
             guard phase == nil, PauseManager.shared.pausedGame == nil else { return }
             launch(game)
         }
+        return true
     }
 
     private func launch(_ game: GameEntry) {
@@ -106,7 +120,7 @@ class AppState {
         do {
             start = try GameStart(game: game)
         } catch {
-            errorMessage = error.localizedDescription
+            shownError = ShownError(message: error.localizedDescription, gameDidNotStart: true)
             return
         }
         selectedGame = game
@@ -158,7 +172,7 @@ class AppState {
     func cancelLoading() {
         guard canEndStuckGame, phase == .loading else { return }
         session.note("The player stopped the loading.")
-        session.recordSessionPlayTime(for: selectedGame)
+        session.recordSessionPlayTime()
         session.killSession(of: selectedGame)
         clearEndedGame()
         phase = nil
@@ -168,7 +182,7 @@ class AppState {
     func endStuckGame() {
         guard canEndStuckGame else { return }
         session.note("The game stopped responding, and Empo ended it.")
-        session.recordSessionPlayTime(for: activeSessionGame)
+        session.recordSessionPlayTime()
         session.killSession(of: activeSessionGame)
         clearEndedGame()
         phase = nil
@@ -190,7 +204,8 @@ class AppState {
     @ObservationIgnored private var quitOnPause = false
     @ObservationIgnored private var quitTask: Task<Void, Never>?
     @ObservationIgnored private var resumeTask: Task<Void, Never>?
-    @ObservationIgnored private var launchTask: Task<Void, Never>?
+    private var launchTask: Task<Void, Never>?
+    var isLaunching: Bool { launchTask != nil }
 
     /// Pauses the game, so the library comes back the same way, and
     /// kills it once the core says it paused. The game is never marked
@@ -222,7 +237,7 @@ class AppState {
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
-            errorMessage = message
+            shownError = ShownError(message: message)
         }
     }
 
@@ -244,22 +259,21 @@ class AppState {
         // Pause is the only return-to-library path. Flush play time
         // here so last-played and totals update even though the
         // engine keeps running.
-        session.recordSessionPlayTime(for: activeSessionGame)
+        session.recordSessionPlayTime()
         // The runtime watch of SPEC 3.6 reads here too. The pause is
         // the only way back to the library, so it is the last point
         // the app controls before the user may close it.
         GameSaveWatch.shared.takeReading()
-        EngineState.shared.isBackgroundPause = false
+        EngineState.shared.pauseRequest = .user
         session.requestPause()
     }
 
     /// The bridge's paused callback calls this on the main thread.
-    /// We ignore background pauses. They stay silent with no UI
-    /// transition.
+    /// A background pause stays silent with no UI transition. A
+    /// callback with no request is late: the app returned first.
     func handlePause(snapshot: UIImage?) {
-        guard phase == .playing else { return }
-        // A quit can meet a background pause: the app went to the
-        // background before the game paused for the quit.
+        guard phase == .playing, EngineState.shared.pauseRequest == .user else { return }
+        EngineState.shared.pauseRequest = nil
         if quitOnPause {
             session.note("The player quit the game.")
             let game = selectedGame
@@ -274,7 +288,6 @@ class AppState {
             }
             return
         }
-        if EngineState.shared.isBackgroundPause { return }
         let pm = PauseManager.shared
         withAnimation(Motion.snappy) {
             phase = nil
@@ -332,7 +345,7 @@ class AppState {
     /// or paused-to-library). Metadata then survives a force-quit.
     func flushSessionPlayTimeForBackground() {
         guard activeSessionGame != nil else { return }
-        session.recordSessionPlayTime(for: activeSessionGame)
+        session.recordSessionPlayTime()
         // Same reason as the play time: the user can close Empo from
         // the app switcher, and no callback follows. A save the game
         // wrote before that must still join the set of SPEC 3.6.
@@ -340,9 +353,10 @@ class AppState {
     }
 
     /// Restarts the session timer after the app returns from the
-    /// background while the game is still in the `.playing` phase.
+    /// background. A paused game has no timer.
     func resumeSessionTimingAfterBackground() {
-        session.resumeSessionTiming(for: activeSessionGame)
+        guard PauseManager.shared.pausedGame == nil else { return }
+        session.resumeSessionTiming(for: selectedGame)
     }
 }
 
@@ -390,6 +404,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // game goes away below, so read it first.
         let played = activeSessionGame
         quitOnPause = false
+        EngineState.shared.pauseRequest = nil
         quitTask?.cancel()
         quitTask = nil
         resumeTask?.cancel()
@@ -427,7 +442,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
 
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
-        errorMessage = message
+        shownError = ShownError(message: message)
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {

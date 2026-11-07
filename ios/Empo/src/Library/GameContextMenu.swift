@@ -16,7 +16,6 @@ struct GameContextMenuModifier: ViewModifier {
     /// already in selection mode, where the entry would be a no-op).
     let onSelect: (() -> Void)?
     @Binding var gameToDelete: GameEntry?
-    @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
     @Environment(\.pauseManager) private var pauseManager
@@ -52,20 +51,21 @@ struct GameContextMenuModifier: ViewModifier {
                     }
                 }
 
-                if let onSelect {
+                if let onSelect, !GameLibrary.isInUse(game) {
                     Divider()
                     Button(action: onSelect) {
                         Label("Select multiple", systemImage: "checklist")
                     }
                 }
 
-                Divider()
+                if !GameLibrary.isInUse(game) {
+                    Divider()
 
-                Button(role: .destructive) {
-                    gameToDelete = game
-                    showDeleteConfirm = true
-                } label: {
-                    Label("Delete", systemImage: "trash")
+                    Button(role: .destructive) {
+                        gameToDelete = game
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             }
         }
@@ -81,7 +81,6 @@ extension View {
         onCancelImport: (() -> Void)? = nil,
         onSelect: (() -> Void)? = nil,
         gameToDelete: Binding<GameEntry?>,
-        showDeleteConfirm: Binding<Bool>,
         gameForSettings: Binding<GameEntry?>,
         gameForInfo: Binding<GameEntry?>
     ) -> some View {
@@ -93,7 +92,6 @@ extension View {
                 onCancelImport: onCancelImport,
                 onSelect: onSelect,
                 gameToDelete: gameToDelete,
-                showDeleteConfirm: showDeleteConfirm,
                 gameForSettings: gameForSettings,
                 gameForInfo: gameForInfo
             ))

@@ -34,7 +34,6 @@ struct GameHeroCard: View {
     let appState: AppState
     let onTap: () -> Void
     @Binding var gameToDelete: GameEntry?
-    @Binding var showDeleteConfirm: Bool
     @Binding var gameForSettings: GameEntry?
     @Binding var gameForInfo: GameEntry?
 
@@ -139,7 +138,7 @@ struct GameHeroCard: View {
         .buttonStyle(CardPressStyle())
         .gameContextMenu(
             game: game, appState: appState, onPlay: onTap, gameToDelete: $gameToDelete,
-            showDeleteConfirm: $showDeleteConfirm, gameForSettings: $gameForSettings,
+            gameForSettings: $gameForSettings,
             gameForInfo: $gameForInfo)
     }
 }

@@ -11,8 +11,7 @@ struct PlusScreen: View {
     @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @Environment(\.openURL) private var openURL
     @State private var isWorking = false
-    @State private var failure: String?
-    @State private var tooManyDevices = false
+    @State private var failure: Failure?
     @State private var managesSubscription = false
 
     var body: some View {
@@ -155,11 +154,11 @@ struct PlusScreen: View {
                 }
             }
             if let failure {
-                Label(failure, systemImage: "exclamationmark.triangle.fill")
+                Label(failure.line, systemImage: "exclamationmark.triangle.fill")
                     .font(.footnote)
                     .foregroundStyle(.destructive)
             }
-            if tooManyDevices {
+            if failure == .tooManyDevices {
                 secondary(String(localized: "Sign out other devices")) {
                     Task { await signIn(replace: true) }
                 }
@@ -224,16 +223,13 @@ struct PlusScreen: View {
         isWorking = true
         defer { isWorking = false }
         failure = nil
-        tooManyDevices = false
         do throws(EmpoPlus.SignInFailure) {
             try await plus.signIn(using: webAuthenticationSession, replace: replace)
         } catch {
             switch error {
             case .cancelled: break
-            case .server: failure = String(localized: "Couldn't sign in with Patreon. Try again.")
-            case .tooManyDevices:
-                failure = String(localized: "Empo Plus works on up to 3 devices at a time.")
-                tooManyDevices = true
+            case .server: failure = .line(String(localized: "Couldn't sign in with Patreon. Try again."))
+            case .tooManyDevices: failure = .tooManyDevices
             }
         }
     }
@@ -248,8 +244,8 @@ struct PlusScreen: View {
         } catch {
             switch error {
             case .cancelled: break
-            case .pending: failure = String(localized: "Your purchase is waiting for approval.")
-            case .failed: failure = String(localized: "Couldn't reach the App Store. Try again.")
+            case .pending: failure = .line(String(localized: "Your purchase is waiting for approval."))
+            case .failed: failure = .line(String(localized: "Couldn't reach the App Store. Try again."))
             }
         }
     }
@@ -259,9 +255,9 @@ struct PlusScreen: View {
         defer { isWorking = false }
         failure = nil
         if await !store.restore() {
-            failure = String(localized: "Couldn't reach the App Store. Try again.")
+            failure = .line(String(localized: "Couldn't reach the App Store. Try again."))
         } else if !store.isSubscribed {
-            failure = String(localized: "No Empo Plus purchase on this Apple Account.")
+            failure = .line(String(localized: "No Empo Plus purchase on this Apple Account."))
         }
     }
 
@@ -270,7 +266,19 @@ struct PlusScreen: View {
         defer { isWorking = false }
         failure = nil
         if await !plus.renew(force: true) {
-            failure = String(localized: "Couldn't check your membership. Try again.")
+            failure = .line(String(localized: "Couldn't check your membership. Try again."))
+        }
+    }
+
+    private enum Failure: Equatable {
+        case line(String)
+        case tooManyDevices
+
+        var line: String {
+            switch self {
+            case .line(let line): line
+            case .tooManyDevices: String(localized: "Empo Plus works on up to 3 devices at a time.")
+            }
         }
     }
 }

@@ -18,9 +18,8 @@ enum BackupNetwork {
         set { UserDefaults.standard.set(newValue, forKey: DefaultsKey.backupOverCellular) }
     }
 
-    /// One run over cellular, per 7.4. The manual ask and the 21-day
-    /// banner set it, it covers the whole run, and it never changes
-    /// the stored switch. The run clears it at its end.
+    /// One run over cellular, per 7.4. It never changes the stored
+    /// switch.
     ///
     /// The background session fixes its configuration at creation,
     /// so the per-request flags of `BackupTransferSession.request`

@@ -16,8 +16,9 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     private let pausedOverlay = PausedOverlay()
     private let controllers: ControllerInputManager
     private var aspectRatio: CGFloat?
-    private var isPaused = false
-    private var pausedBySystem = false
+    private enum PauseReason { case user, minimized, hidden }
+    private var pauseReasons: Set<PauseReason> = []
+    private var isPaused: Bool { !pauseReasons.isEmpty }
     private let actions: PlayerActionRegistry
     private var gameEnded = false
     private var reportedError = false
@@ -40,7 +41,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                 fastForwardMultiplier: { Int(core.getFastForwardMultiplier()) },
                 setFastForwardMultiplier: { core.setFastForwardMultiplier(Int32($0)) },
                 setCheatsEnabled: { core.setCheatsEnabled($0) },
-                tapKey: { keys.tap($0, holdMilliseconds: $1) }))
+                tapKey: { keys.tap($0, holdMilliseconds: $1, by: .touch("tap")) }))
         controllers = ControllerInputManager(keys: keys)
     }
 
@@ -339,14 +340,18 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     // MARK: - Pause and fast forward
 
+    /// A resume by the user clears every reason, as the menu shows one
+    /// paused state.
     @objc func togglePause(_ sender: Any?) {
-        setPaused(!isPaused)
-        pausedBySystem = false
+        setPauseReasons(isPaused ? [] : [.user])
     }
 
-    private func setPaused(_ paused: Bool) {
-        guard paused != isPaused, !gameEnded else { return }
-        isPaused = paused
+    private func setPauseReasons(_ reasons: Set<PauseReason>) {
+        guard !gameEnded else { return }
+        let wasPaused = isPaused
+        pauseReasons = reasons
+        guard isPaused != wasPaused else { return }
+        let paused = isPaused
         if paused {
             controllers.releaseAllHeldInputs()
             core.requestPause()
@@ -390,20 +395,12 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         }
     }
 
-    private func pauseForSystem() {
-        guard !isPaused else { return }
-        setPaused(true)
-        pausedBySystem = true
+    @objc private func windowDidMiniaturize(_ notification: Notification) {
+        setPauseReasons(pauseReasons.union([.minimized]))
     }
-
-    private func resumeAfterSystem() {
-        guard pausedBySystem else { return }
-        pausedBySystem = false
-        setPaused(false)
+    @objc private func windowDidDeminiaturize(_ notification: Notification) {
+        setPauseReasons(pauseReasons.subtracting([.minimized]))
     }
-
-    @objc private func windowDidMiniaturize(_ notification: Notification) { pauseForSystem() }
-    @objc private func windowDidDeminiaturize(_ notification: Notification) { resumeAfterSystem() }
 
     // macOS 27: when the pointer is over the title bar as a window leaves
     // full screen, the system stops sending key presses to the window,
@@ -418,8 +415,10 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         window.makeKey()
         NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
     }
-    func applicationDidHide(_ notification: Notification) { pauseForSystem() }
-    func applicationDidUnhide(_ notification: Notification) { resumeAfterSystem() }
+    func applicationDidHide(_ notification: Notification) { setPauseReasons(pauseReasons.union([.hidden])) }
+    func applicationDidUnhide(_ notification: Notification) {
+        setPauseReasons(pauseReasons.subtracting([.hidden]))
+    }
     func applicationDidResignActive(_ notification: Notification) { controllers.releaseAndForgetHeldInputs() }
 
     // MARK: - Quit

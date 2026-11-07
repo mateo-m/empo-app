@@ -483,7 +483,6 @@ private struct RefreshSpinIcon: View {
     private let spinPeriod: TimeInterval = 0.85
 
     @State private var spinStart: Date?
-    @State private var spinOrigin: Double = 0
     @State private var coastRotation: Double?
     @State private var coastGeneration: UInt = 0
 
@@ -517,7 +516,6 @@ private struct RefreshSpinIcon: View {
     private func startSpinning() {
         coastGeneration += 1
         coastRotation = nil
-        spinOrigin = 0
         spinStart = Date()
     }
 
@@ -529,13 +527,13 @@ private struct RefreshSpinIcon: View {
     }
 
     private func spinRotation(at date: Date) -> Double {
-        guard let spinStart else { return spinOrigin }
+        guard let spinStart else { return 0 }
         let elapsed = date.timeIntervalSince(spinStart)
         let revolution = elapsed / spinPeriod
         let completed = floor(revolution)
         let localProgress = revolution - completed
         let sprungProgress = springRevolutionProgress(localProgress)
-        return spinOrigin + (completed + sprungProgress) * 360
+        return (completed + sprungProgress) * 360
     }
 
     /// One 0→1 spring segment per revolution while checking.
@@ -560,7 +558,7 @@ private struct RefreshSpinIcon: View {
             return
         }
 
-        let minimumTarget = spinOrigin + 360
+        let minimumTarget = 360.0
         let remainder = current.truncatingRemainder(dividingBy: 360)
         let boundaryTarget = remainder > 1 ? current + (360 - remainder) : current
         let target = max(boundaryTarget, minimumTarget)
@@ -582,7 +580,6 @@ private struct RefreshSpinIcon: View {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
-            spinOrigin = 0
             spinStart = nil
             coastRotation = nil
         }
@@ -794,6 +791,7 @@ struct UpdateStatusBadge: View {
     private func promoDragGesture(url: URL, dismiss: @escaping () -> Void) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
+                suppressTapOpen = false
                 let vertical = value.translation.height
                 let horizontal = abs(value.translation.width)
                 if vertical > 0, vertical > horizontal {

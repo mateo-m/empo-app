@@ -90,15 +90,12 @@ public actor SnapshotEngine {
         /// A split moves the run to a new namespace, per 5.12.
         var paths: BackupNamespacePaths
         var fanOutWidth = FormatDescriptor.version1FanOutWidth
-        var didSplit = false
         var uploadedBytes: Int64 = 0
         var streams: [StreamResult] = []
-        /// The quota the run read before its first upload.
+        /// The last quota reading of the run. The first upload reads
+        /// it, and the run reads it again after its uploads.
         var quota: QuotaReading?
-        /// What the target has left for this run's blobs, or `nil`
-        /// where no number governs. The first upload reads it.
-        var room: Int64?
-        var hasReadTheRoom = false
+        var room = Room.notRead
         /// What the games the run skipped for room still need.
         var shortfall: QuotaCheck.Shortfall?
 
@@ -106,6 +103,16 @@ public actor SnapshotEngine {
             self.request = request
             self.paths = paths
         }
+
+        var didSplit: Bool { paths.namespaceId != request.namespaceId }
+    }
+
+    /// What the target has left for this run's blobs. The first
+    /// upload reads it.
+    enum Room {
+        case notRead
+        case noLimit
+        case left(Int64)
     }
 
     /// Runs every stream of the request against the target.
@@ -116,12 +123,10 @@ public actor SnapshotEngine {
     public func run(_ request: BackupRunRequest) async -> BackupRunResult {
         let startedAt = now
         // The row goes in before the first byte moves. A process
-        // that dies mid-run therefore leaves a failed row, and 7.11
-        // rests on that row being the written record of a transient
-        // failure.
-        recordRun(
-            request, startedAt: startedAt, finishedAt: nil, outcome: .failed,
-            uploadedBytes: 0, gameCount: 0, detail: BackupHistoryState.unfinishedLine)
+        // that dies mid-run therefore leaves a row with no end, and
+        // 7.11 rests on that row being the written record of a
+        // transient failure.
+        recordRun(request, startedAt: startedAt, end: nil, uploadedBytes: 0, gameCount: 0)
 
         let context = RunContext(
             request: request,
@@ -148,7 +153,8 @@ public actor SnapshotEngine {
             return finish(
                 context, startedAt: startedAt,
                 stop: Task.isCancelled
-                    ? .paused : .rejected(message: screenText("Empo couldn't read a save file on this device.")))
+                    ? .paused
+                    : .rejected(message: screenText("Empo couldn't read a save file on this device.")))
         }
         return finish(context, startedAt: startedAt, stop: nil)
     }
@@ -178,10 +184,10 @@ public actor SnapshotEngine {
             detail: stop.map(Self.detail(of:)))
 
         recordRun(
-            context.request, startedAt: startedAt, finishedAt: now, outcome: outcome,
+            context.request, startedAt: startedAt,
+            end: BackupRunEnd(outcome: outcome, finishedAt: now, detail: result.detail),
             uploadedBytes: result.uploadedBytes,
-            gameCount: context.streams.filter { $0.streamKey != BackupStream.preferencesKey }.count,
-            detail: result.detail)
+            gameCount: context.streams.filter { $0.streamKey != BackupStream.preferencesKey }.count)
         // The run reached its end with the process alive, so it left
         // no interruption to ask about at the next launch, per 6.5.
         save(try store.clearIntent(kind: .interruptedRun), "the end of the interrupted run")
@@ -200,7 +206,7 @@ public actor SnapshotEngine {
         if let quota = context.quota {
             save(
                 try store.recordTargetQuota(
-                    targetId: context.request.descriptor.id, reading: quota, at: now),
+                    targetId: context.request.descriptor.id, reading: quota),
                 "the space reading of \(context.request.descriptor.id)")
         }
         return result
@@ -209,11 +215,9 @@ public actor SnapshotEngine {
     private func recordRun(
         _ request: BackupRunRequest,
         startedAt: Date,
-        finishedAt: Date?,
-        outcome: BackupRunOutcome,
+        end: BackupRunEnd?,
         uploadedBytes: Int64,
-        gameCount: Int,
-        detail: String?
+        gameCount: Int
     ) {
         save(
             try store.recordRun(
@@ -221,11 +225,9 @@ public actor SnapshotEngine {
                     id: request.runId,
                     targetId: request.descriptor.id,
                     startedAt: startedAt,
-                    finishedAt: finishedAt,
-                    outcome: outcome,
+                    end: end,
                     uploadedBytes: uploadedBytes,
-                    gameCount: gameCount,
-                    detail: detail)),
+                    gameCount: gameCount)),
             "the run history row of \(request.runId)")
     }
 
@@ -312,13 +314,11 @@ public actor SnapshotEngine {
                 "the namespace state of a place with no claim")
             try await writeClaim(context)
         case .conflict(let claim):
-            guard let resolution = context.request.writerResolution else {
+            guard let answer = context.request.writerAnswer else {
                 throw BackupRunStop.writerConflict(claim)
             }
-            if resolution == .split {
-                let fresh = context.request.splitNamespaceId ?? BackupKeys.makeNamespaceId()
+            if case .split(let fresh) = answer {
                 context.paths = context.paths.inNamespace(fresh)
-                context.didSplit = true
                 // No namespace may reference another's blobs, per
                 // 5.12, so the split starts from a full upload.
                 save(
@@ -402,8 +402,9 @@ public actor SnapshotEngine {
         let scannedAt = now
         var setRequest = game.set
         if game.isOneOffFullSnapshot { setRequest.mode = .full }
-        let previous = (try? store.lastUploadedManifest(
-            targetId: targetId, gameKey: game.stream.key))?.manifest
+        let previous =
+            (try? store.lastUploadedManifest(
+                targetId: targetId, gameKey: game.stream.key))?.manifest
         // The app keeps its joins in memory for one launch only.
         let earlierJoins = (previous?.entries ?? [])
             .filter { $0.root == .container && $0.detectionSource == .runtimeWatch }
@@ -609,33 +610,19 @@ public actor SnapshotEngine {
 
     // MARK: - The staleness clock, per 7.2
 
-    func markAttempt(targetId: String, gameKey: String) throws {
-        var clock =
-            (try? store.staleness(targetId: targetId, gameKey: gameKey))
-            ?? StalenessClock(targetId: targetId, gameKey: gameKey)
-        clock.lastAttemptAt = now
-        try store.saveStaleness(clock)
-    }
-
     /// A snapshot that carries a partial path resets the clock only
     /// when no partial path is a save member, per 7.2.
     func markSuccess(
         targetId: String, gameKey: String, manifest: SnapshotManifest, scannedAt: Date,
         isComplete: Bool
     ) {
-        var clock =
-            (try? store.staleness(targetId: targetId, gameKey: gameKey))
-            ?? StalenessClock(targetId: targetId, gameKey: gameKey)
-        clock.lastAttemptAt = now
-
         let savePartials = PartialPathClock.savePartials(in: manifest.entries)
         if savePartials.isEmpty, isComplete {
-            clock.lastSuccessAt = scannedAt
-            clock.partialSince = nil
-        } else if clock.partialSince == nil {
-            clock.partialSince = now
+            save(
+                try store.saveStaleness(
+                    StalenessClock(targetId: targetId, gameKey: gameKey, lastSuccessAt: scannedAt)),
+                "the staleness clock of \(gameKey)")
         }
-        save(try store.saveStaleness(clock), "the staleness clock of \(gameKey)")
 
         let previous = (try? store.partialTally(targetId: targetId, gameKey: gameKey)) ?? [:]
         save(
@@ -730,19 +717,19 @@ public actor SnapshotEngine {
 
     /// Takes the room for one blob out of what the target has left.
     func claimRoom(_ context: RunContext, bytes: Int64) async throws {
-        if !context.hasReadTheRoom {
-            if provider.capabilities.canQueryQuota, context.quota == nil {
+        if case .notRead = context.room {
+            if provider.capabilities.canQueryQuota {
                 context.quota = try? await provider.quota()
             }
-            context.room = QuotaCheck.freeBytes(
+            let free = QuotaCheck.freeBytes(
                 reading: context.quota,
                 capBytes: context.request.descriptor.capBytes,
                 storedBytes: storedBytes(targetId: context.request.descriptor.id))
-            context.hasReadTheRoom = true
+            context.room = free.map(Room.left) ?? .noLimit
         }
-        guard let room = context.room else { return }
+        guard case .left(let room) = context.room else { return }
         guard bytes <= room else { throw NoRoom(blobBytes: bytes, freeBytes: room) }
-        context.room = room - bytes
+        context.room = .left(room - bytes)
     }
 
     /// What Empo holds on the target now, the number the cap of 5.14
@@ -773,7 +760,8 @@ public actor SnapshotEngine {
             return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
         case .notFound:
             return BackupRunStop.rejected(
-                message: screenText("A backup file is missing from this location. Back up again to replace it."))
+                message: screenText(
+                    "A backup file is missing from this location. Back up again to replace it."))
         }
     }
 

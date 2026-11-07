@@ -23,7 +23,7 @@ final class BackupBadges {
     /// no game reached the mark.
     private(set) var banner: LibraryStaleBanner?
     private(set) var bannerTargetLabel: String?
-    private(set) var clocks: [GameFreshness] = []
+    private(set) var clocks: [LateGame] = []
 
     /// The state one card draws. A game that is backed up and
     /// current gets none, which is invariant 9.
@@ -60,7 +60,7 @@ final class BackupBadges {
         let now = Date()
 
         var badges: [String: GameBackupBadge] = [:]
-        var clocks: [GameFreshness] = []
+        var clocks: [LateGame] = []
         for game in games {
             let gameKey = BackupKeys.gameKey(containerFolderName: game.id)
             let read = GameBackupStatusReader.read(
@@ -70,7 +70,7 @@ final class BackupBadges {
                 store: store,
                 now: now)
             badges[game.id] = read.status.badge
-            clocks.append(read.freshness)
+            if let late = read.late { clocks.append(late) }
         }
 
         badgesByGameId = badges
@@ -86,10 +86,8 @@ final class BackupBadges {
     /// screen, where the target row of 13.5 carries the fix.
     func pressTheBanner() {
         guard let banner else { return }
-        if banner.action == .allowThisRunOverCellular {
-            BackupNetwork.allowsThisRunOverCellular = true
-        }
-        BackupScheduler.shared.pressBackUpNow(.library)
+        BackupScheduler.shared.pressBackUpNow(
+            .library, overCellular: banner.action == .allowThisRunOverCellular)
     }
 
     /// Whether the banner's action leads to the Backups screen

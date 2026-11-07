@@ -17,67 +17,7 @@ import Json5
 /// implementation. See the `Json5` doc comment for the number
 /// fidelity rules and for the strict-JSON stand-ins that replace
 /// `infinity` and `NaN`.
-///
-/// `stripLineComments` stays a local text pass. Callers use it for
-/// a minimal clean without the full JSON5 normalization, and it
-/// must keep `//` sequences inside string literals intact.
 public enum JSON5LiteParser {
-
-    /// Strips `//` line comments only. This stays for callers that
-    /// want a minimal clean without the full JSON5 normalization.
-    /// The code first normalizes CRLF / CR to LF. The comment-skip
-    /// loop then cannot run away if the file came from a Windows
-    /// editor.
-    public static func stripLineComments(_ raw: String) -> String {
-        let normalized = raw.replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-
-        var out = ""
-        out.reserveCapacity(normalized.count)
-        var inString = false
-        var escaped = false
-        var i = normalized.startIndex
-
-        while i < normalized.endIndex {
-            let c = normalized[i]
-
-            if escaped {
-                out.append(c)
-                escaped = false
-                i = normalized.index(after: i)
-                continue
-            }
-
-            if c == "\\" && inString {
-                out.append(c)
-                escaped = true
-                i = normalized.index(after: i)
-                continue
-            }
-
-            if c == "\"" {
-                inString.toggle()
-                out.append(c)
-                i = normalized.index(after: i)
-                continue
-            }
-
-            if !inString && c == "/" {
-                let next = normalized.index(after: i)
-                if next < normalized.endIndex && normalized[next] == "/" {
-                    while i < normalized.endIndex && normalized[i] != "\n" {
-                        i = normalized.index(after: i)
-                    }
-                    continue
-                }
-            }
-
-            out.append(c)
-            i = normalized.index(after: i)
-        }
-
-        return out
-    }
 
     /// Rewrites the JSON5 surface that json5pp `parse5` accepts
     /// into strict JSON that `JSONSerialization` / `JSONDecoder`
@@ -107,12 +47,5 @@ public enum JSON5LiteParser {
         let cleaned = normalizeToStrictJSON(raw)
         guard let data = cleaned.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode(T.self, from: data)
-    }
-
-    /// Convenience for callers holding `Data` instead of `String`.
-    /// Decodes the data as UTF-8 first.
-    public static func stripLineComments(in data: Data) -> Data? {
-        guard let text = String(data: data, encoding: .utf8) else { return nil }
-        return stripLineComments(text).data(using: .utf8)
     }
 }

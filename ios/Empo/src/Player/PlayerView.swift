@@ -10,7 +10,7 @@ struct PlayerView: View {
     var layout: ControlsLayout
     @Environment(\.pauseManager) private var pauseManager
     @Environment(\.appSettings) private var settings
-    @State private var editMode = false
+    private var editMode: Bool { layout.editSessionActive }
     /// Mirrored here so entering edit mode with the preference on
     /// can round the layout immediately (the toggle itself lives in
     /// PlayerEditToolbar).
@@ -38,13 +38,7 @@ struct PlayerView: View {
     @State private var input = SessionInput()
     @State private var controlsVisible: Bool = true
 
-    @State private var showAddSheet = false
-    @State private var showResetConfirm = false
-    @State private var editingButton: ButtonModel?
-    @State private var editingActionButton: ActionButtonModel?
-    @State private var editingDPad = false
-    @State private var draggingDPad = false
-    @State private var draggingButtonID: UUID?
+    @State private var editDialog: ControlsEditDialog?
 
     /// More-menu sheet (toolbar -> ellipsis button). Houses pause /
     /// cheats / fast-forward / debug-overlay so the toolbar itself
@@ -145,11 +139,7 @@ struct PlayerView: View {
                         controlsMinY: controlsMinY,
                         editMode: editMode,
                         safeArea: controlsSafeArea,
-                        editingButton: $editingButton,
-                        editingActionButton: $editingActionButton,
-                        editingDPad: $editingDPad,
-                        draggingDPad: $draggingDPad,
-                        draggingButtonID: $draggingButtonID
+                        editDialog: $editDialog
                     )
                 }
 
@@ -180,8 +170,7 @@ struct PlayerView: View {
                         safeArea: controlsSafeArea,
                         geoSize: geo.size,
                         layout: layout,
-                        showAddSheet: $showAddSheet,
-                        showResetConfirm: $showResetConfirm,
+                        editDialog: $editDialog,
                         onDone: { toggleEditMode() }
                     )
                     // Fade while the screen gizmo drags, so the
@@ -374,7 +363,7 @@ struct PlayerView: View {
             // library -> resume (engine state is process-static).
             actions.runtime.bind(container: layout.currentContainer)
             applyBindings()
-            input.start(overlayHidden: $controlsHidden, editMode: $editMode)
+            input.start(overlayHidden: $controlsHidden, editMode: { layout.editSessionActive })
 
             // Pick up the pause snapshot and hold it until the engine
             // signals its first frame. Hide controls during transition.
@@ -395,6 +384,13 @@ struct PlayerView: View {
             }
         }
         .onDisappear {
+            // A pause from edit mode removes this view. The next
+            // player view starts outside edit mode, so the session
+            // ends here, the same as Done.
+            if editMode {
+                layout.save()
+                layout.endEditSession()
+            }
             ChromeHitRegions.removeAll()
             input.stop()
             EngineSessionCoordinator.shared.clearTextInputModeHandler()
@@ -424,8 +420,8 @@ struct PlayerView: View {
                 ),
                 fastForwardMultiplier: actions.runtime.fastForwardMultiplier,
                 showControllerRemap: input.hasSeenPhysicalInput,
-                onControllerRemap: { showControllerRemap = true },
-                onLayoutProfile: { showLayoutProfilePicker = true },
+                onControllerRemap: { sheetAction = .controllerRemap },
+                onLayoutProfile: { sheetAction = .layoutProfile },
                 onPause: { sheetAction = .pause },
                 onQuit: appState.canQuitGame ? { sheetAction = .quit } : nil,
                 onCheats: actions.isAvailable(EmpoActionCatalog.toggleCheats)
@@ -460,11 +456,7 @@ struct PlayerView: View {
         .controlsEditDialogs(
             layout: layout,
             actions: actions,
-            showAddSheet: $showAddSheet,
-            showResetConfirm: $showResetConfirm,
-            editingButton: $editingButton,
-            editingActionButton: $editingActionButton,
-            editingDPad: $editingDPad
+            dialog: $editDialog
         )
     }
 
@@ -734,22 +726,25 @@ struct PlayerView: View {
     }
 
     private enum SheetAction {
-        case pause, quit
+        case pause, quit, controllerRemap, layoutProfile
     }
 
-    /// The pause and the quit remove this view. When they run while
-    /// the More sheet is still on screen, SwiftUI can keep the view
-    /// after the game ended, so they wait until the sheet is gone.
     private func applyBindings() {
         input.applyBindings(container: layout.currentContainer, manifest: layout.activeManifest?.bindings)
     }
 
+    /// The pause and the quit remove this view. When they run while
+    /// the More sheet is still on screen, SwiftUI can keep the view
+    /// after the game ended. SwiftUI shows one sheet at a time, so the
+    /// next sheet also waits until the More sheet is gone.
     private func runSheetAction() {
         let action = sheetAction
         sheetAction = nil
         switch action {
         case .pause: appState.requestPause()
         case .quit: appState.quitGame()
+        case .controllerRemap: showControllerRemap = true
+        case .layoutProfile: showLayoutProfilePicker = true
         case nil: break
         }
     }
@@ -760,20 +755,21 @@ struct PlayerView: View {
             controlsHidden = false
             input.noteManualOverlayToggle()
         }
-        withAnimation(Motion.snappy) {
-            editMode.toggle()
-        }
         if keyboardMode {
             toggleKeyboard()
         }
-        if editMode {
-            layout.beginEditSession()
+        if entering {
+            withAnimation(Motion.snappy) {
+                layout.beginEditSession()
+            }
         } else {
             // Save BEFORE ending the session: the ambient auto-create
             // branch only fires inside an edit session, and sheet-only
             // edits commit exactly here.
             layout.save()
-            layout.endEditSession()
+            withAnimation(Motion.snappy) {
+                layout.endEditSession()
+            }
             resetToolbarIdleTimer()
         }
     }
@@ -838,6 +834,7 @@ struct PlayerView: View {
         // playable - users don't need the buttons screaming for
         // attention the moment the snapshot lifts. They'll brighten
         // in as soon as the user taps anywhere.
+        let fading = resumeSnapshot
         withAnimation(Motion.standard) {
             snapshotOpacity = 0
             controlsVisible = true
@@ -847,6 +844,9 @@ struct PlayerView: View {
             // when the user no longer sees it, even if the spring
             // duration changes.
             resumeSnapshot = nil
+            // A pause during the fade gives a new snapshot, which
+            // the next player view shows.
+            guard let fading, pauseManager.pauseSnapshot === fading else { return }
             pauseManager.pauseSnapshot = nil
             pauseManager.snapshotCanFade = false
         }

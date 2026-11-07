@@ -200,7 +200,7 @@ final class GameLauncher {
         guard let session = session(of: process), let message = PlayerMessage(rawValue: line) else { return }
         switch message {
         case .paused:
-            session.logger.recordSessionPlayTime(for: entry(session))
+            session.logger.recordSessionPlayTime()
         case .resumed:
             if let game = entry(session) { session.logger.resumeSessionTiming(for: game) }
         }
@@ -215,7 +215,7 @@ final class GameLauncher {
         if !crashed, status == 64 {
             session.logger.note("Empo Player could not read the launch data from Empo")
         }
-        session.logger.recordSessionPlayTime(for: entry(session))
+        session.logger.recordSessionPlayTime()
         guard crashed || ![0, 128 + SIGTERM].contains(status) else { return }
         // 64: the launch data was wrong. 70: the core did not open.
         let title =
@@ -246,7 +246,7 @@ final class GameLauncher {
             }
         }
         for session in sessions.values {
-            session.logger.recordSessionPlayTime(for: entry(session))
+            session.logger.recordSessionPlayTime()
             session.process.terminate()
         }
         sessions.removeAll()

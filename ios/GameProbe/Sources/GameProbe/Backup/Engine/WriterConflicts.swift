@@ -7,15 +7,35 @@ public struct WriterConflicts: Codable, Equatable, Sendable {
     public static let fileName = "writer-conflicts.json"
     public static let currentVersion = 1
 
-    public struct Answer: Codable, Equatable, Sendable {
-        public var resolution: WriterClaimResolution
-        /// The namespace a split moves to. The screen makes it when
-        /// the user answers, so the run and the Keychain agree on it.
-        public var splitNamespaceId: String?
+    public enum Answer: Codable, Equatable, Sendable {
+        case split(namespaceId: String)
+        case takeOver
 
-        public init(resolution: WriterClaimResolution, splitNamespaceId: String? = nil) {
-            self.resolution = resolution
-            self.splitNamespaceId = splitNamespaceId
+        private enum CodingKeys: String, CodingKey {
+            case resolution, splitNamespaceId
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            switch try container.decode(WriterClaimResolution.self, forKey: .resolution) {
+            case .split:
+                let namespaceId = try container.decodeIfPresent(
+                    String.self, forKey: .splitNamespaceId)
+                self = .split(namespaceId: namespaceId ?? BackupKeys.makeNamespaceId())
+            case .takeOver:
+                self = .takeOver
+            }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .split(let namespaceId):
+                try container.encode(WriterClaimResolution.split, forKey: .resolution)
+                try container.encode(namespaceId, forKey: .splitNamespaceId)
+            case .takeOver:
+                try container.encode(WriterClaimResolution.takeOver, forKey: .resolution)
+            }
         }
     }
 
@@ -44,9 +64,10 @@ public struct WriterConflicts: Codable, Equatable, Sendable {
 
     public mutating func answer(targetId: String, resolution: WriterClaimResolution) {
         questions.removeValue(forKey: targetId)
-        answers[targetId] = Answer(
-            resolution: resolution,
-            splitNamespaceId: resolution == .split ? BackupKeys.makeNamespaceId() : nil)
+        switch resolution {
+        case .split: answers[targetId] = .split(namespaceId: BackupKeys.makeNamespaceId())
+        case .takeOver: answers[targetId] = .takeOver
+        }
     }
 
     /// A run that met a claim leaves a question. Any other run spends
@@ -95,7 +116,8 @@ public struct WriterConflicts: Codable, Equatable, Sendable {
 public enum WriterConflictQuestion {
 
     public static func line(deviceName: String, targetLabel: String) -> String {
-        screenText("%@ also backs up to %@. Where should new backups from this device go?", deviceName, targetLabel)
+        screenText(
+            "%@ also backs up to %@. Where should new backups from this device go?", deviceName, targetLabel)
     }
 
     public static let note =

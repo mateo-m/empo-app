@@ -147,9 +147,9 @@ struct MkxpCore: GameCore {
         guard !replacing else { return }
         let modern: Bool
         switch source {
-        case .folder: modern = profile.modernRubyScripts
+        case .folder: modern = profile.ruby.modernScripts
         case .archive: modern = false
-        case .joiPlay(let type): modern = type == "mkxp-z" || profile.modernRubyScripts
+        case .joiPlay(let type): modern = type == "mkxp-z" || profile.ruby.modernScripts
         }
         guard modern else { return }
         let stateDirectory = container.ensureEmpoStateDirectory()
@@ -164,8 +164,8 @@ struct MkxpCore: GameCore {
         Self.migrateOldSettings(in: container)
         let settings = MkxpSettings.load(from: container.empoStateURL)
         let profile = MkxpProfile.load(for: container)
-        let ruby = settings.rubyVersionOverride ?? profile.rubyVersion
-        let modern = settings.useModernRuby ?? profile.modernRubyScripts
+        let ruby = settings.rubyVersionOverride ?? profile.ruby.code
+        let modern = settings.useModernRuby ?? profile.ruby.modernScripts
         let inGameKeyboard =
             settings.useInGameKeyboard
             ?? PokemonEssentialsDetection.detect(
@@ -255,12 +255,8 @@ struct MkxpCore: GameCore {
     }
 
     /// Older builds kept the engine settings in `game_settings.json`.
-    /// Moving them rebuilds `mkxp.json`, so the display settings must
-    /// leave that file first.
     private static func migrateOldSettings(in container: GameContainer) {
         let stateDirectory = container.empoStateURL
-        guard ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: stateDirectory)
-        else { return }
         ManagedMkxpConfig.migrateLegacyEngineSettingsIfNeeded(
             stateDirectory: stateDirectory,
             gameDirectory: container.gameURL
@@ -329,7 +325,7 @@ struct MkxpCore: GameCore {
             }
             let code =
                 MkxpSettings.load(from: container.empoStateURL).rubyVersionOverride
-                ?? MkxpProfile.load(for: container).rubyVersion
+                ?? MkxpProfile.load(for: container).ruby.code
             rows.append(
                 InfoRow(
                     label: String(

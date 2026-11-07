@@ -173,8 +173,17 @@ public struct LayoutProfileStore {
             return false
         }
         updatePins(matching: oldName, to: .profile(newName))
+        renameInMigrationRecord(from: oldName, to: newName)
         try? fm.removeItem(at: profileURL(oldName))
         return true
+    }
+
+    private func renameInMigrationRecord(from oldName: String, to newName: String) {
+        let url = profilesRoot.appendingPathComponent(MigrationRecord.fileName)
+        let old = MigrationRecord.load(at: url)
+        var record = old
+        record.renameProfile(from: oldName, to: newName)
+        if record != old { record.save(to: url) }
     }
 
     /// Clears every pin to the profile first, so no game dangles.

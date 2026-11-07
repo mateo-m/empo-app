@@ -30,9 +30,9 @@ struct RestoreSnapshotSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scope: RestoreScope = .savesAndSettings
     @State private var outcome: RestoreOutcome?
-    @State private var isRestoring = false
-    @State private var showsTheMarkerSheet = false
-    @State private var showsTheAttachSheet = false
+    private var isRestoring: Bool { restoring != nil }
+    @State private var restoring: Task<Void, Never>?
+    @State private var sheets = SheetQueue<Sheet>()
     /// The game the attach of 11.11 named, so the question of 11.10
     /// compares against that game's tree and not against none.
     @State private var attachedGame: GameContainer?
@@ -50,24 +50,33 @@ struct RestoreSnapshotSheet: View {
             }
         }
         .interactiveDismissDisabled(isRestoring)
-        .sheet(isPresented: $showsTheAttachSheet) {
-            AttachGameSheet(snapshot: row.identity) { game in
-                attachedGame = game
-                press()
-            }
-        }
-        .sheet(isPresented: $showsTheMarkerSheet) {
-            VersionMarkerSheetView(gameName: gameName) { action in
-                run(scope: action.scope, replacesTheTree: action.replacesTheTree)
-            }
-        }
+        .sheet(
+            item: $sheets.presented, onDismiss: { sheets.closed() },
+            content: { sheet in
+                switch sheet {
+                case .attach:
+                    AttachGameSheet(snapshot: row.identity) { game in
+                        attachedGame = game
+                        press()
+                    }
+                case .marker:
+                    VersionMarkerSheetView(gameName: gameName) { action in
+                        run(scope: action.scope, replacesTheTree: action.replacesTheTree)
+                    }
+                }
+            })
+    }
+
+    private enum Sheet: String, Identifiable {
+        case attach, marker
+        var id: String { rawValue }
     }
 
     private var question: some View {
         StandardSheet(
             title: "Restore this backup?",
             barAction: isRestoring
-                ? SheetBarAction("Stop") { Task { await RestoreCoordinator.shared.cancel() } }
+                ? SheetBarAction("Stop") { restoring?.cancel() }
                 : SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
@@ -94,7 +103,7 @@ struct RestoreSnapshotSheet: View {
             }
             SheetPrimaryButton(buttonTitle) {
                 if attaches {
-                    showsTheAttachSheet = true
+                    sheets.show(.attach)
                 } else {
                     press()
                 }
@@ -122,7 +131,7 @@ struct RestoreSnapshotSheet: View {
         if VersionMarkerSheet.shows(
             mode: row.mode, scope: scope, markerDiffers: markerDiffers)
         {
-            showsTheMarkerSheet = true
+            sheets.show(.marker)
             return
         }
         run(scope: scope, replacesTheTree: false)
@@ -130,11 +139,12 @@ struct RestoreSnapshotSheet: View {
 
     private func run(scope: RestoreScope, replacesTheTree: Bool) {
         guard !isRestoring else { return }
-        isRestoring = true
         outcome = nil
-        Task {
+        // The restore reads the cancel of this task as Stop, also
+        // before it reached the coordinator.
+        restoring = Task {
             outcome = await restore(row, scope, replacesTheTree)
-            isRestoring = false
+            restoring = nil
         }
     }
 }

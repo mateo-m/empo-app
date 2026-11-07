@@ -16,8 +16,8 @@ final class PackageImportModel {
     private(set) var source: PackageSource?
     private(set) var installedGameKeys: [String: String] = [:]
     private let names = BackupGameNames()
-    /// True once a restore finished or stopped. A stopped one keeps
-    /// the staged package for the resume question of 11.9.
+    /// True once a restore stopped. The resume question of 11.9 then
+    /// owns the staged package, also after a later restore finished.
     private var keepsThePackage = false
 
     var sourceDevice: String { source?.manifest.sourceDevice ?? "" }

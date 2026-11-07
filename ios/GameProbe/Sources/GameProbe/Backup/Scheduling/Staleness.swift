@@ -138,24 +138,25 @@ public struct TargetFreshness: Equatable, Sendable {
     }
 }
 
-/// What one game's badge shows: the worst enabled target, per 7.1.
-public struct GameFreshness: Equatable, Sendable {
+/// A game past the 7-day mark on its worst enabled target, per 7.1.
+/// A fresh game has none.
+public struct LateGame: Equatable, Sendable {
 
     public var gameKey: String
     public var level: StalenessLevel
-    /// The target the level came from. `nil` when nothing is late.
-    public var targetId: String?
-    public var cause: StaleCause?
+    /// The target the level came from.
+    public var targetId: String
+    public var cause: StaleCause
     /// When the game stopped being protected. The clock counts from
     /// here.
-    public var unprotectedSince: Date?
+    public var unprotectedSince: Date
 
     public init(
-        gameKey: String = "",
-        level: StalenessLevel = .fresh,
-        targetId: String? = nil,
-        cause: StaleCause? = nil,
-        unprotectedSince: Date? = nil
+        gameKey: String,
+        level: StalenessLevel,
+        targetId: String,
+        cause: StaleCause,
+        unprotectedSince: Date
     ) {
         self.gameKey = gameKey
         self.level = level
@@ -234,7 +235,8 @@ public enum Staleness {
         return .fresh
     }
 
-    /// The badge one game's card shows: the worst enabled target.
+    /// The badge one game's card shows: the worst enabled target, or
+    /// `nil` while the game is fresh on every one.
     ///
     /// A paused target never wins, because it left the promise. Two
     /// targets at the same level break the tie on the older clock,
@@ -242,56 +244,43 @@ public enum Staleness {
     /// every refresh.
     public static func worst(
         gameKey: String = "", of targets: [TargetFreshness], now: Date
-    ) -> GameFreshness {
-        var worst = GameFreshness(gameKey: gameKey)
-        for target in targets where !target.isPaused {
+    ) -> LateGame? {
+        targets.compactMap { target -> LateGame? in
             let level = level(of: target, now: now)
-            guard level != .fresh else { continue }
-            let since = unprotectedSince(target)
-            if level > worst.level || (level == worst.level && wins(since, over: worst, target)) {
-                worst = GameFreshness(
-                    gameKey: gameKey,
-                    level: level,
-                    targetId: target.targetId,
-                    cause: target.cause ?? .waitingForARun,
-                    unprotectedSince: since)
-            }
+            guard level != .fresh, let since = unprotectedSince(target) else { return nil }
+            return LateGame(
+                gameKey: gameKey, level: level, targetId: target.targetId,
+                cause: target.cause ?? .waitingForARun, unprotectedSince: since)
         }
-        return worst
-    }
-
-    /// The tie-break inside one level: the older clock, then the
-    /// target id.
-    private static func wins(
-        _ since: Date?, over worst: GameFreshness, _ target: TargetFreshness
-    ) -> Bool {
-        let held = worst.unprotectedSince ?? .distantFuture
-        let candidate = since ?? .distantFuture
-        if candidate != held { return candidate < held }
-        return target.targetId < (worst.targetId ?? "")
+        .min { left, right in
+            if left.level != right.level { return left.level > right.level }
+            if left.unprotectedSince != right.unprotectedSince {
+                return left.unprotectedSince < right.unprotectedSince
+            }
+            return left.targetId < right.targetId
+        }
     }
 
     /// The one banner, or `nil` while no game has reached 21 days.
     ///
     /// One banner covers the library, not one per game. It names the
     /// cause of the worst game and carries that cause's action.
-    public static func libraryBanner(_ games: [GameFreshness]) -> LibraryStaleBanner? {
+    public static func libraryBanner(_ games: [LateGame]) -> LibraryStaleBanner? {
         let late = games.filter { $0.level == .banner }
         guard let worst = worstGame(of: late) else { return nil }
-        let cause = worst.cause ?? .waitingForARun
         return LibraryStaleBanner(
-            cause: cause,
-            action: cause.action,
+            cause: worst.cause,
+            action: worst.cause.action,
             targetId: worst.targetId,
             gameCount: late.count)
     }
 
-    public static func worstGame(of games: [GameFreshness]) -> GameFreshness? {
-        games.filter { $0.level != .fresh }.min { left, right in
+    public static func worstGame(of games: [LateGame]) -> LateGame? {
+        games.min { left, right in
             if left.level != right.level { return left.level > right.level }
-            let leftSince = left.unprotectedSince ?? .distantFuture
-            let rightSince = right.unprotectedSince ?? .distantFuture
-            if leftSince != rightSince { return leftSince < rightSince }
+            if left.unprotectedSince != right.unprotectedSince {
+                return left.unprotectedSince < right.unprotectedSince
+            }
             return left.gameKey < right.gameKey
         }
     }

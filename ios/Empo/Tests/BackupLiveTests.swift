@@ -292,7 +292,7 @@ final class BackupLiveTests: XCTestCase {
                 namespaceId: namespaceId,
                 stream: BackupStream(key: game.identity.gameKey),
                 snapshotId: firstSnapshot,
-                scope: .wholeGame,
+                choice: .restore(.wholeGame),
                 destination: MemberSource(container: game.container),
                 freeSpaceBytes: .max,
                 mode: .full))

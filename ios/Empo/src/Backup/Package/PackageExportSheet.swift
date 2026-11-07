@@ -95,12 +95,18 @@ final class PackageExportModel {
             }
             record = built
             phase = .saving
-        } catch PackageBuildFailure.notEnoughSpace(let shortfall) {
-            phase = .failed(PackageDoors.shortfallLine(BackupText.bytes(shortfall)))
-        } catch PackageBuildFailure.cancelled {
-            phase = .done
         } catch {
-            phase = .failed(String(localized: "Empo couldn't make this package. Try again."))
+            // Cancel already set `.done`, and a failure that the cancel
+            // caused must not open the sheet again.
+            guard !Task.isCancelled else { return }
+            switch error {
+            case PackageBuildFailure.notEnoughSpace(let shortfall):
+                phase = .failed(PackageDoors.shortfallLine(BackupText.bytes(shortfall)))
+            case PackageBuildFailure.cancelled:
+                phase = .done
+            default:
+                phase = .failed(String(localized: "Empo couldn't make this package. Try again."))
+            }
         }
     }
 

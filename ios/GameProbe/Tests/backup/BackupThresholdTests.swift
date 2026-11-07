@@ -148,8 +148,4 @@ final class BackupThresholdTests: XCTestCase {
         XCTAssertTrue(BackupModeChange.makesDirty(from: nil, to: .full))
         XCTAssertFalse(BackupModeChange.makesDirty(from: .slim, to: .slim))
     }
-
-    func testTheDirtyReasonIsStable() {
-        XCTAssertEqual(BackupModeChange.dirtyReason, "mode-change")
-    }
 }

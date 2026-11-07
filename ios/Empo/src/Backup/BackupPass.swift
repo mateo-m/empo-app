@@ -30,19 +30,16 @@ final class BackupPass: BackupRunning {
             return BackupPassResult(didFinish: true)
         }
 
-        let (games, names) = await gamesInScope(scope)
+        let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
         BackupGameNames.remember(names)
-        BackupRunMonitor.shared.runStarts(
+        BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
         var rows: [BackupPassTarget] = []
         var didFinish = true
         var stopNeedsTheUser = false
 
         for descriptor in targets {
-            guard !Task.isCancelled else {
-                BackupRunMonitor.shared.runEnds()
-                return BackupPassResult(targets: rows)
-            }
+            guard !Task.isCancelled else { return BackupPassResult(targets: rows) }
             // A game wins everything, per 7.6. The session end runs
             // the backbone pass, which takes the rest.
             guard !BackupDeviceConditions.isSessionLive else {
@@ -65,7 +62,6 @@ final class BackupPass: BackupRunning {
             guard !Task.isCancelled else {
                 // A pause. The target row and the notices stay as
                 // they were, because the run proved nothing.
-                BackupRunMonitor.shared.runEnds()
                 return BackupPassResult(didFinish: false, targets: rows)
             }
             BackupRunMonitor.shared.targetEnds()
@@ -99,7 +95,6 @@ final class BackupPass: BackupRunning {
                 BackupPassTarget(id: descriptor.id, label: descriptor.displayName, causes: causes))
         }
 
-        BackupRunMonitor.shared.runEnds()
         return BackupPassResult(didFinish: didFinish, targets: rows)
     }
 
@@ -123,7 +118,6 @@ final class BackupPass: BackupRunning {
 
         var conflicts = WriterConflicts.read(
             applicationSupport: BackupRoot.layout.applicationSupport)
-        let answer = conflicts.answer(for: descriptor.id)
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
@@ -137,8 +131,7 @@ final class BackupPass: BackupRunning {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerResolution: answer?.resolution,
-            splitNamespaceId: answer?.splitNamespaceId,
+            writerAnswer: conflicts.answer(for: descriptor.id),
             syncGroupId: SyncStore.state().groupId)
 
         // The engine takes the store over. `SQLiteDatabase` closes
@@ -148,7 +141,9 @@ final class BackupPass: BackupRunning {
             provider: provider, store: store, localRoot: BackupRoot.layout.root,
             observer: BackupRunMonitor.shared,
             note: { BackupLog.line("SnapshotEngine", $0) })
+        BackupRunMonitor.shared.liveRunId = request.runId
         let result = await engine.run(request)
+        BackupRunMonitor.shared.liveRunId = nil
         log(
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
@@ -185,7 +180,7 @@ final class BackupPass: BackupRunning {
     /// with the name each one shows. The pill and the run block of
     /// 13.2 name the game they upload.
     private func gamesInScope(
-        _ scope: BackupScanScope
+        _ scope: BackupScanScope, targetIds: Set<String>
     ) async -> (games: [BackupRunGame], names: [String: String]) {
         let containers = GameContainer.discover()
         let byKey = Dictionary(
@@ -204,7 +199,8 @@ final class BackupPass: BackupRunning {
             log("\(restoring) sits out, its restore has not finished")
         }
         let keys = BackupTriggerPlan.games(
-            in: scope, dirty: dirty, library: Array(byKey.keys).sorted(), restoring: restoring)
+            in: scope, dirty: dirty, library: Array(byKey.keys).sorted(), targetIds: targetIds,
+            restoring: restoring)
 
         let thresholds = BackupTargets.thresholds()
         var games: [BackupRunGame] = []

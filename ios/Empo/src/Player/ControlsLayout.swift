@@ -401,7 +401,8 @@ class ControlsLayout {
     private static let maxEditUndoDepth = 50
 
     private var editUndoStack: [OrientedControls] = []
-    private var editSessionActive = false
+    /// The edit mode of the player and of the profile editor.
+    private(set) var editSessionActive = false
 
     var canUndo: Bool { editSessionActive && !editUndoStack.isEmpty }
 
@@ -794,11 +795,9 @@ class ControlsLayout {
         if currentGameID != nil {
             save()
         }
-        editSessionActive = false
         // A failed save() can leave screen edits behind. They must
         // not leak into the next game's first save.
-        screenEdits.removeAll()
-        activeScreenDrag = nil
+        endEditSession()
         clearEditUndoStack()
         staggerGeneration += 1
         currentGameID = newGameID
@@ -807,6 +806,7 @@ class ControlsLayout {
         profileRejectionErrorCount = 0
         pinFellThrough = false
         importOfferPending = false
+        gameLayoutNoticePending = false
         separationLogSignature = nil
         activeManifestSource = nil
         resolutionInvolvesDerivation = false
@@ -1611,6 +1611,7 @@ class ControlsLayout {
             pinnedRead?.invalid == true ? (pinnedRead?.errorCount ?? 1) : 0
 
         provenance = outcome.provenance
+        gameLayoutNoticePending = false
         switch outcome.provenance {
         case .pinnedProfile:
             if let touch = pinnedRead?.touch {
@@ -1619,13 +1620,10 @@ class ControlsLayout {
         case .gameLayout:
             // One-time heads-up that the game layout displaced the
             // user's default profile (record section 8 wording).
-            if loaded.pin == .followChain,
-                LayoutProfilesManager.defaultProfileName != nil,
-                let gameID = currentGameID,
-                !Self.shownGameLayoutNotices().contains(gameID)
-            {
-                gameLayoutNoticePending = true
-            }
+            gameLayoutNoticePending =
+                loaded.pin == .followChain
+                && LayoutProfilesManager.defaultProfileName != nil
+                && currentGameID.map { !Self.shownGameLayoutNotices().contains($0) } == true
             applyResolvedLayout()
         case .defaultProfile(let name):
             if let touch = store.validTouch(name) {
@@ -1770,10 +1768,8 @@ class ControlsLayout {
                         comment: "Name of a layout profile that Empo makes when several games share edits."))
                 if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
                     target = shared
+                    record.renameProfile(from: profile, to: shared)
                     record.sharedProfiles.insert(shared)
-                    for (gameID, entry) in record.games where entry.profile == profile {
-                        record.games[gameID]?.profile = shared
-                    }
                 }
             }
             store.writePin(.profile(target), forGameFolder: container.url)

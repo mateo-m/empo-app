@@ -13,6 +13,7 @@ import UIKit
 enum GameViewEmbedder {
     private static weak var embeddedGameView: UIView?
     private static weak var sdlWindow: UIWindow?
+    private static var retryTask: Task<Void, Never>?
 
     static var isEmbedded: Bool { embeddedGameView != nil }
 
@@ -36,17 +37,23 @@ enum GameViewEmbedder {
         return true
     }
 
+    /// The core has no event for "the game window exists", so this polls.
+    /// `UIWindow.didBecomeVisibleNotification` comes too early: the PSDK
+    /// core shows its window before `gamecore_getGameWindow` returns it.
     static func embedWithRetry() {
+        retryTask?.cancel()
         if embedIfNeeded() { return }
-        Task { @MainActor in
+        retryTask = Task { @MainActor in
             for _ in 0..<40 {
                 try? await Task.sleep(for: .milliseconds(50))
-                if embedIfNeeded() { return }
+                if Task.isCancelled || embedIfNeeded() { return }
             }
         }
     }
 
     static func detach() {
+        retryTask?.cancel()
+        retryTask = nil
         guard let gameView = embeddedGameView else { return }
         let window = sdlWindow
 

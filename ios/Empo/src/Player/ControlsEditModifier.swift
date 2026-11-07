@@ -468,22 +468,43 @@ struct DPadEditSheet: View {
     }
 }
 
+/// SwiftUI shows one sheet or alert at a time, and two fingers can tap
+/// two controls in one frame.
+enum ControlsEditDialog: Hashable, Identifiable {
+    case addButton, resetConfirm, dpad
+    case button(UUID)
+    case actionButton(UUID)
+
+    var id: Self { self }
+}
+
 struct ControlsEditDialogs: ViewModifier {
     var layout: ControlsLayout
     var actions: PlayerActionRegistry?
 
-    @Binding var showAddSheet: Bool
-    @Binding var showResetConfirm: Bool
-    @Binding var editingButton: ButtonModel?
-    @Binding var editingActionButton: ActionButtonModel?
-    @Binding var editingDPad: Bool
+    @Binding var dialog: ControlsEditDialog?
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $showAddSheet) {
-                AddButtonSheet(layout: layout, actions: actions)
+            .sheet(
+                item: Binding(
+                    get: { dialog == .resetConfirm ? nil : dialog },
+                    set: { dialog = $0 })
+            ) { dialog in
+                switch dialog {
+                case .addButton: AddButtonSheet(layout: layout, actions: actions)
+                case .dpad: DPadEditSheet(layout: layout)
+                case .button(let id): ButtonEditSheet(layout: layout, buttonID: id)
+                case .actionButton(let id): ActionButtonEditSheet(layout: layout, buttonID: id)
+                case .resetConfirm: EmptyView()
+                }
             }
-            .alert(layout.resetConfirmationTitle, isPresented: $showResetConfirm) {
+            .alert(
+                layout.resetConfirmationTitle,
+                isPresented: Binding(
+                    get: { dialog == .resetConfirm },
+                    set: { if !$0, dialog == .resetConfirm { dialog = nil } })
+            ) {
                 Button(layout.resetConfirmationActionTitle, role: .destructive) {
                     layout.resetToResolvedDefault()
                 }
@@ -492,15 +513,6 @@ struct ControlsEditDialogs: ViewModifier {
             } message: {
                 Text(layout.resetConfirmationMessage())
             }
-            .sheet(item: $editingButton) { button in
-                ButtonEditSheet(layout: layout, buttonID: button.id)
-            }
-            .sheet(item: $editingActionButton) { button in
-                ActionButtonEditSheet(layout: layout, buttonID: button.id)
-            }
-            .sheet(isPresented: $editingDPad) {
-                DPadEditSheet(layout: layout)
-            }
     }
 }
 
@@ -508,21 +520,13 @@ extension View {
     func controlsEditDialogs(
         layout: ControlsLayout,
         actions: PlayerActionRegistry?,
-        showAddSheet: Binding<Bool>,
-        showResetConfirm: Binding<Bool>,
-        editingButton: Binding<ButtonModel?>,
-        editingActionButton: Binding<ActionButtonModel?>,
-        editingDPad: Binding<Bool>
+        dialog: Binding<ControlsEditDialog?>
     ) -> some View {
         modifier(
             ControlsEditDialogs(
                 layout: layout,
                 actions: actions,
-                showAddSheet: showAddSheet,
-                showResetConfirm: showResetConfirm,
-                editingButton: editingButton,
-                editingActionButton: editingActionButton,
-                editingDPad: editingDPad
+                dialog: dialog
             ))
     }
 }

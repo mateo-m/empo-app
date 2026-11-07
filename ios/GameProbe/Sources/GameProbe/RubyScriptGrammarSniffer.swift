@@ -349,15 +349,10 @@ public enum RubyScriptGrammarSniffer {
         return scripts.contains(where: callsRuby19Methods) ? .mixed : .legacy
     }
 
-    /// The source with comments and the plain part of string literals
-    /// and heredoc bodies replaced by spaces. Almost Heroic lists `font:, value:`
-    /// in a comment, which reads as keyword-arg shorthand. A quoted
-    /// string over several lines stays code, because one misread quote
-    /// would hide the rest of every script. For the same reason, a
-    /// heredoc counts only when its end line exists.
     private static func startsFrozen(_ script: String) -> Bool {
         for line in script.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {
-            if frozenStringLiteral?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil {
+            if frozenStringLiteral?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) != nil
+            {
                 return true
             }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -366,47 +361,82 @@ public enum RubyScriptGrammarSniffer {
         return false
     }
 
+    /// The source with comments and the plain part of string literals
+    /// and heredoc bodies replaced by spaces. Almost Heroic lists `font:, value:`
+    /// in a comment, which reads as keyword-arg shorthand. A quoted
+    /// string over several lines stays code, because one misread quote
+    /// would hide the rest of every script. For the same reason, a
+    /// heredoc counts only when its end line exists.
     private static func codeOnly(_ source: String) -> String {
+        scanLines(source).map { line in
+            line.kind == .skipped
+                ? "" : String(line.units.indices.map { line.code[$0] ? line.units[$0] : " " })
+        }.joined(separator: "\n")
+    }
+
+    private enum LineKind {
+        case code
+        case heredocBody
+        /// A block comment line or a heredoc end line.
+        case skipped
+    }
+
+    private struct ScannedLine {
+        let text: String
+        let units: [Character]
+        /// True at each UTF-16 unit that Ruby reads as code.
+        let code: [Bool]
+        let kind: LineKind
+    }
+
+    /// Splits a script into lines and follows its block comments and
+    /// heredocs, so every scan reads the same characters as code.
+    private static func scanLines(_ source: String) -> [ScannedLine] {
         let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        // Ruby needs the end line of a heredoc. With no end line after
+        // it, `value <<token` is a shift.
+        var lastLine: [String: Int] = [:]
+        var lastIndentlessLine: [String: Int] = [:]
+        for (number, line) in lines.enumerated() {
+            lastLine[line] = number
+            lastIndentlessLine[String(withoutIndent(line))] = number
+        }
         var inBlockComment = false
         var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
         var bodyStack = heredocBody
-        var code: [String] = []
-        for (number, line) in lines.enumerated() {
+        return lines.enumerated().map { number, line in
+            let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+            let noCode = [Bool](repeating: false, count: units.count + 1)
             if let open = heredocs.first {
                 if (open.indented ? withoutIndent(line) : line[...]) == open.end {
                     heredocs.removeFirst()
                     bodyStack = heredocBody
-                    code.append("")
-                } else {
-                    let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
-                    let mask = open.interpolates ? codeMask(units, stack: &bodyStack) : []
-                    code.append(String(units.indices.map { mask.isEmpty || !mask[$0] ? " " : units[$0] }))
+                    return ScannedLine(text: line, units: units, code: noCode, kind: .skipped)
                 }
-                continue
+                let code = open.interpolates ? codeMask(units, stack: &bodyStack) : noCode
+                return ScannedLine(text: line, units: units, code: code, kind: .heredocBody)
             }
             if startsDirective(line, "=begin") { inBlockComment = true }
             if inBlockComment {
+                // Ruby also ignores the rest of the `=end` line.
                 if startsDirective(line, "=end") { inBlockComment = false }
-                code.append("")
-                continue
+                return ScannedLine(text: line, units: units, code: noCode, kind: .skipped)
             }
+            let code = codeMask(units)
             let range = NSRange(line.startIndex..., in: line)
-            let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
-            let mask = codeMask(units)
-            for match in heredocStart?.matches(in: line, range: range) ?? [] where mask[match.range.location] {
-                guard let endRange = Range(match.range(at: 3), in: line) else { continue }
-                let end = String(line[endRange])
-                let indented = match.range(at: 1).length > 0
-                let closed = lines[(number + 1)...].contains {
-                    (indented ? withoutIndent($0) : $0[...]) == end
+            for match in heredocStart?.matches(in: line, range: range) ?? [] where code[match.range.location]
+            {
+                func group(_ number: Int) -> Substring {
+                    Range(match.range(at: number), in: line).map { line[$0] } ?? ""
                 }
-                let quote = Range(match.range(at: 2), in: line).map { line[$0] } ?? ""
-                if closed { heredocs.append((end, indented, quote != "'")) }
+                let end = String(group(3))
+                let indented = !group(1).isEmpty
+                if ((indented ? lastIndentlessLine[end] : lastLine[end]) ?? -1) > number {
+                    heredocs.append((end, indented, group(2) != "'"))
+                }
             }
-            code.append(String(units.indices.map { mask[$0] ? units[$0] : " " }))
+            return ScannedLine(text: line, units: units, code: code, kind: .code)
         }
-        return code.joined(separator: "\n")
     }
 
     private static let ruby19Call = try? NSRegularExpression(
@@ -416,7 +446,9 @@ public enum RubyScriptGrammarSniffer {
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
     /// its body on 1.8. Group 1 is the receiver of `respond_to?`.
     private static let ruby19Guard = try? NSRegularExpression(
-        pattern: #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#)
+        pattern:
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#
+    )
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
     private static let heredocStart = try? NSRegularExpression(
@@ -433,66 +465,44 @@ public enum RubyScriptGrammarSniffer {
     /// in a postfix `if` on the same statement or in an `if` block, so
     /// those calls do not count.
     private static func callsRuby19Methods(_ source: String) -> Bool {
-        guard let ruby19Call, let ruby19Guard, let heredocStart else { return false }
+        guard let ruby19Call, let ruby19Guard else { return false }
         func covered(_ call: NSRange, in units: [Character], by covers: [Cover]) -> Bool {
             if covers.contains(.all) { return true }
             guard units[call.location] == "." else { return false }
             var start = call.location
-            while start > 0, units[start - 1].isLetter || units[start - 1].isNumber
-                || "_.@$".contains(units[start - 1]) {
+            while start > 0,
+                units[start - 1].isLetter || units[start - 1].isNumber
+                    || "_.@$".contains(units[start - 1])
+            {
                 start -= 1
             }
             let receiver = String(units[start..<call.location])
             return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
         }
-        var inBlockComment = false
-        var heredocs: [(end: String, indented: Bool, interpolates: Bool)] = []
-        var bodyStack = heredocBody
         var blocks: [(indent: Int, cover: Cover)] = []
-        let lines = source.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        // Ruby needs the end line of a heredoc. With no end line after
-        // it, `value <<token` is a shift.
-        var lastLine: [String: Int] = [:]
-        var lastIndentlessLine: [String: Int] = [:]
-        for (number, line) in lines.enumerated() {
-            lastLine[line] = number
-            lastIndentlessLine[String(withoutIndent(line))] = number
-        }
-        for (number, line) in lines.enumerated() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let indent = line.prefix { $0 == " " || $0 == "\t" }.count
-            let units = line.utf16.map { Character(Unicode.Scalar($0) ?? "\u{FFFD}") }
+        for scanned in scanLines(source) {
+            let line = scanned.text
+            let units = scanned.units
+            let code = scanned.code
             let range = NSRange(line.startIndex..., in: line)
-            if let open = heredocs.first {
-                if (open.indented ? withoutIndent(line) : line[...]) == open.end {
-                    heredocs.removeFirst()
-                    bodyStack = heredocBody
-                } else if open.interpolates {
-                    let code = codeMask(units, stack: &bodyStack)
-                    let calls = ruby19Call.matches(in: line, range: range).filter { code[$0.range.location] }
-                    if calls.contains(where: { !covered($0.range, in: units, by: blocks.map(\.cover)) }) {
-                        return true
-                    }
-                }
-                continue
-            }
-            if startsDirective(line, "=begin") { inBlockComment = true }
-            if startsDirective(line, "=end") { inBlockComment = false }
-            if inBlockComment { continue }
-            let code = codeMask(units)
             func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
                 regex.matches(in: line, range: range).filter { code[$0.range.location] }
             }
-            for match in codeMatches(heredocStart) {
-                func group(_ number: Int) -> Substring {
-                    Range(match.range(at: number), in: line).map { line[$0] } ?? ""
+            switch scanned.kind {
+            case .skipped:
+                continue
+            case .heredocBody:
+                if codeMatches(ruby19Call).contains(where: {
+                    !covered($0.range, in: units, by: blocks.map(\.cover))
+                }) {
+                    return true
                 }
-                let end = String(group(3))
-                let indented = !group(1).isEmpty
-                if ((indented ? lastIndentlessLine[end] : lastLine[end]) ?? -1) > number {
-                    heredocs.append((end, indented, group(2) != "'"))
-                }
+                continue
+            case .code:
+                break
             }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let indent = line.prefix { $0 == " " || $0 == "\t" }.count
             func closes(_ text: String) -> Bool {
                 ["end", "else", "elsif"].contains { text.hasPrefix($0) }
             }
@@ -510,7 +520,8 @@ public enum RubyScriptGrammarSniffer {
                 if !inline.isEmpty && closes(text) { inline.removeAll() }
                 let own = guards.filter { (start..<end).contains($0.range.location) }.map { match in
                     Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
-                        ?? (line[Range(match.range, in: line)!].contains("respond_to") ? .receiver("self") : .all)
+                        ?? (line[Range(match.range, in: line)!].contains("respond_to")
+                            ? .receiver("self") : .all)
                 }
                 let covers = blocks.map(\.cover) + inline + own
                 let open = calls.filter { (start..<end).contains($0.range.location) }
@@ -626,7 +637,8 @@ public enum RubyScriptGrammarSniffer {
         var cursor = slash
         while cursor > 0, chars[cursor - 1] == " " || chars[cursor - 1] == "\t" { cursor -= 1 }
         let next: Character = slash + 1 < chars.count ? chars[slash + 1] : " "
-        let callArgument = cursor < slash && !next.isWhitespace && next != "="
+        let callArgument =
+            cursor < slash && !next.isWhitespace && next != "="
             && closesRegex(chars, after: slash)
         guard cursor > 0 else { return true }
         let previous = chars[cursor - 1]
@@ -636,7 +648,9 @@ public enum RubyScriptGrammarSniffer {
         while start > 0, chars[start - 1].isLetter || chars[start - 1].isNumber || chars[start - 1] == "_" {
             start -= 1
         }
-        let keywords: Set<String> = ["if", "elsif", "unless", "when", "while", "until", "and", "or", "not", "return", "then"]
+        let keywords: Set<String> = [
+            "if", "elsif", "unless", "when", "while", "until", "and", "or", "not", "return", "then",
+        ]
         return callArgument || keywords.contains(String(chars[start..<cursor]))
     }
 

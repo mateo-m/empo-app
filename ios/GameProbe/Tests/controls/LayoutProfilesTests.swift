@@ -247,6 +247,37 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertFalse(store.renameProfile(from: "New", to: "$game"), "sentinel rejected")
     }
 
+    func testRenameUpdatesTheMigrationRecord() {
+        let recordURL = profilesRoot.appendingPathComponent(MigrationRecord.fileName)
+        MigrationRecord(
+            games: [
+                "a": .init(hash: "1", profile: "Old"),
+                "b": .init(hash: "2", profile: "Other"),
+            ],
+            sharedProfiles: ["Old"]
+        ).save(to: recordURL)
+        XCTAssertTrue(store.createProfile("Old", touch: sampleTouch()))
+
+        XCTAssertTrue(store.renameProfile(from: "Old", to: "New"))
+
+        XCTAssertEqual(
+            MigrationRecord.load(at: recordURL),
+            MigrationRecord(
+                games: [
+                    "a": .init(hash: "1", profile: "New"),
+                    "b": .init(hash: "2", profile: "Other"),
+                ],
+                sharedProfiles: ["New"]))
+    }
+
+    func testRenameWritesNoMigrationRecordWhenNoneExists() {
+        XCTAssertTrue(store.createProfile("Old", touch: sampleTouch()))
+        XCTAssertTrue(store.renameProfile(from: "Old", to: "New"))
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: profilesRoot.appendingPathComponent(MigrationRecord.fileName).path))
+    }
+
     func testDeleteClearsPins() throws {
         XCTAssertTrue(store.createProfile("Doomed", touch: sampleTouch()))
         let game = try makeGame("A", pin: .profile("Doomed"))
