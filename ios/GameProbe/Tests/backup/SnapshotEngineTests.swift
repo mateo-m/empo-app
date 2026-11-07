@@ -434,8 +434,10 @@ final class SnapshotEngineTests: XCTestCase {
             directory: targetDirectory, confirmsLater: true, clock: FakeBackupClock())
         let engine = try makeEngine(target, stateURL: stateURL)
 
-        _ = await engine.run(request(games: [game(gameName)]))
+        let result = await engine.run(request(games: [game(gameName)]))
 
+        XCTAssertEqual(result.stream(key(gameName))?.outcome, .blobsOnly)
+        XCTAssertEqual(result.stream(key(gameName))?.uploadedBlobCount, 4)
         XCTAssertEqual(manifestPaths(target).count, 0)
         let store = try BackupStateStore(url: stateURL)
         defer { store.close() }
