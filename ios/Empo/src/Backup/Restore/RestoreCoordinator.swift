@@ -22,10 +22,9 @@ final class RestoreCoordinator {
 
     static let shared = RestoreCoordinator()
 
-    private var running: Task<RestoreOutcome, Never>?
-    /// The game key of the restore in flight, so the manual door of
-    /// 11.3 can close for that game alone.
-    private(set) var runningGameKey: String?
+    /// The restore in flight, from its manifest read to its last
+    /// file, and the game it writes.
+    private var running: (task: Task<RestoreOutcome, Never>, gameKey: String)?
 
     /// The run gate of 7.6 reads it. A backup that starts now would
     /// snapshot the half-restored tree.
@@ -38,7 +37,7 @@ final class RestoreCoordinator {
     /// Whether the manual door is open for one game.
     func availability(gameKey: String) -> RestoreAvailability {
         RestorePicker.availability(
-            runInFlight: runningGameKey == gameKey || BackupScheduler.shared.isRunning,
+            runInFlight: running?.gameKey == gameKey || BackupRunMonitor.shared.isRunning,
             gameIsPlaying: BackupDeviceConditions.isSessionLive)
     }
 
@@ -114,17 +113,12 @@ final class RestoreCoordinator {
         replacesTheTree: Bool = false
     ) async -> RestoreOutcome {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        let paths = BackupNamespacePaths(root: descriptor.root, namespaceId: row.namespaceId)
-        guard
-            let manifest = try? await scan.manifest(
-                at: paths.manifestPath(stream: Self.stream(of: row), snapshotId: row.snapshotId))
-        else {
-            return .failed(RestoreNotices.unreadableLine)
-        }
+        let path = BackupNamespacePaths(root: descriptor.root, namespaceId: row.namespaceId)
+            .manifestPath(stream: Self.stream(of: row), snapshotId: row.snapshotId)
         return await run(
             row, into: container, provider: provider, targetId: descriptor.id,
-            root: descriptor.root, manifest: manifest, scope: scope,
-            replacesTheTree: replacesTheTree)
+            root: descriptor.root, scope: scope, replacesTheTree: replacesTheTree
+        ) { try? await scan.manifest(at: path) }
     }
 
     /// The import of 12.6. The package answers the provider protocol
@@ -137,13 +131,12 @@ final class RestoreCoordinator {
         scope: RestoreScope,
         replacesTheTree: Bool = false
     ) async -> RestoreOutcome {
-        guard let manifest = package.manifest.stream(Self.stream(of: row).key)?.manifest else {
-            return .failed(RestoreNotices.unreadableLine)
-        }
+        let manifest = package.manifest.stream(Self.stream(of: row).key)?.manifest
         return await run(
             row, into: container, provider: package,
             targetId: PackageSource.targetId(packageId: package.packageId), root: "",
-            manifest: manifest, scope: scope, replacesTheTree: replacesTheTree)
+            scope: scope, replacesTheTree: replacesTheTree
+        ) { manifest }
     }
 
     private func run(
@@ -152,24 +145,74 @@ final class RestoreCoordinator {
         provider: some BackupProvider,
         targetId: String,
         root: String,
-        manifest: SnapshotManifest,
         scope: RestoreScope,
-        replacesTheTree: Bool
+        replacesTheTree: Bool,
+        manifest readManifest: @escaping @MainActor () async -> SnapshotManifest?
     ) async -> RestoreOutcome {
-        guard manifest.gameKey == row.identity.gameKey else {
+        guard running == nil else {
+            return .failed(
+                String(localized: "Another restore is running. Wait for it to finish, then try again."))
+        }
+        guard !Task.isCancelled else { return .stopped(.cancelled, RestoreResult()) }
+        guard !BackupRunMonitor.shared.isRunning else {
+            return .failed(
+                String(localized: "A backup is running. Wait for it to finish, then try again."))
+        }
+        guard !gameLaunches, !BackupDeviceConditions.isSessionLive else {
+            return .stopped(.gameLaunched, RestoreResult())
+        }
+
+        let task = Task<RestoreOutcome, Never> {
+            await prepareAndRun(
+                row, into: container, provider: provider, targetId: targetId, root: root,
+                scope: scope, replacesTheTree: replacesTheTree, manifest: readManifest)
+        }
+        // A fresh-install restore has no container yet, so the
+        // snapshot names the game.
+        let gameKey =
+            container.map { BackupKeys.gameKey(containerFolderName: $0.folderName) }
+            ?? row.identity.gameKey
+        running = (task, gameKey)
+        // The downloads ride the background session and survive on
+        // their own. The grant covers the hash check and the copy
+        // between two of them once the user has left the app.
+        await withTaskCancellationHandler {
+            await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
+        } onCancel: {
+            task.cancel()
+        }
+        var outcome = await task.value
+        running = nil
+        // The engine reads any cancel as a game launch. A cancel of the
+        // caller's task is a Stop of the user.
+        if cancelledByTheUser || Task.isCancelled, case .stopped(.gameLaunched, let result) = outcome {
+            outcome = .stopped(.cancelled, result)
+        }
+        cancelledByTheUser = false
+        BackupScheduler.shared.conditionsDidChange()
+        log("restore of \(row.snapshotId): \(outcome)")
+        return outcome
+    }
+
+    private func prepareAndRun(
+        _ row: SnapshotRow,
+        into container: GameContainer?,
+        provider: some BackupProvider,
+        targetId: String,
+        root: String,
+        scope: RestoreScope,
+        replacesTheTree: Bool,
+        manifest readManifest: () async -> SnapshotManifest?
+    ) async -> RestoreOutcome {
+        let manifest = await readManifest()
+        guard !Task.isCancelled else { return .stopped(.gameLaunched, RestoreResult()) }
+        guard let manifest, manifest.gameKey == row.identity.gameKey else {
             return .failed(RestoreNotices.unreadableLine)
         }
         let destination = Self.destination(for: container, manifest: manifest)
         let localFiles = await Self.localFiles(
             destination: destination, manifest: manifest, scope: scope)
-        // The manifest read and the local file read await, so these
-        // checks come after them. A game can launch meanwhile, and
-        // another restore can start.
-        guard running == nil else {
-            return .failed(
-                String(localized: "Another restore is running. Wait for it to finish, then try again."))
-        }
-        guard !gameLaunches, !BackupDeviceConditions.isSessionLive else {
+        guard !Task.isCancelled, !gameLaunches, !BackupDeviceConditions.isSessionLive else {
             return .stopped(.gameLaunched, RestoreResult())
         }
 
@@ -198,27 +241,11 @@ final class RestoreCoordinator {
                 ))
         }
 
-        runningGameKey = container.map { BackupKeys.gameKey(containerFolderName: $0.folderName) }
         // `EmpoState/` always restores, so the snapshot's alias file
         // replaces this one, the attach of 4.3 included.
         let aliasesBefore = container.map { IdentityAliases.load(from: $0.empoStateURL) }
-        let localRoot = BackupRoot.layout.root
-        let task = Task<RestoreOutcome, Never> {
-            let engine = RestoreEngine(provider: provider, store: store, localRoot: localRoot)
-            return await engine.run(request)
-        }
-        running = task
-        // The downloads ride the background session and survive on
-        // their own. The grant covers the hash check and the copy
-        // between two of them once the user has left the app.
-        await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
-        var outcome = await task.value
-        running = nil
-        runningGameKey = nil
-        if cancelledByTheUser, case .stopped(.gameLaunched, let result) = outcome {
-            outcome = .stopped(.cancelled, result)
-        }
-        cancelledByTheUser = false
+        let engine = RestoreEngine(provider: provider, store: store, localRoot: BackupRoot.layout.root)
+        var outcome = await engine.run(request)
         if let container, let aliasesBefore {
             var aliases = IdentityAliases.load(from: container.empoStateURL)
             if aliases.merge(aliasesBefore, forFolderName: container.folderName) {
@@ -234,7 +261,6 @@ final class RestoreCoordinator {
         {
             outcome = .failed(Self.settingsUnchangedLine)
         }
-        log("restore of \(row.snapshotId): \(outcome)")
         return outcome
     }
 
@@ -260,8 +286,8 @@ final class RestoreCoordinator {
         log("a game launched, so the restore stopped")
     }
 
-    /// The Cancel of the restore screens. The engine reads any cancel
-    /// as a game launch, so the coordinator renames the reason.
+    /// The Stop of the fresh-install screen. The engine reads any
+    /// cancel as a game launch, so the coordinator renames the reason.
     func cancel() async {
         guard running != nil else { return }
         cancelledByTheUser = true
@@ -272,9 +298,9 @@ final class RestoreCoordinator {
     private var cancelledByTheUser = false
 
     private func stop() async {
-        guard let running else { return }
-        running.cancel()
-        _ = await running.value
+        guard let task = running?.task else { return }
+        task.cancel()
+        _ = await task.value
     }
 
     func gameLaunchBegins() {

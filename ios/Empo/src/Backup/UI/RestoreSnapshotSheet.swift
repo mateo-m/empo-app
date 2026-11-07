@@ -30,7 +30,8 @@ struct RestoreSnapshotSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var scope: RestoreScope = .savesAndSettings
     @State private var outcome: RestoreOutcome?
-    @State private var isRestoring = false
+    private var isRestoring: Bool { restoring != nil }
+    @State private var restoring: Task<Void, Never>?
     @State private var showsTheMarkerSheet = false
     @State private var showsTheAttachSheet = false
     /// The game the attach of 11.11 named, so the question of 11.10
@@ -67,7 +68,7 @@ struct RestoreSnapshotSheet: View {
         StandardSheet(
             title: "Restore this backup?",
             barAction: isRestoring
-                ? SheetBarAction("Stop") { Task { await RestoreCoordinator.shared.cancel() } }
+                ? SheetBarAction("Stop") { restoring?.cancel() }
                 : SheetBarAction("Cancel") { dismiss() }
         ) {
             SheetBodyText(
@@ -130,11 +131,12 @@ struct RestoreSnapshotSheet: View {
 
     private func run(scope: RestoreScope, replacesTheTree: Bool) {
         guard !isRestoring else { return }
-        isRestoring = true
         outcome = nil
-        Task {
+        // The restore reads the cancel of this task as Stop, also
+        // before it reached the coordinator.
+        restoring = Task {
             outcome = await restore(row, scope, replacesTheTree)
-            isRestoring = false
+            restoring = nil
         }
     }
 }
