@@ -5,10 +5,12 @@
 #     locally (bump + changelog + signed commit + tags) and pushes.
 #     The v*.*.* tag push lands here and CI does the rest.
 #   * From anywhere (e.g. a phone): workflow_dispatch with mode=cut
-#     runs the same cut in the `cut` job via API commits, which
-#     creates the same tags and flows into the same tag-push run.
+#     commits the bump to main through the API, builds that commit,
+#     and creates the tag only when the build and the audit pass. The
+#     same run then publishes. The tag job uses GITHUB_TOKEN, so its
+#     tag push starts no second run.
 #
-# Either way the tag-push run builds, audits, ad-hoc signs, and
+# Either way the run builds, audits, ad-hoc signs, and
 # publishes the unsigned .ipa and the Mac disk image, then the post-release job syncs the
 # AltStore manifest STRAIGHT TO MAIN (no PR): commits
 # created with EMPO_RELEASE_TOKEN are GitHub-signed and authored by
@@ -19,7 +21,7 @@
 #
 # workflow_dispatch with mode=dry-run builds + audits any ref and
 # uploads the .ipa and the Mac disk image as workflow artifacts without
-# publishing anything. Only the publish job has a token that can write.
+# publishing anything. Only the tag and publish jobs have a token that can write.
 #
 # Secrets:
 #   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
@@ -76,6 +78,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'cut'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Require EMPO_RELEASE_TOKEN
         env:
@@ -149,9 +154,17 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          # A cut whose build failed leaves its bump on main with no tag.
+          # The next cut builds main again under the same version.
+          MAIN_VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
+          if [ "$MAIN_VERSION" = "$VERSION" ]; then
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+            echo "main already carries $VERSION: building main again"
+          fi
           echo "Cutting v$VERSION"
 
       - name: Bump version + changelog
+        if: steps.version.outputs.bumped != 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -163,11 +176,17 @@ jobs:
           scripts/changelog.sh "$VERSION"
           echo "version: $VERSION, build: $BUILD"
 
-      - name: Commit to main + create the tag
+      - name: Commit to main
+        id: commit
         env:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
+          BUMPED: ${{ steps.version.outputs.bumped }}
         run: |
           set -e
+          if [ "$BUMPED" = "true" ]; then
+            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           VERSION="${{ steps.version.outputs.version }}"
           BUILD=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' ios/Empo/project.yml | head -n 1)
           HEAD="$(git rev-parse HEAD)"
@@ -188,14 +207,19 @@ jobs:
               }) { commit { oid } }
             }' --jq '.data.createCommitOnBranch.commit.oid')
           echo "bump commit: $OID"
-          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/tags/v$VERSION" -f sha="$OID"
-          echo "tagged v$VERSION; the tag push runs the build"
+          echo "sha=$OID" >> "$GITHUB_OUTPUT"
 
   # ── Mechanical half: build, audit, publish ───────────────────────
   build:
     name: Build + audit .ipa
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run')
+    needs: cut
+    # A tag push and a dry run skip `cut`, so the job states its own
+    # condition instead of the default `success()`.
+    if: >-
+      !cancelled() &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.mode == 'dry-run') ||
+       needs.cut.result == 'success')
     runs-on: ${{ fromJSON(vars.MACOS_RUNNER) }}
     timeout-minutes: 90
     outputs:
@@ -206,7 +230,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ needs.cut.outputs.sha || (github.event_name == 'workflow_dispatch' && inputs.ref) || github.ref }}
           fetch-depth: 0
           submodules: false
           persist-credentials: false
@@ -214,7 +238,7 @@ jobs:
       - name: Verify empo-deps pins
         # Tag releases must build from published pins (this replaces
         # the old deps-pins tag trigger).
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || needs.cut.result == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REQUIRE_PUBLISHED: "1"
@@ -222,15 +246,19 @@ jobs:
 
       - name: Resolve version + build number
         id: meta
+        env:
+          CUT_VERSION: ${{ needs.cut.outputs.version }}
         run: |
           set -e
           VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
           if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            TAG_VERSION="${GITHUB_REF_NAME#v}"
-            if [ "$VERSION" != "$TAG_VERSION" ]; then
-              echo "error: tag $GITHUB_REF_NAME does not match project.yml MARKETING_VERSION $VERSION" >&2
-              exit 1
-            fi
+            EXPECTED="${GITHUB_REF_NAME#v}"
+          else
+            EXPECTED="$CUT_VERSION"
+          fi
+          if [ -n "$EXPECTED" ] && [ "$VERSION" != "$EXPECTED" ]; then
+            echo "error: release v$EXPECTED does not match project.yml MARKETING_VERSION $VERSION" >&2
+            exit 1
           fi
           # The number baked into the binary is project.yml's
           # CURRENT_PROJECT_VERSION (set at cut time), NOT the commit
@@ -322,10 +350,34 @@ jobs:
           name: Empo-mac.dmg
           path: ${{ steps.mac.outputs.dmg }}
 
+  tag:
+    name: Create the tag
+    needs: [cut, build]
+    if: >-
+      !cancelled() && needs.cut.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the built commit
+        # A tag pushed with GITHUB_TOKEN starts no workflow run, so
+        # this run is the only one that publishes the release.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.cut.outputs.version }}
+          SHA: ${{ needs.cut.outputs.sha }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/v$VERSION" -f sha="$SHA" >/dev/null
+          echo "tagged v$VERSION at $SHA"
+
   publish:
     name: Publish the GitHub release
-    needs: build
-    if: github.event_name == 'push'
+    needs: [cut, build, tag]
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      (github.event_name == 'push' || needs.tag.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -333,6 +385,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.cut.outputs.sha || github.ref }}
           submodules: false
           persist-credentials: false
 
@@ -367,7 +420,7 @@ jobs:
   post-release:
     name: Sync AltStore manifest
     needs: [build, publish]
-    if: github.event_name == 'push'
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -434,10 +487,10 @@ jobs:
   # (build is skipped then, so the version comes from the input).
   notify:
     name: Post release changelog to Discord
-    needs: [build, publish]
+    needs: [cut, build, publish]
     if: >-
       !cancelled() &&
-      ((github.event_name == 'push' && needs.publish.result == 'success') ||
+      (needs.publish.result == 'success' ||
        (github.event_name == 'workflow_dispatch' && inputs.mode == 'announce'))
     runs-on: ubuntu-latest
     steps:
@@ -445,9 +498,10 @@ jobs:
         id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          MODE: ${{ inputs.mode }}
         run: |
           set -e
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+          if [ "$MODE" = "announce" ]; then
             VERSION="$INPUT_VERSION"
             if [ -z "$VERSION" ]; then
               echo "::error::announce mode needs the version input (e.g. 0.4.0)"
@@ -458,11 +512,12 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      # A tag push checks out the tag. Announce mode checks out the
-      # branch it runs on, so it posts notes that were fixed after the
-      # release.
+      # A tag push checks out the tag, and a cut checks out the commit
+      # it tagged. Announce mode checks out the branch it runs on, so it
+      # posts notes that were fixed after the release.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.cut.outputs.sha }}
           submodules: false
 
       - name: Extract release notes
