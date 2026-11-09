@@ -114,10 +114,8 @@ public final class SyncEngine {
             return failure
         }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
-        // The restore saves this list, the pass saves the document, then it clears the list. A stop
-        // before the save keeps the key in the document, so its entry stays. A stop before the clear
-        // leaves an entry the saved document no longer holds, and it drops here, so it cannot delete
-        // a value another device sets again.
+        // Order: the restore saves this list, the pass saves the document, then it clears the list. An
+        // entry the held document lacks already went out, so it drops here. A new document keeps all.
         let removed = isNew
             ? current.removedPreferenceKeys
             : current.removedPreferenceKeys.filter { held.preferences[$0] != nil }

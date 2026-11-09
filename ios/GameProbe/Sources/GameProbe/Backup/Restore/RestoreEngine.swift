@@ -361,9 +361,8 @@ public actor RestoreEngine {
         return decision
     }
 
-    /// Deletes the folders under `folder` that hold nothing, then
-    /// `folder` itself when it holds nothing. A link, or a file the
-    /// walk could not list or hash, keeps its folder, per 11.12.
+    /// A link, or a file the walk could not list or hash, keeps its
+    /// folder, per 11.12.
     private func removeIfEmpty(_ folder: URL) -> Bool {
         guard let names = try? fm.contentsOfDirectory(atPath: folder.path) else { return false }
         var left = names.count

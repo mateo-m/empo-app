@@ -2313,8 +2313,6 @@ final class NoteRecorder: @unchecked Sendable {
     }
 }
 
-/// Answers as if a game had started once a set number of members
-/// landed on the target.
 /// Puts another device's claim on the target after the run checked
 /// the claim, before the first game.
 actor ClaimBeforeTheGame: BackupRunObserver {
@@ -2338,6 +2336,8 @@ actor ClaimBeforeTheGame: BackupRunObserver {
     }
 }
 
+/// Answers as if a game had started once a set number of members
+/// landed on the target.
 actor RunGate: BackupRunObserver {
 
     private var membersBeforeTheGame: Int

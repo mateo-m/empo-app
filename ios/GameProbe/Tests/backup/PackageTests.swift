@@ -576,7 +576,7 @@ final class PackageTests: XCTestCase {
         XCTAssertNil(try store.intent(kind: .interruptedRestore))
     }
 
-    func testTwoGamesThatShareASaveFolderExportOneCopyAndImport() throws {
+    func testTwoGamesThatShareASaveFolderExportOneCopyThatReadsBack() throws {
         let shared = Data(repeating: 3, count: 512)
         let folder = root.appendingPathComponent("Data/Kadokawa/Saga", isDirectory: true)
         _ = try file("Data/Kadokawa/Saga/Save01.rvdata2", bytes: shared)

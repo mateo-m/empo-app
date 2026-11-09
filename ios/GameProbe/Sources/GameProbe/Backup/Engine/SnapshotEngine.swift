@@ -325,7 +325,9 @@ public actor SnapshotEngine {
         }
 
         // Only a sync pass moves the sync date. The join picker reads
-        // it to find the device that last changed the settings.
+        // it to find the device that last changed the settings. This
+        // run writes the whole record again, so a damaged one loses
+        // only that date.
         let known = try await fetch(context.paths.deviceFile)
             .flatMap { try? DeviceRecord.decode(json: $0) }
         try await put(

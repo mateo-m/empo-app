@@ -919,8 +919,6 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(noTarget.loads, 0)
     }
 
-    /// A join deletes the file, per 10.4, so every pass starts from
-    /// the file.
     func testASyncStateThatDoesNotReadFailsThePass() async throws {
         let document = FakeDocument()
         let targets = FakeTargets()
@@ -937,6 +935,8 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(targets.puts.isEmpty)
     }
 
+    /// A join deletes the file, per 10.4, so every pass starts from
+    /// the file.
     func testEveryPassReadsTheDocumentFromTheFileAgain() async throws {
         let document = FakeDocument()
         let targets = FakeTargets()

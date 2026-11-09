@@ -325,7 +325,6 @@ final class RestoreCoordinator {
     func pendingResume() -> BackupIntentRecord? {
         guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return nil }
         defer { store.close() }
-        // `try?` flattens the optional, so this is one level, not two.
         let record = try? RestoreResumeQuestion.unfinishedRecord(
             in: store, layout: BackupRoot.layout)
         guard RestoreResumeQuestion.asks(record) else { return nil }
