@@ -123,6 +123,13 @@ final class SyncPass {
         defer { runTheNextPass() }
 
         guard let engine = engine ?? makeTheEngine() else { return }
+        do {
+            _ = try AutomergeDocumentStore.bytes()
+        } catch {
+            lastPassFailed = true
+            BackupLog.line("SyncPass", "The local document was not read: \(error)")
+            return
+        }
         switch await engine.run(trigger) {
         case .runAgain:
             state = .running(newsArrived: true)
@@ -146,7 +153,13 @@ final class SyncPass {
     }
 
     private func makeTheEngine() -> SyncEngine? {
-        guard let namespaceId = try? BackupKeychain.namespaceId() else { return nil }
+        let namespaceId: String
+        do {
+            namespaceId = try BackupKeychain.namespaceId()
+        } catch {
+            BackupLog.line("SyncPass", "The namespace id was not read: \(error)")
+            return nil
+        }
         let engine = SyncEngine(
             document: AutomergeDocumentStore(),
             targets: ProviderSyncTargets(),

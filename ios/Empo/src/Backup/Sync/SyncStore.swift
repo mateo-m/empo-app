@@ -15,13 +15,26 @@ enum SyncStore {
         let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
         var state = SyncState.read(
             applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
+        let deviceActorId: String?
+        do {
+            deviceActorId = try BackupKeychain.syncActorId()
+        } catch {
+            // A Keychain error is not "this device holds no id". A
+            // fresh id here would split this device's history.
+            BackupLog.line("SyncStore", "The actor id was not read: \(error)")
+            return state
+        }
         let replaced = state.replaceActor(
-            unlessTheDeviceHolds: try? BackupKeychain.syncActorId(), fresh: { UUID().uuidString })
+            unlessTheDeviceHolds: deviceActorId, fresh: { UUID().uuidString })
         if replaced {
-            try? BackupKeychain.setSyncActorId(state.actorId)
+            logFailure("The actor id was not saved") {
+                try BackupKeychain.setSyncActorId(state.actorId)
+            }
         }
         if replaced || !FileManager.default.fileExists(atPath: url.path) {
-            try? state.write(applicationSupport: BackupRoot.layout.applicationSupport)
+            logFailure("sync.json was not saved") {
+                try state.write(applicationSupport: BackupRoot.layout.applicationSupport)
+            }
         }
         return state
     }
@@ -31,9 +44,17 @@ enum SyncStore {
     /// and Automerge refuses every copy that holds both.
     static func newActorId() -> String {
         let actorId = UUID().uuidString
-        try? BackupKeychain.setSyncActorId(actorId)
-        try? update { $0.actorId = actorId }
+        logFailure("The actor id was not saved") { try BackupKeychain.setSyncActorId(actorId) }
+        logFailure("sync.json was not saved") { try update { $0.actorId = actorId } }
         return actorId
+    }
+
+    private static func logFailure(_ what: String, _ body: () throws -> Void) {
+        do {
+            try body()
+        } catch {
+            BackupLog.line("SyncStore", "\(what): \(error)")
+        }
     }
 
     /// Changes the state on the file and not on a copy.
@@ -65,13 +86,17 @@ enum SyncStore {
     /// A delete travels as its own record, per 10.6, so the identity
     /// has to outlive the folder until the next pass publishes it.
     static func profileWasDeleted(_ name: String) {
-        try? updateIdentities { $0.markDeleted(profile: name, at: Date()) }
+        logFailure("The delete of \(name) was not saved") {
+            try updateIdentities { $0.markDeleted(profile: name, at: Date()) }
+        }
     }
 
     static func profileWasRenamed(from oldName: String, to newName: String) {
-        try? updateIdentities { identities in
-            guard identities.knownId(ofProfile: oldName) != nil else { return }
-            identities.rename(from: oldName, to: newName)
+        logFailure("The rename of \(oldName) was not saved") {
+            try updateIdentities { identities in
+                guard identities.knownId(ofProfile: oldName) != nil else { return }
+                identities.rename(from: oldName, to: newName)
+            }
         }
     }
 }
