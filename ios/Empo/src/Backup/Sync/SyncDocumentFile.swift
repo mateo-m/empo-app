@@ -16,11 +16,12 @@ final class AutomergeDocumentStore: SyncDocumentStore {
         BackupRoot.layout.syncDocumentFile
     }
 
-    /// A join drops the local document, per 10.4. Two documents that
-    /// never shared a history give the root a second `preferences`
-    /// map, and Automerge answers one of the two.
-    static func delete() {
-        try? FileManager.default.removeItem(at: url)
+    static func delete() throws {
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch CocoaError.fileNoSuchFile {
+            return
+        }
     }
 
     private var document = Document()
