@@ -186,7 +186,7 @@ public actor SnapshotEngine {
             streams: context.streams,
             stop: stop,
             didSplit: context.didSplit,
-            detail: stop.map(Self.detail(of:)))
+            detail: stop?.historyLine)
 
         recordRun(
             context.request, startedAt: startedAt,
@@ -234,33 +234,6 @@ public actor SnapshotEngine {
                     uploadedBytes: uploadedBytes,
                     gameCount: gameCount)),
             "the run history row of \(request.runId)")
-    }
-
-    static func detail(of stop: BackupRunStop) -> String {
-        switch stop {
-        case .writerConflict:
-            return BackupNotificationRule.writerSplitLine
-        case .readOnlyFormat:
-            return screenText("This backup needs a newer version of Empo.")
-        case .needsSignIn:
-            return screenText("Sign in to this location again.")
-        case .blocked(let reason), .full(let reason):
-            return reason
-        case .quotaShortfall(let shortfall):
-            return QuotaCheck.blockedLine(shortfall)
-        case .offline:
-            return screenText("Empo couldn't connect to this location.")
-        case .serverError:
-            return screenText("This location had a server error.")
-        case .throttled(let retryAfter):
-            return screenText("This location asked Empo to wait %lld seconds.", Int(retryAfter))
-        case .rejected(let message):
-            return message
-        case .gameStarted:
-            return screenText("A game started. Empo backs up the rest when you stop playing.")
-        case .paused:
-            return screenText("You or iOS paused the backup.")
-        }
     }
 
     // MARK: - The namespace, the format, and the writer claim
