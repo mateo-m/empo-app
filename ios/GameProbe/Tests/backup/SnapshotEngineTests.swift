@@ -226,10 +226,20 @@ final class SnapshotEngineTests: XCTestCase {
     func testAStateWriteThatFailsReachesTheNote() async throws {
         try makeGameTree(gameName)
         let store = try BackupStateStore(url: nil)
-        // The state database is a cache. A run whose writes all fail
-        // still reaches the target, and every failure reaches the
-        // note.
-        store.close()
+        // The state database is a cache. A run whose inserts and
+        // updates fail still reaches the target, and every failure
+        // reaches the note. A namespace clear that fails stops the
+        // run, so deletes still work.
+        for row in try store.database.query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+        {
+            guard let table = row[0].string else { continue }
+            for event in ["INSERT", "UPDATE"] {
+                try store.database.run(
+                    "CREATE TRIGGER no_\(event)_\(table) BEFORE \(event) ON \(table) BEGIN SELECT RAISE(ABORT, 'held'); END"
+                )
+            }
+        }
         let notes = NoteRecorder()
         let clock = self.clock!
         let engine = SnapshotEngine(
@@ -878,7 +888,192 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(target.objectPaths().filter { $0.contains("/blobs/") }.count, 4)
     }
 
+    func testANamespaceClearThatFailsStopsTheRunBeforeASnapshotWithoutItsFiles() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        try FileManager.default.removeItem(at: targetDirectory)
+        await target.forgetCommittedPaths()
+        try store.database.run(
+            "CREATE TRIGGER keep BEFORE DELETE ON uploaded_manifest BEGIN SELECT RAISE(ABORT, 'held'); END")
+
+        clock.advance(3_600)
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
+    // MARK: - A state store read that fails
+
+    func testAJoinIsNotDroppedWhenTheLastManifestDoesNotRead() async throws {
+        let root = try makeGameTree(gameName)
+        try write("level 3", to: root.appendingPathComponent("Game/Data/progress.bin"))
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        var joined = game(gameName)
+        joined.set.runtimeWatchPaths = ["Game/Data/progress.bin"]
+        _ = await engine.run(request(games: [joined]))
+        try store.database.run("DROP TABLE uploaded_manifest")
+
+        clock.advance(3_600)
+        try changeTheSave(of: gameName, to: "slot one, after a relaunch")
+        let next = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(next.outcome, .failed)
+        XCTAssertEqual(manifestPaths(target).count, 1)
+    }
+
+    func testALastManifestRowThatDoesNotDecodeStopsNoGame() async throws {
+        try makeGameTree("Alpha")
+        try makeGameTree("Bravo")
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        _ = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+        try store.database.run(
+            "UPDATE uploaded_manifest SET manifest = x'7b' WHERE gameKey = ?", [.text(key("Alpha"))])
+
+        clock.advance(3_600)
+        try changeTheSave(of: "Alpha", to: "slot one of Alpha, later")
+        try changeTheSave(of: "Bravo", to: "slot one of Bravo, later")
+        let next = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+
+        XCTAssertEqual(next.outcome, .success)
+        XCTAssertEqual(manifestPaths(target).count, 4)
+    }
+
+    func testAStalenessClockThatDoesNotReadStopsTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run("DROP TABLE staleness")
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.stop, .rejected(message: RestoreNotices.recordsUnavailableLine))
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
+    func testARunThatCannotReadItsSyncGroupKeepsTheRecordedGroup() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        let group = String(repeating: "g", count: 32)
+        let syncedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        try target.seed(
+            path: paths.deviceFile,
+            contents: try DeviceRecord(
+                deviceId: deviceId, model: "iPhone17,1", name: "iPhone", lastWriteAt: syncedAt,
+                syncGroupId: group, syncUpdatedAt: syncedAt
+            ).jsonData())
+        var unread = request(games: [game(gameName)])
+        unread.syncGroup = .keepRecorded
+
+        let result = await engine.run(unread)
+
+        XCTAssertEqual(result.outcome, .success)
+        let record = try DeviceRecord.decode(json: XCTUnwrap(target.contents(atPath: paths.deviceFile)))
+        XCTAssertEqual(record.syncGroupId, group)
+        XCTAssertEqual(record.syncUpdatedAt, syncedAt)
+    }
+
+    func testADeviceRecordThatDoesNotDownloadStopsTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        try target.seed(path: paths.deviceFile, contents: Data("{}".utf8))
+        await target.addFault(
+            FakeTargetFault(
+                operation: .get, error: .offline, pathContains: BackupNamespacePaths.deviceFileName))
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
+    func testASweepWhoseStoredBytesDoNotReadIsAnError() async throws {
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(makeTarget(), stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run("DROP TABLE uploaded_manifest")
+
+        do {
+            _ = try await engine.sweep(
+                SweepRequest(descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId))
+            XCTFail("the sweep read no stored bytes and went on")
+        } catch {}
+    }
+
+    func testADeleteWhoseSnapshotListDoesNotReadStaysPending() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        _ = await engine.run(request(games: [game(gameName)]))
+        try store.database.run("DROP TABLE snapshot_ledger")
+
+        let outcome = await engine.deleteBackups(
+            BackupDeleteRequest(
+                descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId,
+                gameKey: key(gameName)))
+
+        XCTAssertEqual(outcome, .pending)
+        XCTAssertEqual(manifestPaths(target).count, 1)
+    }
+
+    func testPendingDeletionsThatDoNotReadStopTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run("DROP TABLE pending_deletion")
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
     // MARK: - 8. The prune ladder, per 5.14
+
+    func testAClaimTheLadderSweepFindsStopsTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let other = WriterClaim(
+            namespaceId: namespaceId, deviceId: "device-b", deviceName: "iPad",
+            claimedAt: clock.now)
+        let observer = ClaimBeforeTheGame(
+            target: target, path: paths.writerFile, claim: try other.jsonData())
+        await target.addFault(
+            FakeTargetFault(operation: .put, error: .outOfSpace, pathContains: "/blobs/", times: 1))
+        let engine = try makeEngine(target, observer: observer)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.stop, .writerConflict(other))
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
 
     func testTheLadderRetriesAfterAPruneAndThenBlocksTheTarget() async throws {
         try makeGameTree(gameName)
@@ -1471,15 +1666,51 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(kept, "played after the backup")
     }
 
+    func testARestoreTakesASaveWhoseNameHoldsABackslashOrAColon() async throws {
+        try makeGameTree(gameName)
+        let names = ["C:slot.sav", "back\\slash.sav"]
+        for name in names {
+            try write("saved as \(name)", to: container(gameName).appendingPathComponent("Game/\(name)"))
+        }
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        for name in names {
+            try fm.removeItem(at: container(gameName).appendingPathComponent("Game/\(name)"))
+        }
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
+        ).run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: BackupStream(key: key(gameName)),
+                snapshotId: snapshotId,
+                choice: .restore(.wholeGame),
+                destination: MemberSource(container: container(gameName)),
+                localFiles: try localFiles(of: gameName),
+                freeSpaceBytes: .max))
+
+        guard case .finished = outcome else {
+            return XCTFail("the restore refused the names: \(outcome)")
+        }
+        for name in names {
+            XCTAssertEqual(try gameText(name), "saved as \(name)")
+        }
+    }
+
     // MARK: - Use only this backup
 
     /// Every file of the container with its hash, as the app lists it.
     private func localFiles(of folderName: String) throws -> [RestoreLocalFile] {
         let root = container(folderName)
-        return try BackupSetResolver.files(under: root, fm: fm).map {
+        return BackupSetResolver.files(under: root, fm: fm).map {
             RestoreLocalFile(
                 root: .container, path: $0.path, size: $0.size,
-                hash: try ContentHash.hexOfFile(at: root.appendingPathComponent($0.path)))
+                hash: try? ContentHash.hexOfFile(at: root.appendingPathComponent($0.path)))
         }
     }
 
@@ -1516,6 +1747,93 @@ final class SnapshotEngineTests: XCTestCase {
             mode: .full)
     }
 
+    func testARestoreWhoseFormatFileDoesNotDownloadWritesNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        await target.addFault(
+            FakeTargetFault(operation: .get, error: .offline, pathContains: paths.formatFile))
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
+        ).run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: BackupStream(key: key(gameName)),
+                snapshotId: snapshotId,
+                choice: .restore(.wholeGame),
+                destination: MemberSource(container: container(gameName)),
+                freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the restore went on without the format file: \(outcome)")
+        }
+        let save = try String(
+            contentsOf: container(gameName).appendingPathComponent("Game/save1.dat"),
+            encoding: .utf8)
+        XCTAssertEqual(save, "played after the backup")
+    }
+
+    func testAFinishedReplaceWhoseRecordDoesNotClearAsksNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run(
+            "CREATE TRIGGER keep BEFORE DELETE ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
+
+        let outcome =
+            await restore
+            .run(try replaceRequest(snapshotId))
+
+        guard case .finished = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        let layout = BackupRootLayout(root: localRoot)
+        XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
+        try store.database.run("DROP TRIGGER keep")
+        XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
+        XCTAssertNil(try store.intent(kind: .interruptedRestore))
+        XCTAssertFalse(fm.fileExists(atPath: layout.finishedRestoreMark.path))
+    }
+
+    func testARestoreAfterAFinishedOneWhoseRecordDidNotClearKeepsItsMark() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run(
+            "CREATE TRIGGER keep BEFORE DELETE ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
+        guard case .finished = await restore.run(try replaceRequest(snapshotId)) else {
+            return XCTFail("the first replace did not finish")
+        }
+
+        let next = await restore.run(try replaceRequest(snapshotId))
+
+        guard case .failed = next else {
+            return XCTFail("the second replace did not fail: \(next)")
+        }
+        let layout = BackupRootLayout(root: localRoot)
+        XCTAssertTrue(fm.fileExists(atPath: layout.finishedRestoreMark.path))
+        XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
+    }
+
     func testAReplaceThatCannotMoveTheTreeLeavesNoRestoreRecord() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
@@ -1542,13 +1860,68 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertNil(try store.intent(kind: .interruptedRestore))
     }
 
+    func testAReplaceThatCannotMoveTheTreeLeavesNoDownloadedFiles() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let request = try replaceRequest(try snapshotId(of: backup, stream: key(gameName)))
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: container(gameName).path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: container(gameName).path)
+        }
+
+        let outcome = await RestoreEngine(
+            provider: target,
+            store: try BackupStateStore(url: tempRoot.appendingPathComponent("restore.sqlite")),
+            localRoot: localRoot
+        ).run(request)
+
+        guard case .failed = outcome else {
+            return XCTFail("the replace did not fail: \(outcome)")
+        }
+        let restore = BackupRootLayout(root: localRoot).restore
+        XCTAssertEqual((try? fm.contentsOfDirectory(atPath: restore.path)) ?? [], [])
+    }
+
+    func testAReplaceStoppedInItsLastDownloadLeavesTheGameFolderInPlace() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let request = try replaceRequest(try snapshotId(of: backup, stream: key(gameName)))
+        // The format file and the manifest pass, then the three blobs
+        // of `Game/`. The last blob holds.
+        let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
+        let latch = TransferLatch(holdFrom: reads + 3)
+        await target.setLatch(latch)
+        let engine = RestoreEngine(
+            provider: target,
+            store: try BackupStateStore(url: tempRoot.appendingPathComponent("restore.sqlite")),
+            localRoot: localRoot)
+        let running = Task { await engine.run(request) }
+        let arrived = await latch.waitForArrivals(reads + 3)
+        XCTAssertTrue(arrived)
+        running.cancel()
+        await latch.open()
+
+        guard case .stopped(.gameLaunched, _) = await running.value else {
+            return XCTFail("the replace did not stop")
+        }
+        XCTAssertEqual(
+            try String(
+                contentsOf: container(gameName).appendingPathComponent("Game/save1.dat"),
+                encoding: .utf8),
+            "slot one of \(gameName)")
+    }
+
     /// Stops the first try of a replace after one file landed in the
     /// new `Game/`, and answers the folder the old tree moved to.
     private func stopAReplaceHalfWay(
         _ snapshotId: String, on target: FakeBackupTarget, stateURL: URL
     ) async throws -> String {
-        // The format file, the manifest, and the first blob pass, so
-        // one file lands in the new `Game/`. The second blob holds.
+        // The format file, the manifest, and the first blob pass.
+        // The second blob holds.
         let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
         let latch = TransferLatch(holdFrom: reads + 2)
         await target.setLatch(latch)
@@ -1571,7 +1944,17 @@ final class SnapshotEngineTests: XCTestCase {
         if case .restore(.replaceTheTree, let name) = try store.intent(kind: .interruptedRestore)?.work {
             moved = name
         }
-        return try XCTUnwrap(moved, "the record does not name the moved tree")
+        let name = try XCTUnwrap(moved, "the record does not name the moved tree")
+        // The engine writes only after every file is staged, so a
+        // stop in a download lands before the move. A process killed
+        // after the move leaves this.
+        let tree = container(gameName).appendingPathComponent("Game", isDirectory: true)
+        try fm.moveItem(at: tree, to: container(gameName).appendingPathComponent(name))
+        try fm.createDirectory(at: tree, withIntermediateDirectories: false)
+        try fm.copyItem(
+            at: container(gameName).appendingPathComponent(name).appendingPathComponent("Game.ini"),
+            to: tree.appendingPathComponent("Game.ini"))
+        return name
     }
 
     func testAResumedReplaceDoesNotMoveTheHalfRestoredTreeAside() async throws {
@@ -1691,6 +2074,115 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertFalse(
             fm.fileExists(
                 atPath: container(gameName).appendingPathComponent("\(moved)/Game.ini").path))
+    }
+
+    func testAReplaceKeepsTheMovedTreeWhenItHoldsALinkTheBackupDoesNotList() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try fm.createSymbolicLink(
+            atPath: container(gameName).appendingPathComponent("Game/shortcut").path,
+            withDestinationPath: "save1.dat")
+
+        let outcome = try await replace(with: snapshotId, on: target)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        let moved = try XCTUnwrap(result.replacedTreeName, "the moved tree is gone")
+        let link = container(gameName).appendingPathComponent("\(moved)/shortcut").path
+        XCTAssertEqual(try fm.destinationOfSymbolicLink(atPath: link), "save1.dat")
+    }
+
+    func testAReplaceKeepsTheMovedTreeWhenItHoldsAFileEmpoCannotRead() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let locked = container(gameName).appendingPathComponent("Game/locked.sav")
+        try write("a save no backup holds", to: locked)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+
+        let outcome = try await replace(with: snapshotId, on: target)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        let moved = try XCTUnwrap(result.replacedTreeName, "the moved tree is gone")
+        let kept = container(gameName).appendingPathComponent("\(moved)/locked.sav")
+        try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: kept.path)
+        XCTAssertEqual(try String(contentsOf: kept, encoding: .utf8), "a save no backup holds")
+    }
+
+    func testAResumedReplaceKeepsTheSavesTheGameWroteAfterTheStop() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let moved = try await stopAReplaceHalfWay(snapshotId, on: target, stateURL: stateURL)
+        for name in ["Game.ini", "autosave.sav", "save1.dat"] {
+            try write("played after the stop", to: container(gameName).appendingPathComponent("Game/\(name)"))
+        }
+
+        var resume = try replaceRequest(snapshotId)
+        resume.movedAsideTree = moved
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot
+        ).run(resume)
+
+        guard case .finished = outcome else {
+            return XCTFail("the resume did not finish: \(outcome)")
+        }
+        XCTAssertEqual(try gameText("save1.dat"), "slot one of \(gameName)")
+        let tree = container(gameName).appendingPathComponent("Game")
+        let kept = try fm.contentsOfDirectory(atPath: tree.path).filter {
+            (try? String(contentsOf: tree.appendingPathComponent($0), encoding: .utf8))
+                == "played after the stop"
+        }
+        XCTAssertEqual(kept.count, 3, "the saves made after the stop are gone: \(kept)")
+    }
+
+    func testARestoreThatCannotWriteItsResumeRecordWritesNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run(
+            "CREATE TRIGGER hold BEFORE INSERT ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
+
+        let outcome =
+            await restore
+            .run(
+                RestoreRequest(
+                    targetId: targetId,
+                    root: "",
+                    namespaceId: namespaceId,
+                    stream: BackupStream(key: key(gameName)),
+                    snapshotId: snapshotId,
+                    choice: .restore(.wholeGame),
+                    destination: MemberSource(container: container(gameName)),
+                    localFiles: try localFiles(of: gameName),
+                    freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the restore ran with no resume record: \(outcome)")
+        }
+        XCTAssertEqual(try gameText("save1.dat"), "played after the backup")
+        XCTAssertEqual(
+            try fm.contentsOfDirectory(atPath: container(gameName).appendingPathComponent("Game").path)
+                .sorted(),
+            ["Game.ini", "autosave.sav", "save1.dat"])
     }
 
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
@@ -1898,6 +2390,29 @@ final class NoteRecorder: @unchecked Sendable {
         lock.lock()
         recorded.append(line)
         lock.unlock()
+    }
+}
+
+/// Puts another device's claim on the target after the run checked
+/// the claim, before the first game.
+actor ClaimBeforeTheGame: BackupRunObserver {
+
+    let target: FakeBackupTarget
+    let path: String
+    let claim: Data
+
+    init(target: FakeBackupTarget, path: String, claim: Data) {
+        self.target = target
+        self.path = path
+        self.claim = claim
+    }
+
+    func runPlanned(streamKey: String, bytes: Int64) {}
+    func runConfirmed(streamKey: String, bytes: Int64) {}
+
+    func runMayGoOn() -> Bool {
+        try? target.seed(path: path, contents: claim)
+        return true
     }
 }
 

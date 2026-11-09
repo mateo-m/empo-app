@@ -85,8 +85,8 @@ public struct MemberSource: Sendable {
     /// unresolved, so this reads each part.
     private static func file(_ path: String, in root: URL?) -> URL? {
         guard var url = root, !isLink(url) else { return nil }
+        guard path.isEmpty || RelativePath.staysUnderItsRoot(path) else { return nil }
         for part in path.split(separator: "/") {
-            guard part != ".." else { return nil }
             url.appendPathComponent(String(part))
             if isLink(url) { return nil }
         }

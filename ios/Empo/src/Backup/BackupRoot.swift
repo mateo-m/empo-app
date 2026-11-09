@@ -11,14 +11,16 @@ enum BackupRoot {
                 for: .applicationSupportDirectory, in: .userDomainMask)[0])
     }
 
-    static func prepare() {
+    @discardableResult
+    static func prepare() -> Bool {
         do {
             try layout.createDirectories()
         } catch {
             BackupLog.line("BackupRoot", "The backup directories were not made: \(error)")
-            return
+            return false
         }
         excludeFromDeviceBackup()
+        return true
     }
 
     /// iOS carries the flag to the contents of the directory. The root

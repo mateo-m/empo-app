@@ -127,7 +127,7 @@ extension SnapshotEngine {
 
     /// Runs the mark-and-sweep when the schedule of 5.11 allows it.
     public func sweep(_ request: SweepRequest) async throws -> SweepResult {
-        let decision = await sweepDecision(for: request.descriptor)
+        let decision = try await sweepDecision(for: request.descriptor)
         let runs = request.force || decision == .run || decision == .runOverdue
         guard runs else { return SweepResult(decision: decision) }
 
@@ -142,9 +142,9 @@ extension SnapshotEngine {
     /// that fails leaves the run as it was and waits for the next.
     func sweepWhenDue(_ context: RunContext) async {
         let request = context.request
-        let decision = await sweepDecision(for: request.descriptor)
-        guard BackupTriggerPlan.runsSweep(request.trigger, decision: decision) else { return }
         do {
+            let decision = try await sweepDecision(for: request.descriptor)
+            guard BackupTriggerPlan.runsSweep(request.trigger, decision: decision) else { return }
             try await sweepNamespace(
                 paths: context.paths, deviceId: request.deviceId, targetId: request.descriptor.id)
         } catch {
@@ -152,15 +152,15 @@ extension SnapshotEngine {
         }
     }
 
-    private func sweepDecision(for descriptor: TargetDescriptor) async -> SweepSchedule.Decision {
+    private func sweepDecision(for descriptor: TargetDescriptor) async throws -> SweepSchedule.Decision {
         let reading =
             provider.capabilities.canQueryQuota ? try? await provider.quota() : nil
         return SweepSchedule.decide(
-            lastSweepAt: try? store.lastSweep(targetId: descriptor.id),
+            lastSweepAt: try store.lastSweep(targetId: descriptor.id),
             now: now,
             reading: reading,
             capBytes: descriptor.capBytes,
-            storedBytes: storedBytes(targetId: descriptor.id))
+            storedBytes: try storedBytes(targetId: descriptor.id))
     }
 
     /// Mark from every manifest in the namespace, then delete every
@@ -278,10 +278,9 @@ extension SnapshotEngine {
         let paths = BackupNamespacePaths(
             root: request.descriptor.root, namespaceId: request.namespaceId)
         let stream = BackupStream(key: request.gameKey)
-        let ledger = (try? store.snapshots(targetId: targetId, gameKey: request.gameKey)) ?? []
-        let ids = ledger.map(\.snapshotId)
-
         do {
+            let ids = try store.snapshots(targetId: targetId, gameKey: request.gameKey)
+                .map(\.snapshotId)
             try await refuseAnotherWriter(paths: paths, deviceId: request.deviceId)
             if !ids.isEmpty {
                 try await provider.delete(
@@ -328,7 +327,7 @@ extension SnapshotEngine {
     /// Applies the pending deletions of 5.13 at the start of a run.
     func applyPendingDeletions(_ context: RunContext) async throws {
         let targetId = context.request.descriptor.id
-        let pending = (try? store.pendingDeletions(targetId: targetId)) ?? []
+        let pending = try store.pendingDeletions(targetId: targetId)
         for deletion in pending {
             _ = await deleteBackups(
                 BackupDeleteRequest(

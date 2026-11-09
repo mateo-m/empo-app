@@ -146,7 +146,14 @@ enum SyncLocalValues {
     /// Removing a target stays local-only, so nothing here deletes,
     /// and a target this device removed does not come back.
     private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
-        let removed = Set(SyncStore.state().removedTargetIds)
+        let removed: Set<String>
+        do {
+            removed = Set(try SyncStore.state().removedTargetIds)
+        } catch {
+            BackupLog.line(
+                "SyncLocalValues", "The synced locations wait, the sync settings did not read: \(error)")
+            return
+        }
         do {
             try BackupTargets.update { local in
                 for (id, incoming) in descriptors {

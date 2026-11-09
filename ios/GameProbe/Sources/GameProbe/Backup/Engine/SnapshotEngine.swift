@@ -147,6 +147,11 @@ public actor SnapshotEngine {
             return finish(
                 context, startedAt: startedAt,
                 stop: Task.isCancelled ? .paused : .blocked(reason: reason))
+        } catch is SQLiteError {
+            return finish(
+                context, startedAt: startedAt,
+                stop: Task.isCancelled
+                    ? .paused : .rejected(message: RestoreNotices.recordsUnavailableLine))
         } catch {
             // A pause cancels the upload in flight, and that error
             // arrives before the file boundary reads the cancel.
@@ -309,9 +314,7 @@ public actor SnapshotEngine {
             // wrote: another account behind the same target id, or a
             // deleted folder. The blobs the store remembers are not
             // here, so the run starts from a full upload.
-            save(
-                try store.clearNamespaceState(targetId: context.request.descriptor.id),
-                "the namespace state of a place with no claim")
+            try store.clearNamespaceState(targetId: context.request.descriptor.id)
             try await writeClaim(context)
         case .conflict(let claim):
             guard let answer = context.request.writerAnswer else {
@@ -321,26 +324,30 @@ public actor SnapshotEngine {
                 context.paths = context.paths.inNamespace(fresh)
                 // No namespace may reference another's blobs, per
                 // 5.12, so the split starts from a full upload.
-                save(
-                    try store.clearNamespaceState(targetId: context.request.descriptor.id),
-                    "the namespace state the split drops")
+                try store.clearNamespaceState(targetId: context.request.descriptor.id)
             }
             try await writeClaim(context)
         }
 
         // Only a sync pass moves the sync date. The join picker reads
-        // it to find the device that last changed the settings.
-        let known = (try? await fetch(context.paths.deviceFile))
+        // it to find the device that last changed the settings. This
+        // run writes the whole record again, so a damaged one loses
+        // only that date.
+        let known = try await fetch(context.paths.deviceFile)
             .flatMap { try? DeviceRecord.decode(json: $0) }
+        let syncGroupId: String?
+        switch context.request.syncGroup {
+        case .known(let id): syncGroupId = id
+        case .keepRecorded: syncGroupId = known?.syncGroupId
+        }
         try await put(
             try DeviceRecord(
                 deviceId: context.request.deviceId,
                 model: context.request.deviceModel,
                 name: context.request.deviceName,
                 lastWriteAt: now,
-                syncGroupId: context.request.syncGroupId,
-                syncUpdatedAt: known?.syncGroupId == context.request.syncGroupId
-                    ? known?.syncUpdatedAt : nil
+                syncGroupId: syncGroupId,
+                syncUpdatedAt: known?.syncGroupId == syncGroupId ? known?.syncUpdatedAt : nil
             ).jsonData(),
             to: context.paths.deviceFile)
     }
@@ -376,8 +383,8 @@ public actor SnapshotEngine {
                     kind: .preferences,
                     isOneOff: false,
                     isGame: false,
-                    previous: (try? store.lastUploadedManifest(
-                        targetId: targetId, gameKey: BackupStream.preferences.key))?.manifest,
+                    previous: try store.lastUploadedManifest(
+                        targetId: targetId, gameKey: BackupStream.preferences.key)?.manifest,
                     scannedAt: scannedAt))
         }
         inputs += try order(context.request.games, targetId: targetId)
@@ -398,13 +405,12 @@ public actor SnapshotEngine {
         }
     }
 
-    private func input(of game: BackupRunGame, targetId: String) -> StreamInput {
+    private func input(of game: BackupRunGame, targetId: String) throws -> StreamInput {
         let scannedAt = now
         var setRequest = game.set
         if game.isOneOffFullSnapshot { setRequest.mode = .full }
-        let previous =
-            (try? store.lastUploadedManifest(
-                targetId: targetId, gameKey: game.stream.key))?.manifest
+        let previous = try store.lastUploadedManifest(
+            targetId: targetId, gameKey: game.stream.key)?.manifest
         // The app keeps its joins in memory for one launch only.
         let earlierJoins = (previous?.entries ?? [])
             .filter { $0.root == .container && $0.detectionSource == .runtimeWatch }
@@ -462,9 +468,9 @@ public actor SnapshotEngine {
         var candidates: [RunCandidate] = []
         for game in games {
             let key = game.identity.gameKey
-            let input = input(of: game, targetId: targetId)
+            let input = try input(of: game, targetId: targetId)
             byKey[key] = input
-            let clock = try? store.staleness(targetId: targetId, gameKey: key)
+            let clock = try store.staleness(targetId: targetId, gameKey: key)
             candidates.append(
                 RunCandidate(
                     gameKey: key,
@@ -624,12 +630,14 @@ public actor SnapshotEngine {
                 "the staleness clock of \(gameKey)")
         }
 
-        let previous = (try? store.partialTally(targetId: targetId, gameKey: gameKey)) ?? [:]
-        save(
+        do {
+            let previous = try store.partialTally(targetId: targetId, gameKey: gameKey)
             try store.savePartialTally(
                 PartialPathClock.tally(previous, savePartials: savePartials),
-                targetId: targetId, gameKey: gameKey),
-            "the partial tally of \(gameKey)")
+                targetId: targetId, gameKey: gameKey)
+        } catch {
+            note("the partial tally of \(gameKey) was not saved: \(error)")
+        }
     }
 
     // MARK: - Provider calls
@@ -681,9 +689,15 @@ public actor SnapshotEngine {
         //    it orphaned runs at once, the way the delete of 5.13
         //    runs one.
         await pruneEveryStream(context)
-        _ = try? await sweepNamespace(
-            paths: context.paths, deviceId: context.request.deviceId,
-            targetId: context.request.descriptor.id)
+        do {
+            try await sweepNamespace(
+                paths: context.paths, deviceId: context.request.deviceId,
+                targetId: context.request.descriptor.id)
+        } catch let stop as BackupRunStop {
+            throw stop
+        } catch {
+            note("the sweep after the prune stopped: \(error)")
+        }
 
         // 2. Retry.
         do {
@@ -724,7 +738,7 @@ public actor SnapshotEngine {
             let free = QuotaCheck.freeBytes(
                 reading: context.quota,
                 capBytes: context.request.descriptor.capBytes,
-                storedBytes: storedBytes(targetId: context.request.descriptor.id))
+                storedBytes: try storedBytes(targetId: context.request.descriptor.id))
             context.room = free.map(Room.left) ?? .noLimit
         }
         guard case .left(let room) = context.room else { return }
@@ -733,10 +747,9 @@ public actor SnapshotEngine {
     }
 
     /// What Empo holds on the target now, the number the cap of 5.14
-    /// counts. A state store that cannot answer counts nothing, as
-    /// the target screen does.
-    func storedBytes(targetId: String) -> Int64 {
-        ((try? store.usage(targetId: targetId)) ?? []).reduce(0) { $0 + $1.bytes }
+    /// counts.
+    func storedBytes(targetId: String) throws -> Int64 {
+        try store.usage(targetId: targetId).reduce(0) { $0 + $1.bytes }
     }
 
     /// The one effect of 8.4, as a run stop. A transient error keeps

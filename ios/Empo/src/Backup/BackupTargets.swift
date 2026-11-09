@@ -75,7 +75,13 @@ enum BackupTargets {
                 targets.append(target)
             }
         }
-        try SyncStore.update { $0.keep(targetId: target.id) }
+        do {
+            try SyncStore.update { $0.keep(targetId: target.id) }
+        } catch {
+            // The target is saved. Only sync stays stopped while its settings do not read.
+            BackupLog.line(
+                "BackupTargets", "the sync settings do not read, so \(target.id) is not kept for sync")
+        }
         SyncJoin.startAGroup()
     }
 

@@ -323,6 +323,16 @@ final class PackageTests: XCTestCase {
         XCTAssertThrowsError(try PackageValidation.checkThePath("Documents/../../x")) {
             XCTAssertEqual($0 as? PackageRejection, .parentTraversal("Documents/../../x"))
         }
+        for path in ["Documents/Games/Quest//Save01", "Documents/./Save01", "Documents/"] {
+            XCTAssertThrowsError(try PackageValidation.checkThePath(path), path) {
+                XCTAssertEqual($0 as? PackageRejection, .parentTraversal(path))
+            }
+        }
+        for path in ["Documents\\Save01", "C:Save01"] {
+            XCTAssertThrowsError(try PackageValidation.checkThePath(path), path) {
+                XCTAssertEqual($0 as? PackageRejection, .absolutePath(path))
+            }
+        }
 
         var link = good
         link.path = "Documents/Games/Quest/Game/link"
@@ -342,7 +352,9 @@ final class PackageTests: XCTestCase {
         }
 
         var twice = package
-        twice.streams[0].manifest.entries.append(twice.streams[0].manifest.entries[0])
+        var other = twice.streams[0].manifest.entries[0]
+        other.hash = String(repeating: "0", count: 64)
+        twice.streams[0].manifest.entries.append(other)
         XCTAssertThrowsError(try PackageValidation.check(twice, against: [good])) {
             XCTAssertEqual($0 as? PackageRejection, .duplicatePath(good.path))
         }
@@ -485,6 +497,114 @@ final class PackageTests: XCTestCase {
             XCTAssertEqual(error, .notFound)
         }
         await source.close()
+    }
+
+    func testADamagedFileStopsTheImportBeforeItWritesAnyFile() async throws {
+        let first = Data((0..<4_096).map { _ in UInt8.random(in: 0...255) })
+        let second = Data((0..<4_096).map { _ in UInt8.random(in: 0...255) })
+        let package = try writeAPackage(files: [
+            ("Game/Save01.rvdata2", first), ("Game/Save02.rvdata2", second),
+        ])
+        var zip = try Data(contentsOf: package.url)
+        let damaged = try XCTUnwrap(zip.range(of: second.subdata(in: 1_000..<1_064)))
+        zip[damaged.lowerBound] ^= 0xFF
+        try zip.write(to: package.url)
+        let stream = try XCTUnwrap(package.manifest.streams.first)
+        let container = root.appendingPathComponent("Restored/Quest", isDirectory: true)
+
+        let outcome = await RestoreEngine(
+            provider: try PackageSource(zip: package.url, packageId: "p1"),
+            store: try BackupStateStore(url: nil),
+            localRoot: root.appendingPathComponent("local", isDirectory: true)
+        ).run(
+            RestoreRequest(
+                targetId: PackageSource.targetId(packageId: "p1"),
+                root: "",
+                namespaceId: "p1",
+                stream: BackupStream(key: stream.key),
+                snapshotId: PackageSource.snapshotId(
+                    streamKey: stream.key, exportedAt: package.manifest.exportedAt),
+                choice: .restore(.wholeGame),
+                destination: MemberSource(container: container),
+                freeSpaceBytes: .max))
+
+        guard case .failed(let line) = outcome else {
+            return XCTFail("the import did not fail: \(outcome)")
+        }
+        XCTAssertEqual(line, PackageRejection.wrongHash("Documents/Games/Quest/Game/Save02.rvdata2").line)
+        XCTAssertFalse(fm.fileExists(atPath: container.appendingPathComponent("Game/Save01.rvdata2").path))
+    }
+
+    func testADamagedFileAfterAnotherUnfinishedRestoreLeavesNoRecordToResume() async throws {
+        let save = Data((0..<4_096).map { _ in UInt8.random(in: 0...255) })
+        let package = try writeAPackage(files: [("Game/Save01.rvdata2", save)])
+        var zip = try Data(contentsOf: package.url)
+        let damaged = try XCTUnwrap(zip.range(of: save.subdata(in: 1_000..<1_064)))
+        zip[damaged.lowerBound] ^= 0xFF
+        try zip.write(to: package.url)
+        let stream = try XCTUnwrap(package.manifest.streams.first)
+        let stateURL = root.appendingPathComponent("state.sqlite")
+        let earlier = try BackupStateStore(url: stateURL)
+        try earlier.saveIntent(
+            RestoreResumeQuestion.record(
+                targetId: "t1", gameKey: "other-game", snapshotId: "s0",
+                choice: .restore(.wholeGame), at: Date()))
+        earlier.close()
+
+        let outcome = await RestoreEngine(
+            provider: try PackageSource(zip: package.url, packageId: "p1"),
+            store: try BackupStateStore(url: stateURL),
+            localRoot: root.appendingPathComponent("local", isDirectory: true)
+        ).run(
+            RestoreRequest(
+                targetId: PackageSource.targetId(packageId: "p1"),
+                root: "",
+                namespaceId: "p1",
+                stream: BackupStream(key: stream.key),
+                snapshotId: PackageSource.snapshotId(
+                    streamKey: stream.key, exportedAt: package.manifest.exportedAt),
+                choice: .restore(.wholeGame),
+                destination: MemberSource(
+                    container: root.appendingPathComponent("Restored/Quest", isDirectory: true)),
+                freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the import did not fail: \(outcome)")
+        }
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertNil(try store.intent(kind: .interruptedRestore))
+    }
+
+    func testTwoGamesThatShareASaveFolderExportOneCopyThatReadsBack() throws {
+        let shared = Data(repeating: 3, count: 512)
+        let folder = root.appendingPathComponent("Data/Kadokawa/Saga", isDirectory: true)
+        _ = try file("Data/Kadokawa/Saga/Save01.rvdata2", bytes: shared)
+        let streams = ["Quest", "Saga"].map { name in
+            PackagePlan.Stream(
+                key: BackupKeys.gameKey(containerFolderName: name),
+                gameName: name,
+                mode: .slim,
+                containerFolderName: name,
+                versionMarker: .init(),
+                sharedDataDirectory: "Data/Kadokawa/Saga",
+                rescuedSavesBuckets: [],
+                members: [
+                    BackupSetMember(
+                        root: .sharedData, path: "Save01.rvdata2", size: 512, modifiedAt: stamp)
+                ],
+                source: MemberSource(sharedData: folder))
+        }
+        let localRoot = BackupRootLayout(applicationSupport: root).root
+        let record = try PackagePlan(gameName: nil, streams: streams).build(
+            id: "export", localRoot: localRoot, sourceDevice: "iPad",
+            freeSpaceBytes: 1 << 40, at: stamp)
+
+        let url = record.zipURL(localRoot: localRoot)
+        let paths = try ZipReader(reading: url).entries.map(\.path)
+        XCTAssertEqual(paths.filter { $0 == "Documents/Data/Kadokawa/Saga/Save01.rvdata2" }.count, 1)
+        let source = try PackageSource(zip: url, packageId: "p1")
+        XCTAssertEqual(source.manifest.streams.map { $0.manifest.entries.count }, [1, 1])
     }
 
     // MARK: - An export holds every member or fails

@@ -41,16 +41,19 @@ extension BackupStateStore {
             WHERE targetId = ? AND gameKey = ?
             """,
             [.text(targetId), .text(gameKey)])
+        // The target holds the same manifest, so a row this build cannot
+        // decode counts as no earlier snapshot of this game only.
         guard let row = rows.first,
             let snapshotId = row[0].string,
             let payload = row[1].data,
-            let uploadedAt = row[2].double
+            let uploadedAt = row[2].double,
+            let manifest = try? SnapshotManifest.decode(json: payload)
         else { return nil }
         return UploadedManifestRecord(
             targetId: targetId,
             gameKey: gameKey,
             snapshotId: snapshotId,
-            manifest: try SnapshotManifest.decode(json: payload),
+            manifest: manifest,
             uploadedAt: Date(timeIntervalSince1970: uploadedAt))
     }
 

@@ -83,11 +83,9 @@ public struct RestoreRequest: Sendable {
             BackupSetRules.gameDirectoryName, isDirectory: true)
     }
 
-    /// The local files the plan reads. A replace moves the tree aside
-    /// after the plan and before the first write, so the plan must not
-    /// count on a file in it.
-    var plannedLocalFiles: [RestoreLocalFile] {
-        guard choice == .replaceTheTree else { return localFiles }
+    /// The local files the plan reads when a replace moves `Game/`
+    /// aside before the first write.
+    var localFilesOutsideTheTree: [RestoreLocalFile] {
         let tree = BackupSetRules.gameDirectoryName + "/"
         return localFiles.filter { $0.root != .container || !$0.path.hasPrefix(tree) }
     }

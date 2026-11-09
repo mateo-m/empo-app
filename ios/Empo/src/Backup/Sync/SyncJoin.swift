@@ -8,7 +8,7 @@ import GameProbe
 enum SyncJoin {
 
     static func ask() async -> SyncJoinAsk {
-        let state = SyncStore.state()
+        guard let state = try? SyncStore.state() else { return .none }
         var records: [DeviceRecord] = []
         let mine: String
         do {

@@ -15,7 +15,7 @@ enum GameIdentities {
     /// The identity of one game: the container folder name, plus
     /// every alias an earlier attach recorded.
     static func identity(for container: GameContainer) -> GameIdentity {
-        IdentityAliases.load(from: container.empoStateURL)
+        ((try? IdentityAliases.load(from: container.empoStateURL)) ?? IdentityAliases())
             .identity(forFolderName: container.folderName)
     }
 
@@ -49,7 +49,7 @@ enum GameIdentities {
         guard
             let updated = AttachAction.record(
                 snapshot: snapshot, into: identity(for: container),
-                aliases: IdentityAliases.load(from: container.empoStateURL))
+                aliases: try IdentityAliases.load(from: container.empoStateURL))
         else { return false }
         try updated.save(to: container.empoStateURL)
         return true

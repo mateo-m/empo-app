@@ -100,7 +100,10 @@ final class SyncEngineTests: XCTestCase {
             return bytes[path]
         }
 
+        var refusesWrites = false
+
         func write(_ data: Data, to path: String, on target: TargetDescriptor) async -> Bool {
+            guard !refusesWrites else { return false }
             written[path] = data
             return true
         }
@@ -123,7 +126,10 @@ final class SyncEngineTests: XCTestCase {
             value = SyncState(actorId: "actor", groupId: groupId)
         }
 
-        func state() -> SyncState {
+        var failsToRead = false
+
+        func state() throws -> SyncState {
+            if failsToRead { throw CocoaError(.fileReadCorruptFile) }
             reads += 1
             if reads > 1, let joinsMidPass {
                 value.groupId = joinsMidPass
@@ -132,9 +138,17 @@ final class SyncEngineTests: XCTestCase {
             return value
         }
 
-        func update(_ change: (inout SyncState) -> Void) throws { change(&value) }
+        var failsToUpdate = false
+
+        func update(_ change: (inout SyncState) -> Void) throws {
+            if failsToUpdate { throw CocoaError(.fileWriteNoPermission) }
+            change(&value)
+        }
+
+        var failsToUpdateIdentities = false
 
         func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) throws {
+            if failsToUpdateIdentities { throw CocoaError(.fileWriteNoPermission) }
             change(&identities)
         }
     }
@@ -259,6 +273,58 @@ final class SyncEngineTests: XCTestCase {
 
         XCTAssertEqual(outcome, .done)
         XCTAssertEqual(document.saved?.preferences, ["theme": .string("light")])
+        XCTAssertEqual(state.value.removedPreferenceKeys, [])
+    }
+
+    func testARemovalThatDidNotClearDoesNotDeleteAValueSetAgain() async throws {
+        let document = FakeDocument()
+        document.held.preferences = ["theme": .string("light"), "titlePosition": .string("below")]
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("light")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.removedPreferenceKeys = ["titlePosition"]
+        state.failsToUpdate = true
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+
+        let first = await engine.run(.now)
+        XCTAssertEqual(first, .done)
+        XCTAssertNil(document.saved?.preferences["titlePosition"])
+        XCTAssertEqual(state.value.removedPreferenceKeys, ["titlePosition"])
+
+        state.failsToUpdate = false
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["titlePosition": .string("above")])
+        let second = await engine.run(.now)
+
+        XCTAssertEqual(second, .done)
+        XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("above"))
+        XCTAssertEqual(local.applied.last?.preferences["titlePosition"], .string("above"))
+        XCTAssertEqual(state.value.removedPreferenceKeys, [])
+    }
+
+    func testARemovalThatFailedToClearTwiceDoesNotDeleteAValueSetAgain() async throws {
+        let document = FakeDocument()
+        document.held.preferences = ["theme": .string("light"), "titlePosition": .string("below")]
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("light")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.removedPreferenceKeys = ["titlePosition"]
+        state.failsToUpdate = true
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+        _ = await engine.run(.now)
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["titlePosition": .string("above")])
+        _ = await engine.run(.now)
+
+        state.failsToUpdate = false
+        let third = await engine.run(.now)
+
+        XCTAssertEqual(third, .done)
+        XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("above"))
         XCTAssertEqual(state.value.removedPreferenceKeys, [])
     }
 
@@ -399,6 +465,95 @@ final class SyncEngineTests: XCTestCase {
         ).run(.now)
 
         XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
+        XCTAssertEqual(document.steps, ["load"])
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testANewDocumentWritesNothingWhileACopyIsRejected() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        document.rejects = .unreadable("truncated")
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = Data("anything".utf8)
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
+        XCTAssertEqual(document.steps, ["load", "merge"])
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testANewDocumentWritesNothingWhileTheDeviceRecordOfACopyDoesNotRead() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [
+            SyncNamespace(
+                id: "other", record: nil,
+                document: RemoteObject(path: "other/document", sizeBytes: 10, modifiedAt: stamp))
+        ]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testProfileIdsThatDoNotSaveStopThePass() async throws {
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.failsToUpdateIdentities = true
+
+        let outcome = await engine(
+            document: FakeDocument(), targets: targets, state: state, local: local
+        ).run(.now)
+
+        guard case .failed(let reason) = outcome else {
+            return XCTFail("the pass went on with ids that did not save: \(outcome)")
+        }
+        XCTAssertTrue(reason.hasPrefix("the profile identities were not saved"))
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testALostDocumentWritesNothingWhileItsReadProgressStays() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["titlePosition": .string("below")])
+        let state = FakeState(groupId: "g1")
+        state.value.targets = [
+            SyncTargetProgress(
+                targetId: "t1", confirmedHeads: ["lost"], seenNamespaces: ["other": stamp])
+        ]
+        state.failsToUpdate = true
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: local
+        ).run(.now)
+
+        guard case .failed = outcome else { return XCTFail("the pass went on: \(outcome)") }
         XCTAssertEqual(document.steps, ["load"])
         XCTAssertTrue(local.applied.isEmpty)
         XCTAssertTrue(targets.puts.isEmpty)
@@ -642,6 +797,20 @@ final class SyncEngineTests: XCTestCase {
 
     // MARK: - Steps 5 and 6
 
+    func testATargetWithoutTheDeviceRecordGetsTheCopyAgain() async throws {
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.refusesWrites = true
+        let state = FakeState(groupId: "g1")
+
+        let outcome = await engine(
+            document: FakeDocument(), targets: targets, state: state, local: FakeLocalValues()
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertNil(state.value.progress(ofTarget: "t1")?.confirmedHeads)
+    }
+
     func testATargetThatRefusesTheCopyTakesNothingFromTheOthers() async throws {
         let document = FakeDocument()
         let targets = FakeTargets()
@@ -794,6 +963,22 @@ final class SyncEngineTests: XCTestCase {
         ).run(.now)
         XCTAssertEqual(outcome, .nothingToDo)
         XCTAssertEqual(noTarget.loads, 0)
+    }
+
+    func testASyncStateThatDoesNotReadFailsThePass() async throws {
+        let document = FakeDocument()
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.failsToRead = true
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: FakeLocalValues()
+        ).run(.now)
+
+        guard case .failed = outcome else { return XCTFail("the pass did not fail: \(outcome)") }
+        XCTAssertTrue(document.steps.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
     }
 
     /// A join deletes the file, per 10.4, so every pass starts from
