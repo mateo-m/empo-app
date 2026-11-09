@@ -34,13 +34,8 @@ enum BackupTargets {
         }
     }
 
-    /// Moves a damaged file aside, so that the user can add the
-    /// targets again. The damaged copy stays beside it.
     static func setAsideTheDamagedFile() throws {
-        let file = BackupRoot.layout.targetsFile
-        let stamp = Int(Date().timeIntervalSince1970)
-        try FileManager.default.moveItem(
-            at: file, to: file.deletingPathExtension().appendingPathExtension("damaged-\(stamp).json"))
+        try BackupRoot.setAside(BackupRoot.layout.targetsFile)
         BackupBadges.shared.invalidate()
     }
 

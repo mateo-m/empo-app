@@ -1,8 +1,12 @@
 import Foundation
+import GameProbe
 
 /// A JSON file of target ids that still wait for one step, kept beside
 /// the backup records. A target can be offline when the step comes up,
 /// so its id stays in the file until its next run does the step.
+///
+/// A damaged file moves aside and every target waits, so the step must
+/// be safe to do again.
 @MainActor
 struct BackupTargetWaitList {
 
@@ -13,13 +17,15 @@ struct BackupTargetWaitList {
     }
 
     func ids() throws -> Set<String> {
-        let data: Data
+        guard let data = try SettingsFile.data(at: fileURL) else { return [] }
         do {
-            data = try Data(contentsOf: fileURL)
-        } catch CocoaError.fileReadNoSuchFile {
-            return []
+            return try JSONDecoder().decode(Set<String>.self, from: data)
+        } catch is DecodingError {
+            try BackupRoot.setAside(fileURL)
+            let every = Set(BackupTargets.load().map(\.id))
+            try write(every)
+            return every
         }
-        return try JSONDecoder().decode(Set<String>.self, from: data)
     }
 
     func add(_ added: Set<String>) throws {

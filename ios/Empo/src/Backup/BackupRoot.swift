@@ -50,16 +50,12 @@ enum BackupRoot {
         }
     }
 
-    /// A settings file that does not decode moves to
-    /// `<name>.damaged.json`, so the caller can write a new file and the
-    /// old bytes stay on the device.
+    /// The caller can then write a new file, and each damaged copy stays
+    /// on the device.
     static func setAside(_ file: URL, caller: String = #fileID) throws {
-        let aside = file.deletingPathExtension().appendingPathExtension("damaged.json")
-        let manager = FileManager.default
-        if manager.fileExists(atPath: aside.path) {
-            try manager.removeItem(at: aside)
-        }
-        try manager.moveItem(at: file, to: aside)
+        let stamp = Int(Date().timeIntervalSince1970)
+        let aside = file.deletingPathExtension().appendingPathExtension("damaged-\(stamp).json")
+        try FileManager.default.moveItem(at: file, to: aside)
         BackupLog.line(
             caller, "\(file.lastPathComponent) did not read, so it moved to \(aside.lastPathComponent)")
     }
