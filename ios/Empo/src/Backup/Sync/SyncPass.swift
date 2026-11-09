@@ -153,6 +153,10 @@ final class SyncPass {
     }
 
     private func makeTheEngine() -> SyncEngine? {
+        guard let deviceId = BackupDevice.id else {
+            BackupLog.line("SyncPass", "The device id is not known")
+            return nil
+        }
         let namespaceId: String
         do {
             namespaceId = try BackupKeychain.namespaceId()
@@ -166,7 +170,7 @@ final class SyncPass {
             state: SyncFileStore(),
             local: DeviceSyncValues(),
             device: DeviceRecord(
-                deviceId: BackupDevice.id, model: BackupDevice.model, name: BackupDevice.name,
+                deviceId: deviceId, model: BackupDevice.model, name: BackupDevice.name,
                 lastWriteAt: Date()),
             namespaceId: namespaceId,
             now: { Date() },

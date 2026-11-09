@@ -89,7 +89,10 @@ final class RestoreCoordinator {
             BackupLog.line("RestoreCoordinator", "The namespace id was not read: \(error)")
             mine = nil
         }
-        let thisDevice = UIDevice.current.identifierForVendor?.uuidString ?? ""
+        guard let thisDevice = BackupDevice.id else {
+            BackupLog.line("RestoreCoordinator", "No adopt is offered, the device id is not known")
+            return FreshInstallScan(plan: plan, adoptableNamespaceIds: [])
+        }
         let adoptable = namespaces.filter {
             AdoptQuestion.fires(
                 recordedDeviceId: $0.deviceId, thisDeviceId: thisDevice,
@@ -355,21 +358,27 @@ final class RestoreCoordinator {
     /// The record the next launch asks about, or `nil` when there is
     /// nothing to ask.
     func pendingResume() -> BackupIntentRecord? {
-        guard let store = try? BackupRoot.openStateStore() else { return nil }
-        defer { store.close() }
-        // `try?` flattens the optional the store returns, so this is
-        // one level, not two.
-        let record = try? store.intent(kind: .interruptedRestore)
-        guard RestoreResumeQuestion.asks(record) else { return nil }
-        return record
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            let record = try store.intent(kind: .interruptedRestore)
+            return RestoreResumeQuestion.asks(record) ? record : nil
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume record was not read: \(error)")
+            return nil
+        }
     }
 
     /// Marked when the sheet shows. A kill with the sheet open runs no
     /// `onDisappear`, so the answer is too late to mark it.
     func markResumeAsked() {
-        guard let store = try? BackupRoot.openStateStore() else { return }
-        defer { store.close() }
-        try? store.markIntentAsked(kind: .interruptedRestore)
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            try store.markIntentAsked(kind: .interruptedRestore)
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume ask was not marked: \(error)")
+        }
     }
 
     /// Continues the restore the record names, with the same scope
@@ -388,8 +397,14 @@ final class RestoreCoordinator {
             case .restore(let choice, let movedAsideTree) = record.work
         else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
 
-        let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        guard let namespaces = try? await scan.namespaces(),
+        let namespaces: [ScannedNamespace]
+        do {
+            namespaces = try await RestoreScan(provider: provider, descriptor: descriptor).namespaces()
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume scan of \(descriptor.label) failed: \(error)")
+            return .failed(RestoreNotices.unreadableLine)
+        }
+        guard
             let row = namespaces.flatMap({ $0.gameRows + $0.preferencesRows })
                 .first(where: { $0.snapshotId == snapshotId })
         else { return .failed(RestoreNotices.unreadableLine) }
@@ -433,12 +448,16 @@ final class RestoreCoordinator {
     /// Applies one answer. The caller resumes the restore itself when
     /// the effect says to start it now.
     func answerResume(_ action: RestoreResumeQuestion.Action, record: BackupIntentRecord) {
-        guard let store = try? BackupRoot.openStateStore() else { return }
-        defer { store.close() }
-
         let effect = RestoreResumeQuestion.effect(of: action)
         guard !effect.keepsRecord else { return }
-        try? store.clearIntent(kind: .interruptedRestore)
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            try store.clearIntent(kind: .interruptedRestore)
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume record was not cleared: \(error)")
+            return
+        }
         guard effect.deletesStagedBlobs else { return }
         Self.deleteStagedBlobs()
         // Stopping an import deletes the staged package as well as

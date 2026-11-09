@@ -279,30 +279,41 @@ final class BackupScheduler {
     /// launch left nothing to ask about.
     func pendingResume() -> BackupIntentRecord? {
         guard let store else { return nil }
-        let record = try? store.intent(kind: .interruptedRun)
-        guard BackupResumeQuestion.asks(record) else { return nil }
-        return record
+        do {
+            let record = try store.intent(kind: .interruptedRun)
+            return BackupResumeQuestion.asks(record) ? record : nil
+        } catch {
+            BackupLog.line("BackupScheduler", "The resume record was not read: \(error)")
+            return nil
+        }
     }
 
     /// Marked when the sheet shows. A kill with the sheet open runs no
     /// `onDisappear`, so marking on the answer let the same
     /// interruption ask at the next launch too.
     func markResumeAsked() {
-        try? store?.markIntentAsked(kind: .interruptedRun)
+        do {
+            try store?.markIntentAsked(kind: .interruptedRun)
+        } catch {
+            BackupLog.line("BackupScheduler", "The resume ask was not marked: \(error)")
+        }
     }
 
     /// Applies one answer to the resume question.
     func answerResume(_ action: BackupResumeQuestion.Action, gameName: String) {
         guard let store else { return }
-        let record = try? store.intent(kind: .interruptedRun)
-
-        let effect = BackupResumeQuestion.effect(of: action)
-        if effect.startsRunNow, let gameKey = record?.gameKey {
-            pressBackUpNow(.game(gameKey: gameKey, gameName: gameName))
+        do {
+            let record = try store.intent(kind: .interruptedRun)
+            let effect = BackupResumeQuestion.effect(of: action)
+            if effect.startsRunNow, let gameKey = record?.gameKey {
+                pressBackUpNow(.game(gameKey: gameKey, gameName: gameName))
+            }
+            guard !effect.keepsRecord else { return }
+            try store.clearIntent(kind: .interruptedRun)
+            if effect.cleansStagingAndOutbox { Self.cleanStagingAndOutbox() }
+        } catch {
+            BackupLog.line("BackupScheduler", "The resume answer was not applied: \(error)")
         }
-        guard !effect.keepsRecord else { return }
-        try? store.clearIntent(kind: .interruptedRun)
-        if effect.cleansStagingAndOutbox { Self.cleanStagingAndOutbox() }
     }
 
     /// Stop backup throws the staged copies and the outbox away. The

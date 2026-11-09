@@ -324,8 +324,7 @@ final class BackupsScreenModel {
             let provider = await BackupTargets.provider(for: descriptor)
         else { return [] }
         return try await RestoreScan(provider: provider, descriptor: descriptor).namespaceRows(
-            thisNamespaceId: try? BackupKeychain.namespaceId(),
-            thisDeviceId: UIDevice.current.identifierForVendor?.uuidString)
+            thisNamespaceId: try BackupKeychain.namespaceId(), thisDeviceId: BackupDevice.id)
     }
 
     /// What one namespace holds, per 11.3. The trailing game

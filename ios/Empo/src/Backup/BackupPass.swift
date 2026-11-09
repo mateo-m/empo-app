@@ -103,6 +103,10 @@ final class BackupPass: BackupRunning {
         _ descriptor: TargetDescriptor, provider: some BackupProvider, games: [BackupRunGame],
         trigger: BackupTrigger
     ) async -> BackupRunResult? {
+        guard let deviceId = BackupDevice.id else {
+            BackupLog.line("BackupPass", "\(descriptor.label) waits, the device id is not known")
+            return nil
+        }
         let namespaceId: String
         let store: BackupStateStore
         do {
@@ -111,7 +115,7 @@ final class BackupPass: BackupRunning {
             // engine gets its own.
             store = try BackupRoot.openStateStore()
         } catch {
-            BackupLog.line("BackupPass", "\(descriptor.label) could not open its local state")
+            BackupLog.line("BackupPass", "\(descriptor.label) could not open its local state: \(error)")
             return nil
         }
         do {
@@ -137,7 +141,7 @@ final class BackupPass: BackupRunning {
             trigger: trigger,
             descriptor: descriptor,
             namespaceId: namespaceId,
-            deviceId: BackupDevice.id,
+            deviceId: deviceId,
             deviceName: BackupDevice.name,
             deviceModel: BackupDevice.model,
             retentionPreset: BackupSettings.retention,
@@ -197,12 +201,16 @@ final class BackupPass: BackupRunning {
                 (BackupKeys.gameKey(containerFolderName: $0.folderName), $0)
             })
 
-        var dirty: [DirtyMark] = []
-        var restoring: String?
-        if let store = try? BackupRoot.openStateStore() {
-            dirty = (try? store.dirtyGames()) ?? []
-            restoring = (try? store.intent(kind: .interruptedRestore))?.gameKey
-            store.close()
+        let dirty: [DirtyMark]
+        let restoring: String?
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            dirty = try store.dirtyGames()
+            restoring = try store.intent(kind: .interruptedRestore)?.gameKey
+        } catch {
+            BackupLog.line("BackupPass", "No game is backed up, the records were not read: \(error)")
+            return ([], [:])
         }
         if let restoring, byKey[restoring] != nil {
             BackupLog.debug("BackupPass", "\(restoring) sits out, its restore has not finished")

@@ -115,8 +115,8 @@ enum BackupTargetAdd {
                 id: UUID().uuidString, provider: .s3, label: "", root: form["root"] ?? "")
         descriptor.label = form["label"] ?? bucket.name
         descriptor.accountHint = connection.accountHint
-        let before = try? BackupKeychain.secret(targetId: descriptor.id)
         do {
+            let before = try BackupKeychain.secret(targetId: descriptor.id)
             let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
             return await check(descriptor, provider: provider, secretBefore: before)
@@ -176,8 +176,8 @@ enum BackupTargetAdd {
                 id: UUID().uuidString, provider: .webdav, label: "", root: form["root"] ?? "")
         descriptor.label = form["label"] ?? address.host ?? "WebDAV"
         descriptor.accountHint = connection.accountHint
-        let before = try? BackupKeychain.secret(targetId: descriptor.id)
         do {
+            let before = try BackupKeychain.secret(targetId: descriptor.id)
             let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
             return await check(descriptor, provider: provider, secretBefore: before)
@@ -240,7 +240,12 @@ enum BackupTargetAdd {
             guard let screen = await OAuthSignIn.screenForTheSheet() else {
                 return .failed(noSignInScreenLine)
             }
-            let before = try? BackupKeychain.secret(targetId: target.id)
+            let before: String?
+            do {
+                before = try BackupKeychain.secret(targetId: target.id)
+            } catch {
+                return .failed(keychainFailedLine)
+            }
             do {
                 let signedIn =
                     target.provider == .dropbox
@@ -274,10 +279,14 @@ enum BackupTargetAdd {
 
     private static func putBack(_ secret: String?, targetId: String) {
         BackupTargets.forget(targetId: targetId)
-        if let secret {
-            try? BackupKeychain.setSecret(secret, targetId: targetId)
-        } else {
-            try? BackupKeychain.removeSecret(targetId: targetId)
+        do {
+            if let secret {
+                try BackupKeychain.setSecret(secret, targetId: targetId)
+            } else {
+                try BackupKeychain.removeSecret(targetId: targetId)
+            }
+        } catch {
+            BackupLog.line("BackupTargetAdd", "The secret of \(targetId) was not put back: \(error)")
         }
     }
 
