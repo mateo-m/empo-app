@@ -1,8 +1,7 @@
 import type { Env } from "./patreon";
-import { callSession, type SessionState } from "./session";
+import { callSession, type SessionState, unusedLifetimeMs } from "./session";
 
 export const deviceLimit = 3;
-const checkAgainMs = 90 * 24 * 60 * 60 * 1000;
 
 export type MemberRequest = { action: "add"; device: string; session: string; replace: boolean };
 
@@ -24,7 +23,7 @@ export class PatreonMember {
       const devices = await this.liveDevices();
       if (Object.keys(devices).length === 0) return this.state.storage.deleteAll();
       await this.state.storage.put({ devices });
-      await this.state.storage.setAlarm(Date.now() + checkAgainMs);
+      await this.state.storage.setAlarm(Date.now() + unusedLifetimeMs);
     });
   }
 
@@ -43,7 +42,7 @@ export class PatreonMember {
       }
       devices[device] = session;
       await this.state.storage.put({ devices });
-      await this.state.storage.setAlarm(Date.now() + checkAgainMs);
+      await this.state.storage.setAlarm(Date.now() + unusedLifetimeMs);
       return new Response(null, { status: 204 });
     } catch (error) {
       console.error(error);
@@ -52,7 +51,7 @@ export class PatreonMember {
   }
 
   // A session ends without telling this object: on a sign-out, when
-  // Patreon refuses it, or after 90 days without use.
+  // Patreon refuses it, or when it lapses with no use.
   private async liveDevices(): Promise<Record<string, string>> {
     const devices = (await this.state.storage.get<Record<string, string>>("devices")) ?? {};
     const live: Record<string, string> = {};
