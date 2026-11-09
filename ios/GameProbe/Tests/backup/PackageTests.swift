@@ -535,6 +535,47 @@ final class PackageTests: XCTestCase {
         XCTAssertFalse(fm.fileExists(atPath: container.appendingPathComponent("Game/Save01.rvdata2").path))
     }
 
+    func testADamagedFileAfterAnotherUnfinishedRestoreLeavesNoRecordToResume() async throws {
+        let save = Data((0..<4_096).map { _ in UInt8.random(in: 0...255) })
+        let package = try writeAPackage(files: [("Game/Save01.rvdata2", save)])
+        var zip = try Data(contentsOf: package.url)
+        let damaged = try XCTUnwrap(zip.range(of: save.subdata(in: 1_000..<1_064)))
+        zip[damaged.lowerBound] ^= 0xFF
+        try zip.write(to: package.url)
+        let stream = try XCTUnwrap(package.manifest.streams.first)
+        let stateURL = root.appendingPathComponent("state.sqlite")
+        let earlier = try BackupStateStore(url: stateURL)
+        try earlier.saveIntent(
+            RestoreResumeQuestion.record(
+                targetId: "t1", gameKey: "other-game", snapshotId: "s0",
+                choice: .restore(.wholeGame), at: Date()))
+        earlier.close()
+
+        let outcome = await RestoreEngine(
+            provider: try PackageSource(zip: package.url, packageId: "p1"),
+            store: try BackupStateStore(url: stateURL),
+            localRoot: root.appendingPathComponent("local", isDirectory: true)
+        ).run(
+            RestoreRequest(
+                targetId: PackageSource.targetId(packageId: "p1"),
+                root: "",
+                namespaceId: "p1",
+                stream: BackupStream(key: stream.key),
+                snapshotId: PackageSource.snapshotId(
+                    streamKey: stream.key, exportedAt: package.manifest.exportedAt),
+                choice: .restore(.wholeGame),
+                destination: MemberSource(
+                    container: root.appendingPathComponent("Restored/Quest", isDirectory: true)),
+                freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the import did not fail: \(outcome)")
+        }
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        XCTAssertNil(try store.intent(kind: .interruptedRestore))
+    }
+
     func testTwoGamesThatShareASaveFolderExportOneCopyAndImport() throws {
         let shared = Data(repeating: 3, count: 512)
         let folder = root.appendingPathComponent("Data/Kadokawa/Saga", isDirectory: true)

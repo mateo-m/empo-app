@@ -124,8 +124,11 @@ public actor RestoreEngine {
         let layout = BackupRootLayout(root: localRoot)
         let resumes: Bool
         do {
+            let earlier = try RestoreResumeQuestion.unfinishedRecord(
+                in: store, layout: layout, fm: fm)
             resumes =
-                try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout, fm: fm) != nil
+                earlier?.targetId == request.targetId && earlier?.gameKey == gameKey
+                && earlier?.snapshotId == request.snapshotId
             // The mark is still there only when the record of a finished
             // restore did not clear. A new record would leave that one unmarked.
             guard !fm.fileExists(atPath: layout.finishedRestoreMark.path) else {
