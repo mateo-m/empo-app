@@ -100,9 +100,8 @@ struct PlayerControlsOverlay: View {
             size: size,
             opacity: layout.dpadOpacity,
             position: ControlsZone.absolutePosition(
-                for: layout.dpadRelativeCenter, in: geo.size, controlSize: CGSize(width: size, height: size),
+                for: layout.dpadRelativeCenter, in: geo.size, controlSize: size,
                 safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout),
-            hitRegionKey: "controls.dpad",
             onTapEdit: { editDialog = .dpad },
             onDelete: nil,
             update: { layout.dpadRelativeCenter = $0 }
@@ -164,7 +163,6 @@ struct PlayerControlsOverlay: View {
             opacity: button.opacity,
             position: resolvedPosition(
                 displayPosition, center: button.relativeCenter, size: button.size),
-            hitRegionKey: "controls.button.\(button.id.uuidString)",
             onTapEdit: { editDialog = .button(button.id) },
             onDelete: { layout.removeButton(id: button.id) },
             update: { layout.updateButton(id: button.id, relativeCenter: $0) }
@@ -211,7 +209,6 @@ struct PlayerControlsOverlay: View {
             opacity: button.opacity,
             position: resolvedPosition(
                 displayPosition, center: button.relativeCenter, size: button.size),
-            hitRegionKey: "controls.actionButton.\(button.id.uuidString)",
             onTapEdit: { editDialog = .actionButton(button.id) },
             onDelete: { layout.removeActionButton(id: button.id) },
             update: { layout.updateActionButton(id: button.id, relativeCenter: $0) }
@@ -237,7 +234,7 @@ struct PlayerControlsOverlay: View {
         displayPosition
             ?? ControlsZone.absolutePosition(
                 for: center, in: geo.size,
-                controlSize: CGSize(width: size, height: size),
+                controlSize: size,
                 safeArea: safeArea,
                 controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
     }
@@ -248,7 +245,6 @@ struct PlayerControlsOverlay: View {
         size: CGFloat,
         opacity: Double,
         position: CGPoint,
-        hitRegionKey: String,
         onTapEdit: @escaping () -> Void,
         onDelete: (() -> Void)?,
         update: @escaping (CGPoint) -> Void
@@ -284,7 +280,7 @@ struct PlayerControlsOverlay: View {
             }
             // `.position` fills the full proposed space, so a region
             // measured after it covers the whole screen.
-            .chromeHitRegion(hitRegionKey, enabled: !isPreview)
+            .chromeHitRegion(enabled: !isPreview)
             .scaleEffect(isDragging ? ControlsZone.dragScaleFactor : 1.0)
             .animation(Motion.snappy, value: isDragging)
             .position(position)

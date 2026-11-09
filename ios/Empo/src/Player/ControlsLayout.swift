@@ -810,7 +810,7 @@ class ControlsLayout {
         let inputs = allCircles.map { circle -> (x: Double, y: Double, size: Double) in
             let clamped = ControlsZone.absolutePosition(
                 for: circle.center, in: geoSize,
-                controlSize: CGSize(width: circle.size, height: circle.size),
+                controlSize: circle.size,
                 safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
             )
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
@@ -827,7 +827,7 @@ class ControlsLayout {
 
         let dpadClamped = ControlsZone.absolutePosition(
             for: dpadRelativeCenter, in: geoSize,
-            controlSize: CGSize(width: dpadSize, height: dpadSize),
+            controlSize: dpadSize,
             safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
         )
 

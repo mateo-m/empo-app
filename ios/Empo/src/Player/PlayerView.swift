@@ -76,7 +76,7 @@ struct PlayerView: View {
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .ignoresSafeArea()
-                        .chromeHitRegion("editMode")
+                        .chromeHitRegion()
                         .allowsHitTesting(false)
 
                     editZoneBackground(
@@ -97,7 +97,7 @@ struct PlayerView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .ignoresSafeArea()
-                        .chromeHitRegion("keyboardMode")
+                        .chromeHitRegion()
                         .onTapGesture {
                             toggleKeyboard()
                         }
@@ -198,7 +198,7 @@ struct PlayerView: View {
                 }
 
                 if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
-                    noticeCapsule(hitRegionKey: "gameLayoutNotice", safeArea: safeArea) {
+                    noticeCapsule(safeArea: safeArea) {
                         Text("This game's own control layout is now active.")
                             .font(.footnote)
                             .foregroundStyle(.white)
@@ -211,7 +211,7 @@ struct PlayerView: View {
                 }
 
                 if layout.importOfferPending && !editMode {
-                    noticeCapsule(hitRegionKey: "importOffer", safeArea: safeArea) {
+                    noticeCapsule(safeArea: safeArea) {
                         Text("This game includes its own control layout.")
                             .font(.footnote)
                             .foregroundStyle(.white)
@@ -561,7 +561,7 @@ struct PlayerView: View {
     /// Without a hit region, taps inside gameRect go to the engine,
     /// not to the buttons.
     private func noticeCapsule(
-        hitRegionKey: String, safeArea: EdgeInsets,
+        safeArea: EdgeInsets,
         @ViewBuilder content: () -> some View
     ) -> some View {
         VStack {
@@ -573,7 +573,7 @@ struct PlayerView: View {
             .padding(.vertical, Spacing.md)
             .background(Color.black.opacity(Scrim.heavy))
             .clipShape(Capsule())
-            .chromeHitRegion(hitRegionKey)
+            .chromeHitRegion()
             .padding(.bottom, safeArea.bottom + Spacing.md)
         }
     }

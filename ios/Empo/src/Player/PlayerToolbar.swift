@@ -58,7 +58,7 @@ struct PlayerToolbar: View {
         .darkGlass()
         // `.position` fills the full proposed space, so measure the
         // region before it.
-        .chromeHitRegion("toolbar")
+        .chromeHitRegion()
         .opacity(toolbarOpacity)
         .position(placement.center)
     }

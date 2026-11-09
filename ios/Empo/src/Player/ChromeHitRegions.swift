@@ -3,66 +3,45 @@
 
 import SwiftUI
 
-/// Window-coordinate chrome rects that `PlayerView` publishes so
-/// `AppWindow.hitTest` can route touches without a check on view
-/// identity (SwiftUI's hosting view is hit-testable everywhere).
+/// The SwiftUI hosting view accepts a hit at every point. `AppWindow.hitTest`
+/// uses these window rects to find the touches that go to the chrome.
 @MainActor
 enum ChromeHitRegions {
-    private static var regions: [String: CGRect] = [:]
+    fileprivate static var regions: [UUID: CGRect] = [:]
     private static let slop: CGFloat = 6
-
-    static func update(_ id: String, rect: CGRect) {
-        regions[id] = rect
-    }
-
-    static func remove(_ id: String) {
-        regions.removeValue(forKey: id)
-    }
 
     static func removeAll() {
         regions.removeAll()
     }
 
     static func contains(_ point: CGPoint) -> Bool {
-        for rect in regions.values {
-            let inflated = rect.insetBy(dx: -slop, dy: -slop)
-            if inflated.contains(point) {
-                return true
-            }
-        }
-        return false
+        regions.values.contains { $0.insetBy(dx: -slop, dy: -slop).contains(point) }
     }
 }
 
 private struct ChromeHitRegionModifier: ViewModifier {
-    let id: String
+    @State private var id = UUID()
 
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { proxy in
                 proxy.frame(in: .global)
             } action: { frame in
-                ChromeHitRegions.update(id, rect: frame)
+                ChromeHitRegions.regions[id] = frame
             }
             .onDisappear {
-                ChromeHitRegions.remove(id)
+                ChromeHitRegions.regions[id] = nil
             }
     }
 }
 
 extension View {
-    /// Publish this view's global frame for `AppWindow` hit routing.
-    func chromeHitRegion(_ id: String) -> some View {
-        modifier(ChromeHitRegionModifier(id: id))
-    }
-
-    /// Disabled variant for previews: the profile editor renders the
-    /// controls overlay outside the player and must not leak regions
-    /// into the app's hit routing.
+    /// The profile editor shows the controls outside the player. There,
+    /// `enabled` is false, so the regions do not change the hit routing.
     @ViewBuilder
-    func chromeHitRegion(_ id: String, enabled: Bool) -> some View {
+    func chromeHitRegion(enabled: Bool = true) -> some View {
         if enabled {
-            modifier(ChromeHitRegionModifier(id: id))
+            modifier(ChromeHitRegionModifier())
         } else {
             self
         }

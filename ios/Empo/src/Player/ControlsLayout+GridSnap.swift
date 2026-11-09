@@ -182,7 +182,7 @@ extension ControlsLayout {
     private func absoluteCenter(_ relative: CGPoint, size: CGFloat, in geometry: EditGeometry) -> CGPoint {
         ControlsZone.absolutePosition(
             for: relative, in: geometry.geoSize,
-            controlSize: CGSize(width: size, height: size),
+            controlSize: size,
             safeArea: geometry.safeArea, controlsMinY: geometry.controlsMinY, keepout: toolbarKeepout)
     }
 
