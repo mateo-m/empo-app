@@ -116,7 +116,7 @@ final class BackupPass: BackupRunning {
             return nil
         }
 
-        var conflicts = WriterConflicts.read(
+        var conflicts = try? WriterConflicts.read(
             applicationSupport: BackupRoot.layout.applicationSupport)
         let request = BackupRunRequest(
             runId: UUID().uuidString,
@@ -131,8 +131,8 @@ final class BackupPass: BackupRunning {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerAnswer: conflicts.answer(for: descriptor.id),
-            syncGroupId: SyncStore.state().groupId)
+            writerAnswer: conflicts?.answer(for: descriptor.id),
+            syncGroupId: (try? SyncStore.state())?.groupId)
 
         // The engine takes the store over. `SQLiteDatabase` closes
         // its handle when the last reference goes, so nothing here
@@ -148,8 +148,8 @@ final class BackupPass: BackupRunning {
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
-        conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
-        try? conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        conflicts?.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
+        try? conflicts?.write(applicationSupport: BackupRoot.layout.applicationSupport)
         if result.didSplit {
             moveTheDevice(to: result.namespaceId, after: descriptor)
         }

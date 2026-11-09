@@ -174,11 +174,9 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
         try JSONDecoder().decode(TargetDescriptorFile.self, from: data)
     }
 
-    /// Reads `targets.json`, or returns an empty file where none is
-    /// there yet.
     public static func read(applicationSupport: URL) throws -> TargetDescriptorFile {
         let url = BackupRootLayout(applicationSupport: applicationSupport).targetsFile
-        guard let data = try? Data(contentsOf: url) else { return TargetDescriptorFile() }
+        guard let data = try SettingsFile.data(at: url) else { return TargetDescriptorFile() }
         return try decode(json: data)
     }
 

@@ -137,6 +137,16 @@ final class TargetDescriptorTests: XCTestCase {
         XCTAssertTrue(file.targets.isEmpty)
     }
 
+    func testATargetsFileThatDoesNotReadIsAnError() throws {
+        // A folder at the file's path fails the read with an error
+        // other than "no such file".
+        try FileManager.default.createDirectory(
+            at: BackupRootLayout(applicationSupport: tempRoot).targetsFile,
+            withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try TargetDescriptorFile.read(applicationSupport: tempRoot))
+    }
+
     func testEveryV1ProviderHasAName() {
         XCTAssertEqual(
             Set(BackupProviderKind.allCases.map(\.rawValue)),

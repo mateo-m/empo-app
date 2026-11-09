@@ -30,7 +30,9 @@ enum BackupTargets {
     /// before the pass and wrote it back after would put the old
     /// list back, so every change reads the file again first.
     static func update(_ change: (inout [TargetDescriptor]) -> Void) throws {
-        let stored = load()
+        let stored = try TargetDescriptorFile.read(
+            applicationSupport: BackupRoot.layout.applicationSupport
+        ).targets
         var targets = stored
         change(&targets)
         guard targets != stored else { return }

@@ -125,8 +125,9 @@ final class BackupsScreenModel {
         }
         self.items = items
         self.history = runs
-        let conflicts = WriterConflicts.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
+        let conflicts =
+            (try? WriterConflicts.read(applicationSupport: BackupRoot.layout.applicationSupport))
+            ?? WriterConflicts()
         writerQuestions = descriptors.compactMap { descriptor in
             conflicts.questions[descriptor.id].map {
                 WriterQuestionItem(
@@ -399,7 +400,8 @@ final class BackupsScreenModel {
 
     private func updateTheConflicts(_ change: (inout WriterConflicts) -> Void) {
         let applicationSupport = BackupRoot.layout.applicationSupport
-        var conflicts = WriterConflicts.read(applicationSupport: applicationSupport)
+        guard var conflicts = try? WriterConflicts.read(applicationSupport: applicationSupport)
+        else { return }
         change(&conflicts)
         try? conflicts.write(applicationSupport: applicationSupport)
     }

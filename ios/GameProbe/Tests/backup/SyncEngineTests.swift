@@ -123,7 +123,10 @@ final class SyncEngineTests: XCTestCase {
             value = SyncState(actorId: "actor", groupId: groupId)
         }
 
-        func state() -> SyncState {
+        var failsToRead = false
+
+        func state() throws -> SyncState {
+            if failsToRead { throw CocoaError(.fileReadCorruptFile) }
             reads += 1
             if reads > 1, let joinsMidPass {
                 value.groupId = joinsMidPass
@@ -850,6 +853,22 @@ final class SyncEngineTests: XCTestCase {
 
     /// A join deletes the file, per 10.4, so every pass starts from
     /// the file.
+    func testASyncStateThatDoesNotReadFailsThePass() async throws {
+        let document = FakeDocument()
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.failsToRead = true
+
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: FakeLocalValues()
+        ).run(.now)
+
+        guard case .failed = outcome else { return XCTFail("the pass did not fail: \(outcome)") }
+        XCTAssertTrue(document.steps.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
     func testEveryPassReadsTheDocumentFromTheFileAgain() async throws {
         let document = FakeDocument()
         let targets = FakeTargets()

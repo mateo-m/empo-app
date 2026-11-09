@@ -70,7 +70,7 @@ final class RestoreCoordinator {
             hints: FreshInstallHints.lines(
                 streamed: streamed,
                 canOpenICloud: await ICloudDriveGate.shared.availability().isReady),
-            joinedSyncGroup: SyncStore.state().hasJoined)
+            joinedSyncGroup: (try? SyncStore.state())?.hasJoined == true)
         guard
             FreshInstallMerge.opens(
                 libraryIsEmpty: libraryIsEmpty, isFirstTarget: isFirstTarget, plan: plan)
@@ -249,11 +249,12 @@ final class RestoreCoordinator {
 
         // `EmpoState/` always restores, so the snapshot's alias file
         // replaces this one, the attach of 4.3 included.
-        let aliasesBefore = container.map { IdentityAliases.load(from: $0.empoStateURL) }
+        let aliasesBefore = container.flatMap { try? IdentityAliases.load(from: $0.empoStateURL) }
         let engine = RestoreEngine(provider: provider, store: store, localRoot: BackupRoot.layout.root)
         var outcome = await engine.run(request)
-        if let container, let aliasesBefore {
-            var aliases = IdentityAliases.load(from: container.empoStateURL)
+        if let container, let aliasesBefore,
+            var aliases = try? IdentityAliases.load(from: container.empoStateURL)
+        {
             if aliases.merge(aliasesBefore, forFolderName: container.folderName) {
                 try? aliases.save(to: container.empoStateURL)
             }

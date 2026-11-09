@@ -70,7 +70,13 @@ public final class SyncEngine {
     // MARK: - One pass
 
     public func run(_ trigger: SyncTrigger) async -> Outcome {
-        guard let groupId = state.state().groupId else { return .nothingToDo }
+        let current: SyncState
+        do {
+            current = try state.state()
+        } catch {
+            return .failed("the sync state could not be read: \(error)")
+        }
+        guard let groupId = current.groupId else { return .nothingToDo }
         let enabled = targets.enabled()
         guard !enabled.isEmpty else { return .nothingToDo }
 
@@ -106,8 +112,8 @@ public final class SyncEngine {
         var mine = SyncDocumentModel()
         updateIdentities { mine = local.read(identities: &$0) }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
-        let removed = state.state().removedPreferenceKeys
-        let removedBindings = state.state().heldBindingIds.filter {
+        let removed = current.removedPreferenceKeys
+        let removedBindings = current.heldBindingIds.filter {
             mine.controllerBindings[$0] == nil
         }
         if publishes, !isNew {
@@ -185,7 +191,7 @@ public final class SyncEngine {
 
         // A join that landed during this pass left the group this
         // pass read. Nothing of it goes to the new group.
-        guard state.state().groupId == groupId else { return .runAgain }
+        guard (try? state.state())?.groupId == groupId else { return .runAgain }
         await publish(groupId: groupId, to: enabled)
         return .done
     }
@@ -197,10 +203,11 @@ public final class SyncEngine {
     ) async -> (seen: [SeenCopy], isComplete: Bool) {
         var seen: [SeenCopy] = []
         var isComplete = true
-        guard let namespaces = await targets.namespaces(of: descriptor) else { return ([], false) }
+        guard let namespaces = await targets.namespaces(of: descriptor),
+            let held = try? state.state()
+        else { return ([], false) }
         let progress =
-            state.state().progress(ofTarget: descriptor.id)
-            ?? SyncTargetProgress(targetId: descriptor.id)
+            held.progress(ofTarget: descriptor.id) ?? SyncTargetProgress(targetId: descriptor.id)
 
         for namespace in namespaces where namespace.id != namespaceId {
             // A copy of another group belongs to another person, per
@@ -271,9 +278,10 @@ public final class SyncEngine {
 
     private func publish(groupId: String, to enabled: [TargetDescriptor]) async {
         let heads = document.heads()
+        guard let held = try? state.state() else { return }
         let needed = Set(
             SyncReplication.targetsNeedingACopy(
-                enabled: enabled.map(\.id), progress: state.state().targets, heads: heads))
+                enabled: enabled.map(\.id), progress: held.targets, heads: heads))
         guard !needed.isEmpty else { return }
 
         // A target is a mailbox, so the copies go out together.
