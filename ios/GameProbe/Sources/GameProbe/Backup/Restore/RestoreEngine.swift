@@ -165,6 +165,8 @@ public actor RestoreEngine {
             }
         }
 
+        // A cancel during the last download lets that download finish.
+        guard !Task.isCancelled else { return .stopped(.gameLaunched, result) }
         if let tree, let replaced {
             guard (try? fm.moveItem(at: tree, to: replaced)) != nil else {
                 try? store.clearIntent(kind: .interruptedRestore)

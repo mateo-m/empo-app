@@ -1860,6 +1860,37 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual((try? fm.contentsOfDirectory(atPath: restore.path)) ?? [], [])
     }
 
+    func testAReplaceStoppedInItsLastDownloadLeavesTheGameFolderInPlace() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let request = try replaceRequest(try snapshotId(of: backup, stream: key(gameName)))
+        // The format file and the manifest pass, then the three blobs
+        // of `Game/`. The last blob holds.
+        let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
+        let latch = TransferLatch(holdFrom: reads + 3)
+        await target.setLatch(latch)
+        let engine = RestoreEngine(
+            provider: target,
+            store: try BackupStateStore(url: tempRoot.appendingPathComponent("restore.sqlite")),
+            localRoot: localRoot)
+        let running = Task { await engine.run(request) }
+        let arrived = await latch.waitForArrivals(reads + 3)
+        XCTAssertTrue(arrived)
+        running.cancel()
+        await latch.open()
+
+        guard case .stopped(.gameLaunched, _) = await running.value else {
+            return XCTFail("the replace did not stop")
+        }
+        XCTAssertEqual(
+            try String(
+                contentsOf: container(gameName).appendingPathComponent("Game/save1.dat"),
+                encoding: .utf8),
+            "slot one of \(gameName)")
+    }
+
     /// Stops the first try of a replace after one file landed in the
     /// new `Game/`, and answers the folder the old tree moved to.
     private func stopAReplaceHalfWay(
