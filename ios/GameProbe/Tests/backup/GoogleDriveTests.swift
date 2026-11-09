@@ -120,6 +120,7 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(RetryWait.seconds(retryAfter: "30", attempt: 1), 30)
         XCTAssertEqual(RetryWait.seconds(retryAfter: nil, attempt: 4), 8)
         XCTAssertEqual(RetryWait.seconds(retryAfter: "nonsense", attempt: 2), 2)
+        XCTAssertEqual(RetryWait.seconds(retryAfter: "inf", attempt: 2), 2)
     }
 
     // MARK: - 2. Which upload path a file takes, per 9.3

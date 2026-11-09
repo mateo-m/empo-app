@@ -17,7 +17,7 @@ public enum RetryWait {
     public static func headerSeconds(_ header: String?, now: Date = Date()) -> TimeInterval? {
         guard let header else { return nil }
         let text = header.trimmingCharacters(in: .whitespaces)
-        if let seconds = TimeInterval(text), seconds > 0 { return seconds }
+        if let seconds = TimeInterval(text), seconds.isFinite, seconds > 0 { return seconds }
         guard let date = ProviderDate.httpReader()(text) else { return nil }
         let wait = date.timeIntervalSince(now)
         return wait > 0 ? wait : nil
