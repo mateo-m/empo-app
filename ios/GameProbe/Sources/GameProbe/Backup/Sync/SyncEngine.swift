@@ -97,7 +97,11 @@ public final class SyncEngine {
             // A lost document takes its history with it. What this
             // device read and confirmed belongs to that history, as on
             // a join, so the pass reads every copy again.
-            updateState("the progress of the lost history") { $0.targets = [] }
+            do {
+                try state.update { $0.targets = [] }
+            } catch {
+                return .failed("the progress of the lost history was not cleared: \(error)")
+            }
         }
         var mine = SyncDocumentModel()
         updateIdentities { mine = local.read(identities: &$0) }
@@ -212,6 +216,7 @@ public final class SyncEngine {
 
             if case .failure(let rejection) = document.merge(bytes) {
                 note("\(namespace.id) changed nothing: \(rejection)")
+                isComplete = false
                 continue
             }
             rebuildConflicts(
