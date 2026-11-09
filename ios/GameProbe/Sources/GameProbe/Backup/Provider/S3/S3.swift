@@ -324,9 +324,6 @@ public enum S3 {
 
     // MARK: - Throttling, per 9.4
 
-    /// The wait when the service throttles and states no time.
-    public static let defaultRetryAfter: TimeInterval = 2
-
     /// The longest wait the truncated backoff ever makes.
     public static let backoffCeilingSeconds: TimeInterval = 64
 

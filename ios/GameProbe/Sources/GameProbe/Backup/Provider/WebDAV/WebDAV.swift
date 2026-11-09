@@ -302,9 +302,6 @@ public enum WebDAV {
 
     // MARK: - Throttling, per 8.6
 
-    /// The wait when the server throttles and states no time.
-    public static let defaultRetryAfter: TimeInterval = 2
-
     /// The longest wait the truncated backoff ever makes.
     public static let backoffCeilingSeconds: TimeInterval = 64
 

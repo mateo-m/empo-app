@@ -354,9 +354,6 @@ public enum GoogleDrive {
         public static let serverError = 500
     }
 
-    /// The wait when Drive throttles and states no time.
-    public static let defaultRetryAfter: TimeInterval = 2
-
     /// The longest wait the truncated backoff of 9.3 ever makes.
     public static let backoffCeilingSeconds: TimeInterval = 64
 
