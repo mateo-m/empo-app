@@ -13,7 +13,6 @@
 # This file stays as a fallback for tools that pass plain globs to
 # markdownlint (e.g. editor integrations).
 
-.engine-history/
 ios/Empo/build/
 ios/Empo/Empo.xcodeproj/
 ios/Dependencies/

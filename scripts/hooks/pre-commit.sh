@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-# Pre-commit hook: format staged files, then lint/verify formatting.
+# Formats the staged files, then lints them.
 
 set -e
 
@@ -17,6 +17,13 @@ fi
 
 match() {
     printf '%s\n' "$STAGED" | grep -E "$1" || true
+}
+
+# The staged files that CI checks with one lint tool.
+staged_for() {
+    LINTED=$(scripts/lint-files.sh "$1")
+    [ -n "$LINTED" ] || return 0
+    printf '%s\n' "$STAGED" | grep -x -F -e "$LINTED" || true
 }
 
 restage() {
@@ -46,7 +53,7 @@ verify_clang_format() {
     done
 }
 
-SWIFT_FILES=$(match '^ios/Empo/.*\.swift$')
+SWIFT_FILES=$(staged_for swift-format)
 if [ -n "$SWIFT_FILES" ]; then
     section "swift-format (Swift)"
     require_tool swift-format
@@ -54,15 +61,18 @@ if [ -n "$SWIFT_FILES" ]; then
     restage "$SWIFT_FILES"
     printf '%s\n' "$SWIFT_FILES" | xargs swift-format lint --strict ||
         die "swift-format lint failed"
+fi
 
+SWIFTLINT_FILES=$(staged_for swiftlint)
+if [ -n "$SWIFTLINT_FILES" ]; then
     section "swiftlint (Swift)"
     require_tool swiftlint
     # shellcheck disable=SC2086
-    swiftlint lint --strict --quiet $SWIFT_FILES ||
+    swiftlint lint --strict --quiet $SWIFTLINT_FILES ||
         die "swiftlint failed"
 fi
 
-CPP_FILES=$(match '^ios/Empo/(src|shims)/.*\.(h|m|mm|c|cpp)$')
+CPP_FILES=$(staged_for clang-format)
 if [ -n "$CPP_FILES" ]; then
     section "clang-format (ObjC / C / C++)"
     require_tool clang-format
@@ -71,7 +81,7 @@ if [ -n "$CPP_FILES" ]; then
     verify_clang_format "$CPP_FILES"
 fi
 
-SH_FILES=$(match '^(setup\.sh|tools/.*\.sh|scripts/.*\.sh)$')
+SH_FILES=$(staged_for shell)
 if [ -n "$SH_FILES" ]; then
     section "shfmt (Shell)"
     require_tool shfmt
@@ -82,11 +92,11 @@ if [ -n "$SH_FILES" ]; then
 
     section "shellcheck (Shell)"
     require_tool shellcheck
-    printf '%s\n' "$SH_FILES" | xargs shellcheck ||
+    printf '%s\n' "$SH_FILES" | xargs shellcheck -x ||
         die "shellcheck failed"
 fi
 
-OXFMT_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml)$')
+OXFMT_FILES=$(match '^(altstore-source\.json|ios/Empo/project\.yml|ios/Empo/curated-patches/gameRegistry\.json)$')
 if [ -n "$OXFMT_FILES" ]; then
     section "oxfmt (YAML / JSON)"
     require_tool bun
