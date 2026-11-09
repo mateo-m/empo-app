@@ -14294,6 +14294,64 @@
         }
       }
     },
+    "Choose what gets backed up again" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle erneut, was gesichert wird"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a elegir qué se copia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisis à nouveau le contenu de la copie de secours"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli di nuovo cosa include il backup"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップの対象をもう一度選んでください"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "백업할 항목을 다시 선택해 주세요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha de novo o que entra no backup"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Снова выберите, что копировать"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请重新选择备份内容"
+          }
+        }
+      }
+    },
     "Choose which games to update. The others stay as they are, and saves are always kept." : {
       "localizations" : {
         "de" : {
@@ -25233,6 +25291,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empo 无法读取这个包。请重试。"
+          }
+        }
+      }
+    },
+    "Empo couldn't read what %@ backs up. Open the game's settings, tap Backup, and choose what gets backed up again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte nicht lesen, was bei %@ gesichert wird. Öffne die Einstellungen des Spiels, tippe auf Backup und wähle erneut, was gesichert wird."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo leer qué se copia de %@. Abre los ajustes del juego, toca Copia de seguridad y vuelve a elegir qué se copia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu lire le contenu de la copie de secours de %@. Ouvre les réglages du jeu, touche Copie de secours et choisis à nouveau son contenu."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a leggere cosa include il backup di %@. Apri le impostazioni del gioco, tocca Backup e scegli di nuovo cosa include il backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ のバックアップの対象を読み込めませんでした。ゲームの設定を開いて「バックアップ」をタップし、対象をもう一度選んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 %@의 백업할 항목을 읽지 못했어요. 게임 설정을 열고 백업을 탭한 다음 백업할 항목을 다시 선택해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu ler o que entra no backup de %@. Abra os ajustes do jogo, toque em Backup e escolha de novo o que entra no backup."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось прочитать, что копировать для %@. Откройте настройки игры, нажмите «Резервная копия» и снова выберите, что копировать."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法读取 %@ 的备份内容。请打开游戏设置，轻点“备份”，然后重新选择备份内容。"
           }
         }
       }

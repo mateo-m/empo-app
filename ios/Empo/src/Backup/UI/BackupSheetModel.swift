@@ -33,6 +33,9 @@ final class BackupSheetModel {
     /// `nil` until the files are read. An edit made on an empty
     /// editor would save an empty mark list over the user's marks.
     private(set) var editor: SaveFileEditorModel?
+    /// The game's backup settings are damaged. A new mode choice writes a
+    /// new file, and the editor opens again.
+    private(set) var settingsUnread = false
     private(set) var leftovers = GameLeftovers()
     private(set) var hasATarget = false
     /// The first oversized write this game still owes an answer.
@@ -98,6 +101,7 @@ final class BackupSheetModel {
             BackupLog.line("BackupSheetModel", "The backup settings did not read: \(error)")
             guard read == readsOfTheFiles else { return }
             editor = nil
+            settingsUnread = true
             return
         }
         let leftovers = await Self.leftovers(inside: container.url)
@@ -106,6 +110,7 @@ final class BackupSheetModel {
         fullBytes = full.totalSize
         slimBytes = slim.totalSize
         editor = SaveFileEditorModel.from(slim, manualMarks: intent.manualMarks)
+        settingsUnread = false
         self.leftovers = leftovers
     }
 

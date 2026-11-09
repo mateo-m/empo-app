@@ -146,6 +146,9 @@ struct BackupSheet: View {
                     if let editor = model.editor {
                         Text("\(editor.entries.count)")
                             .foregroundStyle(.secondary)
+                    } else if model.settingsUnread {
+                        Text("Choose what gets backed up again")
+                            .foregroundStyle(.secondary)
                     } else {
                         ProgressView()
                     }
