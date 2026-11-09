@@ -466,17 +466,8 @@ struct PlayerView: View {
                     withAnimation(ScreenRegionGizmo.moveAnimation) {
                         layout.resetScreenEdit()
                     }
-                    if let current = context.effectiveRegion,
-                        let target = estimatedAutoRegion(
-                            canvas: context.canvas,
-                            aspect: gameRect.height > 0
-                                ? gameRect.width / gameRect.height : GameAspect.typical)
-                    {
-                        layout.screenRegion.animateResetToAuto(
-                            from: current, toEstimate: target, isPortrait: isPortrait)
-                    } else {
-                        layout.screenRegion.preview(nil, isPortrait: isPortrait)
-                    }
+                    layout.screenRegion.resetToAuto(
+                        from: context.effectiveRegion, in: context.canvas, isPortrait: isPortrait)
                 },
                 overlayOn: context.overlayOn,
                 onToggleOverlay: {
@@ -493,16 +484,6 @@ struct PlayerView: View {
             )
         }
         .ignoresSafeArea()
-    }
-
-    private func estimatedAutoRegion(canvas: ScreenCanvas, aspect: CGFloat) -> ScreenRegion? {
-        let preset: ScreenPreset
-        switch gamecore_getVerticalAlignment() {
-        case GAMECORE_VALIGN_TOP: preset = .top
-        case GAMECORE_VALIGN_CENTER: preset = .center
-        default: preset = .topCenter
-        }
-        return canvas.region(for: .preset(preset), aspect: aspect)
     }
 
     private var editZoneCaptionText: LocalizedStringResource? {

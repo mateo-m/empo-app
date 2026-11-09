@@ -129,11 +129,16 @@ final class ScreenRegionApplier {
     }
 
     /// The engine cannot animate its own layout change. This glides
-    /// from the active region to an estimate of automatic placement,
-    /// then gives the engine its real automatic placement.
-    func animateResetToAuto(
-        from start: ScreenRegion, toEstimate end: ScreenRegion, isPortrait: Bool
-    ) {
+    /// from `start` to an estimate of automatic placement, then gives
+    /// the engine its real automatic placement.
+    func resetToAuto(from start: ScreenRegion?, in canvas: ScreenCanvas, isPortrait: Bool) {
+        guard let start,
+            let end = canvas.region(
+                for: .preset(Self.automaticPreset), aspect: gameAspect ?? GameAspect.typical)
+        else {
+            preview(nil, isPortrait: isPortrait)
+            return
+        }
         animationTask?.cancel()
         previewActive = true
         animationTask = Task { @MainActor [weak self] in
@@ -153,6 +158,15 @@ final class ScreenRegionApplier {
             }
             guard !Task.isCancelled else { return }
             self?.send(nil, isPortrait: isPortrait)
+        }
+    }
+
+    /// The preset that matches the automatic placement of the engine.
+    private static var automaticPreset: ScreenPreset {
+        switch gamecore_getVerticalAlignment() {
+        case GAMECORE_VALIGN_TOP: .top
+        case GAMECORE_VALIGN_CENTER: .center
+        default: .topCenter
         }
     }
 
