@@ -28,6 +28,10 @@ actor OAuthTokenStore {
     /// Counts the sign-ins. A refresh that started before one belongs
     /// to the old pair.
     private var signIns = 0
+    /// The provider can refuse the old refresh token after a refresh,
+    /// so a pair that only memory holds costs a new sign-in at the
+    /// next launch.
+    private var tokensAreUnsaved = false
 
     init(targetId: String, service: Service, tokens: OAuthTokens) {
         self.targetId = targetId
@@ -43,6 +47,7 @@ actor OAuthTokenStore {
 
     /// A token that is alive now.
     func accessToken() async throws(BackupProviderError) -> String {
+        if tokensAreUnsaved { saveTheTokens() }
         guard tokens.isExpired(at: Date()) else { return tokens.accessToken }
         return try await refreshed()
     }
@@ -59,7 +64,7 @@ actor OAuthTokenStore {
             refresh = nil
             if case .success(let fresh) = result {
                 tokens = fresh
-                try? fresh.write(targetId: targetId)
+                saveTheTokens()
             }
         }
         switch result {
@@ -106,6 +111,17 @@ actor OAuthTokenStore {
         signIns += 1
         self.tokens = tokens
         try tokens.write(targetId: targetId)
+        tokensAreUnsaved = false
+    }
+
+    private func saveTheTokens() {
+        do {
+            try tokens.write(targetId: targetId)
+            tokensAreUnsaved = false
+        } catch {
+            tokensAreUnsaved = true
+            BackupLog.line("OAuthTokenStore", "The tokens of \(targetId) were not saved: \(error)")
+        }
     }
 
     private func startRefresh() -> Task<OAuthTokens, Error> {
