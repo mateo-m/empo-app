@@ -122,17 +122,17 @@ public enum PackageValidation {
         }
     }
 
-    /// A path stays inside the package: no root, no drive, no
-    /// parent step, and no backslash that a reader on another
-    /// system would take for a separator.
+    /// On top of `RelativePath`, a package refuses a backslash and a
+    /// drive letter, because a ZIP reader on Windows takes them for
+    /// path parts.
     public static func checkThePath(_ path: String) throws {
         guard !path.hasPrefix("/") else { throw PackageRejection.absolutePath(path) }
+        guard RelativePath.staysUnderItsRoot(path) else {
+            throw PackageRejection.parentTraversal(path)
+        }
         guard !path.contains("\\"), path.count < 2 || path[path.index(path.startIndex, offsetBy: 1)] != ":"
         else {
             throw PackageRejection.absolutePath(path)
-        }
-        for part in path.split(separator: "/") where part == ".." {
-            throw PackageRejection.parentTraversal(path)
         }
     }
 

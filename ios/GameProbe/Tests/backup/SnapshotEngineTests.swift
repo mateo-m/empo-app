@@ -1471,6 +1471,42 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(kept, "played after the backup")
     }
 
+    func testARestoreTakesASaveWhoseNameHoldsABackslashOrAColon() async throws {
+        try makeGameTree(gameName)
+        let names = ["C:slot.sav", "back\\slash.sav"]
+        for name in names {
+            try write("saved as \(name)", to: container(gameName).appendingPathComponent("Game/\(name)"))
+        }
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        for name in names {
+            try fm.removeItem(at: container(gameName).appendingPathComponent("Game/\(name)"))
+        }
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
+        ).run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: BackupStream(key: key(gameName)),
+                snapshotId: snapshotId,
+                choice: .restore(.wholeGame),
+                destination: MemberSource(container: container(gameName)),
+                localFiles: try localFiles(of: gameName),
+                freeSpaceBytes: .max))
+
+        guard case .finished = outcome else {
+            return XCTFail("the restore refused the names: \(outcome)")
+        }
+        for name in names {
+            XCTAssertEqual(try gameText(name), "saved as \(name)")
+        }
+    }
+
     // MARK: - Use only this backup
 
     /// Every file of the container with its hash, as the app lists it.

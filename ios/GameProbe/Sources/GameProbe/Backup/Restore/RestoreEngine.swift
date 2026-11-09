@@ -75,7 +75,7 @@ public actor RestoreEngine {
         // The manifest comes from the storage service. A path that
         // leaves its root, or names the root itself, would write
         // outside the game.
-        guard manifest.entries.allSatisfy({ Self.staysUnderItsRoot($0.path) }),
+        guard manifest.entries.allSatisfy({ RelativePath.staysUnderItsRoot($0.path) }),
             manifest.sharedDataDirectory.map(ExternalMembers.staysInSharedData) ?? true
         else {
             return .failed(RestoreNotices.unreadableLine)
@@ -400,12 +400,6 @@ public actor RestoreEngine {
         case .authExpired, .throttled, .offline, .serverError, .permissionDenied, .notFound, .rejected:
             return .targetFailed
         }
-    }
-
-    private static func staysUnderItsRoot(_ path: String) -> Bool {
-        guard (try? PackageValidation.checkThePath(path)) != nil else { return false }
-        return !path.split(separator: "/", omittingEmptySubsequences: false)
-            .contains { $0.isEmpty || $0 == "." }
     }
 
     private static func line(of error: Error) -> String {

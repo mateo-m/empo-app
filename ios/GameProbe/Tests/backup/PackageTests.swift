@@ -323,6 +323,16 @@ final class PackageTests: XCTestCase {
         XCTAssertThrowsError(try PackageValidation.checkThePath("Documents/../../x")) {
             XCTAssertEqual($0 as? PackageRejection, .parentTraversal("Documents/../../x"))
         }
+        for path in ["Documents/Games/Quest//Save01", "Documents/./Save01", "Documents/"] {
+            XCTAssertThrowsError(try PackageValidation.checkThePath(path), path) {
+                XCTAssertEqual($0 as? PackageRejection, .parentTraversal(path))
+            }
+        }
+        for path in ["Documents\\Save01", "C:Save01"] {
+            XCTAssertThrowsError(try PackageValidation.checkThePath(path), path) {
+                XCTAssertEqual($0 as? PackageRejection, .absolutePath(path))
+            }
+        }
 
         var link = good
         link.path = "Documents/Games/Quest/Game/link"
