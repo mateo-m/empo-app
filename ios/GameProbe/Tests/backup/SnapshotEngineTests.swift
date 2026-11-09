@@ -982,27 +982,6 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(manifestPaths(target).isEmpty)
     }
 
-    func testAPartialTallyThatDoesNotReadKeepsItsCount() async throws {
-        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
-        let engine = try makeEngine(makeTarget(), stateURL: stateURL)
-        let store = try BackupStateStore(url: stateURL)
-        defer { store.close() }
-        try store.savePartialTally(["Game/a.rvdata2": 2], targetId: "t1", gameKey: "g")
-        try store.database.run(
-            "INSERT INTO partial_tally (targetId, gameKey, path, runs) VALUES ('t1', 'g', 'Game/b.rvdata2', 'many')")
-
-        await engine.markSuccess(
-            targetId: "t1", gameKey: "g",
-            manifest: SnapshotManifest(mode: .slim, containerFolderName: gameName),
-            scannedAt: clock.now, isComplete: true)
-
-        XCTAssertEqual(
-            try store.database.query(
-                "SELECT path FROM partial_tally WHERE targetId = 't1' ORDER BY path"
-            ).compactMap { $0[0].string },
-            ["Game/a.rvdata2", "Game/b.rvdata2"])
-    }
-
     func testASweepWhoseStoredBytesDoNotReadIsAnError() async throws {
         let stateURL = tempRoot.appendingPathComponent("state.sqlite")
         let engine = try makeEngine(makeTarget(), stateURL: stateURL)

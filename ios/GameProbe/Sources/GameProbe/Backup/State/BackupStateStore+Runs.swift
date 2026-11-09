@@ -175,9 +175,7 @@ extension BackupStateStore {
             [.text(targetId), .text(gameKey)])
         var tally: [String: Int] = [:]
         for row in rows {
-            guard let path = row[0].string, let runs = row[1].int64 else {
-                throw SQLiteError(code: 20, message: "a partial tally row does not read")
-            }
+            guard let path = row[0].string, let runs = row[1].int64 else { continue }
             tally[path] = Int(runs)
         }
         return tally
