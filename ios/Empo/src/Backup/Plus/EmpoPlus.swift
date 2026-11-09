@@ -15,6 +15,7 @@ final class EmpoPlus {
         case server
         /// The account is signed in on the most devices it can have.
         case tooManyDevices
+        case notSaved
     }
 
     static let joinURL = URL(string: "https://www.patreon.com/checkout/empo_app?rid=29989848")!
@@ -93,7 +94,7 @@ final class EmpoPlus {
         }
         // A server from before the sign-in code puts the pass in the link.
         if let pass = value("pass"), let renewal = value("renewal") {
-            guard keep(pass: pass, renewal: renewal) else { throw .server }
+            try keep(pass: pass, renewal: renewal)
             return
         }
         guard let code = value("code") else { throw .server }
@@ -114,9 +115,9 @@ final class EmpoPlus {
         if status == 409 { throw .tooManyDevices }
         guard status == 200,
             let issued = try? JSONDecoder().decode([String: String].self, from: data),
-            let pass = issued["pass"], let renewal = issued["renewal"],
-            keep(pass: pass, renewal: renewal)
+            let pass = issued["pass"], let renewal = issued["renewal"]
         else { throw .server }
+        try keep(pass: pass, renewal: renewal)
     }
 
     /// Returns false when the API did not answer.
@@ -192,21 +193,19 @@ final class EmpoPlus {
             let issued = try? JSONDecoder().decode([String: String].self, from: data),
             let pass = issued["pass"]
         else { return false }
-        return keep(pass: pass, renewal: renewal)
+        return (try? keep(pass: pass, renewal: renewal)) != nil
     }
 
-    @discardableResult
-    private func keep(pass text: String, renewal: String) -> Bool {
-        guard let pass = PlusPass(text, publicKey: Self.publicKey) else { return false }
+    private func keep(pass text: String, renewal: String) throws(SignInFailure) {
+        guard let pass = PlusPass(text, publicKey: Self.publicKey) else { throw .server }
         do {
             try BackupKeychain.setPlus(pass: text, renewal: renewal)
         } catch {
             // A sign-in kept only in memory is gone at the next launch.
             BackupLog.line("EmpoPlus", "The Plus sign-in was not saved: \(error)")
-            return false
+            throw .notSaved
         }
         self.pass = pass
         self.renewal = renewal
-        return true
     }
 }

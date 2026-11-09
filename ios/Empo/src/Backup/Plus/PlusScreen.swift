@@ -230,6 +230,9 @@ struct PlusScreen: View {
             case .cancelled: break
             case .server: failure = .line(String(localized: "Couldn't sign in with Patreon. Try again."))
             case .tooManyDevices: failure = .tooManyDevices
+            case .notSaved:
+                failure = .line(
+                    String(localized: "Empo couldn't save the sign-in on this device. Try again."))
             }
         }
     }
