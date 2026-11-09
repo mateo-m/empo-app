@@ -30,17 +30,10 @@ struct AddButtonSheet: View {
                         actionRow(for: action)
                     }
                 }
-                KeyCodeSections { code, hint in
-                    KeyCodeLabel(code: code, hint: hint)
-                        .contentShape(Rectangle())
-                        .opacity(atCap ? 0.4 : 1)
-                        .onTapGesture {
-                            guard !atCap, let scancode = KeyCodeTable.scancode(for: code) else { return }
-                            dismiss()
-                            layout.addButton(
-                                label: KeyCodeTable.displayName(for: code) ?? code, scancode: scancode)
-                        }
-                }
+                Section("Common keys") { keyRows(EditorKeys.common + EditorKeys.special) }
+                Section("Letters") { keyRows(EditorKeys.letters) }
+                Section("Numbers") { keyRows(EditorKeys.numbers) }
+                Section("Function keys") { keyRows(EditorKeys.function) }
             }
             .navigationTitle("Add button")
             .navigationBarTitleDisplayMode(.inline)
@@ -52,6 +45,20 @@ struct AddButtonSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+    }
+
+    private func keyRows(_ keys: [EditorKey]) -> some View {
+        ForEach(keys) { key in
+            KeyCodeLabel(key: key)
+                .contentShape(Rectangle())
+                .opacity(atCap ? 0.4 : 1)
+                .onTapGesture {
+                    guard !atCap, let scancode = KeyCodeTable.scancode(for: key.code) else { return }
+                    dismiss()
+                    layout.addButton(
+                        label: KeyCodeTable.buttonLabel(for: key.code) ?? key.code, scancode: scancode)
+                }
+        }
     }
 
     private func actionRow(for action: EmpoAction) -> some View {
@@ -83,34 +90,47 @@ struct AddButtonSheet: View {
     }
 }
 
-/// The key list of the add-button sheet and the key picker. Each key
-/// of the common group shows what it does in most RPG Maker games.
-private struct KeyCodeSections<Row: View>: View {
-    @ViewBuilder let row: (_ code: String, _ hint: String?) -> Row
+private struct EditorKey: Identifiable {
+    let code: String
+    var hint: LocalizedStringResource?
+    var id: String { code }
+}
 
-    var body: some View {
-        let buckets = KeyCodeTable.codesByPickerGroup
-        ForEach(KeyCodePickerGroup.allCases, id: \.self) { group in
-            if let codes = buckets[group], !codes.isEmpty {
-                Section(group.localizedTitle) {
-                    ForEach(codes, id: \.self) { code in
-                        row(code, group == .common ? BindingsCatalog.commonKeyAnnotations[code] : nil)
-                    }
-                }
-            }
-        }
+/// The keys of the add-button sheet and the key picker. The binding
+/// picker offers more keys.
+private enum EditorKeys {
+    private static func usualUse(_ value: String.LocalizationValue) -> LocalizedStringResource {
+        LocalizedStringResource(
+            value,
+            comment: "What this key does in most RPG Maker games. Shown next to the key name in the key list."
+        )
     }
+
+    static let common = [
+        EditorKey(code: "KeyZ", hint: usualUse("Confirm")),
+        EditorKey(code: "KeyX", hint: usualUse("Cancel")),
+        EditorKey(code: "ShiftLeft", hint: usualUse("Dash")),
+        EditorKey(code: "ControlLeft", hint: usualUse("Skip")),
+        EditorKey(code: "Space"),
+        EditorKey(code: "Enter"),
+        EditorKey(code: "Escape"),
+        EditorKey(code: "Tab"),
+    ]
+    static let special = [EditorKey(code: "AltLeft"), EditorKey(code: "Backspace")]
+    static let letters = "ABCDEFGHIJKLMNOPQRSTUVWY".map { EditorKey(code: "Key\($0)") }
+    static let numbers = (0...9).map { EditorKey(code: "Digit\($0)") }
+    static let function = (1...12).map { EditorKey(code: "F\($0)") }
+    static let all = common + letters + numbers + function + special
 }
 
 private struct KeyCodeLabel: View {
-    let code: String
-    let hint: String?
+    let key: EditorKey
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(KeyCodeTable.displayName(for: code) ?? code)
-                if let hint {
+                Text(KeyCodeTable.buttonLabel(for: key.code) ?? key.code)
+                if let hint = key.hint {
                     Text(hint)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -284,7 +304,7 @@ struct ButtonEditSheet: View {
     }
 
     private func keyName(_ scancode: Int32) -> String {
-        KeyCodeTable.code(for: scancode).flatMap { KeyCodeTable.displayName(for: $0) }
+        KeyCodeTable.code(for: scancode).flatMap { KeyCodeTable.buttonLabel(for: $0) }
             ?? String(
                 localized: "Unknown key",
                 comment: "Shown as the key of an on-screen button when Empo does not know its key.")
@@ -292,9 +312,9 @@ struct ButtonEditSheet: View {
 
     private func keyPickerList(current scancode: Int32) -> some View {
         List {
-            KeyCodeSections { code, hint in
-                let keyScancode = KeyCodeTable.scancode(for: code)
-                KeyCodeLabel(code: code, hint: hint)
+            ForEach(EditorKeys.all) { key in
+                let keyScancode = KeyCodeTable.scancode(for: key.code)
+                KeyCodeLabel(key: key)
                     .overlay(alignment: .trailing) {
                         if keyScancode == scancode {
                             Image(systemName: "checkmark")
