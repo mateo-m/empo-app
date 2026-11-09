@@ -234,9 +234,7 @@ public actor RestoreEngine {
             throw RestoreStopReason.targetFailed
         }
         if (try? fm.attributesOfItem(atPath: destination.path)) != nil {
-            try fm.moveItem(
-                at: destination,
-                to: try displacedURL(of: destination, step: step, destination: request.destination))
+            try fm.moveItem(at: destination, to: try displacedURL(of: destination))
         }
         try fm.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -293,18 +291,9 @@ public actor RestoreEngine {
         }
     }
 
-    /// The plan names the displaced copy. A file the plan did not see,
-    /// such as a save the game wrote after the plan, takes the next
-    /// free name, so no local file is ever deleted.
-    private func displacedURL(
-        of destination: URL, step: RestoreStep, destination roots: MemberSource
-    ) throws -> URL {
-        if case .writeAfterDisplacing(let path) = step.action {
-            guard let url = roots.url(root: step.entry.root, path: path) else {
-                throw RestoreStopReason.targetFailed
-            }
-            return url
-        }
+    /// The plan's displaced name does not map back to a URL for the settings export, and a save the
+    /// game wrote after the plan is not in it, so the name comes from the folder as it is now.
+    private func displacedURL(of destination: URL) throws -> URL {
         let folder = destination.deletingLastPathComponent()
         let taken = Set(try fm.contentsOfDirectory(atPath: folder.path))
         return folder.appendingPathComponent(
