@@ -59,12 +59,12 @@ enum BackupNotifier {
                 "BackupNotifier",
                 "\(target.label) carries \(target.causes.count) cause, posts \(posts.causes.count)")
             for cause in posts.causes {
-                post(cause, targetLabel: target.label)
+                post(cause, targetId: target.id, targetLabel: target.label)
             }
         }
     }
 
-    private static func post(_ cause: BackupFailFastCause, targetLabel: String) {
+    private static func post(_ cause: BackupFailFastCause, targetId: String, targetLabel: String) {
         let content = UNMutableNotificationContent()
         content.body = BackupNotificationRule.text(
             for: cause,
@@ -72,7 +72,7 @@ enum BackupNotifier {
             deviceName: BackupDeviceConditions.deviceName)
         content.sound = .default
         let request = UNNotificationRequest(
-            identifier: "\(cause.rawValue).\(targetLabel)",
+            identifier: "\(cause.rawValue).\(targetId)",
             content: content,
             trigger: nil)
         UNUserNotificationCenter.current().add(request)
