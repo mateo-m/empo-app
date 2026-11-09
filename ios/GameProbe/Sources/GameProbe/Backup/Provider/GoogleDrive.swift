@@ -513,27 +513,19 @@ public struct GoogleDriveFilePage: Equatable, Sendable {
 
 extension GoogleDrive {
 
-    /// Drive stamps `modifiedTime` in RFC 3339, with a fraction.
-    public static func date(fromTimestamp text: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: text)
-    }
-
     /// Reads one `files.list` answer.
     public static func page(fromBody body: Data) -> GoogleDriveFilePage? {
         guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             return nil
         }
         let raw = root["files"] as? [[String: Any]] ?? []
+        let dates = ProviderDate.rfc3339Reader()
         let files = raw.map { file in
             GoogleDriveFile(
                 id: file["id"] as? String ?? "",
                 name: file["name"] as? String ?? "",
                 sizeBytes: int64(file["size"]) ?? 0,
-                modifiedTime: (file["modifiedTime"] as? String).flatMap(date(fromTimestamp:)),
+                modifiedTime: (file["modifiedTime"] as? String).flatMap(dates),
                 mimeType: file["mimeType"] as? String ?? "")
         }
         return GoogleDriveFilePage(

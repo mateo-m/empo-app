@@ -338,7 +338,7 @@ final class S3Tests: XCTestCase {
             <Initiated>2026-10-01T10:00:00.000Z</Initiated></Upload>\
             </ListMultipartUploadsResult>
             """.utf8)
-        let now = S3.date(fromTimestamp: "2026-11-05T10:00:00.000Z")!
+        let now = ProviderDate.rfc3339Reader()("2026-11-05T10:00:00.000Z")!
 
         XCTAssertEqual(
             S3.abandonedUploadIds(fromBody: body, key: "Empo/a", ownUploadId: "mine", now: now),

@@ -361,29 +361,19 @@ public struct DropboxEntry: Equatable, Sendable {
 
 extension Dropbox {
 
-    /// Dropbox stamps `server_modified` in this form.
-    public static let timestampFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-
-    public static func date(fromTimestamp text: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = timestampFormat
-        return formatter.date(from: text)
-    }
-
     /// Reads one `list_folder` or `list_folder/continue` answer.
     public static func page(fromBody body: Data) -> DropboxListPage? {
         guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             return nil
         }
         let raw = root["entries"] as? [[String: Any]] ?? []
+        let dates = ProviderDate.rfc3339Reader()
         let entries = raw.map { entry in
             DropboxEntry(
                 tag: entry[".tag"] as? String ?? "",
                 path: entry["path_display"] as? String ?? entry["path_lower"] as? String ?? "",
                 sizeBytes: (entry["size"] as? NSNumber)?.int64Value ?? 0,
-                serverModified: (entry["server_modified"] as? String).flatMap(date(fromTimestamp:)))
+                serverModified: (entry["server_modified"] as? String).flatMap(dates))
         }
         return DropboxListPage(
             entries: entries,

@@ -223,7 +223,7 @@ public enum WebDAV {
     /// 2xx blocks alone.
     public static func entries(fromBody body: Data) -> [Entry] {
         guard let xml = String(data: body, encoding: .utf8) else { return [] }
-        let dates = httpDateReader()
+        let dates = ProviderDate.httpReader()
         return DAVXML.blocks("response", in: xml).compactMap { response in
             guard let href = DAVXML.value("href", in: response), !href.isEmpty else { return nil }
             let properties = foundProperties(in: response)
@@ -232,7 +232,7 @@ public enum WebDAV {
                 isCollection: DAVXML.has("collection", in: properties),
                 sizeBytes: DAVXML.int64("getcontentlength", in: properties) ?? 0,
                 modifiedAt: DAVXML.value("getlastmodified", in: properties)
-                    .flatMap { dates($0) })
+                    .flatMap(dates))
         }
     }
 
@@ -276,28 +276,6 @@ public enum WebDAV {
         return QuotaReading(usedBytes: used, limitBytes: used + available)
     }
 
-    /// Reads the `getlastmodified` of RFC 4918, which is an HTTP
-    /// date. A few servers write an ISO 8601 stamp instead, so this
-    /// takes that too.
-    ///
-    /// It hands back a function, because one listing holds hundreds
-    /// of stamps and one formatter reads them all.
-    public static func httpDateReader() -> (String) -> Date? {
-        let http = DateFormatter()
-        http.locale = Locale(identifier: "en_US_POSIX")
-        http.timeZone = TimeZone(secondsFromGMT: 0)
-        http.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime]
-
-        return { text in
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return nil }
-            return http.date(from: trimmed) ?? iso.date(from: trimmed)
-        }
-    }
-
     // MARK: - Throttling, per 8.6
 
     /// The longest wait the truncated backoff ever makes.
@@ -322,7 +300,7 @@ public enum WebDAV {
         guard let header else { return backoffSeconds(attempt: attempt) }
         let text = header.trimmingCharacters(in: .whitespaces)
         if let seconds = TimeInterval(text), seconds > 0 { return seconds }
-        if let date = httpDateReader()(text) {
+        if let date = ProviderDate.httpReader()(text) {
             let wait = date.timeIntervalSince(now)
             if wait > 0 { return wait }
         }

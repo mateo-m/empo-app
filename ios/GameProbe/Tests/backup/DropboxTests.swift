@@ -164,7 +164,7 @@ final class DropboxTests: XCTestCase {
         XCTAssertEqual(page.entries.first?.sizeBytes, 7)
         XCTAssertEqual(
             page.entries.first?.serverModified,
-            Dropbox.date(fromTimestamp: "2026-08-27T14:30:00Z"))
+            ProviderDate.rfc3339Reader()("2026-08-27T14:30:00Z"))
     }
 
     // MARK: - 5. delete_batch splits

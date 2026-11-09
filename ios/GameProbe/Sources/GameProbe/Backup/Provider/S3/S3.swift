@@ -235,26 +235,17 @@ public enum S3 {
         }
     }
 
-    /// S3 stamps `LastModified` in RFC 3339, with a fraction of a
-    /// second on some services and none on others.
-    public static func date(fromTimestamp text: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: text)
-    }
-
     public static func page(fromBody body: Data) -> ObjectPage? {
         guard let xml = String(data: body, encoding: .utf8) else { return nil }
         guard xml.contains("<ListBucketResult") else { return nil }
+        let dates = ProviderDate.rfc3339Reader()
         let objects = S3XML.blocks(named: "Contents", in: xml).compactMap { block -> Object? in
             guard let key = S3XML.value(of: "Key", in: block), !key.isEmpty else { return nil }
             return Object(
                 key: key,
                 sizeBytes: S3XML.int64("Size", in: block) ?? 0,
                 lastModified: S3XML.value(of: "LastModified", in: block)
-                    .flatMap(date(fromTimestamp:)))
+                    .flatMap(dates))
         }
         // A page that is not truncated carries no token, and a
         // service that sends one anyway means nothing by it.
@@ -309,11 +300,12 @@ public enum S3 {
     ) -> [String] {
         guard let xml = String(data: body, encoding: .utf8) else { return [] }
         let cutoff = now.addingTimeInterval(-S3MultipartUpload.lifetime)
+        let dates = ProviderDate.rfc3339Reader()
         return S3XML.blocks(named: "Upload", in: xml).compactMap { block in
             guard S3XML.value(of: "Key", in: block) == key else { return nil }
             guard let id = S3XML.value(of: "UploadId", in: block), !id.isEmpty else { return nil }
             if id == ownUploadId { return id }
-            guard let initiated = S3XML.value(of: "Initiated", in: block).flatMap(date(fromTimestamp:)),
+            guard let initiated = S3XML.value(of: "Initiated", in: block).flatMap(dates),
                 initiated < cutoff
             else { return nil }
             return id
