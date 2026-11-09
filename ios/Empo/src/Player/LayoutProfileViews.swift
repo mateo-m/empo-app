@@ -428,7 +428,7 @@ struct LayoutProfileEditorView: View {
             }
 
             HStack(spacing: Spacing.xl) {
-                Button("Add button") { editDialog = .addButton }
+                Button("Add button") { editDialog = .sheet(.addButton) }
                 Button {
                     layout.undoLastEdit()
                 } label: {

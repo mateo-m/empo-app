@@ -434,8 +434,13 @@ struct DPadEditSheet: View {
 
 /// SwiftUI shows one sheet or alert at a time, and two fingers can tap
 /// two controls in one frame.
-enum ControlsEditDialog: Hashable, Identifiable {
-    case addButton, resetConfirm, dpad
+enum ControlsEditDialog: Hashable {
+    case sheet(ControlsEditSheet)
+    case resetConfirm
+}
+
+enum ControlsEditSheet: Hashable, Identifiable {
+    case addButton, dpad
     case button(UUID)
     case actionButton(UUID)
 
@@ -452,15 +457,14 @@ struct ControlsEditDialogs: ViewModifier {
         content
             .sheet(
                 item: Binding(
-                    get: { dialog == .resetConfirm ? nil : dialog },
-                    set: { dialog = $0 })
-            ) { dialog in
-                switch dialog {
+                    get: { if case .sheet(let sheet) = dialog { sheet } else { nil } },
+                    set: { dialog = $0.map(ControlsEditDialog.sheet) })
+            ) { sheet in
+                switch sheet {
                 case .addButton: AddButtonSheet(layout: layout, actions: actions)
                 case .dpad: DPadEditSheet(layout: layout)
                 case .button(let id): ButtonEditSheet(layout: layout, buttonID: id)
                 case .actionButton(let id): ActionButtonEditSheet(layout: layout, buttonID: id)
-                case .resetConfirm: EmptyView()
                 }
             }
             .alert(

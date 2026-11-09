@@ -190,7 +190,7 @@ struct PlayerEditToolbar: View {
     private var actionsRow: some View {
         HStack(spacing: Spacing.md) {
             IconButton("plus", label: "Add button", style: .outline, size: .sm, tint: .white) {
-                editDialog = .addButton
+                editDialog = .sheet(.addButton)
             }
 
             IconButton(

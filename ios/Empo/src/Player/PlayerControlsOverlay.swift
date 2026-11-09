@@ -102,7 +102,7 @@ struct PlayerControlsOverlay: View {
             position: ControlsZone.absolutePosition(
                 for: layout.dpadRelativeCenter, in: geo.size, controlSize: size,
                 safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout),
-            onTapEdit: { editDialog = .dpad },
+            onTapEdit: { editDialog = .sheet(.dpad) },
             onDelete: nil,
             update: { layout.dpadRelativeCenter = $0 }
         )
@@ -163,7 +163,7 @@ struct PlayerControlsOverlay: View {
             opacity: button.opacity,
             position: resolvedPosition(
                 displayPosition, center: button.relativeCenter, size: button.size),
-            onTapEdit: { editDialog = .button(button.id) },
+            onTapEdit: { editDialog = .sheet(.button(button.id)) },
             onDelete: { layout.removeButton(id: button.id) },
             update: { layout.updateButton(id: button.id, relativeCenter: $0) }
         )
@@ -211,7 +211,7 @@ struct PlayerControlsOverlay: View {
             opacity: button.opacity,
             position: resolvedPosition(
                 displayPosition, center: button.relativeCenter, size: button.size),
-            onTapEdit: { editDialog = .actionButton(button.id) },
+            onTapEdit: { editDialog = .sheet(.actionButton(button.id)) },
             onDelete: { layout.removeActionButton(id: button.id) },
             update: { layout.updateActionButton(id: button.id, relativeCenter: $0) }
         )
