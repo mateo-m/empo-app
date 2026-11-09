@@ -362,7 +362,13 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
             return
         }
         let didNotMove = lock.withLock { pending[task.taskIdentifier]?.didNotMove ?? false }
-        guard let http, !didNotMove else {
+        guard !didNotMove else {
+            finish(
+                taskIdentifier: task.taskIdentifier,
+                with: .failure(.rejected(message: "this device could not save the download")))
+            return
+        }
+        guard let http else {
             finish(taskIdentifier: task.taskIdentifier, with: .failure(.offline))
             return
         }
