@@ -1704,6 +1704,37 @@ final class SnapshotEngineTests: XCTestCase {
             mode: .full)
     }
 
+    func testARestoreWhoseFormatFileDoesNotDownloadWritesNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        await target.addFault(
+            FakeTargetFault(operation: .get, error: .offline, pathContains: paths.formatFile))
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
+        ).run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: BackupStream(key: key(gameName)),
+                snapshotId: snapshotId,
+                choice: .restore(.wholeGame),
+                destination: MemberSource(container: container(gameName)),
+                freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the restore went on without the format file: \(outcome)")
+        }
+        let save = try String(
+            contentsOf: container(gameName).appendingPathComponent("Game/save1.dat"),
+            encoding: .utf8)
+        XCTAssertEqual(save, "played after the backup")
+    }
+
     func testAReplaceThatCannotMoveTheTreeLeavesNoRestoreRecord() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

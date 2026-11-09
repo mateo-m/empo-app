@@ -53,15 +53,13 @@ public actor RestoreEngine {
         let paths = BackupNamespacePaths(
             root: request.root, namespaceId: request.namespaceId)
 
-        var fanOutWidth = FormatDescriptor.version1FanOutWidth
-        if let data = try? await fetch(paths.formatFile),
-            let descriptor = try? FormatDescriptor.decode(json: data)
-        {
-            fanOutWidth = descriptor.fanOutWidth
-        }
-
+        let fanOutWidth: Int
         let manifest: SnapshotManifest
         do {
+            fanOutWidth =
+                try await fetch(paths.formatFile)
+                .map { try FormatDescriptor.decode(json: $0).fanOutWidth }
+                ?? FormatDescriptor.version1FanOutWidth
             let path = paths.manifestPath(
                 stream: request.stream, snapshotId: request.snapshotId)
             guard let data = try await fetch(path),
@@ -401,9 +399,8 @@ public actor RestoreEngine {
             if error == .notFound { return nil }
             throw error
         }
-        let data = try? Data(contentsOf: scratch)
-        try? fm.removeItem(at: scratch)
-        return data
+        defer { try? fm.removeItem(at: scratch) }
+        return try Data(contentsOf: scratch)
     }
 
     private static func stop(of error: BackupProviderError) -> RestoreStopReason {
