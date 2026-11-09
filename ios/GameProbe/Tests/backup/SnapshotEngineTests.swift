@@ -1702,7 +1702,7 @@ final class SnapshotEngineTests: XCTestCase {
         }
     }
 
-    func testASettingsRestoreMovesAsideAChangedSettingsFile() async throws {
+    func testASettingsRestoreMovesAsideEachChangedSettingsFile() async throws {
         try makeGameTree(gameName)
         let export = documents.appendingPathComponent("userdefaults.json")
         try write("{\"keys\":1}", to: export)
@@ -1713,37 +1713,41 @@ final class SnapshotEngineTests: XCTestCase {
         let backup = try await makeEngine(target).run(
             request(games: [game(gameName)], preferences: preferences))
         let snapshotId = try snapshotId(of: backup, stream: BackupStream.preferencesKey)
-        try write("{\"keys\":2}", to: export)
-        let changed = try Data(contentsOf: export)
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot)
+        var changed: [Data] = []
 
-        let outcome = await RestoreEngine(
-            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
-        ).run(
-            RestoreRequest(
-                targetId: targetId,
-                root: "",
-                namespaceId: namespaceId,
-                stream: .preferences,
-                snapshotId: snapshotId,
-                choice: .restore(.preferences),
-                destination: MemberSource(library: preferences),
-                localFiles: [
-                    RestoreLocalFile(
-                        root: .preferences, path: PreferencesMemberPath.userDefaultsExportName,
-                        size: Int64(changed.count), hash: ContentHash.hex(of: changed))
-                ],
-                freeSpaceBytes: .max))
+        for text in ["{\"keys\":2}", "{\"keys\":3}"] {
+            try write(text, to: export)
+            let bytes = try Data(contentsOf: export)
+            changed.append(bytes)
+            let outcome = await restore.run(
+                RestoreRequest(
+                    targetId: targetId,
+                    root: "",
+                    namespaceId: namespaceId,
+                    stream: .preferences,
+                    snapshotId: snapshotId,
+                    choice: .restore(.preferences),
+                    destination: MemberSource(library: preferences),
+                    localFiles: [
+                        RestoreLocalFile(
+                            root: .preferences, path: PreferencesMemberPath.userDefaultsExportName,
+                            size: Int64(bytes.count), hash: ContentHash.hex(of: bytes))
+                    ],
+                    freeSpaceBytes: .max))
 
-        guard case .finished = outcome else {
-            return XCTFail("the settings restore did not finish: \(outcome)")
+            guard case .finished = outcome else {
+                return XCTFail("the settings restore did not finish: \(outcome)")
+            }
+            XCTAssertEqual(try String(contentsOf: export, encoding: .utf8), "{\"keys\":1}")
         }
-        XCTAssertEqual(try String(contentsOf: export, encoding: .utf8), "{\"keys\":1}")
+
         let aside = try fm.contentsOfDirectory(atPath: documents.path)
             .filter { $0 != export.lastPathComponent && $0.hasPrefix(export.lastPathComponent) }
-        XCTAssertEqual(aside.count, 1)
         XCTAssertEqual(
-            try aside.first.map { try Data(contentsOf: documents.appendingPathComponent($0)) },
-            changed)
+            Set(try aside.map { try Data(contentsOf: documents.appendingPathComponent($0)) }),
+            Set(changed))
     }
 
     // MARK: - Use only this backup

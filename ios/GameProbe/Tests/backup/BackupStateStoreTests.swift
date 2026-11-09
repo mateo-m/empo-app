@@ -850,4 +850,18 @@ final class BackupStateStoreTests: XCTestCase {
         XCTAssertNil(try store.intent(kind: .interruptedRun))
         XCTAssertEqual(try store.partialTally(targetId: targetId, gameKey: gameKey), [:])
     }
+
+    func testRecordingASnapshotAgainKeepsItsOneOffMark() throws {
+        let store = try makeStore()
+        defer { store.close() }
+        let oneOff = SnapshotLedgerEntry(
+            targetId: targetId, gameKey: "game", snapshotId: "s1", createdAt: now, isOneOff: true)
+        try store.recordSnapshot(oneOff)
+
+        try store.recordSnapshot(
+            SnapshotLedgerEntry(
+                targetId: targetId, gameKey: "game", snapshotId: "s1", createdAt: now))
+
+        XCTAssertEqual(try store.snapshots(targetId: targetId, gameKey: "game"), [oneOff])
+    }
 }
