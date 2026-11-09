@@ -246,7 +246,7 @@ final class RestoreCoordinator {
 
         let store: BackupStateStore
         do {
-            store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            store = try BackupRoot.openStateStore()
         } catch {
             return .failed(
                 String(
@@ -330,7 +330,7 @@ final class RestoreCoordinator {
     /// The record the next launch asks about, or `nil` when there is
     /// nothing to ask.
     func pendingResume() -> BackupIntentRecord? {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return nil }
+        guard let store = try? BackupRoot.openStateStore() else { return nil }
         defer { store.close() }
         // `try?` flattens the optional the store returns, so this is
         // one level, not two.
@@ -342,7 +342,7 @@ final class RestoreCoordinator {
     /// Marked when the sheet shows. A kill with the sheet open runs no
     /// `onDisappear`, so the answer is too late to mark it.
     func markResumeAsked() {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
+        guard let store = try? BackupRoot.openStateStore() else { return }
         defer { store.close() }
         try? store.markIntentAsked(kind: .interruptedRestore)
     }
@@ -408,7 +408,7 @@ final class RestoreCoordinator {
     /// Applies one answer. The caller resumes the restore itself when
     /// the effect says to start it now.
     func answerResume(_ action: RestoreResumeQuestion.Action, record: BackupIntentRecord) {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
+        guard let store = try? BackupRoot.openStateStore() else { return }
         defer { store.close() }
 
         let effect = RestoreResumeQuestion.effect(of: action)

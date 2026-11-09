@@ -44,17 +44,19 @@ enum BackupRoot {
         try? mutableURL.setResourceValues(values)
     }
 
-    /// Opens the state store, per 6.2. A caller that sees
-    /// `needsRebuildFromTarget` downloads the newest manifest and
-    /// rebuilds from it, per 6.3.
-    static func openStateStore() throws -> BackupStateStore {
-        try BackupStateStore(url: layout.stateDatabase)
-    }
-
-    /// Deletes the whole root. The cache is never truth, per 6.3, so
-    /// this costs CPU and not bytes. `targets.json` and the
-    /// preference undo sit beside the root and stay.
-    static func deleteAll() throws {
-        try FileManager.default.removeItem(at: layout.root)
+    @MainActor
+    static func openStateStore(caller: String = #fileID) throws -> BackupStateStore {
+        let store: BackupStateStore
+        do {
+            store = try BackupStateStore(url: layout.stateDatabase)
+        } catch {
+            BackupLog.line(caller, "The backup records were not opened: \(error)")
+            throw error
+        }
+        if store.needsRebuildFromTarget {
+            BackupLog.line(caller, "The backup records start empty: \(store.openOutcome)")
+            BackupLedgerRebuild.markEveryTarget()
+        }
+        return store
     }
 }

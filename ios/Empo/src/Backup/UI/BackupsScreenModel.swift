@@ -93,7 +93,7 @@ final class BackupsScreenModel {
         let descriptors = BackupTargets.load()
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []
-        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
+        let store = try? BackupRoot.openStateStore()
         defer { store?.close() }
         let runs = (try? store?.runHistory()) ?? []
 
@@ -264,7 +264,7 @@ final class BackupsScreenModel {
             }
         }
         do {
-            let store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            let store = try BackupRoot.openStateStore()
             defer { store.close() }
             try store.removeTarget(targetId: targetId)
             try SyncStore.update { $0.forget(targetId: targetId) }

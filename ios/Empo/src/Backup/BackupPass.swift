@@ -110,10 +110,18 @@ final class BackupPass: BackupRunning {
             namespaceId = try BackupKeychain.namespaceId()
             // One store belongs to the task that opened it, so the
             // engine gets its own.
-            store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            store = try BackupRoot.openStateStore()
         } catch {
             log("\(descriptor.label) could not open its local state")
             return nil
+        }
+        do {
+            try await BackupLedgerRebuild.runIfWaiting(
+                descriptor, provider: provider, namespaceId: namespaceId, store: store)
+        } catch {
+            // The run still goes. A short ledger only keeps old
+            // snapshots longer, and the next run tries the rebuild again.
+            BackupLog.line("BackupPass", "\(descriptor.label) ledger rebuild failed: \(error)")
         }
 
         var conflicts = WriterConflicts.read(
@@ -167,7 +175,7 @@ final class BackupPass: BackupRunning {
             return
         }
         log("\(descriptor.label) split, the device now writes to \(namespaceId)")
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
+        guard let store = try? BackupRoot.openStateStore() else { return }
         defer { store.close() }
         for other in BackupTargets.load() where other.id != descriptor.id {
             try? store.clearNamespaceState(targetId: other.id)
@@ -190,7 +198,7 @@ final class BackupPass: BackupRunning {
 
         var dirty: [DirtyMark] = []
         var restoring: String?
-        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
+        if let store = try? BackupRoot.openStateStore() {
             dirty = (try? store.dirtyGames()) ?? []
             restoring = (try? store.intent(kind: .interruptedRestore))?.gameKey
             store.close()

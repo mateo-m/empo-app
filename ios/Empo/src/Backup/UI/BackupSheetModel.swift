@@ -67,7 +67,7 @@ final class BackupSheetModel {
         hasATarget = !descriptors.isEmpty
         mode = GameBackupIntent.load(from: container.empoStateURL).mode
 
-        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
+        let store = try? BackupRoot.openStateStore()
         defer { store?.close() }
         readTheStatus(descriptors, store: store)
         readTheStore(descriptors, store: store)

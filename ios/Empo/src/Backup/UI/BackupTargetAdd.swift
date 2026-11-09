@@ -307,7 +307,7 @@ enum BackupTargetAdd {
         else {
             return .failed(String(localized: "Empo couldn't check this location. Try again."))
         }
-        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
+        if let store = try? BackupRoot.openStateStore() {
             try? store.recordTargetQuota(
                 targetId: descriptor.id, reading: result.quota)
             if result.allowsAdd {
