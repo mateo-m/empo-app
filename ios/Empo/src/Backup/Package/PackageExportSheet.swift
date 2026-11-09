@@ -54,6 +54,13 @@ final class PackageExportModel {
             let plan: PackagePlan
             do {
                 plan = try await source.plan()
+            } catch let unread as PackageExport.SettingsUnread {
+                phase = .failed(
+                    String(
+                        localized:
+                            "Empo couldn't read what \(unread.gameName) backs up. Open the game's settings, tap Backup, and choose what gets backed up again."
+                    ))
+                return
             } catch {
                 BackupLog.line("PackageExportModel", "The package plan failed: \(error)")
                 phase = .failed(String(localized: "Empo couldn't make this package. Try again."))

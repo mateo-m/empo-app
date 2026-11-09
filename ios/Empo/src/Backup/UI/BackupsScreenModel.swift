@@ -190,14 +190,8 @@ final class BackupsScreenModel {
         guard !thresholds.isEmpty else { return [] }
         var waiting: [BackupModeAsk] = []
         for container in GameContainer.discover() {
-            let resolution: BackupModeResolution
-            do {
-                resolution = try await GameBackupSets.resolveMode(for: container, targets: thresholds)
-            } catch {
-                BackupLog.line(
-                    "BackupsScreenModel", "\(container.folderName) backup settings did not read: \(error)")
-                continue
-            }
+            let resolution = await GameBackupSets.resolveMode(
+                for: container, targets: thresholds)
             guard case .ask(let ask) = resolution else { continue }
             waiting.append(
                 BackupModeAsk(

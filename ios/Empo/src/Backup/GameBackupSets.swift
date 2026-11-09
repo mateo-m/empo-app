@@ -9,7 +9,13 @@ enum GameBackupSets {
     static func request(
         for container: GameContainer, mode: BackupMode
     ) async throws -> GameBackupSetRequest {
-        let intent = try GameBackupIntent.load(from: container.empoStateURL)
+        let manualMarks: [String]
+        do {
+            manualMarks = try GameBackupIntent.load(from: container.empoStateURL).manualMarks
+        } catch  where mode == .full {
+            // The full set holds each file, so it needs no marks.
+            manualMarks = []
+        }
         var buckets: [String: URL] = [:]
         for bucket in RescuedSaves.matchingBuckets(
             in: DataDirectory.rescuedSavesRootURL, folderName: container.folderName)
@@ -24,7 +30,7 @@ enum GameBackupSets {
                 for: container, core: GameCores.core(forGameAt: container.gameURL)),
             documentsRoot: DataDirectory.documentsRootURL,
             rescuedSavesBuckets: buckets,
-            manualMarks: intent.manualMarks,
+            manualMarks: manualMarks,
             runtimeWatchPaths: await GameSaveWatch.shared.joinedPaths(forGame: container.id))
     }
 
@@ -59,8 +65,18 @@ enum GameBackupSets {
     /// card shows.
     static func resolveMode(
         for container: GameContainer, targets: [BackupTargetThreshold]
-    ) async throws -> BackupModeResolution {
-        let intent = try GameBackupIntent.load(from: container.empoStateURL)
+    ) async -> BackupModeResolution {
+        let intent: GameBackupIntent
+        do {
+            intent = try GameBackupIntent.load(from: container.empoStateURL)
+        } catch {
+            // The rule picks full or the ask for a game with no mode, never
+            // slim, so the marks of the damaged file are not needed.
+            BackupLog.line(
+                "GameBackupSets",
+                "\(container.folderName) backup settings did not read, so the mode is asked again: \(error)")
+            intent = GameBackupIntent()
+        }
         if let answered = intent.mode { return .mode(answered) }
         let treeSize = await GameMetadata.diskSize(for: container.gameURL)
         return BackupThreshold.resolveMode(

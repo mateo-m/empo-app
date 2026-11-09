@@ -5,6 +5,10 @@ import UIKit
 /// What this device puts in a package, per SPEC 12.4.
 enum PackageExport {
 
+    struct SettingsUnread: Error {
+        let gameName: String
+    }
+
     /// The plan for one game. It uses that game's current mode.
     @MainActor
     static func plan(game container: GameContainer) async throws -> PackagePlan {
@@ -30,8 +34,14 @@ enum PackageExport {
     private static func stream(
         of container: GameContainer, gameName: String
     ) async throws -> PackagePlan.Stream {
-        let mode = try await self.mode(of: container)
-        let request = try await GameBackupSets.request(for: container, mode: mode)
+        let mode = await self.mode(of: container)
+        let request: GameBackupSetRequest
+        do {
+            request = try await GameBackupSets.request(for: container, mode: mode)
+        } catch {
+            BackupLog.line("PackageExport", "\(gameName) backup settings did not read: \(error)")
+            throw SettingsUnread(gameName: gameName)
+        }
         // The walk of a full-mode tree takes seconds, and the sheet
         // must still draw and take Cancel meanwhile.
         let set = await Task.detached { BackupSetResolver.resolve(request) }.value
@@ -69,8 +79,8 @@ enum PackageExport {
     }
 
     @MainActor
-    private static func mode(of container: GameContainer) async throws -> BackupMode {
-        let resolution = try await GameBackupSets.resolveMode(
+    private static func mode(of container: GameContainer) async -> BackupMode {
+        let resolution = await GameBackupSets.resolveMode(
             for: container, targets: BackupTargets.thresholds())
         // A game that never answered the ask of 3.5 exports its save
         // members, which is what the ask's own default is.
