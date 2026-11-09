@@ -1302,10 +1302,8 @@ class ControlsLayout {
         importOfferPending = false
     }
 
-    private static let gameLayoutNoticeKey = DefaultsKey.layoutProfilesGameNoticeShown
-
     private static func shownGameLayoutNotices() -> Set<String> {
-        Set(UserDefaults.standard.stringArray(forKey: gameLayoutNoticeKey) ?? [])
+        Set(UserDefaults.standard.stringArray(forKey: DefaultsKey.layoutProfilesGameNoticeShown) ?? [])
     }
 
     func dismissGameLayoutNotice() {
@@ -1313,7 +1311,7 @@ class ControlsLayout {
         guard let gameID = currentGameID else { return }
         var shown = Self.shownGameLayoutNotices()
         shown.insert(gameID)
-        UserDefaults.standard.set(Array(shown).sorted(), forKey: Self.gameLayoutNoticeKey)
+        UserDefaults.standard.set(Array(shown).sorted(), forKey: DefaultsKey.layoutProfilesGameNoticeShown)
     }
 
     // MARK: - Conversion

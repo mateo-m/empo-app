@@ -3,10 +3,6 @@
 
 import SwiftUI
 
-/// Top-right toolbar overlay shown during play. It stays a standalone
-/// View so PlayerView can focus on orchestration (state, lifecycle,
-/// alerts) while toolbar assembly + edit-mode variant live here.
-
 struct PlayerToolbar: View {
     let isPortrait: Bool
     let safeArea: EdgeInsets
@@ -20,14 +16,17 @@ struct PlayerToolbar: View {
     let onShowMore: () -> Void
     let onResetIdleTimer: () -> Void
 
-    private static let buttonCount = 4
+    private enum Entry: CaseIterable {
+        case keyboard, editControls, hideControls, more
+    }
 
     static func placement(
         isPortrait: Bool, safeArea: EdgeInsets, geoSize: CGSize
     ) -> ControlsZone.ToolbarPlacement {
         ControlsZone.toolbarPlacement(
             safeArea: safeArea, geoSize: geoSize, occluded: AppWindow.occludedRects,
-            btnSize: IconButtonSize.sm.points, gap: gap(isPortrait: isPortrait), count: CGFloat(buttonCount))
+            btnSize: IconButtonSize.sm.points, gap: gap(isPortrait: isPortrait),
+            count: CGFloat(Entry.allCases.count))
     }
 
     private static func gap(isPortrait: Bool) -> CGFloat { isPortrait ? Spacing.sm : Spacing.md }
@@ -56,42 +55,37 @@ struct PlayerToolbar: View {
                 }
             }
         }
-        // Pin the Liquid Glass material to the dark variant so the
-        // toolbar matches the on-screen controls (D-pad, action
-        // buttons) and doesn't shift appearance with the system
-        // color scheme or the backdrop brightness of the game.
         .darkGlass()
-        // Measure the region BEFORE .position, which expands to
-        // the full proposed space.
+        // `.position` fills the full proposed space, so measure the
+        // region before it.
         .chromeHitRegion("toolbar")
         .opacity(toolbarOpacity)
         .position(placement.center)
     }
 
     private func toolbarButtons() -> [ToolbarEntry] {
-        let buttons = [
-            ToolbarEntry(
-                icon: "keyboard",
-                label: keyboardShown ? "Hide keyboard" : "Show keyboard",
-                tint: .white,
-                action: onToggleKeyboard
-            ),
-            // square.and.pencil reads as "edit this region" which
-            // fits the controls-edit mode better than a generic
-            // gear/settings.
-            ToolbarEntry(
-                icon: "square.and.pencil", label: "Edit controls", tint: .white, action: onToggleEditMode),
-            ToolbarEntry(
-                icon: controlsHidden ? "eye.slash.fill" : "eye.fill",
-                label: controlsHidden ? "Show controls" : "Hide controls",
-                tint: .white,
-                action: onToggleHideControls
-            ),
-            ToolbarEntry(
-                icon: "ellipsis.circle", label: "More options", tint: .white, action: onShowMore),
-        ]
-        assert(buttons.count == Self.buttonCount)
-        return buttons
+        Entry.allCases.map { entry in
+            switch entry {
+            case .keyboard:
+                ToolbarEntry(
+                    icon: "keyboard",
+                    label: keyboardShown ? "Hide keyboard" : "Show keyboard",
+                    tint: .white,
+                    action: onToggleKeyboard)
+            case .editControls:
+                ToolbarEntry(
+                    icon: "square.and.pencil", label: "Edit controls", tint: .white, action: onToggleEditMode)
+            case .hideControls:
+                ToolbarEntry(
+                    icon: controlsHidden ? "eye.slash.fill" : "eye.fill",
+                    label: controlsHidden ? "Show controls" : "Hide controls",
+                    tint: .white,
+                    action: onToggleHideControls)
+            case .more:
+                ToolbarEntry(
+                    icon: "ellipsis.circle", label: "More options", tint: .white, action: onShowMore)
+            }
+        }
     }
 
     private struct ToolbarEntry {
@@ -112,16 +106,13 @@ struct PlayerEditToolbar: View {
 
     @AppStorage(DefaultsKey.controlsEditSnapToGrid) private var snapToGrid = false
 
-    /// First-render fallbacks for the `.position` anchoring, before
-    /// `onGeometryChange` reports the real piece sizes below.
+    /// Used until `onGeometryChange` gives the real sizes.
     private static let bannerHalfHeightFallback: CGFloat = 11
     private static let actionsHalfHeightFallback: CGFloat = IconButtonSize.sm.points / 2
-    /// The pill's gap above the zone border equals the action row's
-    /// gap below it (user ruling: symmetric around the border).
+    /// The gap of the banner above the zone border, and of the action
+    /// row below it.
     private static let borderGap: CGFloat = Spacing.md
 
-    /// Measured half-heights: the same frames the chrome walls use.
-    /// A font or padding change then moves the anchors with it.
     private var bannerHalfHeight: CGFloat {
         bannerFrame.height > 0 ? bannerFrame.height / 2 : Self.bannerHalfHeightFallback
     }
@@ -130,17 +121,13 @@ struct PlayerEditToolbar: View {
     }
 
     var body: some View {
-        // Anchor both pieces to the controls-zone border, not the
-        // game rect: the pill floats above the border line by the
-        // same distance the action row sits below it. A CRUSHED
-        // zone (fit-then-block leaves only the tallest control)
-        // has no room for the header, so both pieces dodge above
-        // the border and the controls keep the zone to themselves.
+        // A crushed zone has space only for the tallest control. Then
+        // both pieces go above the border.
         let zoneBounds = ControlsZone.bounds(
             controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
         let zoneTop = zoneBounds.minY
-        // The row's own height below the border, plus the same
-        // height again as clearance over the tallest control.
+        // The row below the border, and the same height again as a
+        // gap above the tallest control.
         let actionsRowHeight = actionsHalfHeight * 2
         let headerRoom = actionsRowHeight * 2
         let crushed = zoneBounds.height < layout.requiredEditZoneHeight + headerRoom
@@ -154,9 +141,6 @@ struct PlayerEditToolbar: View {
             : zoneTop - Self.borderGap - bannerHalfHeight
 
         ZStack {
-            // Blast-radius banner: a pinned profile's edits reach
-            // every game using it. Ambient edits mint a new profile.
-            // Its own small pill, so the button capsule stays clean.
             Text(editBannerText)
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.85))
@@ -186,9 +170,7 @@ struct PlayerEditToolbar: View {
                 )
                 .position(x: geoSize.width / 2, y: actionsY)
         }
-        // Dark variant for BOTH pieces: the banner sits outside the
-        // action row's own darkGlass and would fall back to the
-        // system scheme.
+        // The banner is outside the dark glass of the action row.
         .darkGlass()
         .animation(.easeInOut(duration: 0.2), value: crushed)
     }
@@ -196,21 +178,15 @@ struct PlayerEditToolbar: View {
     @State private var bannerFrame: CGRect = .zero
     @State private var actionsFrame: CGRect = .zero
 
-    /// The header pieces are rigid walls for control drags, so a
-    /// control cannot park underneath them. Window space matches
-    /// the overlay's full-window geometry.
+    /// The header pieces are walls for control drags, so a control
+    /// cannot stop under them.
     private func publishChromeFrames() {
         layout.editChromeFrames = [bannerFrame, actionsFrame].filter { !$0.isEmpty }
     }
 
-    /// Four actions: symbols, per the HIG rule for bars past three
-    /// buttons. The tools are the SAME circular glass buttons as
-    /// the play toolbar, so edit mode reads as a variant of it.
-    /// Done keeps the tinted capsule and its shape alone marks it
-    /// as the primary action. No chromeHitRegion: PlayerEditToolbar
-    /// stays mounted at opacity 0 during play (its region would
-    /// cover center screen), and edit mode already publishes a
-    /// full-screen region.
+    /// No chromeHitRegion: this view stays in the tree at opacity 0
+    /// during play, so its region would cover the center of the
+    /// screen. Edit mode publishes a full-screen region.
     private var actionsRow: some View {
         HStack(spacing: Spacing.md) {
             IconButton("plus", label: "Add button", style: .outline, size: .sm, tint: .white) {
@@ -255,8 +231,6 @@ struct PlayerEditToolbar: View {
                     .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
             }
         }
-        // Pin the glass to the dark variant, matching the play
-        // toolbar and the on-screen controls.
         .darkGlass()
     }
 
