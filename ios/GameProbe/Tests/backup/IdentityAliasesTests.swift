@@ -90,7 +90,7 @@ final class IdentityAliasesTests: XCTestCase {
         XCTAssertEqual(try IdentityAliases.load(from: stateDirectory).aliases, [])
     }
 
-    func testADamagedFileMovesAsideAndGivesTheEmptyStore() throws {
+    func testADamagedFileKeepsACopyAndGivesTheEmptyStore() throws {
         try FileManager.default.createDirectory(
             at: stateDirectory, withIntermediateDirectories: true)
         let damaged = Data("{\"aliases\":".utf8)

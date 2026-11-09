@@ -102,7 +102,7 @@ final class WriterConflictsTests: XCTestCase {
         XCTAssertEqual(try WriterConflicts.read(applicationSupport: support), WriterConflicts())
     }
 
-    func testADamagedFileMovesAsideAndReadsAsEmpty() throws {
+    func testADamagedFileKeepsACopyAndReadsAsEmpty() throws {
         let support = FileManager.default.temporaryDirectory
             .appendingPathComponent("writer-conflicts-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)

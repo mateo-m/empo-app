@@ -128,7 +128,7 @@ final class GameBackupIntentTests: XCTestCase {
         XCTAssertEqual(try GameBackupIntent.load(from: tempRoot), GameBackupIntent())
     }
 
-    func testADamagedFileMovesAsideAndLoadsTheEmptyIntent() throws {
+    func testADamagedFileKeepsACopyAndLoadsTheEmptyIntent() throws {
         let damaged = Data("not json at all".utf8)
         try damaged.write(to: tempRoot.appendingPathComponent(GameBackupIntent.fileName))
 

@@ -147,7 +147,7 @@ final class TargetDescriptorTests: XCTestCase {
         XCTAssertThrowsError(try TargetDescriptorFile.read(applicationSupport: tempRoot))
     }
 
-    func testADamagedTargetsFileMovesAsideAndReadsAsAnEmptyOne() throws {
+    func testADamagedTargetsFileKeepsACopyAndReadsAsAnEmptyOne() throws {
         let url = BackupRootLayout(applicationSupport: tempRoot).targetsFile
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

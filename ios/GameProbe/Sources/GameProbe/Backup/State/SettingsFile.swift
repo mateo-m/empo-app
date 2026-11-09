@@ -12,9 +12,10 @@ public enum SettingsFile {
         }
     }
 
-    /// A file that reads but does not decode moves aside under a new
-    /// name and gives `empty`. The next save then writes a new file
-    /// and keeps the damaged bytes.
+    /// A file that reads but does not decode gives `empty`, and its
+    /// bytes get a copy named by their hash. The next save writes over
+    /// the file. A move would race a second reader, and could take a
+    /// good file that another reader saved after this read.
     public static func value<Value>(
         at url: URL, empty: () -> Value, decode: (Data) throws -> Value
     ) throws -> Value {
@@ -22,10 +23,10 @@ public enum SettingsFile {
         do {
             return try decode(data)
         } catch is DecodingError {
-            try FileManager.default.moveItem(
-                at: url,
+            try data.write(
                 to: url.deletingLastPathComponent().appendingPathComponent(
-                    "\(url.lastPathComponent).damaged-\(UUID().uuidString)"))
+                    "\(url.lastPathComponent).damaged-\(ContentHash.hex(of: data).prefix(16))"),
+                options: .atomic)
             return empty()
         }
     }

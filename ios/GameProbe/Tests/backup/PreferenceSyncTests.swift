@@ -516,7 +516,7 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertNil(read.knownId(ofProfile: "Small hands"))
     }
 
-    func testADamagedStateFileMovesAsideAndReadsAsAFreshState() throws {
+    func testADamagedStateFileKeepsACopyAndReadsAsAFreshState() throws {
         let support = try temporaryDirectory()
         let damaged = Data("{\"actorId\":".utf8)
         try damaged.write(to: support.appendingPathComponent(SyncState.fileName))
@@ -531,7 +531,7 @@ final class PreferenceSyncTests: XCTestCase {
             damaged)
     }
 
-    func testADamagedIdentityFileMovesAsideAndReadsAsEmpty() throws {
+    func testADamagedIdentityFileKeepsACopyAndReadsAsEmpty() throws {
         let support = try temporaryDirectory()
         let damaged = Data("{\"ids\":".utf8)
         try damaged.write(to: support.appendingPathComponent(SyncProfileIdentities.fileName))
