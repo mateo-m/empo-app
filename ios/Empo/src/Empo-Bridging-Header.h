@@ -7,7 +7,7 @@
 #import "GameCore.h"
 #import "EmpoAppCore.h"
 #import "GameProcessClient.h"
-#import "TouchControls.h"
+#import "TCKeyboardField.h"
 
 // libarchive - for zip/7z/rar extraction in ArchiveExtractor.
 #import <archive.h>
