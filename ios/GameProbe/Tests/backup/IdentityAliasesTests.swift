@@ -90,19 +90,13 @@ final class IdentityAliasesTests: XCTestCase {
         XCTAssertEqual(try IdentityAliases.load(from: stateDirectory).aliases, [])
     }
 
-    func testADamagedFileKeepsACopyAndGivesTheEmptyStore() throws {
+    func testADamagedFileIsAnError() throws {
         try FileManager.default.createDirectory(
             at: stateDirectory, withIntermediateDirectories: true)
-        let damaged = Data("{\"aliases\":".utf8)
-        try damaged.write(to: stateDirectory.appendingPathComponent(IdentityAliases.fileName))
+        try Data("{\"aliases\":".utf8).write(
+            to: stateDirectory.appendingPathComponent(IdentityAliases.fileName))
 
-        XCTAssertEqual(try IdentityAliases.load(from: stateDirectory).aliases, [])
-        let kept = try FileManager.default.contentsOfDirectory(atPath: stateDirectory.path)
-            .filter { $0.hasPrefix(IdentityAliases.fileName + ".damaged-") }
-        XCTAssertEqual(kept.count, 1)
-        XCTAssertEqual(
-            try Data(contentsOf: stateDirectory.appendingPathComponent(try XCTUnwrap(kept.first))),
-            damaged)
+        XCTAssertThrowsError(try IdentityAliases.load(from: stateDirectory))
     }
 
     func testTheFileKeepsAFieldThisBuildDoesNotKnow() throws {

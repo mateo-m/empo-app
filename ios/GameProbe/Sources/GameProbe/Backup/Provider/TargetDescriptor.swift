@@ -174,8 +174,8 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
 
     public static func read(applicationSupport: URL) throws -> TargetDescriptorFile {
         let url = BackupRootLayout(applicationSupport: applicationSupport).targetsFile
-        return try SettingsFile.value(
-            at: url, empty: { TargetDescriptorFile() }, decode: decode(json:))
+        guard let data = try SettingsFile.data(at: url) else { return TargetDescriptorFile() }
+        return try decode(json: data)
     }
 
     public func write(applicationSupport: URL) throws {

@@ -11,23 +11,4 @@ public enum SettingsFile {
             return nil
         }
     }
-
-    /// A file that reads but does not decode gives `empty`, and its
-    /// bytes get a copy named by their hash. The next save writes over
-    /// the file. A move would race a second reader, and could take a
-    /// good file that another reader saved after this read.
-    public static func value<Value>(
-        at url: URL, empty: () -> Value, decode: (Data) throws -> Value
-    ) throws -> Value {
-        guard let data = try data(at: url) else { return empty() }
-        do {
-            return try decode(data)
-        } catch is DecodingError {
-            try data.write(
-                to: url.deletingLastPathComponent().appendingPathComponent(
-                    "\(url.lastPathComponent).damaged-\(ContentHash.hex(of: data).prefix(16))"),
-                options: .atomic)
-            return empty()
-        }
-    }
 }

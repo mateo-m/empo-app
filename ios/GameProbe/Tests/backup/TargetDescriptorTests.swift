@@ -147,22 +147,13 @@ final class TargetDescriptorTests: XCTestCase {
         XCTAssertThrowsError(try TargetDescriptorFile.read(applicationSupport: tempRoot))
     }
 
-    func testADamagedTargetsFileKeepsACopyAndReadsAsAnEmptyOne() throws {
+    func testADamagedTargetsFileIsAnError() throws {
         let url = BackupRootLayout(applicationSupport: tempRoot).targetsFile
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let damaged = Data("{".utf8)
-        try damaged.write(to: url)
+        try Data("{".utf8).write(to: url)
 
-        XCTAssertTrue(try TargetDescriptorFile.read(applicationSupport: tempRoot).targets.isEmpty)
-        let kept = try FileManager.default.contentsOfDirectory(
-            atPath: url.deletingLastPathComponent().path
-        ).filter { $0.hasPrefix(url.lastPathComponent + ".damaged-") }
-        XCTAssertEqual(kept.count, 1)
-        XCTAssertEqual(
-            try Data(contentsOf: url.deletingLastPathComponent().appendingPathComponent(
-                try XCTUnwrap(kept.first))),
-            damaged)
+        XCTAssertThrowsError(try TargetDescriptorFile.read(applicationSupport: tempRoot))
     }
 
     func testEveryV1ProviderHasAName() {

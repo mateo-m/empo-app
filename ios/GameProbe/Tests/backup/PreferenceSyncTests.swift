@@ -516,34 +516,19 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertNil(read.knownId(ofProfile: "Small hands"))
     }
 
-    func testADamagedStateFileKeepsACopyAndReadsAsAFreshState() throws {
+    func testADamagedStateFileIsAnError() throws {
         let support = try temporaryDirectory()
-        let damaged = Data("{\"actorId\":".utf8)
-        try damaged.write(to: support.appendingPathComponent(SyncState.fileName))
+        try Data("{\"actorId\":".utf8).write(to: support.appendingPathComponent(SyncState.fileName))
 
-        XCTAssertEqual(
-            try SyncState.read(applicationSupport: support, actorId: "actor-2").actorId, "actor-2")
-        let kept = try FileManager.default.contentsOfDirectory(atPath: support.path)
-            .filter { $0.hasPrefix(SyncState.fileName + ".damaged-") }
-        XCTAssertEqual(kept.count, 1)
-        XCTAssertEqual(
-            try Data(contentsOf: support.appendingPathComponent(try XCTUnwrap(kept.first))),
-            damaged)
+        XCTAssertThrowsError(try SyncState.read(applicationSupport: support, actorId: "actor-2"))
     }
 
-    func testADamagedIdentityFileKeepsACopyAndReadsAsEmpty() throws {
+    func testADamagedIdentityFileIsAnError() throws {
         let support = try temporaryDirectory()
-        let damaged = Data("{\"ids\":".utf8)
-        try damaged.write(to: support.appendingPathComponent(SyncProfileIdentities.fileName))
+        try Data("{\"ids\":".utf8).write(
+            to: support.appendingPathComponent(SyncProfileIdentities.fileName))
 
-        XCTAssertEqual(
-            try SyncProfileIdentities.read(applicationSupport: support), SyncProfileIdentities())
-        let kept = try FileManager.default.contentsOfDirectory(atPath: support.path)
-            .filter { $0.hasPrefix(SyncProfileIdentities.fileName + ".damaged-") }
-        XCTAssertEqual(kept.count, 1)
-        XCTAssertEqual(
-            try Data(contentsOf: support.appendingPathComponent(try XCTUnwrap(kept.first))),
-            damaged)
+        XCTAssertThrowsError(try SyncProfileIdentities.read(applicationSupport: support))
     }
 
     // MARK: - Fixtures
