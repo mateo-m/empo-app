@@ -67,13 +67,21 @@ enum GameBackupSets {
             intent: intent, gameTreeBytes: treeSize, targets: targets)
     }
 
-    /// Writes the mode into `EmpoState/backup.json` and answers
-    /// whether the game became dirty, per 3.9. The caller marks the
-    /// game dirty in `state.sqlite`.
+    /// Answers whether the game became dirty, per 3.9. The caller marks
+    /// the game dirty in `state.sqlite`.
+    ///
+    /// A damaged `backup.json` moves aside and the mode goes into a new
+    /// file, so the ask of 3.5 does not come back at each run.
     @discardableResult
     static func setMode(_ mode: BackupMode, for container: GameContainer) throws -> Bool {
         let stateURL = container.empoStateURL
-        let intent = try GameBackupIntent.load(from: stateURL)
+        let intent: GameBackupIntent
+        do {
+            intent = try GameBackupIntent.load(from: stateURL)
+        } catch is DecodingError {
+            try BackupRoot.setAside(stateURL.appendingPathComponent(GameBackupIntent.fileName))
+            intent = GameBackupIntent()
+        }
         let dirty = BackupModeChange.makesDirty(from: intent.mode, to: mode)
         try BackupModeChange.apply(mode, to: intent).save(to: stateURL)
         return dirty

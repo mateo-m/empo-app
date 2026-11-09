@@ -73,6 +73,20 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: conflictsAside), damaged)
     }
 
+    func testAModeChoiceOverADamagedSettingsFileIsSavedAndTheOldFileStays() async throws {
+        try damaged.write(to: intentFile)
+
+        XCTAssertTrue(try GameBackupSets.setMode(.full, for: container))
+
+        XCTAssertEqual(try GameBackupIntent.load(from: container.empoStateURL).mode, .full)
+        let resolution = try await GameBackupSets.resolveMode(for: container, targets: [])
+        XCTAssertEqual(resolution, .mode(.full))
+        XCTAssertEqual(
+            try Data(
+                contentsOf: container.empoStateURL.appendingPathComponent("backup.damaged.json")),
+            damaged)
+    }
+
     func testADamagedSettingsFileStopsTheModeAndTheSetReads() async throws {
         try damaged.write(to: intentFile)
 
