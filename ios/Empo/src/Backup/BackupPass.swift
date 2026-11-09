@@ -237,11 +237,19 @@ final class BackupPass {
             // before the run stages `EmpoState/`, or the layout goes
             // up in neither place.
             ControlsLayout.migrateLegacyPersistence(container: container)
-            let resolution = await GameBackupSets.resolveMode(
-                for: container, targets: thresholds)
-            guard case .mode(let mode) = resolution else {
-                // The ask of 3.5 has no answer yet, so this game
-                // waits for it.
+            let set: GameBackupSetRequest
+            do {
+                guard
+                    case .mode(let mode) = try await GameBackupSets.resolveMode(
+                        for: container, targets: thresholds)
+                else {
+                    // The ask of 3.5 has no answer yet, so this game
+                    // waits for it.
+                    continue
+                }
+                set = try await GameBackupSets.request(for: container, mode: mode)
+            } catch {
+                BackupLog.line("BackupPass", "\(key) sits out, its backup settings did not read: \(error)")
                 continue
             }
             let metadata = GameMetadata.load(from: container)
@@ -251,7 +259,7 @@ final class BackupPass {
                 BackupRunGame(
                     identity: GameIdentities.identity(for: container),
                     title: name,
-                    set: await GameBackupSets.request(for: container, mode: mode),
+                    set: set,
                     versionMarker: GameIdentities.versionMarker(for: container),
                     lastPlayedAt: metadata.lastPlayed))
         }

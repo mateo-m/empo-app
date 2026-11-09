@@ -72,4 +72,18 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(model.writerQuestions.map(\.deviceName), ["Other iPad"])
         XCTAssertEqual(try Data(contentsOf: conflictsAside), damaged)
     }
+
+    func testADamagedSettingsFileStopsTheModeAndTheSetReads() async throws {
+        try damaged.write(to: intentFile)
+
+        do {
+            _ = try await GameBackupSets.resolveMode(for: container, targets: [])
+            XCTFail("The mode read must not take a damaged file as no answer")
+        } catch {}
+        do {
+            _ = try await GameBackupSets.request(for: container, mode: .slim)
+            XCTFail("The set read must not take a damaged file as no marks")
+        } catch {}
+        XCTAssertEqual(try Data(contentsOf: intentFile), damaged)
+    }
 }

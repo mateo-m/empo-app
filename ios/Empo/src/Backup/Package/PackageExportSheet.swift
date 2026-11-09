@@ -8,10 +8,10 @@ enum PackageExportSource {
     case library
 
     @MainActor
-    func plan() async -> PackagePlan {
+    func plan() async throws -> PackagePlan {
         switch self {
-        case .game(let container): return await PackageExport.plan(game: container)
-        case .library: return await PackageExport.libraryPlan()
+        case .game(let container): return try await PackageExport.plan(game: container)
+        case .library: return try await PackageExport.libraryPlan()
         }
     }
 }
@@ -51,7 +51,14 @@ final class PackageExportModel {
         guard case .planning = phase, task == nil else { return }
         task = Task { [weak self] in
             guard let self else { return }
-            let plan = await source.plan()
+            let plan: PackagePlan
+            do {
+                plan = try await source.plan()
+            } catch {
+                BackupLog.line("PackageExportModel", "The package plan failed: \(error)")
+                phase = .failed(String(localized: "Empo couldn't make this package. Try again."))
+                return
+            }
             guard !Task.isCancelled else { return }
             guard !plan.streams.isEmpty else {
                 phase = .failed(String(localized: "This device holds nothing to export."))

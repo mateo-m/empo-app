@@ -85,9 +85,21 @@ final class BackupSheetModel {
     func readTheFiles() async {
         readsOfTheFiles += 1
         let read = readsOfTheFiles
-        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
-        let full = await resolve(.full)
-        let slim = await resolve(.slim)
+        let full: GameBackupSet
+        let slim: GameBackupSet
+        let intent: GameBackupIntent
+        do {
+            intent = try GameBackupIntent.load(from: container.empoStateURL)
+            full = try await resolve(.full)
+            slim = try await resolve(.slim)
+        } catch {
+            // No editor, so a save from it cannot replace the marks
+            // that the damaged file still holds.
+            BackupLog.line("BackupSheetModel", "The backup settings did not read: \(error)")
+            guard read == readsOfTheFiles else { return }
+            editor = nil
+            return
+        }
         let leftovers = await Self.leftovers(inside: container.url)
         // A later read started meanwhile and holds newer marks.
         guard read == readsOfTheFiles else { return }
@@ -110,8 +122,8 @@ final class BackupSheetModel {
         lastSuccessAt = read.lastSuccessAt
     }
 
-    private func resolve(_ mode: BackupMode) async -> GameBackupSet {
-        let request = await GameBackupSets.request(for: container, mode: mode)
+    private func resolve(_ mode: BackupMode) async throws -> GameBackupSet {
+        let request = try await GameBackupSets.request(for: container, mode: mode)
         return await Task.detached { BackupSetResolver.resolve(request) }.value
     }
 
