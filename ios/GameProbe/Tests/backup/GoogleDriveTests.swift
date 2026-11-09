@@ -82,7 +82,7 @@ final class GoogleDriveTests: XCTestCase {
     func testAServerErrorRetriesOnTheNextPass() {
         XCTAssertEqual(GoogleDrive.error(status: 500), .serverError(status: 500))
         XCTAssertEqual(GoogleDrive.error(status: 503), .serverError(status: 503))
-        XCTAssertEqual(GoogleDrive.error(status: 500).runStop, .offline)
+        XCTAssertEqual(GoogleDrive.error(status: 500).runStop, .serverError(status: 500))
     }
 
     func testAnUnknownReasonReachesTheUserWordForWord() {

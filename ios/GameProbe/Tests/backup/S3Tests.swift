@@ -113,7 +113,7 @@ final class S3Tests: XCTestCase {
     func testAServerErrorRetriesOnTheNextPass() {
         XCTAssertEqual(S3.error(status: 500), .serverError(status: 500))
         XCTAssertEqual(S3.error(status: 502), .serverError(status: 502))
-        XCTAssertEqual(S3.error(status: 500).runStop, .offline)
+        XCTAssertEqual(S3.error(status: 500).runStop, .serverError(status: 500))
     }
 
     func testAnUnknownCodeReachesTheUserWordForWord() {

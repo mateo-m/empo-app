@@ -308,7 +308,7 @@ final class WebDAVTests: XCTestCase {
 
     func testAServerThatIsUpButUnwellRetriesOnTheNextPass() {
         XCTAssertEqual(WebDAV.error(status: 500), .serverError(status: 500))
-        XCTAssertEqual(WebDAV.error(status: 500).runStop, .offline)
+        XCTAssertEqual(WebDAV.error(status: 500).runStop, .serverError(status: 500))
     }
 
     // MARK: - The temp name and the MOVE, per tests 5 and 6
