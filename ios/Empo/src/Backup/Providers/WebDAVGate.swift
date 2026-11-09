@@ -36,7 +36,7 @@ final class WebDAVGate {
 
     func cannotOpenLine(for descriptor: TargetDescriptor) -> String? {
         guard descriptor.provider == Self.kind else { return nil }
-        return WebDAVConnectionStore.connection(targetId: descriptor.id) == nil
+        return BackupKeychain.secret(WebDAVConnection.self, targetId: descriptor.id) == nil
             ? Self.noPasswordLine : nil
     }
 
@@ -45,7 +45,7 @@ final class WebDAVGate {
     func target(for descriptor: TargetDescriptor) -> WebDAVTarget? {
         guard descriptor.provider == Self.kind else { return nil }
         if let existing = targets[descriptor.id] { return existing }
-        guard let connection = WebDAVConnectionStore.connection(targetId: descriptor.id) else {
+        guard let connection = BackupKeychain.secret(WebDAVConnection.self, targetId: descriptor.id) else {
             return nil
         }
         let target = WebDAVTarget(connection: connection)
@@ -57,7 +57,7 @@ final class WebDAVGate {
     /// calls it, and the permission check of 8.7 runs after it.
     @discardableResult
     func connect(_ connection: WebDAVConnection, targetId: String) throws -> WebDAVTarget {
-        try WebDAVConnectionStore.write(connection, targetId: targetId)
+        try BackupKeychain.setSecret(json: connection, targetId: targetId)
         let target = WebDAVTarget(connection: connection)
         targets[targetId] = target
         return target
@@ -69,11 +69,11 @@ final class WebDAVGate {
     /// changed answer builds the target again. The check runs at add
     /// time and after a re-sign-in, and nowhere else.
     func rememberTheSpaceQuery(_ answers: Bool, targetId: String) {
-        guard var connection = WebDAVConnectionStore.connection(targetId: targetId),
+        guard var connection = BackupKeychain.secret(WebDAVConnection.self, targetId: targetId),
             connection.server.answersQuota != answers
         else { return }
         connection.server.answersQuota = answers
-        guard (try? WebDAVConnectionStore.write(connection, targetId: targetId)) != nil else {
+        guard (try? BackupKeychain.setSecret(json: connection, targetId: targetId)) != nil else {
             return
         }
         targets[targetId] = WebDAVTarget(connection: connection)

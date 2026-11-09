@@ -39,12 +39,6 @@ actor OAuthTokenStore {
         self.tokens = tokens
     }
 
-    /// The tokens one target holds, or `nil` where it has none. A
-    /// target with none is a placeholder, per 8.8.
-    static func tokens(targetId: String) -> OAuthTokens? {
-        OAuthTokens.read(targetId: targetId)
-    }
-
     /// A token that is alive now.
     func accessToken() async throws(BackupProviderError) -> String {
         if tokensAreUnsaved { saveTheTokens() }
@@ -110,13 +104,13 @@ actor OAuthTokenStore {
         refresh = nil
         signIns += 1
         self.tokens = tokens
-        try tokens.write(targetId: targetId)
+        try BackupKeychain.setSecret(json: tokens, targetId: targetId)
         tokensAreUnsaved = false
     }
 
     private func saveTheTokens() {
         do {
-            try tokens.write(targetId: targetId)
+            try BackupKeychain.setSecret(json: tokens, targetId: targetId)
             tokensAreUnsaved = false
         } catch {
             tokensAreUnsaved = true

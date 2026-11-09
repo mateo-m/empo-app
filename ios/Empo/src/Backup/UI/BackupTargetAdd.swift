@@ -208,12 +208,12 @@ enum BackupTargetAdd {
         var values = ["label": target.label, "root": target.root]
         switch target.provider {
         case .webdav:
-            if let connection = WebDAVConnectionStore.connection(targetId: target.id) {
+            if let connection = BackupKeychain.secret(WebDAVConnection.self, targetId: target.id) {
                 values["address"] = connection.server.address.absoluteString
                 values["username"] = connection.server.username
             }
         case .s3:
-            if let connection = S3ConnectionStore.connection(targetId: target.id) {
+            if let connection = BackupKeychain.secret(S3Connection.self, targetId: target.id) {
                 values["address"] = connection.bucket.address.absoluteString
                 values["bucket"] = connection.bucket.name
                 values["region"] = connection.bucket.region
