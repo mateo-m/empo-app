@@ -129,30 +129,22 @@ struct BindingsView: View {
                 }
             }
             .onAppear {
-                // The screen reads edges without playing them, and it
-                // holds both handlers for its whole life: no child
-                // takes them away, so none has to give them back.
-                input.suppressInjection = true
-                input.controller.elementActivityHandler = { element in
-                    highlight.flash(element)
-                }
-                input.controller.connectionHandler = { refreshToken = UUID() }
-                input.keyboard.keyActivityHandler = { code in
-                    if case .capturingKey = step {
-                        let source = BindingSource.key(code)
-                        step = .choosingTarget(
-                            BindingsCatalog.Row(
-                                source: source, label: BindingsCatalog.label(for: source)))
-                    } else {
-                        highlight.flash(code)
-                    }
-                }
+                input.remapListener = SessionInput.RemapListener(
+                    elementPressed: { highlight.flash($0) },
+                    controllersChanged: { refreshToken = UUID() },
+                    keyPressed: { code in
+                        if case .capturingKey = step {
+                            let source = BindingSource.key(code)
+                            step = .choosingTarget(
+                                BindingsCatalog.Row(
+                                    source: source, label: BindingsCatalog.label(for: source)))
+                        } else {
+                            highlight.flash(code)
+                        }
+                    })
             }
             .onDisappear {
-                input.suppressInjection = false
-                input.controller.elementActivityHandler = nil
-                input.controller.connectionHandler = nil
-                input.keyboard.keyActivityHandler = nil
+                input.remapListener = nil
             }
             .onReceive(NotificationCenter.default.publisher(for: .bindingsDidChange)) { _ in
                 refreshToken = UUID()
