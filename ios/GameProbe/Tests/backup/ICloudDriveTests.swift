@@ -193,7 +193,6 @@ final class ICloudDriveTests: XCTestCase {
         XCTAssertTrue(capabilities.reportsObjectAge)
         XCTAssertTrue(capabilities.supportsBackgroundTransfer)
         XCTAssertNil(capabilities.maxFileSize)
-        XCTAssertFalse(capabilities.foldsCase)
     }
 
     func testNoFileSizeIsRejectedBecauseTheAccountQuotaSetsTheLimit() {

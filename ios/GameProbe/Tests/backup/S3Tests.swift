@@ -495,7 +495,6 @@ final class S3Tests: XCTestCase {
         XCTAssertFalse(flags.canQueryQuota)
         XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
-        XCTAssertFalse(flags.foldsCase)
         XCTAssertEqual(flags.maxFileSize, S3.r2MaxFileSizeBytes)
     }
 

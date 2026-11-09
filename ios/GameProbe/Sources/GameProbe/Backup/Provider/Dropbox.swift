@@ -21,8 +21,7 @@ public enum Dropbox {
         canQueryQuota: true,
         reportsObjectAge: true,
         supportsBackgroundTransfer: true,
-        maxFileSize: Dropbox.maxFileSizeBytes,
-        foldsCase: true)
+        maxFileSize: Dropbox.maxFileSizeBytes)
 
     // MARK: - The endpoints
 

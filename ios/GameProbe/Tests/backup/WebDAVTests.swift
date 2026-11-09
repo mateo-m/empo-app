@@ -407,7 +407,6 @@ final class WebDAVTests: XCTestCase {
         let flags = WebDAV.capabilities(answersQuota: true)
         XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
-        XCTAssertFalse(flags.foldsCase)
         // 9.5: the file limit is whatever the server allows, and the
         // server states no number.
         XCTAssertNil(flags.maxFileSize)

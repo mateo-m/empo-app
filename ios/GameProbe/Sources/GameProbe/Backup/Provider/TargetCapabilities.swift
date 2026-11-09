@@ -24,13 +24,6 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// server sets the limit and states no number.
     public var maxFileSize: Int64?
 
-    /// Whether the target treats two names that differ only in case
-    /// as one object. True for Dropbox. Every name Empo writes is a
-    /// hex key or a fixed ASCII name, per 5.2, so v1 behavior does
-    /// not change. The flag stops a later feature from assuming the
-    /// opposite.
-    public var foldsCase: Bool
-
     /// Whether `list` gives each object's real size. False for iCloud
     /// Drive: a file that is not on the device has the size of its
     /// placeholder until the metadata query reports the real one.
@@ -41,14 +34,12 @@ public struct TargetCapabilities: Equatable, Sendable {
         reportsObjectAge: Bool = true,
         supportsBackgroundTransfer: Bool = true,
         maxFileSize: Int64? = nil,
-        foldsCase: Bool = false,
         listReportsSize: Bool = true
     ) {
         self.canQueryQuota = canQueryQuota
         self.reportsObjectAge = reportsObjectAge
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.maxFileSize = maxFileSize
-        self.foldsCase = foldsCase
         self.listReportsSize = listReportsSize
     }
 

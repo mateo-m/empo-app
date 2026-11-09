@@ -43,8 +43,7 @@ public enum GoogleDrive {
         canQueryQuota: true,
         reportsObjectAge: true,
         supportsBackgroundTransfer: true,
-        maxFileSize: GoogleDrive.maxFileSizeBytes,
-        foldsCase: false)
+        maxFileSize: GoogleDrive.maxFileSizeBytes)
 
     /// 5 TB, per 9.3.
     public static let maxFileSizeBytes: Int64 = 5 * 1000 * 1000 * 1000 * 1000

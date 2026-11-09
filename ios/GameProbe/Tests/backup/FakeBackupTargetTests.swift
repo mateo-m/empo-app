@@ -238,8 +238,7 @@ final class FakeBackupTargetTests: XCTestCase {
             canQueryQuota: true,
             reportsObjectAge: true,
             supportsBackgroundTransfer: false,
-            maxFileSize: 150 * 1024 * 1024,
-            foldsCase: true)
+            maxFileSize: 150 * 1024 * 1024)
         let target = makeTarget(capabilities: capabilities)
 
         XCTAssertEqual(target.capabilities, capabilities)

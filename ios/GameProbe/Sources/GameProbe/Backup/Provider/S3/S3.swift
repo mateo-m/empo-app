@@ -23,8 +23,7 @@ public enum S3 {
         canQueryQuota: false,
         reportsObjectAge: true,
         supportsBackgroundTransfer: true,
-        maxFileSize: S3.maxFileSizeBytes,
-        foldsCase: false)
+        maxFileSize: S3.maxFileSizeBytes)
 
     // MARK: - The sizes of 9.4
 

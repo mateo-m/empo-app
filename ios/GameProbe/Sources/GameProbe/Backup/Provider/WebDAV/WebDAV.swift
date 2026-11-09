@@ -29,8 +29,7 @@ public enum WebDAV {
             canQueryQuota: answersQuota,
             reportsObjectAge: true,
             supportsBackgroundTransfer: true,
-            maxFileSize: nil,
-            foldsCase: false)
+            maxFileSize: nil)
     }
 
     // MARK: - The six methods of 9.5

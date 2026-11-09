@@ -220,7 +220,6 @@ final class DropboxTests: XCTestCase {
         XCTAssertTrue(flags.canQueryQuota)
         XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
-        XCTAssertTrue(flags.foldsCase)
         XCTAssertEqual(flags.maxFileSize, 2 * 1024 * 1024 * 1024 * 1024)
     }
 
