@@ -2074,10 +2074,15 @@ final class SnapshotEngineTests: XCTestCase {
         let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
         let snapshotId = try snapshotId(of: backup, stream: key(gameName))
         try changeTheSave(of: gameName, to: "played after the backup")
-        let store = try BackupStateStore(url: nil)
-        store.close()
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run(
+            "CREATE TRIGGER hold BEFORE INSERT ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
 
-        let outcome = await RestoreEngine(provider: target, store: store, localRoot: localRoot)
+        let outcome = await restore
             .run(
                 RestoreRequest(
                     targetId: targetId,
