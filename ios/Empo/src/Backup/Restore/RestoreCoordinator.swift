@@ -238,8 +238,8 @@ final class RestoreCoordinator {
             return .failed(RestoreNotices.unreadableLine)
         }
         let destination = Self.destination(for: container, manifest: manifest)
-        let localFiles = await Self.localFiles(
-            destination: destination, manifest: manifest, scope: scope)
+        let localFiles = await Self.localFilesForTheRestore(
+            of: Self.stream(of: row), destination: destination, manifest: manifest, scope: scope)
         guard !Task.isCancelled, !gameLaunches, !BackupDeviceConditions.isSessionLive else {
             return .stopped(.gameLaunched, RestoreResult())
         }
@@ -272,17 +272,6 @@ final class RestoreCoordinator {
         // `EmpoState/` always restores, so the snapshot's alias file
         // replaces this one, the attach of 4.3 included.
         let aliasesBefore = container.flatMap { try? IdentityAliases.load(from: $0.empoStateURL) }
-        if request.stream == .preferences {
-            // Applying the file deletes it, so a file here comes from a
-            // restore that stopped before it applied, and nothing applies
-            // it later. The engine would move it aside and keep it.
-            do {
-                try FileManager.default.removeItem(at: PreferenceRestore.restoredFile)
-            } catch CocoaError.fileNoSuchFile {
-            } catch {
-                BackupLog.line("RestoreCoordinator", "The old settings file stays: \(error)")
-            }
-        }
         let engine = RestoreEngine(provider: provider, store: store, localRoot: BackupRoot.layout.root)
         var outcome = await engine.run(request)
         if let container, let aliasesBefore,
@@ -513,6 +502,25 @@ final class RestoreCoordinator {
                 folderName: isPreferences ? nil : container?.folderName ?? manifest.containerFolderName),
             profiles: isPreferences ? LayoutProfilesManager.profilesRootURL : nil,
             userDefaultsExport: isPreferences ? PreferenceRestore.restoredFile : nil)
+    }
+
+    /// Applying the settings file deletes it, so a file here comes from a
+    /// restore that stopped before it applied. The delete must come before
+    /// the list: a listed file with the same bytes makes the plan skip the
+    /// download, and the restore then has no file to apply.
+    static func localFilesForTheRestore(
+        of stream: BackupStream, destination: MemberSource, manifest: SnapshotManifest,
+        scope: RestoreScope
+    ) async -> [RestoreLocalFile] {
+        if stream == .preferences {
+            do {
+                try FileManager.default.removeItem(at: PreferenceRestore.restoredFile)
+            } catch CocoaError.fileNoSuchFile {
+            } catch {
+                BackupLog.line("RestoreCoordinator", "The old settings file stays: \(error)")
+            }
+        }
+        return await localFiles(destination: destination, manifest: manifest, scope: scope)
     }
 
     /// Every local file the plan has to know about.
