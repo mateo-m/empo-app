@@ -16,6 +16,7 @@ struct PlayerControlsOverlay: View {
     /// controls publish no hit regions.
     var isPreview = false
     @Binding var editDialog: ControlsEditDialog?
+    let keys: HeldKeys<KeyHolder>
 
     /// A second finger on another control waits until the drag ends.
     @State private var dragOwner: EditDragSubject?
@@ -112,9 +113,21 @@ struct PlayerControlsOverlay: View {
     private func movementControl(size: CGFloat) -> some View {
         switch layout.dpadStyle {
         case .dpad:
-            DPad(size: size, editing: editMode)
+            DPad(size: size, editing: editMode, onDirection: sendDirection)
         case .stick:
-            Joystick(size: size, editing: editMode)
+            Joystick(size: size, editing: editMode, onDirection: sendDirection)
+        }
+    }
+
+    private func sendDirection(_ direction: ControlDirection, pressed: Bool) {
+        send(direction.scancode, pressed: pressed, by: .touch("dpad:\(direction)"))
+    }
+
+    private func send(_ scancode: Int32, pressed: Bool, by holder: KeyHolder) {
+        if pressed {
+            keys.hold(scancode, by: holder)
+        } else {
+            keys.release(scancode, by: holder)
         }
     }
 
@@ -140,11 +153,11 @@ struct PlayerControlsOverlay: View {
     private func actionButton(button: ButtonModel, displayPosition: CGPoint?) -> some View {
         editableControl(
             ActionButton(
-                id: button.id,
                 label: button.label,
-                scancode: button.scancode,
                 size: button.size,
-                editing: editMode
+                editing: editMode,
+                onPress: { send(button.scancode, pressed: true, by: .touch("button:\(button.id)")) },
+                onRelease: { send(button.scancode, pressed: false, by: .touch("button:\(button.id)")) }
             ),
             subject: .control(button.id),
             size: button.size,

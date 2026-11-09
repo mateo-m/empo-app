@@ -271,14 +271,7 @@ private struct AccessoryKeyButton: View {
         let shape = RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
 
         return ZStack {
-            // With the game view in AppWindow, Liquid Glass with no
-            // opaque backing samples the Metal layer on device.
-            shape
-                .fill(colorScheme == .dark ? Color.black : Color.white)
-
-            shape
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: shape)
+            BackedGlass(shape: shape, backing: colorScheme == .dark ? .black : .white)
 
             // Under the glass, the material makes the brand color pale.
             shape

@@ -7,11 +7,11 @@ import SwiftUI
 // MARK: - Action button
 
 struct ActionButton: View {
-    let id: UUID
     let label: String
-    let scancode: Int32
     let size: CGFloat
     let editing: Bool
+    let onPress: () -> Void
+    let onRelease: () -> Void
 
     var body: some View {
         CircularControlButton(
@@ -22,18 +22,12 @@ struct ActionButton: View {
                 comment:
                     "VoiceOver name of an on-screen game button. The placeholder is the label on the button, such as A."
             ),
-            onPress: {
-                EngineSessionCoordinator.shared.holdKey(
-                    scancode: scancode, by: .touch("button:\(id)"))
-            },
-            onRelease: {
-                EngineSessionCoordinator.shared.releaseKey(
-                    scancode: scancode, by: .touch("button:\(id)"))
-            },
-            face: { isPressed in
+            onPress: onPress,
+            onRelease: onRelease,
+            face: { isPressed, isCompact in
                 Text(label)
                     .font(
-                        .system(size: size < 60 ? 12 : 16, weight: .semibold, design: .rounded)
+                        .system(size: isCompact ? 12 : 16, weight: .semibold, design: .rounded)
                     )
                     .foregroundStyle(.white.opacity(isPressed ? 1.0 : 0.9))
             }
@@ -59,9 +53,9 @@ struct FunctionButton: View {
             accessibilityLabel: action.localizedName,
             onPress: onPress,
             onRelease: onRelease,
-            face: { isPressed in
+            face: { isPressed, isCompact in
                 Image(systemName: action.symbolName)
-                    .font(.system(size: size < 60 ? 16 : 20, weight: .semibold))
+                    .font(.system(size: isCompact ? 16 : 20, weight: .semibold))
                     .foregroundStyle(
                         isActive ? Color.brand : .white.opacity(isPressed ? 1.0 : 0.9))
             }
@@ -69,7 +63,27 @@ struct FunctionButton: View {
     }
 }
 
-// MARK: - Shared circular control
+// MARK: - Shared parts
+
+private let pressHighlight = Color.white.opacity(0.28)
+
+/// With the game view in AppWindow, Liquid Glass with no opaque backing
+/// samples the Metal layer on device. The plus of the D-pad then shows a
+/// clipped highlight at the top and left.
+struct BackedGlass<S: Shape>: View {
+    let shape: S
+    var backing: Color = .black
+
+    var body: some View {
+        ZStack {
+            shape
+                .fill(backing)
+            shape
+                .fill(.clear)
+                .glassEffect(.regular.interactive(), in: shape)
+        }
+    }
+}
 
 struct CircularControlButton<Face: View>: View {
     let size: CGFloat
@@ -78,7 +92,7 @@ struct CircularControlButton<Face: View>: View {
     let accessibilityLabel: String
     let onPress: () -> Void
     let onRelease: () -> Void
-    @ViewBuilder let face: (Bool) -> Face
+    @ViewBuilder let face: (_ isPressed: Bool, _ isCompact: Bool) -> Face
 
     @State private var isPressed = false
 
@@ -86,19 +100,12 @@ struct CircularControlButton<Face: View>: View {
         // `.interactive()` scales only the glass layer, not the content
         // on top of it. The scaleEffect on the ZStack scales the face too.
         ZStack {
-            // Opaque backing: with the game view in AppWindow, Liquid
-            // Glass otherwise samples the Metal layer on device.
-            Circle()
-                .fill(Color.black)
-
-            Circle()
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
+            BackedGlass(shape: Circle())
 
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.white.opacity(0), .white.opacity(0.28)],
+                        colors: [.white.opacity(0), pressHighlight],
                         center: .center,
                         startRadius: size * 0.15,
                         endRadius: size / 2
@@ -107,7 +114,7 @@ struct CircularControlButton<Face: View>: View {
                 .opacity(isPressed || isActive ? 1 : 0)
                 .animation(Motion.instant, value: isPressed)
 
-            face(isPressed)
+            face(isPressed, size < 60)
         }
         .frame(width: size, height: size)
         .scaleEffect(isPressed ? PressScale.standard : 1.0)
@@ -164,6 +171,7 @@ private struct MovementTouchHost<Visual: View>: View {
     let size: CGFloat
     let editing: Bool
     let style: MovementStyle
+    let onDirection: (ControlDirection, _ pressed: Bool) -> Void
     @ViewBuilder let visual: (MovementTouchState) -> Visual
 
     @State private var reducer = DPadTouchReducer()
@@ -203,14 +211,7 @@ private struct MovementTouchHost<Visual: View>: View {
     /// wedge change never holds opposite directions at the same time.
     private func apply(_ edges: [DPadTouchReducer.Edge]) {
         for edge in edges {
-            let holder = KeyHolder.touch("dpad:\(edge.direction)")
-            if edge.pressed {
-                EngineSessionCoordinator.shared.holdKey(
-                    scancode: edge.direction.scancode, by: holder)
-            } else {
-                EngineSessionCoordinator.shared.releaseKey(
-                    scancode: edge.direction.scancode, by: holder)
-            }
+            onDirection(edge.direction, edge.pressed)
         }
         if edges.contains(where: { $0.pressed }) {
             Haptics.controllerTap()
@@ -221,6 +222,7 @@ private struct MovementTouchHost<Visual: View>: View {
 struct DPad: View {
     let size: CGFloat
     let editing: Bool
+    let onDirection: (ControlDirection, _ pressed: Bool) -> Void
 
     /// Exactly one third. The grid snaps the D-pad size to a multiple
     /// of 30 pt, so each edge of the plus lands on the 10 pt grid.
@@ -231,7 +233,7 @@ struct DPad: View {
     private let innerCornerFraction: CGFloat = 0.25
 
     var body: some View {
-        MovementTouchHost(size: size, editing: editing, style: .dpad) { state in
+        MovementTouchHost(size: size, editing: editing, style: .dpad, onDirection: onDirection) { state in
             visual(active: state.active)
         }
     }
@@ -245,15 +247,7 @@ struct DPad: View {
         let pressed = !active.isEmpty
 
         return ZStack {
-            // Opaque backing: with the game view in AppWindow, Liquid
-            // Glass otherwise samples the Metal layer. On device, it
-            // then shows a clipped highlight at the top and left.
-            plus
-                .fill(Color.black)
-
-            plus
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: plus)
+            BackedGlass(shape: plus)
 
             // Each highlight gets the frame of its own arm. On device, a
             // gradient on a shape that draws in one corner of the full
@@ -268,7 +262,7 @@ struct DPad: View {
                     UnevenRoundedRectangle(cornerRadii: radii)
                         .fill(
                             LinearGradient(
-                                colors: [.white.opacity(0.28), .white.opacity(0)],
+                                colors: [pressHighlight, .white.opacity(0)],
                                 startPoint: dir.localHighlightStart,
                                 endPoint: dir.localHighlightEnd
                             )
@@ -310,9 +304,8 @@ struct DPad: View {
 struct Joystick: View {
     let size: CGFloat
     let editing: Bool
+    let onDirection: (ControlDirection, _ pressed: Bool) -> Void
 
-    /// Not tied to `MovementStickTuning.nubRatio`. The two values are
-    /// equal only by chance.
     private let chevronDistanceRatio: CGFloat = 0.42
 
     private var nubSize: CGFloat {
@@ -320,7 +313,7 @@ struct Joystick: View {
     }
 
     var body: some View {
-        MovementTouchHost(size: size, editing: editing, style: .stick) { state in
+        MovementTouchHost(size: size, editing: editing, style: .stick, onDirection: onDirection) { state in
             visual(active: state.active, touchPoint: state.touchPoint)
         }
     }
@@ -340,13 +333,7 @@ struct Joystick: View {
             } ?? .zero
 
         return ZStack {
-            // Opaque backing: Liquid Glass otherwise samples the Metal layer.
-            Circle()
-                .fill(Color.black)
-
-            Circle()
-                .fill(.clear)
-                .glassEffect(.regular.interactive(), in: .circle)
+            BackedGlass(shape: Circle())
 
             ForEach(ControlDirection.allCases, id: \.self) { dir in
                 Image(systemName: dir.symbolName)
@@ -452,8 +439,8 @@ private struct DPadPlusShape: Shape {
         let armW = rect.width * armFraction
         let armH = rect.height * armFraction
         let cornerR = min(armW * cornerFraction, armW / 2, armH / 2)
-        let hInset = (rect.height - armH) / 2  // y of horizontal bar top
-        let vInset = (rect.width - armW) / 2  // x of vertical bar left
+        let hInset = (rect.height - armH) / 2
+        let vInset = (rect.width - armW) / 2
         let innerR = min(
             armW * innerCornerFraction,
             vInset / 2,

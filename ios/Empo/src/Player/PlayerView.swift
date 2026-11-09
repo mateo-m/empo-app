@@ -111,7 +111,8 @@ struct PlayerView: View {
                         controlsMinY: controlsMinY,
                         editMode: editMode,
                         safeArea: controlsSafeArea,
-                        editDialog: $editDialog
+                        editDialog: $editDialog,
+                        keys: EngineSessionCoordinator.shared.heldKeys
                     )
                 }
 

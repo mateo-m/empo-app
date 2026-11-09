@@ -670,7 +670,8 @@ struct EditorCanvasShell<UnderControls: View>: View {
                     editMode: editMode,
                     safeArea: safeArea,
                     isPreview: true,
-                    editDialog: editDialog
+                    editDialog: editDialog,
+                    keys: EngineSessionCoordinator.shared.heldKeys
                 )
             }
             .allowsHitTesting(hitTesting)
