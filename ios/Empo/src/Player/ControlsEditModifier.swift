@@ -63,8 +63,10 @@ struct AddButtonSheet: View {
                 Text(action.localizedBlurb)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let actions, !actions.isAvailable(action.id) {
-                    Text(BindingsCatalog.unavailableActionNote(action.id, in: .addButtonSheet))
+                if let actions, !actions.isAvailable(action.id),
+                    let requirement = PlayerActionRegistry.requirement(of: action.id)
+                {
+                    Text(requirement.addButtonNote)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -516,5 +518,18 @@ extension View {
                 actions: actions,
                 dialog: dialog
             ))
+    }
+}
+
+extension ActionRequirement {
+    var addButtonNote: String {
+        switch self {
+        case .cheats:
+            String(localized: "This game has no cheats. The button shows in games that have cheats.")
+        case .fastForward:
+            String(
+                localized:
+                    "Fast forward is off for this game. The button shows in games that have Fast forward on.")
+        }
     }
 }

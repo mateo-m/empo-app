@@ -544,7 +544,6 @@ class ControlsLayout {
         loadManifest(container: container)
         if let container, newGameID != nil {
             Self.migrateLegacyPersistence(container: container, keys: keys)
-            BindingStore.migrateRenamedActions(container: container)
             runProfileMigration(container: container)
             resolveChain(container: container)
             return

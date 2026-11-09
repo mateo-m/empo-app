@@ -8,12 +8,11 @@ struct RemoveOverrideButton: View {
     let row: BindingsCatalog.Row
     let provenance: BindingsCatalog.Provenance?
     let scope: BindingsCatalog.Scope
-    let container: GameContainer?
 
     var body: some View {
         if provenance == .userOverride {
             Button("Reset to default", role: .destructive) {
-                BindingsCatalog.removeOverride(source: row.source, scope: scope, container: container)
+                BindingsCatalog.removeOverride(source: row.source, scope: scope)
             }
         }
     }
@@ -23,12 +22,11 @@ extension View {
     func resetBindingsAlert(
         isPresented: Binding<Bool>,
         scope: BindingsCatalog.Scope,
-        container: GameContainer?,
         gameTitle: String?
     ) -> some View {
         alert(BindingsCatalog.resetTitle(scope: scope), isPresented: isPresented) {
             Button("Reset", role: .destructive) {
-                BindingsCatalog.resetOverrides(scope: scope, container: container)
+                scope.deleteOverrides()
             }
             Button("Cancel", role: .cancel) {}
         } message: {

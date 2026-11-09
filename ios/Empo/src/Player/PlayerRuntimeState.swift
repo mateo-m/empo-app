@@ -22,6 +22,12 @@ struct PlayerEngine {
     }
 }
 
+/// The game setting that an action needs.
+enum ActionRequirement {
+    case fastForward
+    case cheats
+}
+
 /// SwiftUI makes `PlayerView` again on pause and resume, but the
 /// multiplier of the engine stays for the process, so this state is not
 /// in the view. The fast forward state comes from the engine each time.
@@ -138,7 +144,6 @@ final class PlayerActionRegistry {
     var log: (String) -> Void = { _ in }
 
     private struct ActionBehavior {
-        var isAvailable: () -> Bool = { true }
         var isActive: () -> Bool = { false }
         var handle: (Bool) -> Void
     }
@@ -154,18 +159,15 @@ final class PlayerActionRegistry {
     /// closures read the wiring the player scene sets after init.
     private lazy var behaviors: [String: ActionBehavior] = [
         EmpoActionCatalog.fastForwardHold: ActionBehavior(
-            isAvailable: { [runtime] in runtime.fastForwardAvailable },
             handle: { [runtime] pressed in
                 runtime.fastForwardHoldChanged(pressed: pressed)
             }),
         EmpoActionCatalog.fastForwardToggle: ActionBehavior(
-            isAvailable: { [runtime] in runtime.fastForwardAvailable },
             isActive: { [runtime] in runtime.fastForwardActive },
             handle: Self.pressOnly { [runtime] in runtime.fastForwardToggled() }),
         EmpoActionCatalog.pauseMenu: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.pauseMenu() }),
         EmpoActionCatalog.toggleCheats: ActionBehavior(
-            isAvailable: { [runtime] in runtime.cheatsAvailable },
             handle: Self.pressOnly { [engine] in
                 // The cheat scripts of the engine open their menu on HOME
                 // while the bridge flag is on.
@@ -181,7 +183,20 @@ final class PlayerActionRegistry {
     /// unavailable action's touch button hides during play. A
     /// controller binding to one stays inert.
     func isAvailable(_ actionID: String) -> Bool {
-        Self.actionIDs.contains(actionID) && behaviors[actionID]?.isAvailable() ?? false
+        guard Self.actionIDs.contains(actionID), behaviors[actionID] != nil else { return false }
+        switch Self.requirement(of: actionID) {
+        case .fastForward?: return runtime.fastForwardAvailable
+        case .cheats?: return runtime.cheatsAvailable
+        case nil: return true
+        }
+    }
+
+    static func requirement(of actionID: String) -> ActionRequirement? {
+        switch actionID {
+        case EmpoActionCatalog.fastForwardHold, EmpoActionCatalog.fastForwardToggle: .fastForward
+        case EmpoActionCatalog.toggleCheats: .cheats
+        default: nil
+        }
     }
 
     /// A latched toggle shows its engaged state on the button face.

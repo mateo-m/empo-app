@@ -4,6 +4,11 @@
 import SwiftUI
 import UIKit
 
+extension Notification.Name {
+    /// A touch began anywhere in the window during play.
+    static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
+}
+
 private class AppRootViewController: UIViewController {
 
     private let hostingController: UIHostingController<RootView>
@@ -178,9 +183,8 @@ class AppWindow: UIWindow {
         return gameView.hitTest(convert(point, to: gameView), with: event) ?? gameView
     }
 
-    /// Any tap during play wakes the toolbar via
-    /// `Notification.Name.gameAreaTouchBegan`. This includes taps
-    /// outside the game surface that die on the hosting view.
+    /// This includes the taps outside the game surface that the hosting
+    /// view drops.
     override func sendEvent(_ event: UIEvent) {
         if AppState.shared.phase == .playing,
             event.type == .touches,
@@ -190,8 +194,6 @@ class AppWindow: UIWindow {
         }
         super.sendEvent(event)
     }
-
-    // Controls handle their own key injection via the bridge.
 
     /// In the library and while a game loads, SwiftUI needs this window
     /// as the key window. During play, a game in the app needs the key

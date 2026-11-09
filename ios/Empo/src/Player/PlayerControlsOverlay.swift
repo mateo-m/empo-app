@@ -192,8 +192,10 @@ struct PlayerControlsOverlay: View {
                 onRelease: { actions.handle(button.action, pressed: false) }
             )
             .overlay(alignment: .bottom) {
-                if editMode && !isPreview && !actions.isAvailable(button.action) {
-                    Text(BindingsCatalog.unavailableActionNote(button.action, in: .editModeBadge))
+                if editMode && !isPreview && !actions.isAvailable(button.action),
+                    let requirement = PlayerActionRegistry.requirement(of: button.action)
+                {
+                    Text(requirement.editModeNote)
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 4)
@@ -339,5 +341,14 @@ private struct EditDragModifier: ViewModifier {
             .onChange(of: active) { _, isActive in
                 if !isActive { onFinished() }
             }
+    }
+}
+
+extension ActionRequirement {
+    var editModeNote: String {
+        switch self {
+        case .cheats: String(localized: "This game has no cheats.")
+        case .fastForward: String(localized: "Turn this on in this game's settings")
+        }
     }
 }
