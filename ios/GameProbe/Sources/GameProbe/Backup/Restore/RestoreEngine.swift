@@ -168,6 +168,7 @@ public actor RestoreEngine {
         if let tree, let replaced {
             guard (try? fm.moveItem(at: tree, to: replaced)) != nil else {
                 try? store.clearIntent(kind: .interruptedRestore)
+                clearStagedBlobs()
                 return .failed(
                     screenText("Empo couldn't move the current game files aside. Nothing changed."))
             }

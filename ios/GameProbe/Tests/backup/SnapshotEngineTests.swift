@@ -1836,6 +1836,30 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertNil(try store.intent(kind: .interruptedRestore))
     }
 
+    func testAReplaceThatCannotMoveTheTreeLeavesNoDownloadedFiles() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let request = try replaceRequest(try snapshotId(of: backup, stream: key(gameName)))
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: container(gameName).path)
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: container(gameName).path)
+        }
+
+        let outcome = await RestoreEngine(
+            provider: target,
+            store: try BackupStateStore(url: tempRoot.appendingPathComponent("restore.sqlite")),
+            localRoot: localRoot
+        ).run(request)
+
+        guard case .failed = outcome else {
+            return XCTFail("the replace did not fail: \(outcome)")
+        }
+        let restore = BackupRootLayout(root: localRoot).restore
+        XCTAssertEqual((try? fm.contentsOfDirectory(atPath: restore.path)) ?? [], [])
+    }
+
     /// Stops the first try of a replace after one file landed in the
     /// new `Game/`, and answers the folder the old tree moved to.
     private func stopAReplaceHalfWay(
