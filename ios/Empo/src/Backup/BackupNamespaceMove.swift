@@ -7,7 +7,10 @@ import GameProbe
 @MainActor
 enum BackupNamespaceMove {
 
-    private static let waiting = BackupTargetWaitList(fileName: "namespace-clear.json")
+    /// After a damaged file, targets that kept their namespace lose their
+    /// rows too, so each one rebuilds its snapshot list.
+    private static let waiting = BackupTargetWaitList(
+        fileName: "namespace-clear.json", afterDamage: BackupLedgerRebuild.markEveryTarget)
 
     /// `except` is the target whose run made the move. Its engine
     /// cleared its own rows.

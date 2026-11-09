@@ -11,9 +11,11 @@ import GameProbe
 struct BackupTargetWaitList {
 
     let fileURL: URL
+    private let afterDamage: @MainActor () -> Void
 
-    init(fileName: String) {
+    init(fileName: String, afterDamage: @escaping @MainActor () -> Void = {}) {
         fileURL = BackupRoot.layout.root.appendingPathComponent(fileName)
+        self.afterDamage = afterDamage
     }
 
     func ids() throws -> Set<String> {
@@ -24,6 +26,7 @@ struct BackupTargetWaitList {
             try BackupRoot.setAside(fileURL)
             let every = Set(BackupTargets.load().map(\.id))
             try write(every)
+            afterDamage()
             return every
         }
     }
