@@ -678,9 +678,15 @@ public actor SnapshotEngine {
         //    it orphaned runs at once, the way the delete of 5.13
         //    runs one.
         await pruneEveryStream(context)
-        _ = try? await sweepNamespace(
-            paths: context.paths, deviceId: context.request.deviceId,
-            targetId: context.request.descriptor.id)
+        do {
+            try await sweepNamespace(
+                paths: context.paths, deviceId: context.request.deviceId,
+                targetId: context.request.descriptor.id)
+        } catch let stop as BackupRunStop {
+            throw stop
+        } catch {
+            note("the sweep after the prune stopped: \(error)")
+        }
 
         // 2. Retry.
         do {

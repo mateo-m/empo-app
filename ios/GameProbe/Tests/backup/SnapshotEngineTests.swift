@@ -1032,6 +1032,24 @@ final class SnapshotEngineTests: XCTestCase {
 
     // MARK: - 8. The prune ladder, per 5.14
 
+    func testAClaimTheLadderSweepFindsStopsTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let other = WriterClaim(
+            namespaceId: namespaceId, deviceId: "device-b", deviceName: "iPad",
+            claimedAt: clock.now)
+        let observer = ClaimBeforeTheGame(
+            target: target, path: paths.writerFile, claim: try other.jsonData())
+        await target.addFault(
+            FakeTargetFault(operation: .put, error: .outOfSpace, pathContains: "/blobs/", times: 1))
+        let engine = try makeEngine(target, observer: observer)
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.stop, .writerConflict(other))
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
     func testTheLadderRetriesAfterAPruneAndThenBlocksTheTarget() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
@@ -2235,6 +2253,29 @@ final class NoteRecorder: @unchecked Sendable {
 
 /// Answers as if a game had started once a set number of members
 /// landed on the target.
+/// Puts another device's claim on the target after the run checked
+/// the claim, before the first game.
+actor ClaimBeforeTheGame: BackupRunObserver {
+
+    let target: FakeBackupTarget
+    let path: String
+    let claim: Data
+
+    init(target: FakeBackupTarget, path: String, claim: Data) {
+        self.target = target
+        self.path = path
+        self.claim = claim
+    }
+
+    func runPlanned(streamKey: String, bytes: Int64) {}
+    func runConfirmed(streamKey: String, bytes: Int64) {}
+
+    func runMayGoOn() -> Bool {
+        try? target.seed(path: path, contents: claim)
+        return true
+    }
+}
+
 actor RunGate: BackupRunObserver {
 
     private var membersBeforeTheGame: Int
