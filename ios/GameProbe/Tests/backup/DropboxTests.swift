@@ -218,7 +218,6 @@ final class DropboxTests: XCTestCase {
     func testTheCapabilityFlagsReadAsSectionNineStates() {
         let flags = Dropbox.capabilities
         XCTAssertTrue(flags.canQueryQuota)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
         XCTAssertEqual(flags.maxFileSize, 2 * 1024 * 1024 * 1024 * 1024)
     }

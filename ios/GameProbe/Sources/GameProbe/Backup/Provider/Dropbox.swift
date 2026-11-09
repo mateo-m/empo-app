@@ -19,7 +19,6 @@ public enum Dropbox {
 
     public static let capabilities = TargetCapabilities(
         canQueryQuota: true,
-        reportsObjectAge: true,
         supportsBackgroundTransfer: true,
         maxFileSize: Dropbox.maxFileSizeBytes)
 

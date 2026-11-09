@@ -72,7 +72,6 @@ public enum ICloudDrive {
     /// bounds the file size and 9.1 states no number.
     public static let capabilities = TargetCapabilities(
         canQueryQuota: false,
-        reportsObjectAge: true,
         supportsBackgroundTransfer: true,
         maxFileSize: nil,
         listReportsSize: false)

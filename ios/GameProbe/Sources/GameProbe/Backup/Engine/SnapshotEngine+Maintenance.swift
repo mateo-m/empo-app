@@ -176,14 +176,6 @@ extension SnapshotEngine {
     func sweepNamespace(
         paths: BackupNamespacePaths, deviceId: String, targetId: String
     ) async throws -> [String] {
-        guard provider.capabilities.reportsObjectAge else {
-            // A provider that reports no object age gets no
-            // automatic sweep, per 5.11. It gets the manual reclaim
-            // action of section 13, which cannot run either without
-            // an age to judge the 7-day margin by.
-            return []
-        }
-
         try await refuseAnotherWriter(paths: paths, deviceId: deviceId)
 
         let manifests = try await everyManifest(in: paths)

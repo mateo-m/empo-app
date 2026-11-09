@@ -493,7 +493,6 @@ final class S3Tests: XCTestCase {
         let flags = S3.capabilities
         // 9.7: S3-compatible storage has no free-space call.
         XCTAssertFalse(flags.canQueryQuota)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
         XCTAssertEqual(flags.maxFileSize, S3.r2MaxFileSizeBytes)
     }

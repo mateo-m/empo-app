@@ -21,7 +21,6 @@ public enum S3 {
 
     public static let capabilities = TargetCapabilities(
         canQueryQuota: false,
-        reportsObjectAge: true,
         supportsBackgroundTransfer: true,
         maxFileSize: S3.maxFileSizeBytes)
 

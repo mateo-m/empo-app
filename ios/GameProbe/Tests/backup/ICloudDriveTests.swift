@@ -190,7 +190,6 @@ final class ICloudDriveTests: XCTestCase {
         let capabilities = ICloudDrive.capabilities
 
         XCTAssertFalse(capabilities.canQueryQuota)
-        XCTAssertTrue(capabilities.reportsObjectAge)
         XCTAssertTrue(capabilities.supportsBackgroundTransfer)
         XCTAssertNil(capabilities.maxFileSize)
     }

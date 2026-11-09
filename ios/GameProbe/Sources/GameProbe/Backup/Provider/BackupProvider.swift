@@ -6,8 +6,8 @@ public struct RemoteObject: Equatable, Sendable {
     /// 8.1, so the path is the whole name.
     public let path: String
     public let sizeBytes: Int64
-    /// The object's own modified time, or `nil` on a target whose
-    /// `reportsObjectAge` flag is false.
+    /// The object's own modified time, or `nil` where the target does
+    /// not report one. The sweep never deletes an object without it.
     public let modifiedAt: Date?
 
     public init(path: String, sizeBytes: Int64, modifiedAt: Date?) {

@@ -27,7 +27,6 @@ public enum WebDAV {
     public static func capabilities(answersQuota: Bool) -> TargetCapabilities {
         TargetCapabilities(
             canQueryQuota: answersQuota,
-            reportsObjectAge: true,
             supportsBackgroundTransfer: true,
             maxFileSize: nil)
     }

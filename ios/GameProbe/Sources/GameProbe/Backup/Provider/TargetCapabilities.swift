@@ -1,6 +1,6 @@
 import Foundation
 
-/// The five capability flags of SPEC 8.3.
+/// The capability flags of SPEC 8.3.
 ///
 /// The engine reads these. It never branches on the provider name.
 public struct TargetCapabilities: Equatable, Sendable {
@@ -9,12 +9,6 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// permission check of 8.7 sets it per target, not per provider,
     /// because WebDAV answers only on some servers, per 9.7.
     public var canQueryQuota: Bool
-
-    /// Whether `list` reports an object's own modified time. The
-    /// sweep of 5.11 needs it. All five v1 providers report it. A
-    /// later provider that does not gets the manual reclaim action
-    /// of section 13 in place of an automatic sweep.
-    public var reportsObjectAge: Bool
 
     /// Whether the target can hand a transfer to the system. 8.9
     /// covers what a target that cannot does.
@@ -31,13 +25,11 @@ public struct TargetCapabilities: Equatable, Sendable {
 
     public init(
         canQueryQuota: Bool = false,
-        reportsObjectAge: Bool = true,
         supportsBackgroundTransfer: Bool = true,
         maxFileSize: Int64? = nil,
         listReportsSize: Bool = true
     ) {
         self.canQueryQuota = canQueryQuota
-        self.reportsObjectAge = reportsObjectAge
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.maxFileSize = maxFileSize
         self.listReportsSize = listReportsSize

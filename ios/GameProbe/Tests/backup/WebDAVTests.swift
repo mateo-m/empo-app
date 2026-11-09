@@ -405,7 +405,6 @@ final class WebDAVTests: XCTestCase {
 
     func testTheCapabilityFlagsReadAsSectionNineStates() {
         let flags = WebDAV.capabilities(answersQuota: true)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
         // 9.5: the file limit is whatever the server allows, and the
         // server states no number.

@@ -317,7 +317,6 @@ final class GoogleDriveTests: XCTestCase {
     func testTheCapabilityFlagsReadAsSectionNineStates() {
         let flags = GoogleDrive.capabilities
         XCTAssertTrue(flags.canQueryQuota)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
         XCTAssertEqual(flags.maxFileSize, 5 * 1000 * 1000 * 1000 * 1000)
     }

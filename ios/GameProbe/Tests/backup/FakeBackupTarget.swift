@@ -113,7 +113,6 @@ actor FakeBackupTarget: BackupProvider {
     // MARK: - The six operations
 
     func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {
-        let reportsAge = capabilities.reportsObjectAge
         let root = objectsDirectory
         return try await gate.request {
             [self] () async throws(BackupProviderError) -> [RemoteObject] in
@@ -124,8 +123,7 @@ actor FakeBackupTarget: BackupProvider {
                     RemoteObject(
                         path: found.path,
                         sizeBytes: FakeBackupTarget.fileSize(at: found.url),
-                        modifiedAt: reportsAge
-                            ? FakeBackupTarget.modifiedDate(at: found.url) : nil)
+                        modifiedAt: FakeBackupTarget.modifiedDate(at: found.url))
                 }
                 .sorted { $0.path < $1.path }
         }
