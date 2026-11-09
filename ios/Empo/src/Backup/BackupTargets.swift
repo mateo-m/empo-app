@@ -29,7 +29,13 @@ enum BackupTargets {
         }
     }
 
+    /// A list that only fails to open stays, because its locations may
+    /// still be good.
     static func setAsideTheDamagedFile() throws {
+        do {
+            _ = try read()
+            return
+        } catch is DecodingError {}
         try BackupRoot.setAside(BackupRoot.layout.targetsFile)
         BackupBadges.shared.invalidate()
     }
