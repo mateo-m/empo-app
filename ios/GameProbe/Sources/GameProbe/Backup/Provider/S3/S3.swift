@@ -255,18 +255,12 @@ public enum S3 {
         return ObjectPage(objects: objects, nextContinuationToken: token)
     }
 
-    /// Every object of every page, as `list` reports them, per 8.1.
-    ///
-    /// The result is sorted, because 8.1 states a flat namespace and
-    /// two callers compare two lists.
+    /// The service already took the prefix.
     public static func objects(fromPages pages: [ObjectPage]) -> [RemoteObject] {
-        pages
-            .flatMap(\.objects)
-            .map {
-                RemoteObject(
-                    path: $0.key, sizeBytes: $0.sizeBytes, modifiedAt: $0.lastModified)
-            }
-            .sorted { $0.path < $1.path }
+        let objects = pages.flatMap(\.objects).map {
+            RemoteObject(path: $0.key, sizeBytes: $0.sizeBytes, modifiedAt: $0.lastModified)
+        }
+        return RemoteObject.listing(objects, prefix: "")
     }
 
     /// The id `CreateMultipartUpload` answered.

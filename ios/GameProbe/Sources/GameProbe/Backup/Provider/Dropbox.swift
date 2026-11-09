@@ -342,27 +342,16 @@ extension Dropbox {
             hasMore: root["has_more"] as? Bool ?? false)
     }
 
-    /// Every object of every page, as `list` reports them, per 8.1.
-    ///
     /// Dropbox lists a whole folder, so the prefix filter runs here.
-    /// The result is sorted, because 8.1 states a flat namespace and
-    /// two callers compare two lists.
     public static func objects(
         fromPages pages: [DropboxListPage], prefix: String
     ) -> [RemoteObject] {
-        var found: [RemoteObject] = []
-        for page in pages {
-            for entry in page.entries where entry.isFile {
-                let path = empoPath(forAPIPath: entry.path)
-                guard path.hasPrefix(prefix) else { continue }
-                found.append(
-                    RemoteObject(
-                        path: path,
-                        sizeBytes: entry.sizeBytes,
-                        modifiedAt: entry.serverModified))
-            }
+        let files = pages.flatMap(\.entries).filter(\.isFile).map {
+            RemoteObject(
+                path: empoPath(forAPIPath: $0.path), sizeBytes: $0.sizeBytes,
+                modifiedAt: $0.serverModified)
         }
-        return found.sorted { $0.path < $1.path }
+        return RemoteObject.listing(files, prefix: prefix)
     }
 
     // MARK: - users/get_space_usage

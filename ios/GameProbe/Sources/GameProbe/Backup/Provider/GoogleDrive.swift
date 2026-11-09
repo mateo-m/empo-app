@@ -476,26 +476,14 @@ extension GoogleDrive {
             files: files, nextPageToken: root["nextPageToken"] as? String)
     }
 
-    /// Every object of every page, as `list` reports them, per 8.1.
-    ///
-    /// Drive lists the whole folder and takes no prefix of its own,
-    /// so the prefix filter runs here. The result is sorted, because
-    /// 8.1 states a flat namespace and two callers compare two lists.
+    /// Drive lists the whole folder and takes no prefix of its own, so the prefix filter runs here.
     public static func objects(
         fromPages pages: [GoogleDriveFilePage], prefix: String
     ) -> [RemoteObject] {
-        var found: [RemoteObject] = []
-        for page in pages {
-            for file in page.files where file.isFile {
-                guard file.name.hasPrefix(prefix) else { continue }
-                found.append(
-                    RemoteObject(
-                        path: file.name,
-                        sizeBytes: file.sizeBytes,
-                        modifiedAt: file.modifiedTime))
-            }
+        let files = pages.flatMap(\.files).filter(\.isFile).map {
+            RemoteObject(path: $0.name, sizeBytes: $0.sizeBytes, modifiedAt: $0.modifiedTime)
         }
-        return found.sorted { $0.path < $1.path }
+        return RemoteObject.listing(files, prefix: prefix)
     }
 
     /// The id and the name of every file of every page, which is what
