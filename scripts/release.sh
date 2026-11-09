@@ -30,7 +30,7 @@ Commands for a person:
                           source and push it to main. Use it when the sync
                           job of the Release workflow failed.
 
-Steps of the Release workflow. Each one prints key=value lines:
+Steps of the Release workflow. prepare, build, and altstore print key=value lines:
   prepare <bump>          Bump the version and write the changelog. No commit.
   build [version]         Build, sign, audit, and package the iPhone app and
                           the Mac app. The version defaults to project.yml.
@@ -80,7 +80,7 @@ require_clean_tree() {
 
 repo_slug() {
     local slug
-    slug=$(git remote get-url origin | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')
+    slug=$(git remote get-url origin | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)##; s#\.git$##')
     [[ "$slug" =~ ^[^/:]+/[^/:]+$ ]] || fail "origin is not a GitHub repository: $(git remote get-url origin)"
     echo "$slug"
 }
@@ -154,11 +154,13 @@ prepare_release() {
 
 # Sets IPA_PATH, IPA_SIZE, and DMG_PATH.
 build_release() {
-    local version="$1" cores products derived app ipa_dir
+    local version="$1" cores products derived app ipa_dir project_version
     cores=$(release_cores)
     products="$BUILD_ROOT/Release-iphoneos"
     derived="$BUILD_ROOT/DerivedData"
     ipa_dir="$BUILD_ROOT/ipa"
+    project_version=$(project_setting MARKETING_VERSION)
+    [[ "$version" == "$project_version" ]] || fail "project.yml has the version $project_version, not $version"
     log "==> building v$version with the cores: $cores"
 
     xcodegen generate --spec "$PROJECT_YML" --project "$PROJECT_DIR" --quiet >&2
@@ -211,17 +213,21 @@ release_notes() {
 # Sets SYNC_MESSAGE. The build number and the minimum iOS version come
 # from the tag, because main can move on after the cut.
 write_altstore() {
-    local version="$1" ipa_size="$2" project
+    local version="$1" ipa_size="$2" project slug build min_os notes
     project=$(git show "v$version:ios/Empo/project.yml") || fail "tag v$version not found"
+    slug=$(repo_slug)
+    build=$(setting_in CURRENT_PROJECT_VERSION <<<"$project")
+    min_os=$(setting_in iOS <<<"$project")
+    notes=$(scripts/altstore-notes.sh "$version" "$CHANGELOG_PATH")
     log "==> writing v$version into $(basename "$ALTSTORE_SOURCE")"
     bun scripts/update-altstore-source.ts \
         --version "$version" \
-        --build "$(setting_in CURRENT_PROJECT_VERSION <<<"$project")" \
-        --min-os-version "$(setting_in iOS <<<"$project")" \
+        --build "$build" \
+        --min-os-version "$min_os" \
         --size "$ipa_size" \
         --date "$(date -u +%Y-%m-%d)" \
-        --download-url "https://github.com/$(repo_slug)/releases/download/v$version/$IPA_NAME" \
-        --description "$(scripts/altstore-notes.sh "$version" "$CHANGELOG_PATH")" >&2
+        --download-url "https://github.com/$slug/releases/download/v$version/$IPA_NAME" \
+        --description "$notes" >&2
     # The Lint job checks the format of this file on main.
     bun x oxfmt "$ALTSTORE_SOURCE" >&2
     SYNC_MESSAGE="chore(release): sync AltStore source for v$version"
@@ -261,8 +267,10 @@ cut_release() {
 
     if [[ "$local_build" == 1 ]]; then
         log "==> creating the GitHub release"
+        local notes
+        notes=$(release_notes "$VERSION")
         gh release create "v$VERSION" --title "v$VERSION" \
-            --notes "$(release_notes "$VERSION")" "$IPA_PATH" "$DMG_PATH"
+            --notes "$notes" "$IPA_PATH" "$DMG_PATH"
         log "==> done: v$VERSION is released"
     else
         log "==> done: the Release workflow builds and publishes v$VERSION"

@@ -38,7 +38,7 @@ on:
         required: false
         default: ""
       ref:
-        description: "dry-run only: ref to build (tag, branch, or sha)"
+        description: "dry-run only: ref to build (tag, branch, or sha). It must have the build command of scripts/release.sh"
         required: false
         default: "main"
 
