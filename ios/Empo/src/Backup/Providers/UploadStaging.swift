@@ -13,9 +13,15 @@ enum UploadStaging {
     /// memory whole.
     private static let readSize = 1024 * 1024
 
-    static func fileSize(at url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
+    static func fileSize(at url: URL) throws(BackupProviderError) -> Int64 {
+        do {
+            guard let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            return Int64(size)
+        } catch {
+            throw stagingFailure(error)
+        }
     }
 
     /// A directory of this provider's own, for the pieces of one

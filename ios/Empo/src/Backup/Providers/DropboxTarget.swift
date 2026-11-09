@@ -41,7 +41,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
     func put(localFile: URL, path: String) async throws(BackupProviderError) {
         // Before any byte moves, per 8.3. A file over the limit is a
         // permanent refusal and no amount of space makes it fit.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in

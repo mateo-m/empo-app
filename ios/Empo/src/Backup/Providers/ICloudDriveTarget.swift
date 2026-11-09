@@ -48,7 +48,7 @@ actor ICloudDriveTarget: BackupProvider {
         // Before any byte moves, per 8.3. iCloud states no number,
         // so this rejects nothing today and stays for the day the
         // spec gives it one.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         let destination = fileURL(forPath: path)
