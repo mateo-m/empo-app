@@ -3,7 +3,8 @@
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 # Checks that the iPhone release and the Mac release share.
-# Source this file. It needs a fail function.
+# Source this file. require_release_bundle_id calls the fail function of the
+# caller.
 
 RELEASE_BUNDLE_ID="sh.mateo.empo"
 

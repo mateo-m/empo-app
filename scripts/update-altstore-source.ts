@@ -59,11 +59,11 @@ function requireFlag(name: string, value: string | undefined): string {
 
 const version = requireFlag("version", values.version);
 const sizeString = requireFlag("size", values.size);
-const size = Number(sizeString);
-if (!Number.isInteger(size) || size <= 0) {
+if (!/^[1-9]\d*$/.test(sizeString)) {
   console.error(`error: --size must be a positive integer (got ${sizeString})`);
   process.exit(1);
 }
+const size = Number(sizeString);
 
 const manifest = (await Bun.file(sourcePath).json()) as Manifest;
 const versions = manifest.apps?.[0]?.versions;

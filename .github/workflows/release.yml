@@ -38,7 +38,7 @@ on:
         required: false
         default: ""
       ref:
-        description: "dry-run only: ref to build (tag, branch, or sha). It must have the build command of scripts/release.sh"
+        description: "dry-run only: ref to build (tag, branch, or sha). Tags up to v0.11.0 fail, because their scripts/release.sh has no build command"
         required: false
         default: "main"
 

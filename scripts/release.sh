@@ -78,6 +78,14 @@ require_clean_tree() {
     git diff --quiet HEAD || fail "the working tree has changes. Commit or stash them first"
 }
 
+# cut and sync push the local main, and next_version reads the tags.
+require_current_main() {
+    [[ "$(git branch --show-current)" == main ]] || fail "check out main first"
+    git fetch --quiet --tags origin main
+    [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] ||
+        fail "main is not the same as origin/main. Pull or push first"
+}
+
 repo_slug() {
     local slug
     slug=$(git remote get-url origin | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)##; s#\.git$##')
@@ -250,6 +258,7 @@ cut_release() {
     fi
     [[ $# -eq 1 ]] || usage
 
+    require_current_main
     prepare_release "$1"
     git add "$PROJECT_YML" "$CHANGELOG_PATH"
     git commit -S -m "$BUMP_MESSAGE" >&2
@@ -282,6 +291,7 @@ cut_release() {
 sync_release() {
     local version="$1" size
     require_clean_tree
+    require_current_main
     size=$(gh release view "v$version" --json assets \
         --jq ".assets[] | select(.name == \"$IPA_NAME\") | .size") ||
         fail "could not read the GitHub release v$version"

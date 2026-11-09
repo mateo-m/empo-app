@@ -98,6 +98,7 @@ fi
 # The engines sit in the core frameworks, not in the app binary. Empo
 # opens one with dlopen when the user picks a game, so nothing here names
 # them and nm on the app finds no engine symbol.
+[[ -d "$APP/Frameworks" ]] || fail "no game core in the app bundle"
 PRESENT_CORES=$(find "$APP/Frameworks" -maxdepth 1 -name "*Core.framework" -exec basename {} .framework \; | sort | xargs)
 [[ -n "$PRESENT_CORES" ]] || fail "no game core in the app bundle"
 
@@ -122,6 +123,7 @@ fi
 audit_core() {
     local core="$1"
     local bin="$APP/Frameworks/$core.framework/$core"
+    [[ -f "$bin" ]] || fail "$core.framework has no $core binary"
     has_platform "$bin" 2 || fail "$core is not device (platform 2)"
     ! has_platform "$bin" 7 || fail "$core contains simulator objects"
 
