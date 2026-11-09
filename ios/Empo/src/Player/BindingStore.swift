@@ -44,7 +44,7 @@ enum BindingStore {
     }
 
     static func deletePerGame(container: GameContainer) {
-        _ = UserControlsFile.removeBindingsSection(in: container)
+        _ = UserControlsFile.updateBindings(in: container, bindings: nil)
         NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
