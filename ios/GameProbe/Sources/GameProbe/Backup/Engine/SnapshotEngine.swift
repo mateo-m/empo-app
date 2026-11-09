@@ -326,7 +326,7 @@ public actor SnapshotEngine {
 
         // Only a sync pass moves the sync date. The join picker reads
         // it to find the device that last changed the settings.
-        let known = (try? await fetch(context.paths.deviceFile))
+        let known = try await fetch(context.paths.deviceFile)
             .flatMap { try? DeviceRecord.decode(json: $0) }
         try await put(
             try DeviceRecord(
@@ -372,8 +372,8 @@ public actor SnapshotEngine {
                     kind: .preferences,
                     isOneOff: false,
                     isGame: false,
-                    previous: (try? store.lastUploadedManifest(
-                        targetId: targetId, gameKey: BackupStream.preferences.key))?.manifest,
+                    previous: try store.lastUploadedManifest(
+                        targetId: targetId, gameKey: BackupStream.preferences.key)?.manifest,
                     scannedAt: scannedAt))
         }
         inputs += try order(context.request.games, targetId: targetId)
@@ -394,13 +394,12 @@ public actor SnapshotEngine {
         }
     }
 
-    private func input(of game: BackupRunGame, targetId: String) -> StreamInput {
+    private func input(of game: BackupRunGame, targetId: String) throws -> StreamInput {
         let scannedAt = now
         var setRequest = game.set
         if game.isOneOffFullSnapshot { setRequest.mode = .full }
-        let previous =
-            (try? store.lastUploadedManifest(
-                targetId: targetId, gameKey: game.stream.key))?.manifest
+        let previous = try store.lastUploadedManifest(
+            targetId: targetId, gameKey: game.stream.key)?.manifest
         // The app keeps its joins in memory for one launch only.
         let earlierJoins = (previous?.entries ?? [])
             .filter { $0.root == .container && $0.detectionSource == .runtimeWatch }
@@ -458,9 +457,9 @@ public actor SnapshotEngine {
         var candidates: [RunCandidate] = []
         for game in games {
             let key = game.identity.gameKey
-            let input = input(of: game, targetId: targetId)
+            let input = try input(of: game, targetId: targetId)
             byKey[key] = input
-            let clock = try? store.staleness(targetId: targetId, gameKey: key)
+            let clock = try store.staleness(targetId: targetId, gameKey: key)
             candidates.append(
                 RunCandidate(
                     gameKey: key,
@@ -620,12 +619,14 @@ public actor SnapshotEngine {
                 "the staleness clock of \(gameKey)")
         }
 
-        let previous = (try? store.partialTally(targetId: targetId, gameKey: gameKey)) ?? [:]
-        save(
+        do {
+            let previous = try store.partialTally(targetId: targetId, gameKey: gameKey)
             try store.savePartialTally(
                 PartialPathClock.tally(previous, savePartials: savePartials),
-                targetId: targetId, gameKey: gameKey),
-            "the partial tally of \(gameKey)")
+                targetId: targetId, gameKey: gameKey)
+        } catch {
+            note("the partial tally of \(gameKey) was not saved: \(error)")
+        }
     }
 
     // MARK: - Provider calls
@@ -720,7 +721,7 @@ public actor SnapshotEngine {
             let free = QuotaCheck.freeBytes(
                 reading: context.quota,
                 capBytes: context.request.descriptor.capBytes,
-                storedBytes: storedBytes(targetId: context.request.descriptor.id))
+                storedBytes: try storedBytes(targetId: context.request.descriptor.id))
             context.room = free.map(Room.left) ?? .noLimit
         }
         guard case .left(let room) = context.room else { return }
@@ -729,10 +730,9 @@ public actor SnapshotEngine {
     }
 
     /// What Empo holds on the target now, the number the cap of 5.14
-    /// counts. A state store that cannot answer counts nothing, as
-    /// the target screen does.
-    func storedBytes(targetId: String) -> Int64 {
-        ((try? store.usage(targetId: targetId)) ?? []).reduce(0) { $0 + $1.bytes }
+    /// counts.
+    func storedBytes(targetId: String) throws -> Int64 {
+        try store.usage(targetId: targetId).reduce(0) { $0 + $1.bytes }
     }
 
     /// The one effect of 8.4, as a run stop. A transient error keeps

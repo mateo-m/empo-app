@@ -908,6 +908,128 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(manifestPaths(target).isEmpty)
     }
 
+    // MARK: - A state store read that fails
+
+    func testAJoinIsNotDroppedWhenTheLastManifestDoesNotRead() async throws {
+        let root = try makeGameTree(gameName)
+        try write("level 3", to: root.appendingPathComponent("Game/Data/progress.bin"))
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        var joined = game(gameName)
+        joined.set.runtimeWatchPaths = ["Game/Data/progress.bin"]
+        _ = await engine.run(request(games: [joined]))
+        try store.database.run("DROP TABLE uploaded_manifest")
+
+        clock.advance(3_600)
+        try changeTheSave(of: gameName, to: "slot one, after a relaunch")
+        let next = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(next.outcome, .failed)
+        XCTAssertEqual(manifestPaths(target).count, 1)
+    }
+
+    func testAStalenessClockThatDoesNotReadStopsTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run("DROP TABLE staleness")
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
+    func testADeviceRecordThatDoesNotDownloadStopsTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        try target.seed(path: paths.deviceFile, contents: Data("{}".utf8))
+        await target.addFault(
+            FakeTargetFault(
+                operation: .get, error: .offline, pathContains: BackupNamespacePaths.deviceFileName))
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
+    func testAPartialTallyThatDoesNotReadKeepsItsCount() async throws {
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(makeTarget(), stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.savePartialTally(["Game/a.rvdata2": 2], targetId: "t1", gameKey: "g")
+        try store.database.run(
+            "INSERT INTO partial_tally (targetId, gameKey, path, runs) VALUES ('t1', 'g', 'Game/b.rvdata2', 'many')")
+
+        await engine.markSuccess(
+            targetId: "t1", gameKey: "g",
+            manifest: SnapshotManifest(mode: .slim, containerFolderName: gameName),
+            scannedAt: clock.now, isComplete: true)
+
+        XCTAssertEqual(
+            try store.database.query(
+                "SELECT path FROM partial_tally WHERE targetId = 't1' ORDER BY path"
+            ).compactMap { $0[0].string },
+            ["Game/a.rvdata2", "Game/b.rvdata2"])
+    }
+
+    func testASweepWhoseStoredBytesDoNotReadIsAnError() async throws {
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(makeTarget(), stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run("DROP TABLE uploaded_manifest")
+
+        do {
+            _ = try await engine.sweep(
+                SweepRequest(descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId))
+            XCTFail("the sweep read no stored bytes and went on")
+        } catch {}
+    }
+
+    func testADeleteWhoseSnapshotListDoesNotReadStaysPending() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        _ = await engine.run(request(games: [game(gameName)]))
+        try store.database.run("DROP TABLE snapshot_ledger")
+
+        let outcome = await engine.deleteBackups(
+            BackupDeleteRequest(
+                descriptor: descriptor, namespaceId: namespaceId, deviceId: deviceId,
+                gameKey: key(gameName)))
+
+        XCTAssertEqual(outcome, .pending)
+        XCTAssertEqual(manifestPaths(target).count, 1)
+    }
+
+    func testPendingDeletionsThatDoNotReadStopTheRun() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run("DROP TABLE pending_deletion")
+
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
+    }
+
     // MARK: - 8. The prune ladder, per 5.14
 
     func testTheLadderRetriesAfterAPruneAndThenBlocksTheTarget() async throws {
