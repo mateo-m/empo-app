@@ -10,27 +10,10 @@ import UIKit
 import AppKit
 #endif
 
-@MainActor
-final class ControllerInputManager {
-    /// Takes (action id, pressed). Returns false when the action
-    /// refuses the press.
-    var actionHandler: ((String, Bool) -> Bool)?
-
+final class ControllerInputManager: InputManager<String> {
     var elementActivityHandler: ((String) -> Void)?
 
     var connectionHandler: (() -> Void)?
-
-    /// Suppression swallows the release edges of the keys held when it
-    /// begins. Release those keys now, or they stay stuck in the engine.
-    var suppressInjection = false {
-        didSet {
-            if suppressInjection, !oldValue {
-                releaseAllHeldInputs()
-            }
-        }
-    }
-
-    weak var overlay: OverlayVisibilityController?
 
     private(set) var hasHadControllerThisSession = false
 
@@ -61,21 +44,17 @@ final class ControllerInputManager {
     private typealias Reader = GameControllerReader
     #endif
 
-    private var sessionActive = false
     private var reducer = ControllerStateReducer()
-    private var resolvedMap = BindingResolver.resolveRuntime().elements
-    private var elementPressScancode: [String: Int32] = [:]
-    private var elementPressAction: [String: String] = [:]
     private var connectedControllers: [String: ConnectedPad] = [:]
     private var heldStickDirections: [String: Set<ControlDirection>] = [:]
     private lazy var reader = Reader(manager: self)
 
-    private let keys: HeldKeys<KeyHolder>
-
     private var activeObserver: NSObjectProtocol?
 
     init(keys: HeldKeys<KeyHolder>) {
-        self.keys = keys
+        super.init(
+            keys: keys, source: .controller, holder: KeyHolder.controller,
+            resolvedMap: BindingResolver.resolveRuntime().elements)
     }
 
     #if os(iOS)
@@ -83,11 +62,6 @@ final class ControllerInputManager {
         self.init(keys: EngineSessionCoordinator.shared.heldKeys)
     }
     #endif
-
-    /// A key that is held now keeps its press-time scancode until release.
-    func updateResolvedMap(_ map: [String: ResolvedTarget]) {
-        resolvedMap = map
-    }
 
     func start() {
         stop()
@@ -129,11 +103,7 @@ final class ControllerInputManager {
         controllersWithLoggedInput.removeAll()
         heldStickDirections.removeAll()
         reducer = ControllerStateReducer()
-        elementPressScancode.removeAll()
-        elementPressAction.removeAll()
     }
-
-    var deviceLogHandler: ((String) -> Void)?
 
     private var controllersWithLoggedInput: Set<String> = []
 
@@ -228,41 +198,13 @@ final class ControllerInputManager {
             }
             if suppressInjection { continue }
             if edge.pressed {
-                guard let target = resolvedMap[edge.element] else { continue }
-                switch target {
-                case .key(let scancode):
-                    elementPressScancode[edge.element] = scancode
-                    keys.hold(scancode, by: .controller(edge.element))
-                case .action(let name):
-                    if actionHandler?(name, true) == true {
-                        elementPressAction[edge.element] = name
-                    }
-                case .unbound:
-                    break
+                if let target = resolvedMap[edge.element] {
+                    press(edge.element, as: target)
                 }
             } else {
-                if let action = elementPressAction.removeValue(forKey: edge.element) {
-                    _ = actionHandler?(action, false)
-                    continue
-                }
-                guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
-                    continue
-                }
-                keys.release(scancode, by: .controller(edge.element))
+                release(edge.element)
             }
         }
-    }
-
-    /// Suppression and stop() swallow the physical release edges. A held
-    /// fast-forward with no release leaves the engine sped up.
-    func releaseAllHeldInputs() {
-        keys.release { $0.source == .controller }
-        elementPressScancode.removeAll()
-
-        for action in elementPressAction.values {
-            _ = actionHandler?(action, false)
-        }
-        elementPressAction.removeAll()
     }
 
     /// Also forgets which elements are down, so the poll when the app

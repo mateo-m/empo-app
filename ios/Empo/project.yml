@@ -573,6 +573,7 @@ targets:
       - path: src/Player/BindingStore.swift
       - path: src/Player/BindingsCatalog.swift
       - path: src/Player/ControllerInputManager.swift
+      - path: src/Player/InputManager.swift
       - path: src/Player/EmpoAction+Localized.swift
       - path: src/Player/OverlayVisibilityController.swift
       - path: src/Player/PlayerRuntimeState.swift
@@ -664,6 +665,7 @@ targets:
         excludes:
           - EmpoPlayer.entitlements
       - path: src/Player/ControllerInputManager.swift
+      - path: src/Player/InputManager.swift
       - path: src/Player/OverlayVisibilityController.swift
       - path: src/App/UITestVirtualController.swift
       - path: src/Player/PlayerRuntimeState.swift
