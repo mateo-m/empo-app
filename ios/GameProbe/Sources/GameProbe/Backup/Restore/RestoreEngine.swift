@@ -14,7 +14,8 @@ import Foundation
 /// 1. Read the manifest and plan against the local tree.
 /// 2. Refuse on the space check of 11.8, before any write.
 /// 3. Write the intent record of 6.5, before the first byte lands.
-/// 4. Stage each blob under `restore/<hash>` and write its file.
+/// 4. Stage and check each blob under `restore/<hash>`, then write
+///    the files.
 /// 5. Drop from a replaced tree only what proven coverage allows.
 /// 6. Clear the intent record.
 ///
@@ -121,7 +122,9 @@ public actor RestoreEngine {
 
         // Without the record, a process that dies mid-restore leaves a
         // silent mix of old and restored files, per 6.5.
+        let resumes: Bool
         do {
+            resumes = try store.intent(kind: .interruptedRestore) != nil
             try store.saveIntent(
                 RestoreResumeQuestion.record(
                     targetId: request.targetId,
@@ -132,6 +135,25 @@ public actor RestoreEngine {
                     at: now))
         } catch {
             return .failed(RestoreNotices.recordsUnavailableLine)
+        }
+
+        var staged: Set<String> = []
+        for step in plan.steps where step.action != .unchanged && !staged.contains(step.entry.hash) {
+            guard !Task.isCancelled else { return .stopped(.gameLaunched, result) }
+            do {
+                try await stageBlob(step.entry, paths: paths, fanOutWidth: fanOutWidth)
+                staged.insert(step.entry.hash)
+            } catch BackupProviderError.rejected(let message) {
+                if !resumes {
+                    try? store.clearIntent(kind: .interruptedRestore)
+                    clearStagedBlobs()
+                }
+                return .failed(message)
+            } catch let stop as RestoreStopReason {
+                return .stopped(stop, result)
+            } catch {
+                return .stopped(Task.isCancelled ? .gameLaunched : .targetFailed, result)
+            }
         }
 
         if let tree, let replaced {
@@ -154,7 +176,7 @@ public actor RestoreEngine {
                 continue
             }
             do {
-                try await write(step, request: request, paths: paths, fanOutWidth: fanOutWidth)
+                try write(step, request: request)
             } catch let stop as RestoreStopReason {
                 return .stopped(stop, result)
             } catch {
@@ -182,21 +204,12 @@ public actor RestoreEngine {
 
     /// The local file moves aside first, and the restored file takes
     /// the real name, per 11.1.
-    private func write(
-        _ step: RestoreStep,
-        request: RestoreRequest,
-        paths: BackupNamespacePaths,
-        fanOutWidth: Int
-    ) async throws {
+    private func write(_ step: RestoreStep, request: RestoreRequest) throws {
         let entry = step.entry
+        let staged = BackupRootLayout(root: localRoot).restoreBlob(hash: entry.hash)
         guard let destination = request.destination.url(of: entry) else {
             throw RestoreStopReason.targetFailed
         }
-        let staged = try await stageBlob(entry, paths: paths, fanOutWidth: fanOutWidth)
-        // A download can finish after the cancel of 7.6. The game may
-        // already run, so the file stays as it is.
-        guard !Task.isCancelled else { throw RestoreStopReason.gameLaunched }
-
         if (try? fm.attributesOfItem(atPath: destination.path)) != nil {
             try fm.moveItem(
                 at: destination,
@@ -231,10 +244,10 @@ public actor RestoreEngine {
     /// its name is thrown away and fetched again.
     private func stageBlob(
         _ entry: SnapshotManifest.Entry, paths: BackupNamespacePaths, fanOutWidth: Int
-    ) async throws -> URL {
+    ) async throws {
         let staged = BackupRootLayout(root: localRoot).restoreBlob(hash: entry.hash)
         if fm.fileExists(atPath: staged.path) {
-            if verify(staged, entry: entry) { return staged }
+            if verify(staged, entry: entry) { return }
             try? fm.removeItem(at: staged)
         }
 
@@ -245,6 +258,7 @@ public actor RestoreEngine {
             try await provider.get(path: path, localFile: staged)
         } catch {
             try? fm.removeItem(at: staged)
+            if case .rejected = error { throw error }
             // The cancel of 7.6 usually lands while the download is
             // in flight, and the session reports it as a transport
             // error. The cancel flag says what really happened.
@@ -254,7 +268,6 @@ public actor RestoreEngine {
             try? fm.removeItem(at: staged)
             throw RestoreStopReason.targetFailed
         }
-        return staged
     }
 
     /// The plan names the displaced copy. A file the plan did not see,

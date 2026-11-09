@@ -1583,8 +1583,8 @@ final class SnapshotEngineTests: XCTestCase {
     private func stopAReplaceHalfWay(
         _ snapshotId: String, on target: FakeBackupTarget, stateURL: URL
     ) async throws -> String {
-        // The format file, the manifest, and the first blob pass, so
-        // one file lands in the new `Game/`. The second blob holds.
+        // The format file, the manifest, and the first blob pass.
+        // The second blob holds.
         let reads = target.contents(atPath: paths.formatFile) == nil ? 1 : 2
         let latch = TransferLatch(holdFrom: reads + 2)
         await target.setLatch(latch)
@@ -1607,7 +1607,17 @@ final class SnapshotEngineTests: XCTestCase {
         if case .restore(.replaceTheTree, let name) = try store.intent(kind: .interruptedRestore)?.work {
             moved = name
         }
-        return try XCTUnwrap(moved, "the record does not name the moved tree")
+        let name = try XCTUnwrap(moved, "the record does not name the moved tree")
+        // The engine writes only after every file is staged, so a
+        // stop in a download lands before the move. A process killed
+        // after the move leaves this.
+        let tree = container(gameName).appendingPathComponent("Game", isDirectory: true)
+        try fm.moveItem(at: tree, to: container(gameName).appendingPathComponent(name))
+        try fm.createDirectory(at: tree, withIntermediateDirectories: false)
+        try fm.copyItem(
+            at: container(gameName).appendingPathComponent(name).appendingPathComponent("Game.ini"),
+            to: tree.appendingPathComponent("Game.ini"))
+        return name
     }
 
     func testAResumedReplaceDoesNotMoveTheHalfRestoredTreeAside() async throws {

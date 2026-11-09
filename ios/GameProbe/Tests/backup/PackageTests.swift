@@ -497,6 +497,42 @@ final class PackageTests: XCTestCase {
         await source.close()
     }
 
+    func testADamagedFileStopsTheImportBeforeItWritesAnyFile() async throws {
+        let first = Data((0..<4_096).map { _ in UInt8.random(in: 0...255) })
+        let second = Data((0..<4_096).map { _ in UInt8.random(in: 0...255) })
+        let package = try writeAPackage(files: [
+            ("Game/Save01.rvdata2", first), ("Game/Save02.rvdata2", second),
+        ])
+        var zip = try Data(contentsOf: package.url)
+        let damaged = try XCTUnwrap(zip.range(of: second.subdata(in: 1_000..<1_064)))
+        zip[damaged.lowerBound] ^= 0xFF
+        try zip.write(to: package.url)
+        let stream = try XCTUnwrap(package.manifest.streams.first)
+        let container = root.appendingPathComponent("Restored/Quest", isDirectory: true)
+
+        let outcome = await RestoreEngine(
+            provider: try PackageSource(zip: package.url, packageId: "p1"),
+            store: try BackupStateStore(url: nil),
+            localRoot: root.appendingPathComponent("local", isDirectory: true)
+        ).run(
+            RestoreRequest(
+                targetId: PackageSource.targetId(packageId: "p1"),
+                root: "",
+                namespaceId: "p1",
+                stream: BackupStream(key: stream.key),
+                snapshotId: PackageSource.snapshotId(
+                    streamKey: stream.key, exportedAt: package.manifest.exportedAt),
+                choice: .restore(.wholeGame),
+                destination: MemberSource(container: container),
+                freeSpaceBytes: .max))
+
+        guard case .failed(let line) = outcome else {
+            return XCTFail("the import did not fail: \(outcome)")
+        }
+        XCTAssertEqual(line, PackageRejection.wrongHash("Documents/Games/Quest/Game/Save02.rvdata2").line)
+        XCTAssertFalse(fm.fileExists(atPath: container.appendingPathComponent("Game/Save01.rvdata2").path))
+    }
+
     // MARK: - An export holds every member or fails
 
     func testAnExportWithAnUnreadableSaveFailsInsteadOfDroppingIt() throws {
