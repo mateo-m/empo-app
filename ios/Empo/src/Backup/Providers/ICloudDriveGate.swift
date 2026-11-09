@@ -118,7 +118,6 @@ final class ICloudDriveGate {
 
     private func probeAndLog() async {
         let answer = await availability()
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("ICloudDriveGate", "the probe answers \(answer)")
+        BackupLog.debug("ICloudDriveGate", "the probe answers \(answer)")
     }
 }

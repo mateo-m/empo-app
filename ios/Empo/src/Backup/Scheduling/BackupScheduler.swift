@@ -97,7 +97,7 @@ final class BackupScheduler {
         runner = BackupPass.shared
         BackupTaskScheduler.scheduleNightly()
         PackageRecord.deleteThePackagesWithoutARecord(localRoot: BackupRoot.layout.root)
-        log("the schedule started")
+        BackupLog.debug("BackupScheduler", "the schedule started")
         // The active notification of this launch fires before the
         // gate opens, so the catch-up wait starts by hand here.
         BackupLaunchGate.shared.whenOpen {
@@ -146,7 +146,7 @@ final class BackupScheduler {
         case .lowPowerMode:
             guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         }
-        log("the pause ended, %@ no more", pause.line)
+        BackupLog.debug("BackupScheduler", "the pause ended, \(pause.line) no more")
         Task { await run(trigger: .foreground) }
     }
 
@@ -177,8 +177,14 @@ final class BackupScheduler {
     /// games alone.
     func markDirty(container: GameContainer) {
         let gameKey = BackupKeys.gameKey(containerFolderName: container.folderName)
-        try? store?.markDirty(
-            gameKey: gameKey, targetIds: BackupTargets.load().map(\.id), at: Date())
+        do {
+            try store?.markDirty(
+                gameKey: gameKey, targetIds: BackupTargets.load().map(\.id), at: Date())
+        } catch {
+            // The next foreground pass scans the whole library, so the
+            // game still goes up then.
+            BackupLog.line("BackupScheduler", "\(gameKey) was not marked for backup: \(error)")
+        }
     }
 
     private func runUnderTheGrant(_ trigger: BackupTrigger) async {
@@ -213,7 +219,7 @@ final class BackupScheduler {
         // 7.4. A continued-processing task would show "Starting" for
         // as long as the hold lasts, so the pass runs without one.
         if BackupNetwork.isConstrained {
-            log("manual press in Low Data Mode, the pass runs without a task")
+            BackupLog.debug("BackupScheduler", "manual press in Low Data Mode, the pass runs without a task")
             startManualRun(press, overCellular: overCellular)
             return
         }
@@ -243,7 +249,7 @@ final class BackupScheduler {
     /// checkpoint of 6.5 carries the rest to the next run. The
     /// upload in flight is cancelled too, per 7.5.
     func pauseTheRun() {
-        log("the user paused the run")
+        BackupLog.debug("BackupScheduler", "the user paused the run")
         pauses += 1
         inFlight?.cancel()
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
@@ -348,7 +354,7 @@ final class BackupScheduler {
         switch ResourcePolicy.stagingGate(conditions) {
         case .pause(let reason):
             BackupRunMonitor.shared.pause = reason
-            log("%@ paused: %@", trigger.rawValue, reason.line)
+            BackupLog.debug("BackupScheduler", "\(trigger.rawValue) paused: \(reason.line)")
             close(progress)
             return false
         case .run:
@@ -356,7 +362,7 @@ final class BackupScheduler {
         }
 
         guard let runner else {
-            log("%@ has no runner yet", trigger.rawValue)
+            BackupLog.debug("BackupScheduler", "\(trigger.rawValue) has no runner yet")
             close(progress)
             return false
         }
@@ -369,9 +375,9 @@ final class BackupScheduler {
         networkCause = ResourcePolicy.blockedCause(
             policy: BackupNetwork.policy, isOnCellular: BackupNetwork.isOnCellular)
 
-        log(
-            "%@ runs, network %@",
-            trigger.rawValue, networkCause == nil ? "clear" : BackupNetwork.waitingLine)
+        BackupLog.debug(
+            "BackupScheduler",
+            "\(trigger.rawValue) runs, network \(networkCause == nil ? "clear" : BackupNetwork.waitingLine)")
 
         BackupRunMonitor.shared.runBegins()
         progress?.totalUnitCount = 1
@@ -400,13 +406,6 @@ final class BackupScheduler {
         record(result.didFinish ? .succeeded : .otherFailure)
         report(result.targets)
         return result.didFinish
-    }
-
-    /// The one line a device check reads. The Backups screen of
-    /// ticket 016 shows the same state on screen.
-    private func log(_ format: String, _ arguments: CVarArg...) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("BackupScheduler", String(format: format, arguments: arguments))
     }
 
     /// A continued-processing task that stops reporting progress is

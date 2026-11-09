@@ -52,8 +52,14 @@ final class RestoreCoordinator {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         let libraryIsEmpty = GameContainer.discover().isEmpty
         let isFirstTarget = targetCount == 1
-        guard libraryIsEmpty, isFirstTarget, let namespaces = try? await scan.namespaces()
-        else { return nil }
+        guard libraryIsEmpty, isFirstTarget else { return nil }
+        let namespaces: [ScannedNamespace]
+        do {
+            namespaces = try await scan.namespaces()
+        } catch {
+            BackupLog.line("RestoreCoordinator", "\(descriptor.label) was not scanned: \(error)")
+            return nil
+        }
 
         let preferencesRows = namespaces.flatMap(\.preferencesRows)
         let newestPreferences = RestorePicker.newestFirst(preferencesRows).first
@@ -76,7 +82,13 @@ final class RestoreCoordinator {
                 libraryIsEmpty: libraryIsEmpty, isFirstTarget: isFirstTarget, plan: plan)
         else { return nil }
 
-        let mine = try? BackupKeychain.namespaceId()
+        let mine: String?
+        do {
+            mine = try BackupKeychain.namespaceId()
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The namespace id was not read: \(error)")
+            mine = nil
+        }
         let thisDevice = UIDevice.current.identifierForVendor?.uuidString ?? ""
         let adoptable = namespaces.filter {
             AdoptQuestion.fires(
@@ -120,7 +132,14 @@ final class RestoreCoordinator {
             row, into: container, provider: provider, targetId: descriptor.id,
             root: descriptor.root, scope: scope, replacesTheTree: replacesTheTree,
             movedAsideTree: movedAsideTree
-        ) { try? await scan.manifest(at: path) }
+        ) {
+            do {
+                return try await scan.manifest(at: path)
+            } catch {
+                BackupLog.line("RestoreCoordinator", "\(path) was not read: \(error)")
+                return nil
+            }
+        }
     }
 
     /// The import of 12.6. The package answers the provider protocol
@@ -203,7 +222,7 @@ final class RestoreCoordinator {
         }
         cancelledByTheUser = false
         BackupScheduler.shared.conditionsDidChange()
-        log("restore of \(row.snapshotId): \(outcome)")
+        BackupLog.debug("RestoreCoordinator", "restore of \(row.snapshotId): \(outcome)")
         return outcome
     }
 
@@ -263,7 +282,13 @@ final class RestoreCoordinator {
         if let container, let aliasesBefore {
             var aliases = IdentityAliases.load(from: container.empoStateURL)
             if aliases.merge(aliasesBefore, forFolderName: container.folderName) {
-                try? aliases.save(to: container.empoStateURL)
+                do {
+                    try aliases.save(to: container.empoStateURL)
+                } catch {
+                    BackupLog.line(
+                        "RestoreCoordinator",
+                        "The aliases of \(container.folderName) were not saved: \(error)")
+                }
             }
         }
         // The rollback of 10.9. The stream carries one export file,
@@ -297,7 +322,7 @@ final class RestoreCoordinator {
     /// when the restore wrote its last file.
     func stopForGameLaunch() async {
         await stop()
-        log("a game launched, so the restore stopped")
+        BackupLog.debug("RestoreCoordinator", "a game launched, so the restore stopped")
     }
 
     /// The Stop of the fresh-install screen. The engine reads any
@@ -306,7 +331,7 @@ final class RestoreCoordinator {
         guard running != nil else { return }
         cancelledByTheUser = true
         await stop()
-        log("the user stopped the restore")
+        BackupLog.debug("RestoreCoordinator", "the user stopped the restore")
     }
 
     private var cancelledByTheUser = false
@@ -535,10 +560,5 @@ final class RestoreCoordinator {
         let values = try? BackupRoot.layout.root.resourceValues(
             forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         return values?.volumeAvailableCapacityForImportantUsage ?? 0
-    }
-
-    private func log(_ message: String) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("RestoreCoordinator", message)
     }
 }

@@ -26,7 +26,7 @@ final class BackupPass: BackupRunning {
         await PlusStore.shared.refresh()
         let targets = BackupTargets.writable()
         guard !targets.isEmpty else {
-            log("the pass found no target")
+            BackupLog.debug("BackupPass", "the pass found no target")
             return BackupPassResult(didFinish: true)
         }
 
@@ -43,7 +43,7 @@ final class BackupPass: BackupRunning {
             // A game wins everything, per 7.6. The session end runs
             // the backbone pass, which takes the rest.
             guard !BackupDeviceConditions.isSessionLive else {
-                log("a game is running, the pass stops before \(descriptor.label)")
+                BackupLog.debug("BackupPass", "a game is running, the pass stops before \(descriptor.label)")
                 BackupRunMonitor.shared.pause = .gameRunning
                 didFinish = false
                 break
@@ -52,7 +52,7 @@ final class BackupPass: BackupRunning {
                 // The gate of 9.1 is closed, or the provider is not
                 // built yet. Neither is a failure the user can clear,
                 // so nothing notifies.
-                log("\(descriptor.label) cannot open in this build")
+                BackupLog.debug("BackupPass", "\(descriptor.label) cannot open in this build")
                 BackupRunMonitor.shared.targetEnds()
                 continue
             }
@@ -112,7 +112,7 @@ final class BackupPass: BackupRunning {
             // engine gets its own.
             store = try BackupRoot.openStateStore()
         } catch {
-            log("\(descriptor.label) could not open its local state")
+            BackupLog.line("BackupPass", "\(descriptor.label) could not open its local state")
             return nil
         }
         do {
@@ -159,16 +159,22 @@ final class BackupPass: BackupRunning {
         BackupRunMonitor.shared.liveRunId = request.runId
         let result = await engine.run(request)
         BackupRunMonitor.shared.liveRunId = nil
-        log(
+        BackupLog.debug(
+            "BackupPass",
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
         conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
-        try? conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        do {
+            try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        } catch {
+            BackupLog.line("BackupPass", "\(descriptor.label) writer answers were not saved: \(error)")
+        }
         if result.didSplit {
             do {
                 try BackupNamespaceMove.move(to: result.namespaceId, except: descriptor.id)
-                log("\(descriptor.label) split, the device now writes to \(result.namespaceId)")
+                BackupLog.debug(
+                    "BackupPass", "\(descriptor.label) split, the device now writes to \(result.namespaceId)")
             } catch {
                 BackupLog.line(
                     "BackupPass",
@@ -200,7 +206,7 @@ final class BackupPass: BackupRunning {
             store.close()
         }
         if let restoring, byKey[restoring] != nil {
-            log("\(restoring) sits out, its restore has not finished")
+            BackupLog.debug("BackupPass", "\(restoring) sits out, its restore has not finished")
         }
         let keys = BackupTriggerPlan.games(
             in: scope, dirty: dirty, library: Array(byKey.keys).sorted(), targetIds: targetIds,
@@ -276,10 +282,5 @@ final class BackupPass: BackupRunning {
             }
         }
         return causes
-    }
-
-    private func log(_ message: String) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("BackupPass", message)
     }
 }

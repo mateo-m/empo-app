@@ -155,17 +155,12 @@ final class GameSaveWatch {
     }
 
     private func apply(_ result: RuntimeWatchResult, forGame containerId: String) {
-        // The Backups screen and the Backup sheet do not exist yet,
-        // so this line is the only place a join shows. Tickets 016
-        // and 018 read the same numbers into the UI.
-        if AppSettings.shared.debugLogs, !result.isEmpty {
-            NSLog(
-                "[GameSaveWatch] %@: %ld joined, %ld to ask, %ld suggested: %@",
-                containerId,
-                result.joined.count,
-                result.asks.count,
-                result.suggestions.count,
-                (result.joined + result.asks).joined(separator: ", "))
+        if !result.isEmpty {
+            BackupLog.debug(
+                "GameSaveWatch",
+                "\(containerId): \(result.joined.count) joined, \(result.asks.count) to ask, "
+                    + "\(result.suggestions.count) suggested: "
+                    + (result.joined + result.asks).joined(separator: ", "))
         }
         if !result.joined.isEmpty {
             joinedPathsByGame[containerId, default: []].formUnion(result.joined)
@@ -207,7 +202,11 @@ final class GameSaveWatch {
         let stateURL = container.empoStateURL
         let intent = RuntimeWatch.declining(
             path, in: GameBackupIntent.load(from: stateURL))
-        try? intent.save(to: stateURL)
+        do {
+            try intent.save(to: stateURL)
+        } catch {
+            BackupLog.line("GameSaveWatch", "The declined \(path) was not saved: \(error)")
+        }
     }
 
     // MARK: - The reading

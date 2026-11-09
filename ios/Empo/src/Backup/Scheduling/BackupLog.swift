@@ -29,6 +29,13 @@ enum BackupLog {
         write("\(stamp.string(from: Date())) [\(tag)] \(message)\n")
     }
 
+    /// Writes one line only while the Debug logs setting is on.
+    @MainActor
+    static func debug(_ tag: String, _ message: @autoclosure () -> String) {
+        guard AppSettings.shared.debugLogs else { return }
+        line(tag, message())
+    }
+
     private static let lock = NSLock()
 
     private static let stamp: DateFormatter = {

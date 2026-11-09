@@ -138,7 +138,11 @@ final class BackupSheetModel {
 
     func setMarks(_ editor: SaveFileEditorModel) async {
         let intent = GameBackupIntent.load(from: container.empoStateURL)
-        try? editor.applied(to: intent).save(to: container.empoStateURL)
+        do {
+            try editor.applied(to: intent).save(to: container.empoStateURL)
+        } catch {
+            BackupLog.line("BackupSheetModel", "The save file marks were not saved: \(error)")
+        }
         await load()
     }
 

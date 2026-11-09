@@ -135,7 +135,7 @@ final class SyncPass {
             state = .running(newsArrived: true)
         case .failed(let reason):
             lastPassFailed = true
-            log(reason)
+            BackupLog.debug("SyncPass", reason)
         case .done, .nothingToDo, .noLocalNews:
             lastPassFailed = false
         }
@@ -170,13 +170,8 @@ final class SyncPass {
                 lastWriteAt: Date()),
             namespaceId: namespaceId,
             now: { Date() },
-            note: { [weak self] in self?.log($0) })
+            note: { BackupLog.debug("SyncPass", $0) })
         self.engine = engine
         return engine
-    }
-
-    private func log(_ message: String) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("SyncPass", message)
     }
 }

@@ -428,7 +428,11 @@ final class BackupsScreenModel {
         let applicationSupport = BackupRoot.layout.applicationSupport
         var conflicts = WriterConflicts.read(applicationSupport: applicationSupport)
         change(&conflicts)
-        try? conflicts.write(applicationSupport: applicationSupport)
+        do {
+            try conflicts.write(applicationSupport: applicationSupport)
+        } catch {
+            BackupLog.line("BackupsScreenModel", "The writer answers were not saved: \(error)")
+        }
     }
 
     // MARK: - Notifications, per 13.19
