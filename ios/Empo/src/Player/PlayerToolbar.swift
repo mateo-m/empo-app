@@ -110,8 +110,6 @@ struct PlayerEditToolbar: View {
     @Binding var editDialog: ControlsEditDialog?
     let onDone: () -> Void
 
-    /// Shared with PlayerControlsOverlay's drag pipeline, so the
-    /// button state and the snapping never disagree.
     @AppStorage(DefaultsKey.controlsEditSnapToGrid) private var snapToGrid = false
 
     /// First-render fallbacks for the `.position` anchoring, before
@@ -231,16 +229,9 @@ struct PlayerEditToolbar: View {
                 "grid", label: "Snap to grid", style: .outline, size: .sm,
                 tint: snapToGrid ? .brand : .white
             ) {
-                // On: round every control onto the lattice now. Off:
-                // put the pre-snap values back (Done never ran).
-                snapToGrid.toggle()
-                if snapToGrid {
-                    layout.applyGridSnap(
-                        geoSize: geoSize, safeArea: safeArea,
-                        controlsMinY: controlsMinY)
-                } else {
-                    layout.revertGridSnap()
-                }
+                layout.toggleSnapToGrid(
+                    in: ControlsLayout.EditGeometry(
+                        geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY))
             }
             .accessibilityValue(
                 snapToGrid

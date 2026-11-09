@@ -340,69 +340,39 @@ class ControlsLayout {
             dropScreenEdits()
         }
         // Done keeps the snapped values. Only the restore record goes.
-        gridSnapOriginals = [:]
-        gridSnapDPadOriginals = [:]
-        gridSnapActive = false
+        dropGridSnapRecord()
     }
 
     // MARK: - Grid snap state
 
-    struct GridSnapOriginal {
-        var size: CGFloat
-        var relativeCenter: CGPoint
-    }
-
     var gridSnapOriginals: [UUID: GridSnapOriginal] = [:]
     var gridSnapDPadOriginals: [ControlsOrientation: GridSnapOriginal] = [:]
 
-    /// A reset clears the restore record but stays in grid mode.
-    /// Thus this flag cannot come from an empty record.
+    /// The size mutators read this flag, so a size from a sheet also
+    /// goes on the grid while snap is on.
     var gridSnapActive = false
-
-    static func gridSnappedSize(_ value: CGFloat) -> CGFloat {
-        (value / ControlsZone.editGridStep).rounded() * ControlsZone.editGridStep
-    }
-
-    /// The arms of the D-pad are thirds of its size, so only a size
-    /// in steps of 3 grid steps puts the inner arm borders on the grid.
-    static func gridSnappedDPadSize(_ value: CGFloat) -> CGFloat {
-        let step = ControlsZone.editGridStep * 3
-        return (value / step).rounded() * step
-    }
 
     /// The user can rotate during the session. Thus the ID can be in
     /// either orientation slot.
-    func restoreGridSnapOriginal(_ id: UUID, _ original: GridSnapOriginal) {
-        func restore<Control: PlacedControl>(in controls: inout [Control]) {
+    func setPlacement(of id: UUID, size: CGFloat, relativeCenter: CGPoint) {
+        func set<Control: PlacedControl>(in controls: inout [Control]) {
             guard let index = controls.firstIndex(where: { $0.id == id }) else { return }
-            controls[index].size = original.size
-            controls[index].relativeCenter = original.relativeCenter
+            controls[index].size = size
+            controls[index].relativeCenter = relativeCenter
         }
-        restore(in: &buttons)
-        restore(in: &actionButtons)
-        restore(in: &inactive.buttons)
-        restore(in: &inactive.actionButtons)
+        set(in: &buttons)
+        set(in: &actionButtons)
+        set(in: &inactive.buttons)
+        set(in: &inactive.actionButtons)
     }
 
-    func revertGridSnap() {
-        let buttonOriginals = gridSnapOriginals
-        let dpadOriginals = gridSnapDPadOriginals
-        gridSnapOriginals = [:]
-        gridSnapDPadOriginals = [:]
-        gridSnapActive = false
-
-        for (id, original) in buttonOriginals {
-            restoreGridSnapOriginal(id, original)
-        }
-
-        for (orientation, original) in dpadOriginals {
-            if orientation == currentOrientation {
-                dpadSize = original.size
-                dpadRelativeCenter = original.relativeCenter
-            } else {
-                inactive.dpadSize = original.size
-                inactive.dpadRelativeCenter = original.relativeCenter
-            }
+    func setDPadPlacement(in orientation: ControlsOrientation, size: CGFloat, relativeCenter: CGPoint) {
+        if orientation == currentOrientation {
+            dpadSize = size
+            dpadRelativeCenter = relativeCenter
+        } else {
+            inactive.dpadSize = size
+            inactive.dpadRelativeCenter = relativeCenter
         }
     }
 
@@ -633,9 +603,7 @@ class ControlsLayout {
 
         // A revert after the reset would put the pre-snap values back
         // over the reset.
-        gridSnapOriginals = [:]
-        gridSnapDPadOriginals = [:]
-        gridSnapActive = false
+        dropGridSnapRecord()
 
         if case .pinnedProfile = provenance, let container = currentContainer {
             do {
@@ -769,7 +737,7 @@ class ControlsLayout {
         self.inactive = inactive
     }
 
-    // MARK: - Edit-drag collision
+    // MARK: - Edit geometry
 
     /// In window space.
     var editChromeFrames: [CGRect] = []
@@ -815,75 +783,6 @@ class ControlsLayout {
             toggled.h = min(toggled.h, limit - toggled.y)
         }
         return toggled
-    }
-
-    private func dragObstacles(
-        draggedID: UUID?, draggedIsDPad: Bool, geoSize: CGSize,
-        safeArea: EdgeInsets, controlsMinY: CGFloat
-    ) -> [EditDragSolver.Circle] {
-        var obstacles: [EditDragSolver.Circle] = []
-        func append(_ relativeCenter: CGPoint, _ size: CGFloat) {
-            let absolute = ControlsZone.absolutePosition(
-                for: relativeCenter, in: geoSize,
-                controlSize: CGSize(width: size, height: size),
-                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout)
-            obstacles.append(
-                EditDragSolver.Circle(
-                    x: Double(absolute.x), y: Double(absolute.y),
-                    radius: Double(size) / 2))
-        }
-        for button in buttons where button.id != draggedID {
-            append(button.relativeCenter, button.size)
-        }
-        for button in actionButtons where button.id != draggedID {
-            append(button.relativeCenter, button.size)
-        }
-        if !draggedIsDPad {
-            append(dpadRelativeCenter, dpadSize)
-        }
-        return obstacles
-    }
-
-    private var chromeWalls: [EditDragSolver.Rect] {
-        (editChromeFrames + [toolbarKeepout].filter { !$0.isNull }).map {
-            EditDragSolver.Rect(
-                x: Double($0.minX), y: Double($0.minY),
-                width: Double($0.width), height: Double($0.height))
-        }
-    }
-
-    /// The clamp and the push-out can fight at the zone edges. Thus
-    /// the drag rejects an update that still collides after the solve.
-    func dragPositionCollides(
-        _ center: CGPoint, draggedID: UUID?, draggedIsDPad: Bool,
-        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
-        controlsMinY: CGFloat
-    ) -> Bool {
-        EditDragSolver.collides(
-            x: Double(center.x), y: Double(center.y),
-            radius: Double(controlSize) / 2,
-            obstacles: dragObstacles(
-                draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
-                safeArea: safeArea, controlsMinY: controlsMinY),
-            walls: chromeWalls)
-    }
-
-    /// `previous` is the side memory of the drag.
-    func collisionResolvedCenter(
-        _ desired: CGPoint, previous: CGPoint?, draggedID: UUID?, draggedIsDPad: Bool,
-        controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
-        controlsMinY: CGFloat
-    ) -> CGPoint {
-        let resolved = EditDragSolver.resolvedCenter(
-            desiredX: Double(desired.x), desiredY: Double(desired.y),
-            previousX: previous.map { Double($0.x) },
-            previousY: previous.map { Double($0.y) },
-            radius: Double(controlSize) / 2,
-            obstacles: dragObstacles(
-                draggedID: draggedID, draggedIsDPad: draggedIsDPad, geoSize: geoSize,
-                safeArea: safeArea, controlsMinY: controlsMinY),
-            walls: chromeWalls)
-        return CGPoint(x: resolved.x, y: resolved.y)
     }
 
     // MARK: - Display-time button separation

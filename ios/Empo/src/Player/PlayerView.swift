@@ -11,7 +11,6 @@ struct PlayerView: View {
     @Environment(\.pauseManager) private var pauseManager
     @Environment(\.appSettings) private var settings
     private var editMode: Bool { layout.editSessionActive }
-    @AppStorage(DefaultsKey.controlsEditSnapToGrid) private var snapToGrid = false
     @State private var controlsHidden = false
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
@@ -245,13 +244,10 @@ struct PlayerView: View {
                 layout.toolbarKeepout = keepout
             }
             .onChange(of: editMode) { _, editing in
-                // No undo on exit: `endEditSession()` drops the
-                // restore record, so Done keeps the snap.
-                guard editing, snapToGrid else { return }
-                layout.applyGridSnap(
-                    geoSize: geo.size,
-                    safeArea: controlsSafeArea,
-                    controlsMinY: controlsMinY)
+                layout.editModeChanged(
+                    editing,
+                    in: ControlsLayout.EditGeometry(
+                        geoSize: geo.size, safeArea: controlsSafeArea, controlsMinY: controlsMinY))
             }
         }
         .ignoresSafeArea()
