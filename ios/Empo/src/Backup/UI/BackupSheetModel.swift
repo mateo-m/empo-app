@@ -88,29 +88,26 @@ final class BackupSheetModel {
     func readTheFiles() async {
         readsOfTheFiles += 1
         let read = readsOfTheFiles
-        let full: GameBackupSet
-        let slim: GameBackupSet
-        let intent: GameBackupIntent
+        let marks: [String]?
         do {
-            intent = try GameBackupIntent.load(from: container.empoStateURL)
-            full = try await resolve(.full)
-            slim = try await resolve(.slim)
+            marks = try GameBackupIntent.load(from: container.empoStateURL).manualMarks
         } catch {
             // No editor, so a save from it cannot replace the marks
             // that the damaged file still holds.
             BackupLog.line("BackupSheetModel", "The backup settings did not read: \(error)")
-            guard read == readsOfTheFiles else { return }
-            editor = nil
-            settingsUnread = true
-            return
+            marks = nil
         }
+        // A new mode choice over a damaged file starts with no marks, so
+        // the sizes count none.
+        let full = await resolve(.full, marks: marks ?? [])
+        let slim = await resolve(.slim, marks: marks ?? [])
         let leftovers = await Self.leftovers(inside: container.url)
         // A later read started meanwhile and holds newer marks.
         guard read == readsOfTheFiles else { return }
         fullBytes = full.totalSize
         slimBytes = slim.totalSize
-        editor = SaveFileEditorModel.from(slim, manualMarks: intent.manualMarks)
-        settingsUnread = false
+        editor = marks.map { SaveFileEditorModel.from(slim, manualMarks: $0) }
+        settingsUnread = marks == nil
         self.leftovers = leftovers
     }
 
@@ -127,8 +124,8 @@ final class BackupSheetModel {
         lastSuccessAt = read.lastSuccessAt
     }
 
-    private func resolve(_ mode: BackupMode) async throws -> GameBackupSet {
-        let request = try await GameBackupSets.request(for: container, mode: mode)
+    private func resolve(_ mode: BackupMode, marks: [String]) async -> GameBackupSet {
+        let request = await GameBackupSets.request(for: container, mode: mode, manualMarks: marks)
         return await Task.detached { BackupSetResolver.resolve(request) }.value
     }
 

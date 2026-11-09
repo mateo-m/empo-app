@@ -93,11 +93,16 @@ final class DamagedBackupSettingsTests: XCTestCase {
 
     func testTheBackupSheetAsksForTheModeAgainOverADamagedSettingsFile() async throws {
         try damaged.write(to: intentFile)
+        try FileManager.default.createDirectory(
+            at: container.gameURL, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 4096).write(
+            to: container.gameURL.appendingPathComponent("Game.ini"))
         let model = BackupSheetModel(container: container, gameName: "Test")
 
         await model.load()
         XCTAssertTrue(model.settingsUnread)
         XCTAssertNil(model.editor)
+        XCTAssertGreaterThan(model.fullBytes, 0, "The question must show the size of the game")
 
         await model.setMode(.slim)
         XCTAssertFalse(model.settingsUnread)

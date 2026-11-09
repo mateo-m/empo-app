@@ -16,6 +16,12 @@ enum GameBackupSets {
             // The full set holds each file, so it needs no marks.
             manualMarks = []
         }
+        return await request(for: container, mode: mode, manualMarks: manualMarks)
+    }
+
+    static func request(
+        for container: GameContainer, mode: BackupMode, manualMarks: [String]
+    ) async -> GameBackupSetRequest {
         var buckets: [String: URL] = [:]
         for bucket in RescuedSaves.matchingBuckets(
             in: DataDirectory.rescuedSavesRootURL, folderName: container.folderName)
