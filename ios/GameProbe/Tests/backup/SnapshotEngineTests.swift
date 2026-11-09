@@ -931,6 +931,27 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(manifestPaths(target).count, 1)
     }
 
+    func testALastManifestRowThatDoesNotDecodeStopsNoGame() async throws {
+        try makeGameTree("Alpha")
+        try makeGameTree("Bravo")
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        _ = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+        try store.database.run(
+            "UPDATE uploaded_manifest SET manifest = x'7b' WHERE gameKey = ?", [.text(key("Alpha"))])
+
+        clock.advance(3_600)
+        try changeTheSave(of: "Alpha", to: "slot one of Alpha, later")
+        try changeTheSave(of: "Bravo", to: "slot one of Bravo, later")
+        let next = await engine.run(request(games: [game("Alpha"), game("Bravo")]))
+
+        XCTAssertEqual(next.outcome, .success)
+        XCTAssertEqual(manifestPaths(target).count, 4)
+    }
+
     func testAStalenessClockThatDoesNotReadStopsTheRun() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()
