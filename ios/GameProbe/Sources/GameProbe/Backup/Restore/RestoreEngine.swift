@@ -119,21 +119,23 @@ public actor RestoreEngine {
         let gameKey = request.stream == .preferences ? nil : request.stream.key
         var result = RestoreResult(partialPathCount: plan.partialPaths.count)
 
-        // The record goes in before the first byte lands and before
-        // `Game/` moves, so a process that dies mid-restore leaves one
-        // that names the moved tree, per 6.5.
-        let saved =
-            (try? store.saveIntent(
+        // Without the record, a process that dies mid-restore leaves a
+        // silent mix of old and restored files, per 6.5.
+        do {
+            try store.saveIntent(
                 RestoreResumeQuestion.record(
                     targetId: request.targetId,
                     gameKey: gameKey,
                     snapshotId: request.snapshotId,
                     choice: request.choice,
                     movedAsideTree: replaced?.lastPathComponent,
-                    at: now))) != nil
+                    at: now))
+        } catch {
+            return .failed(RestoreNotices.recordsUnavailableLine)
+        }
 
         if let tree, let replaced {
-            guard saved, (try? fm.moveItem(at: tree, to: replaced)) != nil else {
+            guard (try? fm.moveItem(at: tree, to: replaced)) != nil else {
                 try? store.clearIntent(kind: .interruptedRestore)
                 return .failed(
                     screenText("Empo couldn't move the current game files aside. Nothing changed."))

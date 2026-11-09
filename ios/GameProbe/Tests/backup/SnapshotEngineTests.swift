@@ -1764,6 +1764,38 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(kept.count, 3, "the saves made after the stop are gone: \(kept)")
     }
 
+    func testARestoreThatCannotWriteItsResumeRecordWritesNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(request(games: [game(gameName)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try changeTheSave(of: gameName, to: "played after the backup")
+        let store = try BackupStateStore(url: nil)
+        store.close()
+
+        let outcome = await RestoreEngine(provider: target, store: store, localRoot: localRoot)
+            .run(
+                RestoreRequest(
+                    targetId: targetId,
+                    root: "",
+                    namespaceId: namespaceId,
+                    stream: BackupStream(key: key(gameName)),
+                    snapshotId: snapshotId,
+                    choice: .restore(.wholeGame),
+                    destination: MemberSource(container: container(gameName)),
+                    localFiles: try localFiles(of: gameName),
+                    freeSpaceBytes: .max))
+
+        guard case .failed = outcome else {
+            return XCTFail("the restore ran with no resume record: \(outcome)")
+        }
+        XCTAssertEqual(try gameText("save1.dat"), "played after the backup")
+        XCTAssertEqual(
+            try fm.contentsOfDirectory(atPath: container(gameName).appendingPathComponent("Game").path)
+                .sorted(),
+            ["Game.ini", "autosave.sav", "save1.dat"])
+    }
+
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
 
     func testTheRunReportsOnePlanForTheStreamAndConfirmsEveryBlobOfIt() async throws {
