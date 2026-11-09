@@ -14,7 +14,6 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
     /// Scancodes the accessory bar must hide, asked fresh on every
     /// keyboard presentation.
     var excludedScancodes: () -> Set<Int32> = { [] }
-    var onActivate: (() -> Void)?
 
     func makeUIView(context: Context) -> TCKeyboardField {
         let field = TCKeyboardField(frame: .zero)
@@ -59,7 +58,7 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         (field.inputAccessoryView as? KeyboardAccessoryHostView)?
             .excludedScancodes = excludedScancodes
         if isActive && !field.isFirstResponder {
-            onActivate?()
+            AppWindow.claimKey(.keyboard)
             field.becomeFirstResponder()
         } else if !isActive && field.isFirstResponder {
             // Resign first, then hand the key window back to SDL.
@@ -69,12 +68,13 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             // choke point every keyboard-off path goes through,
             // including the game-driven `Input.text_input` end.
             field.resignFirstResponder()
-            AppWindow.setAllowKeyWindow(false)
+            AppWindow.releaseKey(.keyboard)
             context.coordinator.stopTyping()
         }
     }
 
     static func dismantleUIView(_ field: TCKeyboardField, coordinator: Coordinator) {
+        AppWindow.releaseKey(.keyboard)
         coordinator.stopTyping()
     }
 

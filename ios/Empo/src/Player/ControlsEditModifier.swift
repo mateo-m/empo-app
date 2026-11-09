@@ -289,11 +289,11 @@ struct ButtonEditSheet: View {
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .onAppear {
-            AppWindow.setAllowKeyWindow(true)
+            AppWindow.claimKey(.buttonEditor)
             labelText = button?.label ?? ""
         }
         .onDisappear {
-            AppWindow.setAllowKeyWindow(false)
+            AppWindow.releaseKey(.buttonEditor)
         }
     }
 

@@ -183,10 +183,7 @@ struct PlayerView: View {
                 // the way down. A mounted field resigns cleanly.
                 KeyboardFieldRepresentable(
                     isActive: keyboardMode,
-                    excludedScancodes: { accessoryExcludedScancodes },
-                    onActivate: {
-                        AppWindow.setAllowKeyWindow(true)
-                    }
+                    excludedScancodes: { accessoryExcludedScancodes }
                 )
                 .frame(width: 0, height: 0)
 
@@ -280,7 +277,7 @@ struct PlayerView: View {
                 if active != keyboardMode {
                     keyboardMode = active
                     if active {
-                        AppWindow.setAllowKeyWindow(true)
+                        AppWindow.claimKey(.keyboard)
                     }
                 }
             }

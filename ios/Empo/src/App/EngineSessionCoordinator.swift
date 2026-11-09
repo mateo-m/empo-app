@@ -292,7 +292,7 @@ final class EngineSessionCoordinator {
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.delegate?
                         .coordinatorDidReportEngineError(message)
-                    AppWindow.setAllowKeyWindow(true)
+                    AppWindow.claimKey(.alert)
                 }
             }, nil)
 
@@ -303,7 +303,7 @@ final class EngineSessionCoordinator {
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.delegate?
                         .coordinatorDidReportEngineInfo(message)
-                    AppWindow.setAllowKeyWindow(true)
+                    AppWindow.claimKey(.info)
                 }
             }, nil)
 
