@@ -100,9 +100,7 @@ public struct IdentityAliases: Equatable, Sendable {
         fields[Key.version] = .int(version)
         fields[Key.aliases] = .array(aliases.map { .string($0) })
 
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        return try encoder.encode(fields)
+        return try BackupJSON.encoder().encode(fields)
     }
 
     // MARK: - The file

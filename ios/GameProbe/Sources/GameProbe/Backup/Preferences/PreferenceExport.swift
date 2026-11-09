@@ -173,16 +173,11 @@ public enum PreferenceExport {
             version: currentVersion,
             exportedAt: date,
             values: portableValues(of: defaults))
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes, .prettyPrinted]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(document)
+        return try BackupJSON.encoder().encode(document)
     }
 
     public static func decode(json data: Data) throws -> PreferenceDocument {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(PreferenceDocument.self, from: data)
+        try BackupJSON.decoder().decode(PreferenceDocument.self, from: data)
     }
 }
 

@@ -35,16 +35,11 @@ public struct WriterClaim: Codable, Equatable, Sendable {
     }
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func decode(json data: Data) throws -> WriterClaim {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(WriterClaim.self, from: data)
+        try BackupJSON.decoder().decode(WriterClaim.self, from: data)
     }
 }
 
@@ -90,16 +85,11 @@ public struct DeviceRecord: Codable, Equatable, Sendable {
     }
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func decode(json data: Data) throws -> DeviceRecord {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(DeviceRecord.self, from: data)
+        try BackupJSON.decoder().decode(DeviceRecord.self, from: data)
     }
 }
 

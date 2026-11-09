@@ -144,9 +144,7 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
     }
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public init(from decoder: Decoder) throws {
