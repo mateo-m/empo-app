@@ -18,7 +18,7 @@ public struct UploadChunk: Equatable, Sendable {
 
     /// A broken upload carries on from the offset the service reports, so it never starts again
     /// from zero. An offset at the end of the file leaves no chunk.
-    public static func plan(fileSize size: Int64, from offset: Int64, chunkBytes: Int64) -> [UploadChunk] {
+    static func plan(fileSize size: Int64, from offset: Int64, chunkBytes: Int64) -> [UploadChunk] {
         var chunks: [UploadChunk] = []
         var cursor = max(0, min(offset, size))
         while cursor < size {
