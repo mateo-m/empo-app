@@ -18,7 +18,7 @@ enum GameBackupSets {
     static func request(
         for container: GameContainer, mode: BackupMode
     ) async -> GameBackupSetRequest {
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
+        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
         var buckets: [String: URL] = [:]
         for bucket in RescuedSaves.matchingBuckets(
             in: DataDirectory.rescuedSavesRootURL, folderName: container.folderName)
@@ -77,7 +77,7 @@ enum GameBackupSets {
     static func resolveMode(
         for container: GameContainer, targets: [BackupTargetThreshold]
     ) async -> BackupModeResolution {
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
+        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
         if let answered = intent.mode { return .mode(answered) }
         let treeSize = await GameMetadata.diskSize(for: container.gameURL)
         return BackupThreshold.resolveMode(
@@ -90,7 +90,7 @@ enum GameBackupSets {
     @discardableResult
     static func setMode(_ mode: BackupMode, for container: GameContainer) throws -> Bool {
         let stateURL = container.empoStateURL
-        let intent = GameBackupIntent.load(from: stateURL)
+        let intent = try GameBackupIntent.load(from: stateURL)
         let dirty = BackupModeChange.makesDirty(from: intent.mode, to: mode)
         try BackupModeChange.apply(mode, to: intent).save(to: stateURL)
         return dirty

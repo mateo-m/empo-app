@@ -65,7 +65,7 @@ final class BackupSheetModel {
     func refresh() {
         let descriptors = BackupTargets.load()
         hasATarget = !descriptors.isEmpty
-        mode = GameBackupIntent.load(from: container.empoStateURL).mode
+        mode = (try? GameBackupIntent.load(from: container.empoStateURL))?.mode
 
         let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
         defer { store?.close() }
@@ -85,7 +85,7 @@ final class BackupSheetModel {
     func readTheFiles() async {
         readsOfTheFiles += 1
         let read = readsOfTheFiles
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
+        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
         let full = await resolve(.full)
         let slim = await resolve(.slim)
         let leftovers = await Self.leftovers(inside: container.url)
@@ -137,8 +137,9 @@ final class BackupSheetModel {
     }
 
     func setMarks(_ editor: SaveFileEditorModel) async {
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
-        try? editor.applied(to: intent).save(to: container.empoStateURL)
+        if let intent = try? GameBackupIntent.load(from: container.empoStateURL) {
+            try? editor.applied(to: intent).save(to: container.empoStateURL)
+        }
         await load()
     }
 
