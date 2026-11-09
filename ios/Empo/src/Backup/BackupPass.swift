@@ -105,13 +105,9 @@ final class BackupPass: BackupRunning {
         trigger: BackupTrigger
     ) async -> BackupRunResult? {
         let namespaceId: String
-        let syncGroupId: String?
         let store: BackupStateStore
         do {
             namespaceId = try BackupKeychain.namespaceId()
-            // The engine writes this group into the device record, so
-            // a guess would take the device out of its sync group.
-            syncGroupId = try SyncStore.state().groupId
             // One store belongs to the task that opened it, so the
             // engine gets its own.
             store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
@@ -122,6 +118,13 @@ final class BackupPass: BackupRunning {
 
         var conflicts = try? WriterConflicts.read(
             applicationSupport: BackupRoot.layout.applicationSupport)
+        let syncGroup: BackupRunRequest.SyncGroupChoice
+        do {
+            syncGroup = .known(try SyncStore.state().groupId)
+        } catch {
+            log("\(descriptor.label) could not read the sync settings, so it keeps the recorded group")
+            syncGroup = .keepRecorded
+        }
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
@@ -136,7 +139,7 @@ final class BackupPass: BackupRunning {
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
             writerAnswer: conflicts?.answer(for: descriptor.id),
-            syncGroupId: syncGroupId)
+            syncGroup: syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
         // its handle when the last reference goes, so nothing here

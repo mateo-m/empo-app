@@ -969,6 +969,29 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertTrue(manifestPaths(target).isEmpty)
     }
 
+    func testARunThatCannotReadItsSyncGroupKeepsTheRecordedGroup() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let engine = try makeEngine(target)
+        let group = String(repeating: "g", count: 32)
+        let syncedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        try target.seed(
+            path: paths.deviceFile,
+            contents: try DeviceRecord(
+                deviceId: deviceId, model: "iPhone17,1", name: "iPhone", lastWriteAt: syncedAt,
+                syncGroupId: group, syncUpdatedAt: syncedAt
+            ).jsonData())
+        var unread = request(games: [game(gameName)])
+        unread.syncGroup = .keepRecorded
+
+        let result = await engine.run(unread)
+
+        XCTAssertEqual(result.outcome, .success)
+        let record = try DeviceRecord.decode(json: XCTUnwrap(target.contents(atPath: paths.deviceFile)))
+        XCTAssertEqual(record.syncGroupId, group)
+        XCTAssertEqual(record.syncUpdatedAt, syncedAt)
+    }
+
     func testADeviceRecordThatDoesNotDownloadStopsTheRun() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

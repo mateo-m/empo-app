@@ -307,7 +307,13 @@ public final class SyncEngine {
 
     private func publish(groupId: String, to enabled: [TargetDescriptor]) async {
         let heads = document.heads()
-        guard let held = try? state.state() else { return }
+        let held: SyncState
+        do {
+            held = try state.state()
+        } catch {
+            note("the sync state does not read, so no copy goes out on this pass")
+            return
+        }
         let needed = Set(
             SyncReplication.targetsNeedingACopy(
                 enabled: enabled.map(\.id), progress: held.targets, heads: heads))

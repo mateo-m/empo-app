@@ -335,15 +335,19 @@ public actor SnapshotEngine {
         // only that date.
         let known = try await fetch(context.paths.deviceFile)
             .flatMap { try? DeviceRecord.decode(json: $0) }
+        let syncGroupId: String?
+        switch context.request.syncGroup {
+        case .known(let id): syncGroupId = id
+        case .keepRecorded: syncGroupId = known?.syncGroupId
+        }
         try await put(
             try DeviceRecord(
                 deviceId: context.request.deviceId,
                 model: context.request.deviceModel,
                 name: context.request.deviceName,
                 lastWriteAt: now,
-                syncGroupId: context.request.syncGroupId,
-                syncUpdatedAt: known?.syncGroupId == context.request.syncGroupId
-                    ? known?.syncUpdatedAt : nil
+                syncGroupId: syncGroupId,
+                syncUpdatedAt: known?.syncGroupId == syncGroupId ? known?.syncUpdatedAt : nil
             ).jsonData(),
             to: context.paths.deviceFile)
     }
