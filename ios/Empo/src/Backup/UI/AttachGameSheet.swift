@@ -10,7 +10,6 @@ import SwiftUI
 struct AttachGameSheet: View {
 
     let snapshot: SnapshotIdentity
-    /// Runs after the attach, with the game the user chose.
     let attached: (GameContainer) -> Void
 
     @Environment(\.dismiss) private var dismiss

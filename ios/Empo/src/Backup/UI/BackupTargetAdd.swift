@@ -92,8 +92,6 @@ enum BackupTargetAdd {
         return await check(descriptor, provider: provider, secretBefore: nil)
     }
 
-    /// `id` is the target that signs in again. A new target takes a
-    /// fresh id.
     /// A sign-in passes the `existing` target, which keeps its id,
     /// its folder, and its backup policy.
     static func s3(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {

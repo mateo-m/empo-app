@@ -2,14 +2,6 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// The app-side half of SPEC 11: it hands the pure rules the paths
-/// and the numbers only the app knows, and it owns the one running
-/// restore.
-///
-/// One restore runs at a time. Launching a game cancels it at once,
-/// per 7.6, and the cancel leaves the intent record of 6.5 plus the
-/// staged blobs, so the next launch asks once.
-///
 /// What the fresh-install flow of SPEC 11.4 reads off one target.
 struct FreshInstallScan {
     var plan: FreshInstallPlan
@@ -17,6 +9,9 @@ struct FreshInstallScan {
     var adoptableNamespaceIds: [String]
 }
 
+/// One restore runs at a time. Launching a game cancels it at once,
+/// per 7.6, and the cancel leaves the intent record of 6.5 plus the
+/// staged blobs, so the next launch asks once.
 @MainActor
 final class RestoreCoordinator {
 
@@ -34,7 +29,6 @@ final class RestoreCoordinator {
 
     // MARK: - The doors, per 11.3
 
-    /// Whether the manual door is open for one game.
     func availability(gameKey: String) -> RestoreAvailability {
         RestorePicker.availability(
             runInFlight: running?.gameKey == gameKey || BackupRunMonitor.shared.isRunning,
@@ -114,8 +108,6 @@ final class RestoreCoordinator {
 
     // MARK: - Running one restore
 
-    /// Starts a restore and waits for it.
-    ///
     /// The caller has already answered the version-marker sheet of
     /// 11.10 where it fired, so `scope` and `replacesTheTree` carry
     /// that answer.
@@ -355,8 +347,6 @@ final class RestoreCoordinator {
 
     // MARK: - The resume question, per 11.9
 
-    /// The record the next launch asks about, or `nil` when there is
-    /// nothing to ask.
     func pendingResume() -> BackupIntentRecord? {
         do {
             let store = try BackupRoot.openStateStore()
@@ -559,7 +549,6 @@ final class RestoreCoordinator {
         return files
     }
 
-    /// One directory under one named root.
     private struct Folder: Hashable {
         var root: EntryRoot
         var path: String

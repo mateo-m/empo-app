@@ -1,11 +1,6 @@
 import Foundation
 import GameProbe
 
-/// What the Google Drive sign-in of SPEC 8.10 and 9.3 needs.
-///
-/// `OAuthSignIn` runs the flow, the same one ticket 009 built for
-/// Dropbox. This holds the parts that are about Drive: the client id,
-/// the one scope, and the reversed-client-id callback scheme.
 @MainActor
 enum GoogleDriveSignIn {
 

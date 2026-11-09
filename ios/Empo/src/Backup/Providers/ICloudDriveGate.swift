@@ -38,7 +38,6 @@ final class ICloudDriveGate {
         Task { await probeAndLog() }
     }
 
-    /// The gate's answer, from the cache or from a fresh probe.
     func availability() async -> ICloudAvailability {
         if let cached = cache.value { return cached }
         let identityChangesBefore = identityChanges
@@ -75,7 +74,6 @@ final class ICloudDriveGate {
         return status != .noAccount
     }
 
-    /// The target, or `nil` where the gate is closed.
     func target() async -> ICloudDriveTarget? {
         guard await availability().isReady, let containerURL else { return nil }
         let watch = watch ?? ICloudUploadWatch()

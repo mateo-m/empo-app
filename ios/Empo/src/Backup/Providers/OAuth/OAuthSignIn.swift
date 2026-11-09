@@ -30,10 +30,6 @@ protocol AccountReading: Sendable {
 /// AppAuth carries PKCE and the code exchange. Empo hand-rolls the
 /// REST of each provider and nothing else, because an SDK would bring
 /// a second background session beside Empo's own, per 9.2 and 9.3.
-///
-/// One class holds the flow for Dropbox, for Google Drive, and for
-/// any later service. Ticket 010 states the rule plainly: reuse the
-/// shape ticket 009 built, and do not write a second OAuth stack.
 @MainActor
 final class OAuthSignIn {
 

@@ -30,7 +30,7 @@ final class GameSaveWatch {
     private var joinedPathsByGame: [String: Set<String>] = [:]
 
     /// The paths over the 50 MB limit that wait for an answer, per
-    /// 3.6. Tickets 017 and 018 show the ask.
+    /// 3.6.
     private var pendingAsksByGame: [String: [String]] = [:]
 
     private var session: Session?

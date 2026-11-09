@@ -3,9 +3,7 @@ import GameProbe
 import UIKit
 
 struct BackupPassResult: Sendable {
-    /// True when the pass did all the work it planned.
     var didFinish: Bool
-    /// One row for each target the pass touched.
     var targets: [BackupPassTarget]
 
     init(didFinish: Bool = false, targets: [BackupPassTarget] = []) {
@@ -252,8 +250,6 @@ final class BackupScheduler {
 
     // MARK: - The resume question of 6.5 and 13.18
 
-    /// The run the process did not survive, or `nil` when the last
-    /// launch left nothing to ask about.
     func pendingResume() -> BackupIntentRecord? {
         guard let store else { return nil }
         do {
@@ -276,7 +272,6 @@ final class BackupScheduler {
         }
     }
 
-    /// Applies one answer to the resume question.
     func answerResume(_ action: BackupResumeQuestion.Action, gameName: String) {
         guard let store else { return }
         do {

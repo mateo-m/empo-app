@@ -1,10 +1,6 @@
 import Foundation
 import GameProbe
 
-/// What the Dropbox sign-in of SPEC 8.10 and 9.2 needs.
-///
-/// `OAuthSignIn` runs the flow. This holds the parts that are about
-/// Dropbox: the app key, the scopes, and the callback scheme.
 @MainActor
 enum DropboxSignIn {
 

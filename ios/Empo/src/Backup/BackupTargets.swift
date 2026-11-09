@@ -122,10 +122,6 @@ enum BackupTargets {
 
     /// Runs the permission check of 8.7 against a provider, then adds
     /// the target when the check allows it.
-    ///
-    /// Ticket 016 renders the sheet. This is the part below it: the
-    /// four steps in order, and the quota answer that sets
-    /// `canQueryQuota` for this target, per 8.3 and 9.7.
     static func addAfterPermissionCheck(
         _ target: TargetDescriptor, provider: some BackupProvider
     ) async throws -> PermissionCheckResult {

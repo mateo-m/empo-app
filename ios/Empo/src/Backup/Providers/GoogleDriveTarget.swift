@@ -1,12 +1,6 @@
 import Foundation
 import GameProbe
 
-/// The Google Drive target of SPEC 9.3, the second OAuth provider.
-///
-/// Hand-rolled REST over the one background session of 7.3, with the
-/// AppAuth sign-in ticket 009 built. There is one OAuth stack and one
-/// background session in the app, and this file adds neither.
-///
 /// The rules a test can reach live in `GoogleDrive`, inside GameProbe:
 /// the URLs, the queries, the framing, the paging, and the error map.
 /// This file needs an account.

@@ -2,14 +2,6 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// One backup pass: every enabled target, every game the trigger
-/// covers, through the snapshot engine of SPEC 5.
-///
-/// The scheduler of ticket 007 owns when a pass runs and stops it at
-/// every gate. This file owns what a pass carries: it turns the
-/// library into a `BackupRunRequest` and hands it to `SnapshotEngine`,
-/// which does the rest.
-///
 /// A game whose mode is still unanswered is skipped, per 3.5. The
 /// Backups screen asks about every such game before it starts a run.
 @MainActor

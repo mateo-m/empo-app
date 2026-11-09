@@ -33,7 +33,6 @@ enum UploadStaging {
         return url
     }
 
-    /// Copies one byte range of a file into a file of its own.
     static func piece(
         of localFile: URL, offset: Int64, length: Int64, named name: String, in scratch: URL
     ) throws(BackupProviderError) -> URL {

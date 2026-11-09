@@ -258,7 +258,6 @@ actor S3Target: BackupProvider {
         try await commit(record)
     }
 
-    /// The upload to carry on from, or a new one.
     private func openUpload(
         key: String, size: Int64, parts: [S3.Part]
     ) async throws(BackupProviderError) -> S3MultipartUpload {

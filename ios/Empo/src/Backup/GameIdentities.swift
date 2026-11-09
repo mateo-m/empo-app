@@ -19,7 +19,6 @@ enum GameIdentities {
             .identity(forFolderName: container.folderName)
     }
 
-    /// The identity of every installed game.
     static func installedIdentities() -> [GameIdentity] {
         GameContainer.discover().map(identity(for:))
     }

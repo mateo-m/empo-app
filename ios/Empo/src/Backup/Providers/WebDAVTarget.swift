@@ -227,13 +227,13 @@ actor WebDAVTarget: BackupProvider {
         }
     }
 
-    /// `PUT` the whole file under the temp name, on the background
-    /// session of 7.3.
     /// Above this size the collections go in before the `PUT`. A
     /// server answers 409 for a missing collection only after it has
     /// read the whole body.
     static let collectionsFirstAbove = 8_000_000
 
+    /// `PUT` the whole file under the temp name, on the background
+    /// session of 7.3.
     private func stage(
         _ localFile: URL, at temporary: String
     ) async throws(BackupProviderError) {

@@ -24,9 +24,7 @@ final class S3Gate {
     /// record of what is already committed.
     private var targets: [String: S3Target] = [:]
 
-    /// The two numbers a device check lowers, per ticket 011. The
-    /// launch flag sets them, and a normal run leaves them at the
-    /// 5 GiB and the 32 MiB of 9.4.
+    /// A normal run leaves them at the 5 GiB and the 32 MiB of 9.4.
     private var singleUploadLimit = S3.singleUploadLimitBytes
     private var partBase = S3.defaultPartBytes
 
@@ -75,8 +73,7 @@ final class S3Gate {
     }
 
     /// Lowers the two upload numbers so the multipart path of 9.4
-    /// runs with a file a phone can write, per the device check of
-    /// ticket 011.
+    /// runs with a file a phone can write.
     func useSmallParts(singleUploadLimit: Int64, partBase: Int64) {
         self.singleUploadLimit = singleUploadLimit
         self.partBase = partBase
