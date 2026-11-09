@@ -89,11 +89,13 @@ public enum PackageValidation {
     /// first, because a bad path never has to be read, then the
     /// links, then what the two sides do not agree on.
     public static func check(_ manifest: PackageManifest, against entries: [ZipEntry]) throws {
-        var declared: Set<String> = []
+        var declared: [String: SnapshotManifest.Entry] = [:]
         for file in manifest.files {
             try checkThePath(file.zipPath)
             try checkThePath(file.entry.path)
-            guard declared.insert(file.zipPath).inserted else {
+            if let earlier = declared.updateValue(file.entry, forKey: file.zipPath),
+                earlier.hash != file.entry.hash || earlier.size != file.entry.size
+            {
                 throw PackageRejection.duplicatePath(file.zipPath)
             }
         }
@@ -105,7 +107,7 @@ public enum PackageValidation {
             guard seen.insert(entry.path).inserted else {
                 throw PackageRejection.duplicatePath(entry.path)
             }
-            guard declared.contains(entry.path) || ownFiles.contains(entry.path) else {
+            guard declared[entry.path] != nil || ownFiles.contains(entry.path) else {
                 throw PackageRejection.undeclaredFile(entry.path)
             }
         }

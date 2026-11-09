@@ -352,7 +352,9 @@ final class PackageTests: XCTestCase {
         }
 
         var twice = package
-        twice.streams[0].manifest.entries.append(twice.streams[0].manifest.entries[0])
+        var other = twice.streams[0].manifest.entries[0]
+        other.hash = String(repeating: "0", count: 64)
+        twice.streams[0].manifest.entries.append(other)
         XCTAssertThrowsError(try PackageValidation.check(twice, against: [good])) {
             XCTAssertEqual($0 as? PackageRejection, .duplicatePath(good.path))
         }
@@ -531,6 +533,37 @@ final class PackageTests: XCTestCase {
         }
         XCTAssertEqual(line, PackageRejection.wrongHash("Documents/Games/Quest/Game/Save02.rvdata2").line)
         XCTAssertFalse(fm.fileExists(atPath: container.appendingPathComponent("Game/Save01.rvdata2").path))
+    }
+
+    func testTwoGamesThatShareASaveFolderExportOneCopyAndImport() throws {
+        let shared = Data(repeating: 3, count: 512)
+        let folder = root.appendingPathComponent("Data/Kadokawa/Saga", isDirectory: true)
+        _ = try file("Data/Kadokawa/Saga/Save01.rvdata2", bytes: shared)
+        let streams = ["Quest", "Saga"].map { name in
+            PackagePlan.Stream(
+                key: BackupKeys.gameKey(containerFolderName: name),
+                gameName: name,
+                mode: .slim,
+                containerFolderName: name,
+                versionMarker: .init(),
+                sharedDataDirectory: "Data/Kadokawa/Saga",
+                rescuedSavesBuckets: [],
+                members: [
+                    BackupSetMember(
+                        root: .sharedData, path: "Save01.rvdata2", size: 512, modifiedAt: stamp)
+                ],
+                source: MemberSource(sharedData: folder))
+        }
+        let localRoot = BackupRootLayout(applicationSupport: root).root
+        let record = try PackagePlan(gameName: nil, streams: streams).build(
+            id: "export", localRoot: localRoot, sourceDevice: "iPad",
+            freeSpaceBytes: 1 << 40, at: stamp)
+
+        let url = record.zipURL(localRoot: localRoot)
+        let paths = try ZipReader(reading: url).entries.map(\.path)
+        XCTAssertEqual(paths.filter { $0 == "Documents/Data/Kadokawa/Saga/Save01.rvdata2" }.count, 1)
+        let source = try PackageSource(zip: url, packageId: "p1")
+        XCTAssertEqual(source.manifest.streams.map { $0.manifest.entries.count }, [1, 1])
     }
 
     // MARK: - An export holds every member or fails
