@@ -113,7 +113,7 @@ struct CircularControlButton<Face: View>: View {
         .scaleEffect(isPressed ? PressScale.standard : 1.0)
         .animation(Motion.controlPress, value: isPressed)
         .darkGlass()
-        .contentShape(Circle())
+        .contentShape(ControlTouchCapture.hitShape)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(.isButton)
         .overlay {
@@ -298,7 +298,7 @@ struct DPad: View {
         // Without the dark variant, the plus shows brighter than the
         // circles of the buttons.
         .darkGlass()
-        .contentShape(Circle())
+        .contentShape(ControlTouchCapture.hitShape)
         .accessibilityLabel("D-pad")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
@@ -369,7 +369,7 @@ struct Joystick: View {
         }
         .frame(width: size, height: size)
         .darkGlass()
-        .contentShape(Circle())
+        .contentShape(ControlTouchCapture.hitShape)
         .accessibilityLabel("Joystick")
         .accessibilityHint("Touch and drag to move the character")
         .accessibilityAddTraits(.allowsDirectInteraction)
