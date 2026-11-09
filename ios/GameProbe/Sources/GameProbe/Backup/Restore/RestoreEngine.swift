@@ -81,10 +81,16 @@ public actor RestoreEngine {
             return .failed(RestoreNotices.unreadableLine)
         }
 
+        let tree = request.choice == .replaceTheTree ? request.gameTreeURL : nil
+        let replaced = tree.flatMap { treeAside(of: $0, resumingInto: request.movedAsideTree) }
+        // A resume finds the tree already aside, and the game may have
+        // written new saves into the half-restored `Game/` since the
+        // stop. The plan must see them, so the writes move them aside.
+        let movesTheTree = replaced.map { !fm.fileExists(atPath: $0.path) } ?? false
         let plan = RestorePlanner.plan(
             manifest: manifest,
             scope: request.choice.scope,
-            localFiles: request.plannedLocalFiles,
+            localFiles: movesTheTree ? request.localFilesOutsideTheTree : request.localFiles,
             localVersionMarker: request.localVersionMarker,
             stagedBlobHashes: stagedBlobHashes())
 
@@ -96,7 +102,7 @@ public actor RestoreEngine {
 
         return await write(
             plan, manifest: manifest, request: request, paths: paths,
-            fanOutWidth: fanOutWidth)
+            fanOutWidth: fanOutWidth, tree: movesTheTree ? tree : nil, replaced: replaced)
     }
 
     // MARK: - The writes
@@ -106,12 +112,12 @@ public actor RestoreEngine {
         manifest: SnapshotManifest,
         request: RestoreRequest,
         paths: BackupNamespacePaths,
-        fanOutWidth: Int
+        fanOutWidth: Int,
+        tree: URL?,
+        replaced: URL?
     ) async -> RestoreOutcome {
         let gameKey = request.stream == .preferences ? nil : request.stream.key
         var result = RestoreResult(partialPathCount: plan.partialPaths.count)
-        let tree = request.choice == .replaceTheTree ? request.gameTreeURL : nil
-        let replaced = tree.flatMap { treeAside(of: $0, resumingInto: request.movedAsideTree) }
 
         // The record goes in before the first byte lands and before
         // `Game/` moves, so a process that dies mid-restore leaves one
@@ -126,7 +132,7 @@ public actor RestoreEngine {
                     movedAsideTree: replaced?.lastPathComponent,
                     at: now))) != nil
 
-        if let tree, let replaced, !fm.fileExists(atPath: replaced.path) {
+        if let tree, let replaced {
             guard saved, (try? fm.moveItem(at: tree, to: replaced)) != nil else {
                 try? store.clearIntent(kind: .interruptedRestore)
                 return .failed(
@@ -172,10 +178,8 @@ public actor RestoreEngine {
         return .finished(result)
     }
 
-    /// Stages one blob and writes its file.
-    ///
     /// The local file moves aside first, and the restored file takes
-    /// the real name, per 11.1. Nothing is deleted.
+    /// the real name, per 11.1.
     private func write(
         _ step: RestoreStep,
         request: RestoreRequest,
@@ -191,15 +195,13 @@ public actor RestoreEngine {
         // already run, so the file stays as it is.
         guard !Task.isCancelled else { throw RestoreStopReason.gameLaunched }
 
-        if case .writeAfterDisplacing(let displacedPath) = step.action,
-            let displaced = request.destination.url(root: entry.root, path: displacedPath)
-        {
-            try fm.moveItem(at: destination, to: displaced)
+        if (try? fm.attributesOfItem(atPath: destination.path)) != nil {
+            try fm.moveItem(
+                at: destination,
+                to: try displacedURL(of: destination, step: step, destination: request.destination))
         }
-
         try fm.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? fm.removeItem(at: destination)
 
         switch entry.compression {
         case .stored:
@@ -251,6 +253,24 @@ public actor RestoreEngine {
             throw RestoreStopReason.targetFailed
         }
         return staged
+    }
+
+    /// The plan names the displaced copy. A file the plan did not see,
+    /// such as a save the game wrote after the plan, takes the next
+    /// free name, so no local file is ever deleted.
+    private func displacedURL(
+        of destination: URL, step: RestoreStep, destination roots: MemberSource
+    ) throws -> URL {
+        if case .writeAfterDisplacing(let path) = step.action {
+            guard let url = roots.url(root: step.entry.root, path: path) else {
+                throw RestoreStopReason.targetFailed
+            }
+            return url
+        }
+        let folder = destination.deletingLastPathComponent()
+        let taken = Set(try fm.contentsOfDirectory(atPath: folder.path))
+        return folder.appendingPathComponent(
+            DisplacedCopy.nextFileName(for: destination.lastPathComponent, taken: taken))
     }
 
     /// Whether a staged file holds the entry's bytes.

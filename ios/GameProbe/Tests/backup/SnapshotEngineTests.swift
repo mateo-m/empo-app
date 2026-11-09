@@ -1734,6 +1734,36 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: kept, encoding: .utf8), "a save no backup holds")
     }
 
+    func testAResumedReplaceKeepsTheSavesTheGameWroteAfterTheStop() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("restore.sqlite")
+        let moved = try await stopAReplaceHalfWay(snapshotId, on: target, stateURL: stateURL)
+        for name in ["Game.ini", "autosave.sav", "save1.dat"] {
+            try write("played after the stop", to: container(gameName).appendingPathComponent("Game/\(name)"))
+        }
+
+        var resume = try replaceRequest(snapshotId)
+        resume.movedAsideTree = moved
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot
+        ).run(resume)
+
+        guard case .finished = outcome else {
+            return XCTFail("the resume did not finish: \(outcome)")
+        }
+        XCTAssertEqual(try gameText("save1.dat"), "slot one of \(gameName)")
+        let tree = container(gameName).appendingPathComponent("Game")
+        let kept = try fm.contentsOfDirectory(atPath: tree.path).filter {
+            (try? String(contentsOf: tree.appendingPathComponent($0), encoding: .utf8))
+                == "played after the stop"
+        }
+        XCTAssertEqual(kept.count, 3, "the saves made after the stop are gone: \(kept)")
+    }
+
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
 
     func testTheRunReportsOnePlanForTheStreamAndConfirmsEveryBlobOfIt() async throws {
