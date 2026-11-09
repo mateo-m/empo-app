@@ -352,29 +352,6 @@ public enum GoogleDrive {
         public static let serverError = 500
     }
 
-    /// The longest wait the truncated backoff of 9.3 ever makes.
-    public static let backoffCeilingSeconds: TimeInterval = 64
-
-    /// The truncated exponential delay of 9.3, for attempt 1, 2, 3,
-    /// and so on. It doubles and then stops at the ceiling.
-    public static func backoffSeconds(attempt: Int) -> TimeInterval {
-        let step = max(1, attempt)
-        guard step < 32 else { return backoffCeilingSeconds }
-        return min(backoffCeilingSeconds, TimeInterval(1 << (step - 1)))
-    }
-
-    /// `Retry-After` in seconds, per 8.6. Drive states it in seconds
-    /// when it states it at all, and the backoff of 9.3 covers the
-    /// rest.
-    public static func retryAfterSeconds(_ header: String?, attempt: Int = 1) -> TimeInterval {
-        guard let header, let seconds = TimeInterval(header.trimmingCharacters(in: .whitespaces)),
-            seconds > 0
-        else {
-            return backoffSeconds(attempt: attempt)
-        }
-        return seconds
-    }
-
     // MARK: - The error map, per 8.4
 
     /// What a Drive failure body carries.
@@ -425,7 +402,7 @@ public enum GoogleDrive {
         case Status.unauthorized:
             return .authExpired
         case Status.tooManyRequests:
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         case Status.forbidden:
             return forbidden(failure, retryAfterHeader: retryAfterHeader, attempt: attempt)
         case Status.notFound, Status.gone:
@@ -448,7 +425,7 @@ public enum GoogleDrive {
         }
         if failure.reason == "authError" { return .authExpired }
         if throttleReasons.contains(failure.reason) {
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         }
         return refusal(failure)
     }

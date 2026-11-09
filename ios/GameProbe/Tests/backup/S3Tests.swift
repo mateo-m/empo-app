@@ -74,10 +74,10 @@ final class S3Tests: XCTestCase {
     func testAThrottleWithNoStatedTimeTakesTheTruncatedBackoff() {
         let error = S3.error(
             status: 503, failure: failure(code: "SlowDown"), attempt: 4)
-        XCTAssertEqual(error, .throttled(retryAfter: S3.backoffSeconds(attempt: 4)))
-        XCTAssertEqual(S3.backoffSeconds(attempt: 1), 1)
-        XCTAssertEqual(S3.backoffSeconds(attempt: 4), 8)
-        XCTAssertEqual(S3.backoffSeconds(attempt: 40), S3.backoffCeilingSeconds)
+        XCTAssertEqual(error, .throttled(retryAfter: RetryWait.backoffSeconds(attempt: 4)))
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 1), 1)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 4), 8)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 40), RetryWait.backoffCeilingSeconds)
     }
 
     func testAFullBucketRunsThePruneLadder() {

@@ -242,16 +242,8 @@ public enum Dropbox {
     /// The default wait when Dropbox throttles and states no time.
     public static let defaultRetryAfter: TimeInterval = 5
 
-    /// `Retry-After` in seconds, per 8.6. A missing or unreadable
-    /// header takes the default, because a throttle Empo ignores
-    /// earns a second throttle.
     public static func retryAfterSeconds(_ header: String?) -> TimeInterval {
-        guard let header, let seconds = TimeInterval(header.trimmingCharacters(in: .whitespaces)),
-            seconds > 0
-        else {
-            return defaultRetryAfter
-        }
-        return seconds
+        RetryWait.headerSeconds(header) ?? defaultRetryAfter
     }
 
     /// One Dropbox failure onto one error kind of 8.4.

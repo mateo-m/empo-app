@@ -312,30 +312,6 @@ public enum S3 {
         }
     }
 
-    // MARK: - Throttling, per 9.4
-
-    /// The longest wait the truncated backoff ever makes.
-    public static let backoffCeilingSeconds: TimeInterval = 64
-
-    /// The truncated exponential delay for attempt 1, 2, 3, and so
-    /// on. It doubles and then stops at the ceiling.
-    public static func backoffSeconds(attempt: Int) -> TimeInterval {
-        let step = max(1, attempt)
-        guard step < 32 else { return backoffCeilingSeconds }
-        return min(backoffCeilingSeconds, TimeInterval(1 << (step - 1)))
-    }
-
-    /// `Retry-After` in seconds, per 8.6. S3 states it in seconds
-    /// when it states it at all, and the backoff covers the rest.
-    public static func retryAfterSeconds(_ header: String?, attempt: Int = 1) -> TimeInterval {
-        guard let header, let seconds = TimeInterval(header.trimmingCharacters(in: .whitespaces)),
-            seconds > 0
-        else {
-            return backoffSeconds(attempt: attempt)
-        }
-        return seconds
-    }
-
     // MARK: - The error map, per 8.4
 
     /// What an S3 failure body carries.
@@ -415,7 +391,7 @@ public enum S3 {
         if outOfSpaceCodes.contains(failure.code) { return .outOfSpace }
         if credentialCodes.contains(failure.code) { return .authExpired }
         if throttleCodes.contains(failure.code) {
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         }
 
         switch status {
@@ -435,7 +411,7 @@ public enum S3 {
             if notFoundCodes.contains(failure.code) { return .notFound }
             return refusal(failure)
         case Status.tooManyRequests, Status.unavailable:
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         case Status.insufficientStorage:
             return .outOfSpace
         case Status.serverError..<600:

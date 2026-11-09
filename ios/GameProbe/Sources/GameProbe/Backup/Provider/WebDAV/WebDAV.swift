@@ -276,37 +276,6 @@ public enum WebDAV {
         return QuotaReading(usedBytes: used, limitBytes: used + available)
     }
 
-    // MARK: - Throttling, per 8.6
-
-    /// The longest wait the truncated backoff ever makes.
-    public static let backoffCeilingSeconds: TimeInterval = 64
-
-    /// The truncated exponential delay for attempt 1, 2, 3, and so
-    /// on. It doubles and then stops at the ceiling.
-    public static func backoffSeconds(attempt: Int) -> TimeInterval {
-        let step = max(1, attempt)
-        guard step < 32 else { return backoffCeilingSeconds }
-        return min(backoffCeilingSeconds, TimeInterval(1 << (step - 1)))
-    }
-
-    /// `Retry-After` in seconds, per 8.6.
-    ///
-    /// HTTP states two forms, and a WebDAV server may send either: a
-    /// count of seconds, or a date. The backoff covers the header a
-    /// server leaves out.
-    public static func retryAfterSeconds(
-        _ header: String?, attempt: Int = 1, now: Date = Date()
-    ) -> TimeInterval {
-        guard let header else { return backoffSeconds(attempt: attempt) }
-        let text = header.trimmingCharacters(in: .whitespaces)
-        if let seconds = TimeInterval(text), seconds > 0 { return seconds }
-        if let date = ProviderDate.httpReader()(text) {
-            let wait = date.timeIntervalSince(now)
-            if wait > 0 { return wait }
-        }
-        return backoffSeconds(attempt: attempt)
-    }
-
     // MARK: - The error map, per 8.4
 
     /// The status codes, named so the map below reads as the rule.
@@ -368,7 +337,7 @@ public enum WebDAV {
             return refusal(fromBody: body)
         case Status.tooManyRequests, Status.unavailable:
             return .throttled(
-                retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+                retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         case Status.insufficientStorage:
             return .outOfSpace
         case Status.serverError..<600:

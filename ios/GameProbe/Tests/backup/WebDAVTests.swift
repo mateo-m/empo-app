@@ -273,7 +273,7 @@ final class WebDAVTests: XCTestCase {
 
         // A server that states no time gets the truncated backoff.
         XCTAssertEqual(WebDAV.error(status: 429, attempt: 3), .throttled(retryAfter: 4))
-        XCTAssertEqual(WebDAV.backoffSeconds(attempt: 99), WebDAV.backoffCeilingSeconds)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 99), RetryWait.backoffCeilingSeconds)
     }
 
     func testARetryAfterDateReadsAsAWait() {
@@ -281,12 +281,13 @@ final class WebDAVTests: XCTestCase {
         let later = now.addingTimeInterval(45)
         let header = WebDAVTests.httpDate(later)
         XCTAssertEqual(
-            WebDAV.retryAfterSeconds(header, now: now), 45, accuracy: 1)
+            RetryWait.seconds(retryAfter: header, attempt: 1, now: now), 45, accuracy: 1)
         // A date that has already passed is no wait at all, so the
         // backoff decides.
         XCTAssertEqual(
-            WebDAV.retryAfterSeconds(WebDAVTests.httpDate(now.addingTimeInterval(-60)), now: now),
-            WebDAV.backoffSeconds(attempt: 1))
+            RetryWait.seconds(
+                retryAfter: WebDAVTests.httpDate(now.addingTimeInterval(-60)), attempt: 1, now: now),
+            RetryWait.backoffSeconds(attempt: 1))
     }
 
     func testAServerThatIsUpButUnwellRetriesOnTheNextPass() {
