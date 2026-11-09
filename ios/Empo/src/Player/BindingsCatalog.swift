@@ -49,7 +49,7 @@ enum BindingsCatalog {
         var id: String { source.name }
     }
 
-    /// RPG Maker meaning hints for the Common key group (ticket 005 section 4).
+    /// What each key of the common group does in most RPG Maker games.
     static let commonKeyAnnotations: [String: String] = [
         "Enter": String(
             localized: "Confirm",

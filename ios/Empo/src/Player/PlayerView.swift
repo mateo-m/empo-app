@@ -677,10 +677,7 @@ struct PlayerView: View {
     private var accessoryExcludedScancodes: Set<Int32> {
         var covered = Set<Int32>()
         if !controlsHidden {
-            covered.formUnion([
-                Int32(GAMECORE_SCANCODE_UP), Int32(GAMECORE_SCANCODE_DOWN),
-                Int32(GAMECORE_SCANCODE_LEFT), Int32(GAMECORE_SCANCODE_RIGHT),
-            ])
+            covered.formUnion(ControlDirection.allCases.map(\.scancode))
             for button in layout.buttons {
                 covered.insert(button.scancode)
             }

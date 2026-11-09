@@ -30,25 +30,16 @@ struct AddButtonSheet: View {
                         actionRow(for: action)
                     }
                 }
-                Section("Common keys") {
-                    ForEach(keyCatalog.filter { isCommon($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
-                Section("Letters") {
-                    ForEach(keyCatalog.filter { isLetter($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
-                Section("Numbers") {
-                    ForEach(keyCatalog.filter { isNumber($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
-                Section("Function keys") {
-                    ForEach(keyCatalog.filter { isFunction($0) }) { entry in
-                        row(for: entry)
-                    }
+                KeyCodeSections { code, hint in
+                    KeyCodeLabel(code: code, hint: hint)
+                        .contentShape(Rectangle())
+                        .opacity(atCap ? 0.4 : 1)
+                        .onTapGesture {
+                            guard !atCap, let scancode = KeyCodeTable.scancode(for: code) else { return }
+                            dismiss()
+                            layout.addButton(
+                                label: KeyCodeTable.displayName(for: code) ?? code, scancode: scancode)
+                        }
                 }
             }
             .navigationTitle("Add button")
@@ -61,27 +52,6 @@ struct AddButtonSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-    }
-
-    private func row(for entry: KeyEntry) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.label)
-                if let hint = entry.hint {
-                    Text(hint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-        }
-        .contentShape(Rectangle())
-        .opacity(atCap ? 0.4 : 1)
-        .onTapGesture {
-            guard !atCap else { return }
-            dismiss()
-            layout.addButton(label: entry.label, scancode: entry.scancode)
-        }
     }
 
     private func actionRow(for action: EmpoAction) -> some View {
@@ -109,29 +79,43 @@ struct AddButtonSheet: View {
             layout.addActionButton(action: action.id)
         }
     }
+}
 
-    private func isCommon(_ entry: KeyEntry) -> Bool {
-        let common: Set<Int32> = [
-            Int32(GAMECORE_SCANCODE_Z), Int32(GAMECORE_SCANCODE_X),
-            Int32(GAMECORE_SCANCODE_LSHIFT), Int32(GAMECORE_SCANCODE_LCTRL),
-            Int32(GAMECORE_SCANCODE_SPACE), Int32(GAMECORE_SCANCODE_RETURN),
-            Int32(GAMECORE_SCANCODE_ESCAPE), Int32(GAMECORE_SCANCODE_TAB),
-            Int32(GAMECORE_SCANCODE_LALT), Int32(GAMECORE_SCANCODE_BACKSPACE),
-        ]
-        return common.contains(entry.scancode)
+/// The key list of the add-button sheet and the key picker. Each key
+/// of the common group shows what it does in most RPG Maker games.
+private struct KeyCodeSections<Row: View>: View {
+    @ViewBuilder let row: (_ code: String, _ hint: String?) -> Row
+
+    var body: some View {
+        let buckets = KeyCodeTable.codesByPickerGroup
+        ForEach(KeyCodePickerGroup.allCases, id: \.self) { group in
+            if let codes = buckets[group], !codes.isEmpty {
+                Section(group.localizedTitle) {
+                    ForEach(codes, id: \.self) { code in
+                        row(code, group == .common ? BindingsCatalog.commonKeyAnnotations[code] : nil)
+                    }
+                }
+            }
+        }
     }
+}
 
-    private func isLetter(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(GAMECORE_SCANCODE_A) && entry.scancode <= Int32(GAMECORE_SCANCODE_Z)
-            && !isCommon(entry)
-    }
+private struct KeyCodeLabel: View {
+    let code: String
+    let hint: String?
 
-    private func isNumber(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(GAMECORE_SCANCODE_1) && entry.scancode <= Int32(GAMECORE_SCANCODE_0)
-    }
-
-    private func isFunction(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(GAMECORE_SCANCODE_F1) && entry.scancode <= Int32(GAMECORE_SCANCODE_F12)
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(KeyCodeTable.displayName(for: code) ?? code)
+                if let hint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
     }
 }
 
@@ -253,7 +237,7 @@ struct ButtonEditSheet: View {
                         NavigationLink {
                             keyPickerList(current: button.scancode)
                         } label: {
-                            LabeledContent("Key", value: scancodeDisplayName(button.scancode))
+                            LabeledContent("Key", value: keyName(button.scancode))
                         }
                     }
 
@@ -297,29 +281,30 @@ struct ButtonEditSheet: View {
         }
     }
 
+    private func keyName(_ scancode: Int32) -> String {
+        KeyCodeTable.code(for: scancode).flatMap { KeyCodeTable.displayName(for: $0) }
+            ?? String(
+                localized: "Unknown key",
+                comment: "Shown as the key of an on-screen button when Empo does not know its key.")
+    }
+
     private func keyPickerList(current scancode: Int32) -> some View {
         List {
-            ForEach(keyCatalog) { entry in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.label)
-                        if let hint = entry.hint {
-                            Text(hint)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            KeyCodeSections { code, hint in
+                let keyScancode = KeyCodeTable.scancode(for: code)
+                KeyCodeLabel(code: code, hint: hint)
+                    .overlay(alignment: .trailing) {
+                        if keyScancode == scancode {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.brand)
                         }
                     }
-                    Spacer()
-                    if entry.scancode == scancode {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.brand)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard let keyScancode else { return }
+                        layout.recordEditSnapshot()
+                        layout.updateButton(id: buttonID, scancode: keyScancode)
                     }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    layout.recordEditSnapshot()
-                    layout.updateButton(id: buttonID, scancode: entry.scancode)
-                }
             }
         }
         .navigationTitle("Key")

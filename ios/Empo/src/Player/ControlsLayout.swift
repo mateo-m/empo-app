@@ -1641,12 +1641,8 @@ class ControlsLayout {
 
     func addButton(label: String, scancode: Int32) {
         recordEditSnapshot()
-        var displayLabel = label
-        if let range = label.range(of: " (") {
-            displayLabel = String(label[..<range.lowerBound])
-        }
         let button = ButtonModel(
-            label: displayLabel, scancode: scancode,
+            label: label, scancode: scancode,
             relativeCenter: resolvedSpawnRelativeCenter(size: newControlSize),
             size: newControlSize)
         withAnimation(Motion.gentle) {
