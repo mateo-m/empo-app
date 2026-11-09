@@ -1,7 +1,6 @@
 import Foundation
 
-/// The version-marker sheet of SPEC 11.10. **This copy is
-/// canonical.** Ticket 017 renders it and writes no copy of its own.
+/// The version-marker sheet of SPEC 11.10.
 ///
 /// It shows in one case: a full-mode restore over a tree whose
 /// version marker of 4.4 differs. A restore of saves and settings
@@ -13,24 +12,16 @@ import Foundation
 /// collide with.
 public enum VersionMarkerSheet {
 
-    /// What the user picks, per 11.10.
     public enum Action: String, Codable, Sendable, CaseIterable, Equatable {
-        /// Puts back the saves alone and touches nothing else. The
-        /// safe first choice.
         case savesAndSettingsOnly = "saves-and-settings-only"
-        /// Adds the backup's files beside the local ones. Removes
-        /// nothing.
         case keepMyFiles = "keep-my-files"
-        /// Moves the local game files aside, then writes the
-        /// backup's files in their place.
         case useOnlyThisBackup = "use-only-this-backup"
 
         public var scope: RestoreScope {
             self == .savesAndSettingsOnly ? .savesAndSettings : .wholeGame
         }
 
-        /// Whether the action replaces the tree, per 11.12. Only one
-        /// of the three does.
+        /// Per 11.12.
         public var replacesTheTree: Bool {
             self == .useOnlyThisBackup
         }
@@ -65,8 +56,8 @@ public enum VersionMarkerSheet {
             + "already here?", gameName)
     }
 
-    /// The order the actions appear in. Saves and settings only is
-    /// first, because it is the safe first choice.
+    /// Saves and settings only is first, because it is the safe
+    /// first choice.
     public static let actions: [Action] = [
         .savesAndSettingsOnly, .keepMyFiles, .useOnlyThisBackup,
     ]

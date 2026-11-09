@@ -61,8 +61,6 @@ public enum VersionMarkerBuilder {
     /// differs, because that can bury a self-updated game under its
     /// own older files. A restore of saves and settings never warns,
     /// and no mismatch ever refuses a restore.
-    ///
-    /// Ticket 014 builds the sheet. Section 11.10 holds its copy.
     public static func warnsBeforeRestore(mode: BackupMode, differs: Bool) -> Bool {
         mode == .full && differs
     }

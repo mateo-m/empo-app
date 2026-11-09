@@ -1,8 +1,6 @@
 import Foundation
 
 /// The capability flags of SPEC 8.3.
-///
-/// The engine reads these. It never branches on the provider name.
 public struct TargetCapabilities: Equatable, Sendable {
 
     /// Whether this target answers a space query. The add-time
@@ -39,10 +37,6 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// 13.6. A row that cannot be filled is absent, and a missing
     /// usage bar would read as a loading failure, so a target that
     /// answers no space query says why.
-    ///
-    /// It lives here and not on one provider, because 9.7 names two
-    /// providers that never answer and two more that answer on some
-    /// servers alone.
     public static let noSpaceQueryLine = screenText("This service doesn't show how much free space is left.")
 
     /// The error a file of this size earns, or `nil` when it fits.

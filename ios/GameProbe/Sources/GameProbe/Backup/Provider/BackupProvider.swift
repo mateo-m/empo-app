@@ -59,21 +59,13 @@ public enum PutConfirmation: Equatable, Sendable {
 /// which retries a whole put.
 public protocol BackupProvider: Sendable {
 
-    /// The five flags of 8.3. They are fixed for the life of the
-    /// provider. `canQueryQuota` comes from the add-time permission
-    /// check and rides the target descriptor.
+    /// Fixed for the life of the provider. `canQueryQuota` comes from
+    /// the add-time permission check and rides the target descriptor.
     var capabilities: TargetCapabilities { get }
 
-    /// Every object whose path starts with `prefix`.
-    ///
-    /// No run calls this. Its five callers are the sweep of 5.11,
-    /// the permission check of 8.7, the fresh-install scan of 11.3,
-    /// the namespace list of 13.9, and the preference-sync pass of
-    /// 10.5.
+    /// No run calls this. The sweep and the scans do.
     func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject]
 
-    /// Uploads one file.
-    ///
     /// It always reads from a file, because a background URLSession
     /// uploads from a file alone. Inside the provider it is two
     /// phases: stage, then commit.
@@ -84,7 +76,6 @@ public protocol BackupProvider: Sendable {
     /// Throws `notFound` when the target holds no object there.
     func confirm(path: String) async throws(BackupProviderError) -> PutConfirmation
 
-    /// Downloads one object to `localFile`.
     func get(path: String, localFile: URL) async throws(BackupProviderError)
 
     /// Deletes a batch. A path that holds no object is not an error,
