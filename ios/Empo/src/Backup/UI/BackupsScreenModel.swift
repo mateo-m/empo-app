@@ -399,7 +399,12 @@ final class BackupsScreenModel {
 
     func answerTheAdoptBanner(_ banner: AdoptBannerItem, adopts: Bool) {
         if adopts {
-            try? BackupKeychain.adoptNamespaceId(banner.namespaceId)
+            do {
+                try BackupNamespaceMove.move(to: banner.namespaceId)
+            } catch {
+                BackupLog.line("BackupsScreenModel", "The adopt was not saved: \(error)")
+                return
+            }
         }
         adoptBanners.removeAll { $0.id == banner.id }
     }

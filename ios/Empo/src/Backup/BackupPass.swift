@@ -116,6 +116,13 @@ final class BackupPass: BackupRunning {
             return nil
         }
         do {
+            try BackupNamespaceMove.clearIfWaiting(targetId: descriptor.id, store: store)
+        } catch {
+            BackupLog.line(
+                "BackupPass", "\(descriptor.label) still holds the rows of the old namespace: \(error)")
+            return nil
+        }
+        do {
             try await BackupLedgerRebuild.runIfWaiting(
                 descriptor, provider: provider, namespaceId: namespaceId, store: store)
         } catch {
@@ -159,27 +166,16 @@ final class BackupPass: BackupRunning {
         conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
         try? conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
         if result.didSplit {
-            moveTheDevice(to: result.namespaceId, after: descriptor)
+            do {
+                try BackupNamespaceMove.move(to: result.namespaceId, except: descriptor.id)
+                log("\(descriptor.label) split, the device now writes to \(result.namespaceId)")
+            } catch {
+                BackupLog.line(
+                    "BackupPass",
+                    "\(descriptor.label) split to \(result.namespaceId) but the Keychain kept the old id")
+            }
         }
         return result
-    }
-
-    /// The namespace id is one per device, so a split on one target
-    /// moves every target to the new space. The others start from a
-    /// full upload on their next run, like the one that split.
-    private func moveTheDevice(to namespaceId: String, after descriptor: TargetDescriptor) {
-        do {
-            try BackupKeychain.adoptNamespaceId(namespaceId)
-        } catch {
-            log("\(descriptor.label) split to \(namespaceId) but the Keychain kept the old id")
-            return
-        }
-        log("\(descriptor.label) split, the device now writes to \(namespaceId)")
-        guard let store = try? BackupRoot.openStateStore() else { return }
-        defer { store.close() }
-        for other in BackupTargets.load() where other.id != descriptor.id {
-            try? store.clearNamespaceState(targetId: other.id)
-        }
     }
 
     // MARK: - The games

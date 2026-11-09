@@ -60,7 +60,11 @@ final class FreshInstallModel {
     func answerTheAdopt(_ answer: AdoptQuestion.Answer) {
         hasAnsweredTheAdopt = true
         guard answer == .adopt, let first = adoptableNamespaceIds.first else { return }
-        try? BackupKeychain.adoptNamespaceId(first)
+        do {
+            try BackupNamespaceMove.move(to: first)
+        } catch {
+            BackupLog.line("FreshInstallSheet", "The adopt was not saved: \(error)")
+        }
     }
 
     // MARK: - The confirm tap
