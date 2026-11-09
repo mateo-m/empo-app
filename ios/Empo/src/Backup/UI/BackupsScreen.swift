@@ -21,6 +21,7 @@ struct BackupsScreen: View {
     var body: some View {
         ReadFirst(value: model.items) { items in
             List {
+                damagedTargetsLine
                 if items.isEmpty {
                     emptyState
                     fileSection
@@ -213,6 +214,24 @@ struct BackupsScreen: View {
                 }
                 Button(WriterConflictQuestion.label(of: .takeOver)) {
                     model.answerTheWriterQuestion(item, resolution: .takeOver)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var damagedTargetsLine: some View {
+        if model.targetsFileIsDamaged {
+            Section {
+                question(
+                    String(localized: "Empo can't read your list of locations."),
+                    note: String(
+                        localized:
+                            "Your backups are still there. Add your locations again to keep backing up."))
+                Button("Add locations again") {
+                    Task {
+                        await model.setAsideTheDamagedTargets()
+                        if !model.targetsFileIsDamaged { sheets.show(.add) }
+                    }
                 }
             }
         }

@@ -11,10 +11,37 @@ import GameProbe
 @MainActor
 enum BackupTargets {
 
+    /// A damaged file throws. A caller that read it as "no targets"
+    /// and wrote the list back would delete every target.
+    static func read() throws -> [TargetDescriptor] {
+        let data: Data
+        do {
+            data = try Data(contentsOf: BackupRoot.layout.targetsFile)
+        } catch CocoaError.fileReadNoSuchFile {
+            return []
+        }
+        return try TargetDescriptorFile.decode(json: data).targets
+    }
+
+    /// For the readers that only show or skip targets. They see no
+    /// target when the file is damaged, and nothing writes.
     static func load() -> [TargetDescriptor] {
-        let file = try? TargetDescriptorFile.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
-        return file?.targets ?? []
+        do {
+            return try read()
+        } catch {
+            BackupLog.line("BackupTargets", "targets.json was not read: \(error)")
+            return []
+        }
+    }
+
+    /// Moves a damaged file aside, so that the user can add the
+    /// targets again. The damaged copy stays beside it.
+    static func setAsideTheDamagedFile() throws {
+        let file = BackupRoot.layout.targetsFile
+        let stamp = Int(Date().timeIntervalSince1970)
+        try FileManager.default.moveItem(
+            at: file, to: file.deletingPathExtension().appendingPathExtension("damaged-\(stamp).json"))
+        BackupBadges.shared.invalidate()
     }
 
     /// Restores use `load()`, so they still read from every target.
@@ -30,7 +57,7 @@ enum BackupTargets {
     /// before the pass and wrote it back after would put the old
     /// list back, so every change reads the file again first.
     static func update(_ change: (inout [TargetDescriptor]) -> Void) throws {
-        let stored = load()
+        let stored = try read()
         var targets = stored
         change(&targets)
         guard targets != stored else { return }

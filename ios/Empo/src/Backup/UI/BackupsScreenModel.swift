@@ -81,6 +81,7 @@ final class BackupsScreenModel {
     private(set) var writerQuestions: [WriterQuestionItem] = []
     /// The line of 7.11, after a split, until the user closes it.
     private(set) var showsTheSplitLine = false
+    private(set) var targetsFileIsDamaged = false
     /// Whether the row above Backup history shows, per 13.19.
     private(set) var asksForNotifications = false
 
@@ -90,7 +91,15 @@ final class BackupsScreenModel {
 
     func refresh() async {
         iCloudReach = await ICloudDriveGate.shared.availability().reach
-        let descriptors = BackupTargets.load()
+        let descriptors: [TargetDescriptor]
+        do {
+            descriptors = try BackupTargets.read()
+            targetsFileIsDamaged = false
+        } catch {
+            BackupLog.line("BackupsScreenModel", "targets.json was not read: \(error)")
+            descriptors = []
+            targetsFileIsDamaged = true
+        }
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []
         let store = try? BackupRoot.openStateStore()
@@ -230,9 +239,22 @@ final class BackupsScreenModel {
     private func change(
         targetId: String, _ edit: (inout TargetDescriptor) -> Void
     ) async {
-        try? BackupTargets.update { targets in
-            guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
-            edit(&targets[index])
+        do {
+            try BackupTargets.update { targets in
+                guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
+                edit(&targets[index])
+            }
+        } catch {
+            BackupLog.line("BackupsScreenModel", "the change to \(targetId) was not saved: \(error)")
+        }
+        await refresh()
+    }
+
+    func setAsideTheDamagedTargets() async {
+        do {
+            try BackupTargets.setAsideTheDamagedFile()
+        } catch {
+            BackupLog.line("BackupsScreenModel", "targets.json was not set aside: \(error)")
         }
         await refresh()
     }
