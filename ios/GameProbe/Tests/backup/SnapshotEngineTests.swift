@@ -236,7 +236,8 @@ final class SnapshotEngineTests: XCTestCase {
             guard let table = row[0].string else { continue }
             for event in ["INSERT", "UPDATE"] {
                 try store.database.run(
-                    "CREATE TRIGGER no_\(event)_\(table) BEFORE \(event) ON \(table) BEGIN SELECT RAISE(ABORT, 'held'); END")
+                    "CREATE TRIGGER no_\(event)_\(table) BEFORE \(event) ON \(table) BEGIN SELECT RAISE(ABORT, 'held'); END"
+                )
             }
         }
         let notes = NoteRecorder()
@@ -1768,7 +1769,8 @@ final class SnapshotEngineTests: XCTestCase {
         try store.database.run(
             "CREATE TRIGGER keep BEFORE DELETE ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
 
-        let outcome = await restore
+        let outcome =
+            await restore
             .run(try replaceRequest(snapshotId))
 
         guard case .finished = outcome else {
@@ -2136,7 +2138,8 @@ final class SnapshotEngineTests: XCTestCase {
         try store.database.run(
             "CREATE TRIGGER hold BEFORE INSERT ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
 
-        let outcome = await restore
+        let outcome =
+            await restore
             .run(
                 RestoreRequest(
                     targetId: targetId,
