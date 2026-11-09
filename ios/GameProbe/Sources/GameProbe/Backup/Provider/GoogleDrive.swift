@@ -196,24 +196,6 @@ public enum GoogleDrive {
     /// chunk repeats.
     public static let uploadChunkBytes: Int64 = 64 * chunkAlignmentBytes
 
-    /// One chunk of a resumable upload.
-    public struct Chunk: Equatable, Sendable {
-        public let offset: Int64
-        public let length: Int64
-        /// Whether the session ends after this one. Drive commits the
-        /// file at the end of the last chunk, which is how a
-        /// resumable upload meets 8.2.
-        public let isLast: Bool
-
-        public init(offset: Int64, length: Int64, isLast: Bool) {
-            self.offset = offset
-            self.length = length
-            self.isLast = isLast
-        }
-
-        public var endOffset: Int64 { offset + length }
-    }
-
     /// How one file goes up, per 9.3.
     public enum UploadPlan: Equatable, Sendable {
         /// One multipart request. Drive commits it whole, so it meets
@@ -221,7 +203,7 @@ public enum GoogleDrive {
         case simple
         /// A session URI, then a `PUT` per chunk. The file appears
         /// only when the session ends, so the commit is atomic.
-        case resumable(chunks: [Chunk])
+        case resumable(chunks: [UploadChunk])
     }
 
     public static func uploadPlan(forFileOfSize size: Int64) -> UploadPlan {
@@ -229,28 +211,13 @@ public enum GoogleDrive {
         return .resumable(chunks: chunks(ofFileSize: size, from: 0))
     }
 
-    /// The chunks left for a file of this size, starting at `offset`.
-    ///
-    /// A session that broke resumes from the offset the probe
-    /// reports, so it never starts again from zero. Every chunk but
-    /// the last is a multiple of 256 KB, which is what Drive takes.
-    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [Chunk] {
-        let start = max(0, min(offset, size))
-        guard start < size else { return [] }
-
-        var chunks: [Chunk] = []
-        var cursor = start
-        while cursor < size {
-            let left = size - cursor
-            let length = left <= uploadChunkBytes ? left : uploadChunkBytes
-            cursor += length
-            chunks.append(Chunk(offset: cursor - length, length: length, isLast: cursor >= size))
-        }
-        return chunks
+    /// Every chunk but the last is a multiple of the alignment, which is what Drive takes.
+    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [UploadChunk] {
+        UploadChunk.plan(fileSize: size, from: offset, chunkBytes: uploadChunkBytes)
     }
 
     /// The `Content-Range` header of one chunk.
-    public static func contentRange(of chunk: Chunk, fileSize: Int64) -> String {
+    public static func contentRange(of chunk: UploadChunk, fileSize: Int64) -> String {
         "bytes \(chunk.offset)-\(chunk.endOffset - 1)/\(fileSize)"
     }
 

@@ -176,7 +176,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
     /// The session path of 9.2. Nothing appears at the target path
     /// until `finish` commits, which is how this meets 8.2.
     private func uploadSession(
-        _ localFile: URL, to path: String, size: Int64, chunks: [Dropbox.Chunk]
+        _ localFile: URL, to path: String, size: Int64, chunks: [UploadChunk]
     ) async throws(BackupProviderError) {
         let scratch = UploadStaging.scratchDirectory("dropbox")
         defer { try? FileManager.default.removeItem(at: scratch) }

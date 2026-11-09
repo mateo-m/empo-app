@@ -169,7 +169,7 @@ final class GoogleDriveTests: XCTestCase {
     }
 
     func testTheContentRangeNamesTheBytesAndTheWholeSize() {
-        let chunk = GoogleDrive.Chunk(offset: 0, length: 262_144, isLast: false)
+        let chunk = UploadChunk(offset: 0, length: 262_144, isLast: false)
         XCTAssertEqual(
             GoogleDrive.contentRange(of: chunk, fileSize: 1_048_576),
             "bytes 0-262143/1048576")

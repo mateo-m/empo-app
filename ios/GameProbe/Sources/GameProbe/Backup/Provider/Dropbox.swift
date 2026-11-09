@@ -108,22 +108,6 @@ public enum Dropbox {
     /// trades disk against the work a failed append repeats.
     public static let uploadChunkBytes: Int64 = 16 * 1024 * 1024
 
-    /// One append of an upload session.
-    public struct Chunk: Equatable, Sendable {
-        public let offset: Int64
-        public let length: Int64
-        /// Whether `finish` commits after this one.
-        public let isLast: Bool
-
-        public init(offset: Int64, length: Int64, isLast: Bool) {
-            self.offset = offset
-            self.length = length
-            self.isLast = isLast
-        }
-
-        public var endOffset: Int64 { offset + length }
-    }
-
     /// How one file goes up, per 9.2.
     public enum UploadPlan: Equatable, Sendable {
         /// One `files/upload` call. Dropbox commits it whole, so it
@@ -132,7 +116,7 @@ public enum Dropbox {
         /// `upload_session/start`, then an `append_v2` per chunk,
         /// then `finish`. Nothing appears at the path until the
         /// commit, which is how a session meets 8.2.
-        case session(chunks: [Chunk])
+        case session(chunks: [UploadChunk])
     }
 
     public static func uploadPlan(forFileOfSize size: Int64) -> UploadPlan {
@@ -140,24 +124,9 @@ public enum Dropbox {
         return .session(chunks: chunks(ofFileSize: size, from: 0))
     }
 
-    /// The appends left for a file of this size, starting at
-    /// `offset`.
-    ///
-    /// A session that broke resumes from the offset Dropbox reports,
-    /// so it never restarts from zero. An offset at the end of the
-    /// file leaves no append, and `finish` still has to run.
-    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [Chunk] {
-        let start = max(0, min(offset, size))
-        guard start < size else { return [] }
-
-        var chunks: [Chunk] = []
-        var cursor = start
-        while cursor < size {
-            let length = min(uploadChunkBytes, size - cursor)
-            cursor += length
-            chunks.append(Chunk(offset: cursor - length, length: length, isLast: cursor >= size))
-        }
-        return chunks
+    /// An offset at the end of the file leaves no append, and `finish` still has to run.
+    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [UploadChunk] {
+        UploadChunk.plan(fileSize: size, from: offset, chunkBytes: uploadChunkBytes)
     }
 
     // MARK: - Delete
