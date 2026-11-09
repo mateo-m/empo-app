@@ -210,7 +210,8 @@ final class BackupPass: BackupRunning {
             // The legacy per-game keys have to leave UserDefaults
             // before the run stages `EmpoState/`, or the layout goes
             // up in neither place.
-            ControlsLayout.migrateLegacyPersistence(container: container)
+            ControlsLayout.migrateLegacyPersistence(
+                container: container, keys: GameKey.keys(forGameAt: container.gameURL))
             let resolution = await GameBackupSets.resolveMode(
                 for: container, targets: thresholds)
             guard case .mode(let mode) = resolution else {

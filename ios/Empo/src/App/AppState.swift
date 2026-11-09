@@ -129,7 +129,9 @@ class AppState {
         launchedSettings = start.launchedSettings
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
-        ControlsLayout.shared.switchGame(id: game.id, container: start.container, title: game.title)
+        ControlsLayout.shared.switchGame(
+            id: game.id, container: start.container, title: game.title,
+            keys: start.core.defaultKeys(forGameAt: start.container.gameURL))
         PauseManager.shared.reset()
         sessionShowedError = false
         phase = .loading

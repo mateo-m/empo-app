@@ -12,18 +12,13 @@ protocol PlacedControl: Identifiable where ID == UUID {
     var size: CGFloat { get set }
 }
 
-struct ButtonModel: PlacedControl, Equatable, Codable {
+struct ButtonModel: PlacedControl, Equatable {
     let id: UUID
     var label: String
     var scancode: Int32
-    var relativeCenter: CGPoint  // fraction of superview size
+    var relativeCenter: CGPoint
     var size: CGFloat
     var opacity: Double
-
-    enum CodingKeys: String, CodingKey {
-        case label, scancode, size, opacity
-        case rx, ry
-    }
 
     init(
         label: String, scancode: Int32, relativeCenter: CGPoint, size: CGFloat, opacity: Double = 1.0
@@ -35,42 +30,14 @@ struct ButtonModel: PlacedControl, Equatable, Codable {
         self.size = size
         self.opacity = opacity
     }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = UUID()
-        self.label = try c.decodeIfPresent(String.self, forKey: .label) ?? ""
-        self.scancode = try c.decodeIfPresent(Int32.self, forKey: .scancode) ?? 0
-        let rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? 0.5
-        let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
-        self.relativeCenter = CGPoint(x: rx, y: ry)
-        self.size =
-            try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? CGFloat(ControlLimits.defaultButtonSize)
-        self.opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(label, forKey: .label)
-        try c.encode(scancode, forKey: .scancode)
-        try c.encode(relativeCenter.x, forKey: .rx)
-        try c.encode(relativeCenter.y, forKey: .ry)
-        try c.encode(size, forKey: .size)
-        try c.encode(opacity, forKey: .opacity)
-    }
 }
 
-struct ActionButtonModel: PlacedControl, Equatable, Codable {
+struct ActionButtonModel: PlacedControl, Equatable {
     let id: UUID
     var action: String
-    var relativeCenter: CGPoint  // fraction of superview size
+    var relativeCenter: CGPoint
     var size: CGFloat
     var opacity: Double
-
-    enum CodingKeys: String, CodingKey {
-        case action, size, opacity
-        case rx, ry
-    }
 
     init(action: String, relativeCenter: CGPoint, size: CGFloat, opacity: Double = 1.0) {
         self.id = UUID()
@@ -78,27 +45,6 @@ struct ActionButtonModel: PlacedControl, Equatable, Codable {
         self.relativeCenter = relativeCenter
         self.size = size
         self.opacity = opacity
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.id = UUID()
-        self.action = try c.decodeIfPresent(String.self, forKey: .action) ?? ""
-        let rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? 0.5
-        let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
-        self.relativeCenter = CGPoint(x: rx, y: ry)
-        self.size =
-            try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? CGFloat(ControlLimits.defaultButtonSize)
-        self.opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(action, forKey: .action)
-        try c.encode(relativeCenter.x, forKey: .rx)
-        try c.encode(relativeCenter.y, forKey: .ry)
-        try c.encode(size, forKey: .size)
-        try c.encode(opacity, forKey: .opacity)
     }
 }
 
@@ -114,55 +60,49 @@ enum ControlsOrientation: String, Codable {
     }
 }
 
-private struct PersistedLayout: Codable {
-    struct DPad: Codable, Equatable {
+/// The layout that older versions kept in UserDefaults. Only the
+/// migration to the controls file reads it.
+private struct LegacyLayout: Decodable {
+    struct DPad: Decodable {
         var rx: CGFloat
         var ry: CGFloat
         var size: CGFloat
         var opacity: Double?
-        var style: MovementStyle
-
-        init(
-            rx: CGFloat, ry: CGFloat, size: CGFloat, opacity: Double? = nil,
-            style: MovementStyle = .dpad
-        ) {
-            self.rx = rx
-            self.ry = ry
-            self.size = size
-            self.opacity = opacity
-            self.style = style
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            rx = try container.decode(CGFloat.self, forKey: .rx)
-            ry = try container.decode(CGFloat.self, forKey: .ry)
-            size = try container.decode(CGFloat.self, forKey: .size)
-            opacity = try container.decodeIfPresent(Double.self, forKey: .opacity)
-            style =
-                try container.decodeIfPresent(MovementStyle.self, forKey: .style) ?? .dpad
-        }
     }
-    struct Oriented: Codable, Equatable {
+    struct Oriented: Decodable {
         var dpad: DPad
-        var buttons: [ButtonModel]
-        /// Legacy UserDefaults blobs do not have this key.
-        /// nil and [] mean the same thing.
-        var actionButtons: [ActionButtonModel]?
-
-        init(dpad: DPad, buttons: [ButtonModel], actionButtons: [ActionButtonModel]? = nil) {
-            self.dpad = dpad
-            self.buttons = buttons
-            self.actionButtons = actionButtons
-        }
+        var buttons: [LegacyButton]
     }
     var portrait: Oriented
     var landscape: Oriented
 }
 
-private struct PersistedLayoutV1: Codable {
-    var dpad: PersistedLayout.DPad
-    var buttons: [ButtonModel]
+private struct LegacyLayoutV1: Decodable {
+    var dpad: LegacyLayout.DPad
+    var buttons: [LegacyButton]
+}
+
+private struct LegacyButton: Decodable {
+    var label = ""
+    var scancode: Int32 = 0
+    var rx: CGFloat = 0.5
+    var ry: CGFloat = 0.5
+    var size = CGFloat(ControlLimits.defaultButtonSize)
+    var opacity = 1.0
+
+    enum CodingKeys: String, CodingKey {
+        case label, scancode, rx, ry, size, opacity
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        label = try c.decodeIfPresent(String.self, forKey: .label) ?? label
+        scancode = try c.decodeIfPresent(Int32.self, forKey: .scancode) ?? scancode
+        rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? rx
+        ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? ry
+        size = try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? size
+        opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? opacity
+    }
 }
 
 @MainActor
@@ -209,7 +149,7 @@ class ControlsLayout {
 
     /// A snapshot from resolution time. A live recomputation can show
     /// metrics drift as a user edit, so auto-create compares with this.
-    private var ambientBaseline: PersistedLayout?
+    private var ambientBaseline: TouchSection?
 
     enum Role: Equatable {
         case player
@@ -287,18 +227,16 @@ class ControlsLayout {
 
     struct OrientedControls: Equatable {
         var dpadRelativeCenter: CGPoint
-        var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
+        var dpadSize = CGFloat(ControlLimits.defaultDPadSize)
         var dpadOpacity: Double = 1.0
         var dpadStyle: MovementStyle = .dpad
         var buttons: [ButtonModel]
         var actionButtons: [ActionButtonModel] = []
     }
 
-    private var active = OrientedControls(
-        dpadRelativeCenter: ControlsLayout.defaultDPadCenter(.portrait), buttons: [])
-    private var inactive = OrientedControls(
-        dpadRelativeCenter: ControlsLayout.defaultDPadCenter(.landscape),
-        buttons: ControlsLayout.defaultButtons(.landscape))
+    /// Each init replaces these with the builtin layout.
+    private var active = OrientedControls(dpadRelativeCenter: .zero, buttons: [])
+    private var inactive = OrientedControls(dpadRelativeCenter: .zero, buttons: [])
 
     var dpadRelativeCenter: CGPoint {
         get { active.dpadRelativeCenter }
@@ -342,22 +280,24 @@ class ControlsLayout {
     var canUndo: Bool { editSessionActive && !editUndoStack.isEmpty }
 
     private init() {
-        applyDefaultsForCurrentOrientation()
+        applyBuiltinLayout()
         observeProfileNotifications()
     }
 
-    init(editorForProfile name: String, metrics: TouchZoneMetrics) {
+    init(editorForProfile name: String, metrics: TouchZoneMetrics, keys: [GameKey]) {
         role = .profileEditor(name: name)
         metricsOverride = metrics
-        applyDefaultsForCurrentOrientation()
+        gameKeys = keys
+        applyBuiltinLayout()
         observeProfileNotifications()
         reloadEditorProfile()
     }
 
-    init(viewerForBuiltins metrics: TouchZoneMetrics) {
+    init(viewerForBuiltins metrics: TouchZoneMetrics, keys: [GameKey]) {
         role = .builtinViewer
         metricsOverride = metrics
-        applyDefaultsForCurrentOrientation()
+        gameKeys = keys
+        applyBuiltinLayout()
     }
 
     // Written once on the main actor at init, read in deinit (which is
@@ -402,7 +342,6 @@ class ControlsLayout {
         switch provenance {
         case .pinnedProfile(let winning) where winning == name,
             .defaultProfile(let winning) where winning == name:
-            staggerGeneration += 1
             resolveChain(container: container)
         default:
             break
@@ -413,7 +352,6 @@ class ControlsLayout {
         guard note.object as AnyObject? !== self, !isEditorInstance else { return }
         guard !editSessionActive, let container = currentContainer else { return }
         guard note.userInfo?[LayoutProfilesManager.gameIDKey] as? String == currentGameID else { return }
-        staggerGeneration += 1
         resolveChain(container: container)
     }
 
@@ -632,13 +570,17 @@ class ControlsLayout {
 
     func undoLastEdit() {
         guard let snapshot = editUndoStack.popLast() else { return }
-        staggerGeneration += 1
         withAnimation(Motion.standard) {
-            active = snapshot
+            replaceControls(active: snapshot, inactive: inactive)
         }
     }
 
-    func switchGame(id newGameID: String?, container: GameContainer?, title: String? = nil) {
+    /// `keys` are the keys of the game core, in grid order. The builtin
+    /// layout puts one button on each.
+    func switchGame(
+        id newGameID: String?, container: GameContainer?, title: String? = nil,
+        keys: [GameKey] = GameKey.standard
+    ) {
         if currentGameID != nil {
             try? save()
         }
@@ -646,7 +588,6 @@ class ControlsLayout {
         // not leak into the next game's first save.
         endEditSession()
         clearEditUndoStack()
-        staggerGeneration += 1
         currentGameID = newGameID
         currentContainer = container
         currentGameTitle = title
@@ -657,12 +598,10 @@ class ControlsLayout {
         separationLogSignature = nil
         activeManifestSource = nil
         resolutionInvolvesDerivation = false
-        Self.activeKeys =
-            container.flatMap { GameCores.core(forGameAt: $0.gameURL)?.defaultKeys(forGameAt: $0.gameURL) }
-            ?? GameKey.standard
-        loadManifest(from: container?.gameURL)
+        gameKeys = keys
+        loadManifest(container: container)
         if let container, newGameID != nil {
-            Self.migrateLegacyPersistence(container: container)
+            Self.migrateLegacyPersistence(container: container, keys: keys)
             BindingStore.migrateRenamedActions(container: container)
             runProfileMigration(container: container)
             resolveChain(container: container)
@@ -670,7 +609,7 @@ class ControlsLayout {
         }
         provenance = .builtin
         ambientBaseline = nil
-        applyDefaultsForCurrentOrientation()
+        applyBuiltinLayout()
     }
 
     func setOrientation(_ new: ControlsOrientation) {
@@ -684,9 +623,7 @@ class ControlsLayout {
         }
 
         clearEditUndoStack()
-        staggerGeneration += 1
-
-        swap(&active, &inactive)
+        replaceControls(active: inactive, inactive: active)
         currentOrientation = new
     }
 
@@ -697,73 +634,17 @@ class ControlsLayout {
         guard !editSessionActive else { return }
         guard provenance == .gameLayout else { return }
 
-        staggerGeneration += 1
         separationLogSignature = nil
-
-        loadManifest(from: container.gameURL)
+        loadManifest(container: container)
         resolveChain(container: container)
     }
 
-    private nonisolated static func orientedInput(
-        dpadCenter: CGPoint,
-        dpadSize: CGFloat,
-        dpadOpacity: Double,
-        dpadStyle: MovementStyle,
-        buttons: [ButtonModel],
-        actionButtons: [ActionButtonModel] = []
-    ) -> ControlsManifestSerializer.TouchOrientedInput {
-        ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: Double(dpadCenter.x),
-            dpadY: Double(dpadCenter.y),
-            dpadSize: Double(dpadSize),
-            dpadOpacity: dpadOpacity,
-            dpadStyle: dpadStyle,
-            buttons: buttons.map { button in
-                ControlsManifestSerializer.TouchButtonInput(
-                    label: button.label,
-                    scancode: button.scancode,
-                    x: Double(button.relativeCenter.x),
-                    y: Double(button.relativeCenter.y),
-                    size: Double(button.size),
-                    opacity: button.opacity
-                )
-            },
-            actionButtons: actionButtons.map { button in
-                ControlsManifestSerializer.TouchActionButtonInput(
-                    action: button.action,
-                    x: Double(button.relativeCenter.x),
-                    y: Double(button.relativeCenter.y),
-                    size: Double(button.size),
-                    opacity: button.opacity
-                )
-            }
-        )
-    }
+    // MARK: - Builtin layout
 
-    // MARK: - Defaults
+    private(set) var gameKeys = GameKey.standard
 
-    nonisolated static let defaultDPadSize = CGFloat(ControlLimits.defaultDPadSize)
-
-    nonisolated static func defaultDPadCenter(_ orientation: ControlsOrientation) -> CGPoint {
-        let dpad = BuiltinLayout.dpad(isLandscape: orientation == .landscape)
-        return CGPoint(x: dpad.x, y: dpad.y)
-    }
-
-    /// `switchGame` sets these before the layout resolves.
-    nonisolated(unsafe) private static var activeKeys = GameKey.standard
-
-    nonisolated static func defaultButtons(_ orientation: ControlsOrientation) -> [ButtonModel] {
-        let centers = BuiltinLayout.buttonCenters(isLandscape: orientation == .landscape)
-        return zip(activeKeys, centers).map { key, center in
-            ButtonModel(
-                label: key.label, scancode: key.scancode,
-                relativeCenter: CGPoint(x: center.x, y: center.y),
-                size: CGFloat(ControlLimits.defaultButtonSize))
-        }
-    }
-
-    nonisolated static var builtinKeys: [BuiltinLayout.Key] {
-        activeKeys.map { BuiltinLayout.Key(label: $0.label, code: KeyCodeTable.code(for: $0.scancode)) }
+    private var builtins: ProfileMaterializer.Builtins {
+        LayoutProfilesManager.builtins(keys: gameKeys)
     }
 
     // MARK: - Reset
@@ -798,66 +679,15 @@ class ControlsLayout {
             clearEditUndoStack()
         }
 
-        let resolved = ambientResolved()
-        ambientBaseline = resolved
-
-        let activeResolved: PersistedLayout.Oriented
-        let inactiveResolved: PersistedLayout.Oriented
-        switch currentOrientation {
-        case .portrait:
-            activeResolved = resolved.portrait
-            inactiveResolved = resolved.landscape
-        case .landscape:
-            activeResolved = resolved.landscape
-            inactiveResolved = resolved.portrait
-        }
-
-        inactive = Self.orientedControls(from: inactiveResolved)
-
-        animateReset(
-            toButtons: activeResolved.buttons,
-            toActionButtons: activeResolved.actionButtons ?? [],
-            dpadCenter: CGPoint(x: activeResolved.dpad.rx, y: activeResolved.dpad.ry),
-            targetDpadSize: activeResolved.dpad.size,
-            targetDpadOpacity: activeResolved.dpad.opacity ?? 1.0,
-            targetDpadStyle: activeResolved.dpad.style
-        )
+        let resolved = controlsPair(ambientResolved())
+        ambientBaseline = touchSection(active: resolved.active, inactive: resolved.inactive)
+        inactive = resolved.inactive
+        animateReset(to: resolved.active)
     }
 
-    private static func defaultControls(
-        for orientation: ControlsOrientation
-    ) -> OrientedControls {
-        OrientedControls(
-            dpadRelativeCenter: defaultDPadCenter(orientation),
-            buttons: defaultButtons(orientation))
-    }
-
-    private static func orientedControls(
-        from oriented: PersistedLayout.Oriented
-    ) -> OrientedControls {
-        OrientedControls(
-            dpadRelativeCenter: CGPoint(x: oriented.dpad.rx, y: oriented.dpad.ry),
-            dpadSize: oriented.dpad.size,
-            dpadOpacity: oriented.dpad.opacity ?? 1.0,
-            dpadStyle: oriented.dpad.style,
-            buttons: oriented.buttons,
-            actionButtons: oriented.actionButtons ?? [])
-    }
-
-    private func applyDefaultsForCurrentOrientation() {
-        active = Self.defaultControls(for: currentOrientation)
-        inactive = Self.defaultControls(
-            for: currentOrientation == .portrait ? .landscape : .portrait)
-    }
-
-    private func animateReset(
-        toButtons targetButtons: [ButtonModel],
-        toActionButtons targetActionButtons: [ActionButtonModel],
-        dpadCenter: CGPoint,
-        targetDpadSize: CGFloat,
-        targetDpadOpacity: Double,
-        targetDpadStyle: MovementStyle
-    ) {
+    private func animateReset(to layout: OrientedControls) {
+        let targetButtons = layout.buttons
+        let targetActionButtons = layout.actionButtons
         var matchedIDs = Set<UUID>()
         var matchedTargets = Set<Int>()
 
@@ -913,10 +743,10 @@ class ControlsLayout {
             for move in actionMoves {
                 updateActionButton(id: move.id, size: move.size, relativeCenter: move.center)
             }
-            dpadRelativeCenter = dpadCenter
-            dpadSize = targetDpadSize
-            dpadOpacity = targetDpadOpacity
-            dpadStyle = targetDpadStyle
+            dpadRelativeCenter = layout.dpadRelativeCenter
+            dpadSize = layout.dpadSize
+            dpadOpacity = layout.dpadOpacity
+            dpadStyle = layout.dpadStyle
         }
 
         let missingActions = targetActionButtons.enumerated()
@@ -957,10 +787,15 @@ class ControlsLayout {
         }
     }
 
-    /// Each wholesale layout replacement (undo, orientation flip,
-    /// game switch) bumps this. Pending stagger-add tasks from an
-    /// earlier reset then cannot append onto the new state.
+    /// The stagger tasks of a reset add their buttons only while this
+    /// value stays the same.
     private var staggerGeneration = 0
+
+    private func replaceControls(active: OrientedControls, inactive: OrientedControls) {
+        staggerGeneration += 1
+        self.active = active
+        self.inactive = inactive
+    }
 
     // MARK: - Edit-drag collision
 
@@ -1226,10 +1061,7 @@ class ControlsLayout {
             var failure: Error?
             let section = materializedTouchSection()
             let controlsOnDisk = store.readProfile(name)?.touch.map { existing in
-                ProfileMaterializer.canonicalBytes(
-                    ProfileMaterializer.materialize(
-                        user: existing, manifest: nil,
-                        builtins: LayoutProfilesManager.builtins(), metrics: layoutMetrics()))
+                ProfileMaterializer.canonicalBytes(materialized(user: existing, manifest: nil))
             }
             if controlsOnDisk != ControlsManifestSerializer.serialize(section) {
                 do {
@@ -1270,11 +1102,7 @@ class ControlsLayout {
             // at crash teardown must not create one.
             guard editSessionActive else { return }
             guard let baseline = ambientBaseline else { return }
-            let current = currentPersistedLayout()
-            let layoutsChanged =
-                !Self.layoutsEquivalent(current.portrait, baseline.portrait)
-                || !Self.layoutsEquivalent(current.landscape, baseline.landscape)
-            guard layoutsChanged || screenEditsDirty else { return }
+            guard materializedTouchSection() != baseline || screenEditsDirty else { return }
             let base = currentGameTitle ?? container.url.lastPathComponent
             let name = store.uniqueName(base: base)
             do {
@@ -1332,11 +1160,7 @@ class ControlsLayout {
     /// Never sparse. A sparse section resolves against the next game
     /// that pins the profile.
     func materializedTouchSection() -> TouchSection {
-        let layout = currentPersistedLayout()
-        return TouchSection(
-            portrait: Self.touchLayout(from: layout.portrait),
-            landscape: Self.touchLayout(from: layout.landscape)
-        )
+        touchSection(active: active, inactive: inactive)
     }
 
     func editorSave() throws {
@@ -1421,28 +1245,30 @@ class ControlsLayout {
             }
         case .builtin:
             resolutionInvolvesDerivation = false
-            applyDefaultsForCurrentOrientation()
+            applyBuiltinLayout()
         }
 
-        ambientBaseline = ambientResolved()
+        let ambient = controlsPair(ambientResolved())
+        ambientBaseline = touchSection(active: ambient.active, inactive: ambient.inactive)
     }
 
     /// Profile gaps complete against the builtin only. A game manifest
     /// would put values of one game into a portable profile.
     private func applyProfileSection(_ touch: TouchSection) {
-        let metrics = layoutMetrics()
-        let materialized = ProfileMaterializer.materialize(
-            user: touch, manifest: nil,
-            builtins: LayoutProfilesManager.builtins(), metrics: metrics)
         resolutionInvolvesDerivation = false
-        applyV2(
-            PersistedLayout(
-                portrait: Self.oriented(
-                    from: materialized.portrait, orientation: .portrait,
-                    manifest: nil, metrics: metrics),
-                landscape: Self.oriented(
-                    from: materialized.landscape, orientation: .landscape,
-                    manifest: nil, metrics: metrics)))
+        apply(materialized(user: touch, manifest: nil))
+    }
+
+    private func applyResolvedLayout() {
+        let completion = activeManifest?.touch.map {
+            TouchSectionCompletion.complete($0, metrics: layoutMetrics())
+        }
+        resolutionInvolvesDerivation = completion?.involvedDerivation ?? false
+        apply(materialized(user: nil, manifest: completion?.section))
+    }
+
+    private func applyBuiltinLayout() {
+        apply(materialized(user: nil, manifest: nil))
     }
 
     private func ambientProvenance() -> LayoutProvenance {
@@ -1454,35 +1280,22 @@ class ControlsLayout {
         ).provenance
     }
 
-    private func ambientResolved() -> PersistedLayout {
-        let metrics = layoutMetrics()
-        if activeManifest?.touch != nil {
-            return PersistedLayout(
-                portrait: Self.resolveInitialLayout(
-                    manifest: activeManifest, orientation: .portrait, metrics: metrics),
-                landscape: Self.resolveInitialLayout(
-                    manifest: activeManifest, orientation: .landscape, metrics: metrics)
-            )
+    /// The layout of the chain without the pin of the game.
+    private func ambientResolved() -> ProfileMaterializer.MaterializedTouch {
+        if let manifest = activeManifest?.touch {
+            return materialized(user: nil, manifest: manifest)
         }
-        if let defaultName = LayoutProfilesManager.defaultProfileName,
-            let touch = LayoutProfilesManager.store.validTouch(defaultName)
-        {
-            let materialized = ProfileMaterializer.materialize(
-                user: touch, manifest: nil,
-                builtins: LayoutProfilesManager.builtins(), metrics: metrics)
-            return PersistedLayout(
-                portrait: Self.oriented(
-                    from: materialized.portrait, orientation: .portrait,
-                    manifest: nil, metrics: metrics),
-                landscape: Self.oriented(
-                    from: materialized.landscape, orientation: .landscape,
-                    manifest: nil, metrics: metrics)
-            )
+        let defaultTouch = LayoutProfilesManager.defaultProfileName.flatMap {
+            LayoutProfilesManager.store.validTouch($0)
         }
-        return PersistedLayout(
-            portrait: Self.builtinOriented(.portrait),
-            landscape: Self.builtinOriented(.landscape)
-        )
+        return materialized(user: defaultTouch, manifest: nil)
+    }
+
+    private func materialized(
+        user: TouchSection?, manifest: TouchSection?
+    ) -> ProfileMaterializer.MaterializedTouch {
+        ProfileMaterializer.materialize(
+            user: user, manifest: manifest, builtins: builtins, metrics: layoutMetrics())
     }
 
     private func layoutMetrics() -> TouchZoneMetrics {
@@ -1495,7 +1308,7 @@ class ControlsLayout {
         let store = LayoutProfilesManager.store
         let recordURL = Self.migrationRecordURL
         var record = Self.loadMigrationRecord(at: recordURL)
-        let builtins = LayoutProfilesManager.builtins()
+        let builtins = builtins
 
         // An invalid per-game file stays on disk as it is.
         let userTouch = UserControlsFile.loadAndLog(in: container)?.manifest?.touch
@@ -1594,7 +1407,7 @@ class ControlsLayout {
         let store = LayoutProfilesManager.store
         let materialized = ProfileMaterializer.materialize(
             user: userTouch, manifest: activeManifest?.touch,
-            builtins: LayoutProfilesManager.builtins(), metrics: .reference)
+            builtins: builtins, metrics: .reference)
         let name = store.uniqueName(base: baseName)
         do {
             try store.createProfile(name, touch: materialized.section)
@@ -1646,155 +1459,93 @@ class ControlsLayout {
         UserDefaults.standard.set(Array(shown).sorted(), forKey: Self.gameLayoutNoticeKey)
     }
 
-    private static func persistedOriented(
-        from controls: OrientedControls
-    ) -> PersistedLayout.Oriented {
-        PersistedLayout.Oriented(
-            dpad: .init(
-                rx: controls.dpadRelativeCenter.x, ry: controls.dpadRelativeCenter.y,
-                size: controls.dpadSize, opacity: controls.dpadOpacity,
-                style: controls.dpadStyle
-            ),
-            buttons: controls.buttons,
-            actionButtons: controls.actionButtons
-        )
+    // MARK: - Conversion
+
+    private func controlsPair(
+        _ layout: ProfileMaterializer.MaterializedTouch
+    ) -> (active: OrientedControls, inactive: OrientedControls) {
+        let portrait = Self.controls(from: layout.portrait, .portrait)
+        let landscape = Self.controls(from: layout.landscape, .landscape)
+        return currentOrientation == .portrait ? (portrait, landscape) : (landscape, portrait)
     }
 
-    private func currentPersistedLayout() -> PersistedLayout {
-        let activeOriented = Self.persistedOriented(from: active)
-        let inactiveOriented = Self.persistedOriented(from: inactive)
-        switch currentOrientation {
-        case .portrait:
-            return PersistedLayout(portrait: activeOriented, landscape: inactiveOriented)
-        case .landscape:
-            return PersistedLayout(portrait: inactiveOriented, landscape: activeOriented)
-        }
+    private func apply(_ layout: ProfileMaterializer.MaterializedTouch) {
+        let pair = controlsPair(layout)
+        replaceControls(active: pair.active, inactive: pair.inactive)
     }
 
-    /// Ignores `ButtonModel.id`. resolveInitialLayout makes new UUIDs
-    /// on each call, so the synthesized == shows each manifest layout
-    /// as customized.
-    private static func layoutsEquivalent(
-        _ a: PersistedLayout.Oriented,
-        _ b: PersistedLayout.Oriented
-    ) -> Bool {
-        guard a.dpad == b.dpad, a.buttons.count == b.buttons.count else { return false }
-        let aActions = a.actionButtons ?? []
-        let bActions = b.actionButtons ?? []
-        guard aActions.count == bActions.count else { return false }
-        guard
-            zip(aActions, bActions).allSatisfy({ lhs, rhs in
-                lhs.action == rhs.action
-                    && lhs.relativeCenter == rhs.relativeCenter
-                    && lhs.size == rhs.size && lhs.opacity == rhs.opacity
-            })
-        else { return false }
-        return zip(a.buttons, b.buttons).allSatisfy { lhs, rhs in
-            lhs.label == rhs.label && lhs.scancode == rhs.scancode
-                && lhs.relativeCenter == rhs.relativeCenter
-                && lhs.size == rhs.size && lhs.opacity == rhs.opacity
-        }
+    private func touchSection(active: OrientedControls, inactive: OrientedControls) -> TouchSection {
+        let portrait = currentOrientation == .portrait ? active : inactive
+        let landscape = currentOrientation == .portrait ? inactive : active
+        return TouchSection(
+            portrait: Self.touchLayout(from: portrait),
+            landscape: Self.touchLayout(from: landscape))
     }
 
-    private static func touchLayout(from oriented: PersistedLayout.Oriented) -> TouchLayout {
-        // The serializer omits the style line for .dpad, so passing
-        // the concrete value keeps existing files byte-stable.
-        let dpad = DPadSpec(
-            x: Double(oriented.dpad.rx),
-            y: Double(oriented.dpad.ry),
-            size: Double(oriented.dpad.size),
-            opacity: oriented.dpad.opacity,
-            style: oriented.dpad.style
-        )
-        let buttons = oriented.buttons.compactMap { button -> ButtonSpec? in
-            guard let key = KeyCodeTable.code(for: button.scancode) else { return nil }
-            return ButtonSpec(
-                label: button.label.isEmpty ? nil : button.label,
-                key: key,
-                x: Double(button.relativeCenter.x),
-                y: Double(button.relativeCenter.y),
-                size: Double(button.size),
-                opacity: button.opacity
-            )
-        }
-        // Always non-nil. At load, an omitted key means "inherit the
-        // shipped action buttons". A user who deleted them all must
-        // save an explicit [].
-        let actionButtons = (oriented.actionButtons ?? []).map { button in
-            ActionButtonSpec(
-                action: button.action,
-                x: Double(button.relativeCenter.x),
-                y: Double(button.relativeCenter.y),
-                size: Double(button.size),
-                opacity: button.opacity
-            )
-        }
-        return TouchLayout(dpad: dpad, buttons: buttons, actionButtons: actionButtons)
-    }
-
-    private static func oriented(
-        from touchLayout: TouchLayout,
-        orientation: ControlsOrientation,
-        manifest: ControlsManifest?,
-        metrics: TouchZoneMetrics
-    ) -> PersistedLayout.Oriented {
-        let fallback = resolveInitialLayout(
-            manifest: manifest, orientation: orientation, metrics: metrics)
-
-        let dpad: PersistedLayout.DPad
-        if let spec = touchLayout.dpad {
-            dpad = PersistedLayout.DPad(
-                rx: CGFloat(spec.x),
-                ry: CGFloat(spec.y),
-                size: CGFloat(spec.size ?? ControlLimits.defaultDPadSize),
-                opacity: spec.opacity ?? 1.0,
-                style: spec.style
-            )
-        } else {
-            dpad = fallback.dpad
-        }
-
-        let buttons: [ButtonModel]
-        if let specs = touchLayout.buttons {
-            buttons = specs.compactMap { spec in
+    /// The materializer fills each gap of the layout, so the fallbacks
+    /// here only keep the types whole.
+    private static func controls(
+        from layout: TouchLayout, _ orientation: ControlsOrientation
+    ) -> OrientedControls {
+        let dpad = layout.dpad ?? BuiltinLayout.dpad(isLandscape: orientation == .landscape)
+        return OrientedControls(
+            dpadRelativeCenter: CGPoint(x: dpad.x, y: dpad.y),
+            dpadSize: CGFloat(dpad.size ?? ControlLimits.defaultDPadSize),
+            dpadOpacity: dpad.opacity ?? 1.0,
+            dpadStyle: dpad.style,
+            buttons: (layout.buttons ?? []).compactMap { spec in
                 guard let scancode = KeyCodeTable.scancode(for: spec.key) else { return nil }
-                let label = spec.label ?? KeyCodeTable.displayName(for: spec.key) ?? spec.key
                 return ButtonModel(
-                    label: label,
+                    label: spec.label ?? KeyCodeTable.displayName(for: spec.key) ?? spec.key,
                     scancode: scancode,
                     relativeCenter: CGPoint(x: spec.x, y: spec.y),
                     size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
-                    opacity: spec.opacity ?? 1.0
-                )
-            }
-        } else {
-            buttons = fallback.buttons
-        }
-
-        let actionButtons: [ActionButtonModel]?
-        if let specs = touchLayout.actionButtons {
-            actionButtons = specs.map(Self.actionButtonModel(from:))
-        } else {
-            actionButtons = fallback.actionButtons
-        }
-
-        return PersistedLayout.Oriented(
-            dpad: dpad, buttons: buttons, actionButtons: actionButtons)
+                    opacity: spec.opacity ?? 1.0)
+            },
+            actionButtons: (layout.actionButtons ?? []).map { spec in
+                ActionButtonModel(
+                    action: spec.action,
+                    relativeCenter: CGPoint(x: spec.x, y: spec.y),
+                    size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
+                    opacity: spec.opacity ?? 1.0)
+            })
     }
 
-    private static func actionButtonModel(from spec: ActionButtonSpec) -> ActionButtonModel {
-        ActionButtonModel(
-            action: spec.action,
-            relativeCenter: CGPoint(x: spec.x, y: spec.y),
-            size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
-            opacity: spec.opacity ?? 1.0
-        )
+    /// The action buttons are never nil. At load, an omitted key means
+    /// "inherit the shipped action buttons", so a user who deleted them
+    /// all must save an explicit [].
+    private static func touchLayout(from controls: OrientedControls) -> TouchLayout {
+        TouchLayout(
+            dpad: DPadSpec(
+                x: Double(controls.dpadRelativeCenter.x),
+                y: Double(controls.dpadRelativeCenter.y),
+                size: Double(controls.dpadSize),
+                opacity: controls.dpadOpacity,
+                style: controls.dpadStyle),
+            buttons: controls.buttons.compactMap { button in
+                guard let key = KeyCodeTable.code(for: button.scancode) else { return nil }
+                return ButtonSpec(
+                    label: button.label.isEmpty ? nil : button.label,
+                    key: key,
+                    x: Double(button.relativeCenter.x),
+                    y: Double(button.relativeCenter.y),
+                    size: Double(button.size),
+                    opacity: button.opacity)
+            },
+            actionButtons: controls.actionButtons.map { button in
+                ActionButtonSpec(
+                    action: button.action,
+                    x: Double(button.relativeCenter.x),
+                    y: Double(button.relativeCenter.y),
+                    size: Double(button.size),
+                    opacity: button.opacity)
+            })
     }
 
     /// A backup run calls this before it stages `EmpoState/`. Thus a
     /// game that the player did not open since the update also moves
     /// its layout into the container.
-    static func migrateLegacyPersistence(container: GameContainer) {
+    static func migrateLegacyPersistence(container: GameContainer, keys: [GameKey]) {
         guard !UserControlsFile.exists(in: container) else { return }
 
         let layoutKey = DefaultsKey.controlsLayout(gameID: container.id)
@@ -1803,33 +1554,7 @@ class ControlsLayout {
         let hasMap = UserDefaults.standard.data(forKey: mapKey) != nil
         guard layoutData != nil || hasMap else { return }
 
-        let touch: TouchSection?
-        if let layoutData, let layout = decodeLegacyLayout(data: layoutData) {
-            touch = ControlsManifestSerializer.touchSection(
-                portrait: Self.orientedInput(
-                    dpadCenter: CGPoint(x: layout.portrait.dpad.rx, y: layout.portrait.dpad.ry),
-                    dpadSize: layout.portrait.dpad.size,
-                    dpadOpacity: layout.portrait.dpad.opacity ?? 1.0,
-                    dpadStyle: .dpad,
-                    buttons: layout.portrait.buttons
-                ),
-                landscape: Self.orientedInput(
-                    dpadCenter: CGPoint(x: layout.landscape.dpad.rx, y: layout.landscape.dpad.ry),
-                    dpadSize: layout.landscape.dpad.size,
-                    dpadOpacity: layout.landscape.dpad.opacity ?? 1.0,
-                    dpadStyle: .dpad,
-                    buttons: layout.landscape.buttons
-                ),
-                onDroppedButton: { label, scancode in
-                    NSLog(
-                        "controls.json: Dropped button \"\(label)\" (scancode \(scancode) has no key name)"
-                    )
-                }
-            )
-        } else {
-            touch = nil
-        }
-
+        let touch = layoutData.flatMap { legacyTouchSection(data: $0, keys: keys) }
         let controller = BindingStore.decodeLegacyPerGameMap(gameID: container.id)
 
         guard touch != nil || controller != nil else { return }
@@ -1842,20 +1567,36 @@ class ControlsLayout {
         UserDefaults.standard.removeObject(forKey: mapKey)
     }
 
-    private static func decodeLegacyLayout(data: Data) -> PersistedLayout? {
-        if let v2 = try? JSONDecoder().decode(PersistedLayout.self, from: data) {
-            return v2
+    /// The legacy blob has no action buttons, so the section leaves the
+    /// key out and the layout inherits the shipped ones.
+    private static func legacyTouchSection(data: Data, keys: [GameKey]) -> TouchSection? {
+        func layout(_ dpad: LegacyLayout.DPad, _ buttons: [LegacyButton]) -> TouchLayout {
+            TouchLayout(
+                dpad: DPadSpec(
+                    x: Double(dpad.rx), y: Double(dpad.ry), size: Double(dpad.size),
+                    opacity: dpad.opacity ?? 1.0),
+                buttons: buttons.compactMap { button in
+                    guard let key = KeyCodeTable.code(for: button.scancode) else {
+                        NSLog(
+                            "controls.json: Dropped button \"\(button.label)\" (scancode \(button.scancode) has no key name)"
+                        )
+                        return nil
+                    }
+                    return ButtonSpec(
+                        label: button.label, key: key, x: Double(button.rx), y: Double(button.ry),
+                        size: Double(button.size), opacity: button.opacity)
+                })
         }
-
-        if let v1 = try? JSONDecoder().decode(PersistedLayoutV1.self, from: data) {
-            let portrait = PersistedLayout.Oriented(dpad: v1.dpad, buttons: v1.buttons)
-            let landscape = PersistedLayout.Oriented(
-                dpad: Self.builtinOriented(.landscape).dpad,
-                buttons: Self.defaultButtons(.landscape)
-            )
-            return PersistedLayout(portrait: portrait, landscape: landscape)
+        if let v2 = try? JSONDecoder().decode(LegacyLayout.self, from: data) {
+            return TouchSection(
+                portrait: layout(v2.portrait.dpad, v2.portrait.buttons),
+                landscape: layout(v2.landscape.dpad, v2.landscape.buttons))
         }
-
+        if let v1 = try? JSONDecoder().decode(LegacyLayoutV1.self, from: data) {
+            var landscape = LayoutProfilesManager.builtins(keys: keys).landscape
+            landscape.actionButtons = nil
+            return TouchSection(portrait: layout(v1.dpad, v1.buttons), landscape: landscape)
+        }
         return nil
     }
 
@@ -1921,125 +1662,21 @@ class ControlsLayout {
         )
     }
 
-    private func loadManifest(from gameRoot: URL?) {
+    private func loadManifest(container: GameContainer?) {
         activeManifest = nil
         activeManifestSource = nil
         manifestRejection = nil
-        guard let gameRoot else { return }
-
-        let metrics = Self.touchZoneMetricsForManifestLoad()
-
-        guard let outcome = ControlsManifestLoader.load(gameRoot: gameRoot, metrics: metrics) else {
-            return
-        }
+        guard let container,
+            let outcome = ControlsManifestLoader.load(
+                gameRoot: container.gameURL, metrics: layoutMetrics())
+        else { return }
 
         activeManifestSource = outcome.result.location
-        let logsContainer = GameContainer(url: gameRoot.deletingLastPathComponent())
         for line in outcome.logLines {
-            logsContainer.appendLogLine(line, fileName: UserControlsFile.logFileName)
+            container.appendLogLine(line, fileName: UserControlsFile.logFileName)
         }
         activeManifest = outcome.result.manifest
         manifestRejection = outcome.result.rejection
-    }
-
-    private func applyResolvedLayout() {
-        let metrics = Self.touchZoneMetricsForManifestLoad()
-        resolutionInvolvesDerivation = false
-        if let touch = activeManifest?.touch {
-            let completion = TouchSectionCompletion.complete(touch, metrics: metrics)
-            resolutionInvolvesDerivation = completion.involvedDerivation
-        }
-        let portrait = Self.resolveInitialLayout(
-            manifest: activeManifest, orientation: .portrait, metrics: metrics)
-        let landscape = Self.resolveInitialLayout(
-            manifest: activeManifest, orientation: .landscape, metrics: metrics)
-        applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
-    }
-
-    fileprivate static func resolveInitialLayout(
-        manifest: ControlsManifest?,
-        orientation: ControlsOrientation,
-        metrics: TouchZoneMetrics
-    ) -> PersistedLayout.Oriented {
-        let builtin = builtinOriented(orientation)
-        guard let touch = manifest?.touch else { return builtin }
-
-        let completed = TouchSectionCompletion.complete(touch, metrics: metrics).section
-
-        let touchLayout: TouchLayout?
-        switch orientation {
-        case .portrait:
-            touchLayout = completed.portrait
-        case .landscape:
-            touchLayout = completed.landscape
-        }
-
-        guard let touchLayout else { return builtin }
-
-        let dpad: PersistedLayout.DPad
-        if let spec = touchLayout.dpad {
-            dpad = PersistedLayout.DPad(
-                rx: CGFloat(spec.x),
-                ry: CGFloat(spec.y),
-                size: CGFloat(spec.size ?? ControlLimits.defaultDPadSize),
-                opacity: spec.opacity ?? 1.0,
-                style: spec.style
-            )
-        } else {
-            dpad = builtin.dpad
-        }
-
-        let buttons: [ButtonModel]
-        if let specs = touchLayout.buttons {
-            buttons = specs.compactMap { spec in
-                guard let scancode = KeyCodeTable.scancode(for: spec.key) else { return nil }
-                let label = spec.label ?? KeyCodeTable.displayName(for: spec.key) ?? spec.key
-                return ButtonModel(
-                    label: label,
-                    scancode: scancode,
-                    relativeCenter: CGPoint(x: spec.x, y: spec.y),
-                    size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
-                    opacity: spec.opacity ?? 1.0
-                )
-            }
-        } else {
-            buttons = builtin.buttons
-        }
-
-        // A shipped action button must not show as a user edit in the
-        // customization diff.
-        let actionButtons = touchLayout.actionButtons.map { specs in
-            specs.map(actionButtonModel(from:))
-        }
-
-        return PersistedLayout.Oriented(
-            dpad: dpad, buttons: buttons, actionButtons: actionButtons)
-    }
-
-    private static func builtinOriented(_ orientation: ControlsOrientation) -> PersistedLayout.Oriented {
-        let dpadCenter = defaultDPadCenter(orientation)
-        return PersistedLayout.Oriented(
-            dpad: .init(
-                rx: dpadCenter.x,
-                ry: dpadCenter.y,
-                size: defaultDPadSize,
-                opacity: 1.0,
-                style: .dpad
-            ),
-            buttons: defaultButtons(orientation),
-            actionButtons: nil
-        )
-    }
-
-    private func applyV2(_ layout: PersistedLayout) {
-        switch currentOrientation {
-        case .portrait:
-            active = Self.orientedControls(from: layout.portrait)
-            inactive = Self.orientedControls(from: layout.landscape)
-        case .landscape:
-            active = Self.orientedControls(from: layout.landscape)
-            inactive = Self.orientedControls(from: layout.portrait)
-        }
     }
 
     // MARK: - Mutators

@@ -5,96 +5,6 @@ import Foundation
 
 public enum ControlsManifestSerializer {
 
-    public struct TouchOrientedInput: Equatable, Sendable {
-        public var dpadX: Double
-        public var dpadY: Double
-        public var dpadSize: Double
-        public var dpadOpacity: Double
-        public var dpadStyle: MovementStyle
-        public var buttons: [TouchButtonInput]
-        /// On this path an empty list omits the key, and an omitted key
-        /// means "inherit". The legacy migration uses this path, and
-        /// there the user made no choice about action buttons. The live
-        /// save path builds `TouchLayout` and keeps `[]` as "none".
-        public var actionButtons: [TouchActionButtonInput]
-
-        public init(
-            dpadX: Double,
-            dpadY: Double,
-            dpadSize: Double,
-            dpadOpacity: Double,
-            dpadStyle: MovementStyle = .dpad,
-            buttons: [TouchButtonInput],
-            actionButtons: [TouchActionButtonInput] = []
-        ) {
-            self.dpadX = dpadX
-            self.dpadY = dpadY
-            self.dpadSize = dpadSize
-            self.dpadOpacity = dpadOpacity
-            self.dpadStyle = dpadStyle
-            self.buttons = buttons
-            self.actionButtons = actionButtons
-        }
-    }
-
-    public struct TouchActionButtonInput: Equatable, Sendable {
-        public var action: String
-        public var x: Double
-        public var y: Double
-        public var size: Double
-        public var opacity: Double
-
-        public init(
-            action: String,
-            x: Double,
-            y: Double,
-            size: Double,
-            opacity: Double
-        ) {
-            self.action = action
-            self.x = x
-            self.y = y
-            self.size = size
-            self.opacity = opacity
-        }
-    }
-
-    public struct TouchButtonInput: Equatable, Sendable {
-        public var label: String
-        public var scancode: Int32
-        public var x: Double
-        public var y: Double
-        public var size: Double
-        public var opacity: Double
-
-        public init(
-            label: String,
-            scancode: Int32,
-            x: Double,
-            y: Double,
-            size: Double,
-            opacity: Double
-        ) {
-            self.label = label
-            self.scancode = scancode
-            self.x = x
-            self.y = y
-            self.size = size
-            self.opacity = opacity
-        }
-    }
-
-    public static func touchSection(
-        portrait: TouchOrientedInput,
-        landscape: TouchOrientedInput,
-        onDroppedButton: ((String, Int32) -> Void)? = nil
-    ) -> TouchSection {
-        TouchSection(
-            portrait: orientedLayout(portrait, onDroppedButton: onDroppedButton),
-            landscape: orientedLayout(landscape, onDroppedButton: onDroppedButton)
-        )
-    }
-
     public static func serialize(
         touch: TouchSection?,
         bindings: BindingMap?
@@ -131,41 +41,6 @@ public enum ControlsManifestSerializer {
         lines.append("}")
         lines.append("")
         return Data(lines.joined(separator: "\n").utf8)
-    }
-
-    // MARK: - Touch conversion
-
-    private static func orientedLayout(
-        _ input: TouchOrientedInput,
-        onDroppedButton: ((String, Int32) -> Void)?
-    ) -> TouchLayout {
-        let dpad = DPadSpec(
-            x: input.dpadX, y: input.dpadY, size: input.dpadSize,
-            opacity: input.dpadOpacity, style: input.dpadStyle)
-
-        var buttons: [ButtonSpec] = []
-        for button in input.buttons {
-            guard let key = KeyCodeTable.code(for: button.scancode) else {
-                onDroppedButton?(button.label, button.scancode)
-                continue
-            }
-            buttons.append(
-                ButtonSpec(
-                    label: button.label, key: key, x: button.x, y: button.y,
-                    size: button.size, opacity: button.opacity))
-        }
-
-        let actionButtons = input.actionButtons.map { button in
-            ActionButtonSpec(
-                action: button.action, x: button.x, y: button.y,
-                size: button.size, opacity: button.opacity)
-        }
-
-        return limited(
-            TouchLayout(
-                dpad: dpad,
-                buttons: buttons,
-                actionButtons: actionButtons.isEmpty ? nil : actionButtons))
     }
 
     // MARK: - JSON emission

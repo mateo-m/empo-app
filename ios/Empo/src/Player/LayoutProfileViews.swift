@@ -126,6 +126,7 @@ struct LayoutProfilePickerSheet: View {
 // MARK: - Manager
 
 struct LayoutProfilesSettingsView: View {
+    @Environment(\.controlsLayout) private var playerLayout
     @State private var profiles: [String] = []
     @State private var defaultName: String?
     @State private var renaming: String?
@@ -152,7 +153,7 @@ struct LayoutProfilesSettingsView: View {
             if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                 Section {
                     NavigationLink {
-                        BuiltinLayoutViewerView()
+                        BuiltinLayoutViewerView(keys: playerLayout.gameKeys)
                     } label: {
                         HStack {
                             Text("Empo default")
@@ -247,7 +248,7 @@ struct LayoutProfilesSettingsView: View {
 
     private func profileRow(_ name: String) -> some View {
         NavigationLink {
-            LayoutProfileEditorView(profileName: name)
+            LayoutProfileEditorView(profileName: name, keys: playerLayout.gameKeys)
         } label: {
             HStack {
                 Text(name)
@@ -373,12 +374,12 @@ struct LayoutProfileEditorView: View {
     @State private var savedOnLeave = false
     @Environment(\.dismiss) private var dismiss
 
-    init(profileName: String) {
+    init(profileName: String, keys: [GameKey]) {
         self.profileName = profileName
         _currentName = State(initialValue: profileName)
         _layout = State(
             initialValue: ControlsLayout(
-                editorForProfile: profileName, metrics: .reference))
+                editorForProfile: profileName, metrics: .reference, keys: keys))
     }
 
     private var canvasSize: CGSize { EditorCanvas.size(for: editingOrientation) }
@@ -718,6 +719,7 @@ private struct NewProfileAlert: ViewModifier {
     @Binding var isPresented: Bool
     let onCreate: () -> Void
 
+    @Environment(\.controlsLayout) private var playerLayout
     @State private var name = ""
     @State private var showNameError = false
     @State private var showSaveFailure = false
@@ -742,7 +744,7 @@ private struct NewProfileAlert: ViewModifier {
 
     private func create() {
         do {
-            try LayoutProfilesManager.createProfileFromBuiltins(rawName: name)
+            try LayoutProfilesManager.createProfileFromBuiltins(rawName: name, keys: playerLayout.gameKeys)
             onCreate()
         } catch is LayoutProfileStore.StoreError {
             showNameError = true
@@ -778,10 +780,14 @@ extension View {
 // MARK: - Built-in viewer
 
 struct BuiltinLayoutViewerView: View {
-    @State private var layout = ControlsLayout(viewerForBuiltins: .reference)
+    @State private var layout: ControlsLayout
     @State private var actions = PlayerActionRegistry()
     @State private var orientation: ControlsOrientation = .portrait
     @State private var showCreateDialog = false
+
+    init(keys: [GameKey]) {
+        _layout = State(initialValue: ControlsLayout(viewerForBuiltins: .reference, keys: keys))
+    }
 
     var body: some View {
         VStack(spacing: Spacing.md) {
