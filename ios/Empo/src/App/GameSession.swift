@@ -60,7 +60,7 @@ enum GameSession {
         // After the reset (which clears the previous session's
         // region) and before boot: the engine's first recalc reads
         // the bridge statics, so the region is set pre-boot.
-        ScreenRegionApplier.beginSession(container: container)
+        ControlsLayout.shared.screenRegion.beginSession(container: container)
         gamecore_setGameControllerCaptureEnabled(false)
         // Seed the touch-mouse atomic before boot.
         // `gamecore_resetSessionState` above leaves it alone, so without

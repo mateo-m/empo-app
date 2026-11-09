@@ -232,6 +232,11 @@ class AppWindow: UIWindow {
             top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
     }
 
+    static var canvas: ScreenCanvas? {
+        guard let window = instance else { return nil }
+        return ScreenCanvas(size: window.bounds.size, safeArea: currentSafeArea)
+    }
+
     static func claimKey(_ claim: KeyClaim) {
         guard let window = instance else { return }
         window.keyClaims.insert(claim)

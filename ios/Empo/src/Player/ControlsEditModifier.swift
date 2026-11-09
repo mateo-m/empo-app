@@ -477,19 +477,45 @@ struct ControlsEditDialogs: ViewModifier {
                 }
             }
             .alert(
-                layout.resetConfirmationTitle,
+                resetTitle,
                 isPresented: Binding(
                     get: { dialog == .resetConfirm },
                     set: { if !$0, dialog == .resetConfirm { dialog = nil } })
             ) {
-                Button(layout.resetConfirmationActionTitle, role: .destructive) {
+                Button(resetActionTitle, role: .destructive) {
                     layout.resetToResolvedDefault()
                 }
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(layout.resetConfirmationMessage())
+                Text(resetMessage())
             }
+    }
+
+    private var resetTitle: LocalizedStringResource {
+        if case .pinnedProfile(let name) = layout.provenance {
+            return "Stop using \(name)?"
+        }
+        return layout.hasManifestTouchSection ? "Reset to game default?" : "Reset to Empo default?"
+    }
+
+    private var resetActionTitle: LocalizedStringResource {
+        if case .pinnedProfile = layout.provenance {
+            return "Stop using"
+        }
+        return "Reset"
+    }
+
+    private func resetMessage() -> LocalizedStringResource {
+        let screenChanges = layout.screenChangesOnReset()
+        if case .pinnedProfile(let name) = layout.provenance {
+            return screenChanges
+                ? "This game stops using the profile \(name). The profile keeps its layout. The screen returns to automatic placement."
+                : "This game stops using the profile \(name). The profile keeps its layout."
+        }
+        return screenChanges
+            ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
+            : "This deletes your custom layout. You can't undo this."
     }
 }
 

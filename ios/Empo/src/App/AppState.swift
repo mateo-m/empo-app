@@ -426,7 +426,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // game's slot. `switchGame(nil)` also flushes any pending
         // edits.
         ControlsLayout.shared.switchGame(id: nil, container: nil)
-        ScreenRegionApplier.endSession()
+        ControlsLayout.shared.screenRegion.endSession()
         engineReady = false
         PauseManager.shared.reset()
         // Last, because 7.6 counts a paused session as live and

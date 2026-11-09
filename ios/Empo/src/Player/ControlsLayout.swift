@@ -106,21 +106,13 @@ private struct LegacyButton: Decodable {
 }
 
 @MainActor
-protocol ScreenEditSyncing {
-    func endPreview()
-    func resolvedPlacement(isPortrait: Bool) -> ScreenPlacement?
-}
-
-@MainActor
 @Observable
 class ControlsLayout {
-    static let shared: ControlsLayout = {
-        let layout = ControlsLayout()
-        layout.screenSync = ScreenRegionApplierSync()
-        return layout
-    }()
+    static let shared = ControlsLayout()
 
-    @ObservationIgnored var screenSync: ScreenEditSyncing?
+    /// The editor instances never begin a session, so their applier
+    /// sends nothing.
+    let screenRegion = ScreenRegionApplier()
 
     /// nil means that no game is active. Mutations then stay in memory.
     private(set) var currentGameID: String?
@@ -172,44 +164,20 @@ class ControlsLayout {
         activeManifest?.touch != nil
     }
 
-    var resetConfirmationTitle: LocalizedStringResource {
-        if case .pinnedProfile(let name) = provenance {
-            return "Stop using \(name)?"
-        }
-        return hasManifestTouchSection ? "Reset to game default?" : "Reset to Empo default?"
-    }
-
-    var resetConfirmationActionTitle: LocalizedStringResource {
-        if case .pinnedProfile = provenance {
-            return "Stop using"
-        }
-        return "Reset"
-    }
-
-    /// This reads two files. Call it when the confirm alert shows,
-    /// not on each render.
-    func resetConfirmationMessage() -> LocalizedStringResource {
-        if case .pinnedProfile(let name) = provenance {
-            return screenChangesOnReset()
-                ? "This game stops using the profile \(name). The profile keeps its layout. The screen returns to automatic placement."
-                : "This game stops using the profile \(name). The profile keeps its layout."
-        }
-        return screenChangesOnReset()
-            ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
-            : "This deletes your custom layout. You can't undo this."
-    }
-
-    private func screenChangesOnReset() -> Bool {
+    /// True when a reset sends the screen back to automatic placement.
+    /// This reads two files, so do not call it on each render.
+    func screenChangesOnReset() -> Bool {
         let isPortrait = currentOrientation == .portrait
         let current = effectiveScreenPlacement(
-            stored: screenSync?.resolvedPlacement(isPortrait: isPortrait))
+            stored: screenRegion.resolvedPlacement(isPortrait: isPortrait))
         guard current != nil else { return false }
 
         let store = LayoutProfilesManager.store
-        var postResetPin: LayoutPin = .followChain
-        if case .pinnedProfile = provenance {
+        let postResetPin: LayoutPin
+        switch (provenance, currentContainer) {
+        case (.pinnedProfile, _), (_, nil):
             postResetPin = .followChain
-        } else if let container = currentContainer {
+        case (_, let container?):
             postResetPin = store.loadPin(forGameFolder: container.url).pin
         }
         let postReset = ScreenResolution.resolve(
@@ -368,9 +336,8 @@ class ControlsLayout {
         // recovery does not run. The profile editor saves after it
         // ends its session, so its edits must stay.
         if !isEditorInstance {
-            screenEdits.removeAll()
             activeScreenDrag = nil
-            screenSync?.endPreview()
+            dropScreenEdits()
         }
         // Done keeps the snapped values. Only the restore record goes.
         gridSnapOriginals = [:]
@@ -510,9 +477,14 @@ class ControlsLayout {
 
     private func abandonScreenEdits() {
         guard !screenEdits.isEmpty || activeScreenDrag != nil else { return }
-        screenEdits.removeAll()
         activeScreenDrag = nil
-        screenSync?.endPreview()
+        dropScreenEdits()
+    }
+
+    /// The applier then shows the region on disk again.
+    private func dropScreenEdits() {
+        screenEdits.removeAll()
+        screenRegion.endPreview()
     }
 
     /// A reset of a drag that was never saved is no change. It must
@@ -533,7 +505,7 @@ class ControlsLayout {
         if storedEntry != nil {
             screenEdits[currentOrientation] = .resetToAuto
         } else if targetName == nil,
-            screenSync?.resolvedPlacement(isPortrait: currentOrientation == .portrait) != nil
+            screenRegion.resolvedPlacement(isPortrait: currentOrientation == .portrait) != nil
         {
             // The region comes from the default profile, so there is
             // nothing to delete in place. Done then creates a pinned
@@ -619,7 +591,7 @@ class ControlsLayout {
         // must not commit in the new orientation.
         if activeScreenDrag != nil {
             activeScreenDrag = nil
-            screenSync?.endPreview()
+            screenRegion.endPreview()
         }
 
         clearEditUndoStack()
@@ -818,38 +790,26 @@ class ControlsLayout {
             + ControlsZone.toolbarGap
     }
 
-    func screenDragAllowedRect(
-        isPortrait: Bool, overlayOn: Bool, canvasSize: CGSize, safeArea: EdgeInsets
-    ) -> CGRect {
-        let safeBottom =
-            isPortrait ? canvasSize.height - safeArea.bottom : canvasSize.height
-        let maxBottom =
-            isPortrait && !overlayOn
-            ? safeBottom - requiredEditZoneHeight
-            : safeBottom
-        let top = isPortrait ? safeArea.top : 0
-        return CGRect(
-            x: safeArea.leading,
-            y: top,
-            width: canvasSize.width - safeArea.leading - safeArea.trailing,
-            height: maxBottom - top)
+    /// Upright and without overlay, the game screen stays above the
+    /// controls zone.
+    func screenDragAllowedRect(in canvas: ScreenCanvas, overlayOn: Bool) -> CGRect {
+        var allowed = canvas.safeRect
+        if canvas.isPortrait && !overlayOn {
+            allowed.size.height -= requiredEditZoneHeight
+        }
+        return allowed
     }
 
     /// When overlay turns off, a deep region must move above the fit
     /// limit. If not, the zone has no space and the controls stack at
     /// the bottom.
-    func overlayToggledRegion(
-        from region: ScreenRegion, isPortrait: Bool, canvasSize: CGSize,
-        safeArea: EdgeInsets
-    ) -> ScreenRegion {
+    func overlayToggledRegion(from region: ScreenRegion, in canvas: ScreenCanvas) -> ScreenRegion {
         var toggled = region
         toggled.overlay = !region.overlay
-        guard !toggled.overlay, isPortrait, canvasSize.height > 0 else { return toggled }
-        let allowed = screenDragAllowedRect(
-            isPortrait: isPortrait, overlayOn: false, canvasSize: canvasSize,
-            safeArea: safeArea)
-        let limit = Double(allowed.maxY / canvasSize.height)
-        let top = Double(allowed.minY / canvasSize.height)
+        guard !toggled.overlay, canvas.isPortrait, canvas.size.height > 0 else { return toggled }
+        let allowed = screenDragAllowedRect(in: canvas, overlayOn: false)
+        let limit = Double(allowed.maxY / canvas.size.height)
+        let top = Double(allowed.minY / canvas.size.height)
         if toggled.y + toggled.h > limit {
             toggled.y = max(top, limit - toggled.h)
             toggled.h = min(toggled.h, limit - toggled.y)
@@ -1088,8 +1048,7 @@ class ControlsLayout {
                     }
                 }
                 if screenSaved {
-                    screenEdits.removeAll()
-                    screenSync?.endPreview()
+                    dropScreenEdits()
                 }
             }
             if changed {
@@ -1152,8 +1111,7 @@ class ControlsLayout {
                 if let landscape { screenEdits[.landscape] = .set(landscape) }
                 throw screenFailure
             }
-            screenEdits.removeAll()
-            screenSync?.endPreview()
+            dropScreenEdits()
         }
     }
 
@@ -1172,7 +1130,7 @@ class ControlsLayout {
             if screenEditsDirty {
                 let merged = mergedScreenPlacements(profile: name, store: store)
                 try store.writeScreen(name, portrait: merged.portrait, landscape: merged.landscape)
-                screenEdits.removeAll()
+                dropScreenEdits()
             }
         } catch {
             NSLog("layout profile: editor save of \(name) failed: \(error)")
@@ -1634,7 +1592,7 @@ class ControlsLayout {
         // has the exact values. In an upright window the notch is
         // usually at the top, but the closed iPhone Duo puts its camera
         // and status bar on the right edge (top 0, trailing 84).
-        let isLandscapeNow = bounds.width > bounds.height
+        let isLandscapeNow = ControlsOrientation.from(geoSize: bounds.size) == .landscape
         let landscapeLeading: Double
         let landscapeTrailing: Double
         if isLandscapeNow {

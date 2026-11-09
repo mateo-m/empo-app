@@ -7,7 +7,7 @@ import SwiftUI
 struct ScreenRegionGizmo: View {
     static let moveAnimation = Animation.easeInOut(duration: 0.25)
 
-    let canvasSize: CGSize
+    let canvas: ScreenCanvas
     let allowedRect: CGRect
     let baseRect: CGRect
     let onDragBegan: () -> Void
@@ -19,16 +19,18 @@ struct ScreenRegionGizmo: View {
 
     @State private var draft: CGRect?
     @State private var anchorRect: CGRect?
-    /// The gesture that owns the drag in flight: 0 for the move
-    /// surface, 1 to 4 for the corners. A second finger cannot
-    /// change the anchor or end the drag.
-    @State private var dragOwner: Int?
+    /// A second finger cannot change the anchor or end the drag.
+    @State private var dragOwner: DragHandle?
 
     private var rect: CGRect { draft ?? baseRect }
-    private var minW: CGFloat { canvasSize.width * ScreenRegionGizmo.minFraction }
-    private var minH: CGFloat { canvasSize.height * ScreenRegionGizmo.minFraction }
+    private var minW: CGFloat { canvas.size.width * ScreenRegionGizmo.minFraction }
+    private var minH: CGFloat { canvas.size.height * ScreenRegionGizmo.minFraction }
     private static let minFraction = CGFloat(ScreenRegionFile.minFraction)
-    private static let moveOwner = 0
+
+    private enum DragHandle: Equatable {
+        case move
+        case corner(Corner)
+    }
 
     var body: some View {
         surfaces
@@ -37,16 +39,9 @@ struct ScreenRegionGizmo: View {
     /// Shrinks the anchor into `allowedRect`. A stored rect can break
     /// the limits after a restore from another device, or after the
     /// controls grow. Without the shrink, the clamps invert.
-    private func claimDrag(owner: Int) -> Bool {
+    private func claimDrag(owner: DragHandle) -> Bool {
         if anchorRect == nil {
-            var anchor = rect
-            anchor.size.width = min(anchor.width, allowedRect.width)
-            anchor.size.height = min(anchor.height, allowedRect.height)
-            anchor.origin.x = min(
-                max(allowedRect.minX, anchor.origin.x), allowedRect.maxX - anchor.width)
-            anchor.origin.y = min(
-                max(allowedRect.minY, anchor.origin.y), allowedRect.maxY - anchor.height)
-            anchorRect = anchor
+            anchorRect = rect.kept(inside: allowedRect)
             dragOwner = owner
             onDragBegan()
         }
@@ -64,7 +59,7 @@ struct ScreenRegionGizmo: View {
             .contentShape(Rectangle())
             .editDrag(
                 minimumDistance: 2, onChanged: moveChanged,
-                onFinished: { finishDrag(owner: Self.moveOwner) }
+                onFinished: { finishDrag(owner: .move) }
             )
             .accessibilityLabel("Game screen position")
             .accessibilityHint("Drag to move the game screen")
@@ -86,7 +81,7 @@ struct ScreenRegionGizmo: View {
                     .position(corner.point(in: rect, inset: 16))
                     .editDrag(
                         minimumDistance: 2, onChanged: { resizeChanged($0, corner: corner) },
-                        onFinished: { finishDrag(owner: corner.owner) }
+                        onFinished: { finishDrag(owner: .corner(corner)) }
                     )
                     .accessibilityLabel(corner.accessibilityLabel)
             }
@@ -96,19 +91,16 @@ struct ScreenRegionGizmo: View {
     private static let grabberSide: CGFloat = 22
 
     private func moveChanged(_ value: DragGesture.Value) {
-        guard claimDrag(owner: Self.moveOwner), let anchor = anchorRect else { return }
-        var moved = anchor.offsetBy(
-            dx: value.translation.width, dy: value.translation.height)
-        moved.origin.x = min(
-            max(allowedRect.minX, moved.origin.x), allowedRect.maxX - moved.width)
-        moved.origin.y = min(
-            max(allowedRect.minY, moved.origin.y), allowedRect.maxY - moved.height)
+        guard claimDrag(owner: .move), let anchor = anchorRect else { return }
+        let moved = anchor.offsetBy(
+            dx: value.translation.width, dy: value.translation.height
+        ).kept(inside: allowedRect)
         draft = moved
-        onDragChanged(region(from: moved))
+        onDragChanged(canvas.region(for: moved, overlay: overlayOn))
     }
 
     private func resizeChanged(_ value: DragGesture.Value, corner: Corner) {
-        guard claimDrag(owner: corner.owner), let anchor = anchorRect
+        guard claimDrag(owner: .corner(corner)), let anchor = anchorRect
         else { return }
         var minX = anchor.minX
         var minY = anchor.minY
@@ -150,20 +142,11 @@ struct ScreenRegionGizmo: View {
         }
         let resized = CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
         draft = resized
-        onDragChanged(region(from: resized))
+        onDragChanged(canvas.region(for: resized, overlay: overlayOn))
     }
 
     private enum Corner: CaseIterable {
         case topLeft, topRight, bottomLeft, bottomRight
-
-        var owner: Int {
-            switch self {
-            case .topLeft: 1
-            case .topRight: 2
-            case .bottomLeft: 3
-            case .bottomRight: 4
-            }
-        }
 
         var accessibilityLabel: LocalizedStringResource {
             switch self {
@@ -195,23 +178,14 @@ struct ScreenRegionGizmo: View {
         }
     }
 
-    private func finishDrag(owner: Int) {
+    private func finishDrag(owner: DragHandle) {
         guard dragOwner == owner else { return }
         if let draft {
-            onDragEnded(region(from: draft))
+            onDragEnded(canvas.region(for: draft, overlay: overlayOn))
         }
         anchorRect = nil
         draft = nil
         dragOwner = nil
-    }
-
-    private func region(from rect: CGRect) -> ScreenRegion {
-        ScreenRegion(
-            x: rect.minX / canvasSize.width,
-            y: rect.minY / canvasSize.height,
-            w: rect.width / canvasSize.width,
-            h: rect.height / canvasSize.height,
-            overlay: overlayOn)
     }
 }
 
@@ -224,6 +198,12 @@ struct ScreenRegionChips: View {
     var overlayOn: Bool = false
     var onToggleOverlay: (() -> Void)?
 
+    /// The chips stack down from the top edge of the region, one row
+    /// for each chip.
+    private func chipY(row: Int) -> CGFloat {
+        rect.minY + 14 + 30 * CGFloat(row)
+    }
+
     var body: some View {
         ZStack {
             Text("Screen")
@@ -232,7 +212,7 @@ struct ScreenRegionChips: View {
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 2)
                 .glassEffect(.regular, in: .capsule)
-                .position(x: rect.midX, y: rect.minY + 14)
+                .position(x: rect.midX, y: chipY(row: 0))
                 .allowsHitTesting(false)
 
             if showsReset {
@@ -249,7 +229,7 @@ struct ScreenRegionChips: View {
                 // Top area, below the "Screen" label: the bottom
                 // corner belongs to the resize grabber, and at the
                 // minimum region size a bottom chip would overlap it.
-                .position(x: rect.midX, y: rect.minY + 44)
+                .position(x: rect.midX, y: chipY(row: 1))
                 .accessibilityLabel("Reset screen to automatic placement")
             }
 
@@ -268,7 +248,7 @@ struct ScreenRegionChips: View {
                     .foregroundStyle(overlayOn ? Color.brand : .white)
                     .glassEffect(.regular.interactive(), in: .capsule)
                 }
-                .position(x: rect.midX, y: rect.minY + (showsReset ? 74 : 44))
+                .position(x: rect.midX, y: chipY(row: showsReset ? 2 : 1))
                 .accessibilityLabel("Controls over game")
                 .accessibilityValue(
                     overlayOn
