@@ -234,7 +234,7 @@ public actor RestoreEngine {
             throw RestoreStopReason.targetFailed
         }
         if (try? fm.attributesOfItem(atPath: destination.path)) != nil {
-            try fm.moveItem(at: destination, to: try displacedURL(of: destination))
+            try fm.moveItem(at: destination, to: displacedURL(of: destination))
         }
         try fm.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -291,13 +291,13 @@ public actor RestoreEngine {
         }
     }
 
-    /// The plan's displaced name does not map back to a URL for the settings export, and a save the
-    /// game wrote after the plan is not in it, so the name comes from the folder as it is now.
-    private func displacedURL(of destination: URL) throws -> URL {
+    /// `attributesOfItem` also sees a link whose target is gone, which `fileExists` does not.
+    private func displacedURL(of destination: URL) -> URL {
         let folder = destination.deletingLastPathComponent()
-        let taken = Set(try fm.contentsOfDirectory(atPath: folder.path))
         return folder.appendingPathComponent(
-            DisplacedCopy.nextFileName(for: destination.lastPathComponent, taken: taken))
+            DisplacedCopy.nextFileName(for: destination.lastPathComponent) {
+                (try? fm.attributesOfItem(atPath: folder.appendingPathComponent($0).path)) != nil
+            })
     }
 
     /// Whether a staged file holds the entry's bytes.
