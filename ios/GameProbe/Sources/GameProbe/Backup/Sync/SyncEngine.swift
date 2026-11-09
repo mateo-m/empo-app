@@ -110,7 +110,9 @@ public final class SyncEngine {
             }
         }
         var mine = SyncDocumentModel()
-        updateIdentities { mine = local.read(identities: &$0) }
+        if let failure = updateIdentities({ mine = local.read(identities: &$0) }) {
+            return failure
+        }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
         let removed = current.removedPreferenceKeys
         let removedBindings = current.heldBindingIds.filter {
@@ -152,13 +154,17 @@ public final class SyncEngine {
         // A change made during the downloads, such as a settings
         // restore, is not in `mine`, and the apply would undo it.
         var latest = SyncDocumentModel()
-        updateIdentities { latest = local.read(identities: &$0) }
+        if let failure = updateIdentities({ latest = local.read(identities: &$0) }) {
+            return failure
+        }
         guard latest == mine else { return .runAgain }
         // A build that may not write leaves a removal out of the
         // document, so the apply drops it here.
         let applied = merged.removing(
             preferences: removed, bindings: removedBindings, absentFrom: mine)
-        updateIdentities { local.apply(applied, identities: &$0) }
+        if let failure = updateIdentities({ local.apply(applied, identities: &$0) }) {
+            return failure
+        }
 
         guard publishes, !SyncCopyValidation.readsButDoesNotPublish(merged) else {
             return .failed("this build reads the document but does not write it")
@@ -171,7 +177,9 @@ public final class SyncEngine {
         // Only a saved pass counts as read. A pass that stops before
         // the save reads the same copies and local values again.
         var after = SyncDocumentModel()
-        updateIdentities { after = local.read(identities: &$0) }
+        if let failure = updateIdentities({ after = local.read(identities: &$0) }) {
+            return failure
+        }
         lastLocalValues = after
         updateState("the bindings this device holds") {
             $0.heldBindingIds = after.controllerBindings.keys.sorted()
@@ -337,11 +345,14 @@ public final class SyncEngine {
         }
     }
 
-    private func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) {
+    /// An id that does not save is made again on the next read, so
+    /// the pass stops.
+    private func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) -> Outcome? {
         do {
             try state.updateIdentities(change)
+            return nil
         } catch {
-            note("the profile identities were not saved: \(error)")
+            return .failed("the profile identities were not saved: \(error)")
         }
     }
 }

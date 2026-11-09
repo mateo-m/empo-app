@@ -142,7 +142,10 @@ final class SyncEngineTests: XCTestCase {
             change(&value)
         }
 
+        var failsToUpdateIdentities = false
+
         func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) throws {
+            if failsToUpdateIdentities { throw CocoaError(.fileWriteNoPermission) }
             change(&identities)
         }
     }
@@ -429,6 +432,26 @@ final class SyncEngineTests: XCTestCase {
 
         XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
         XCTAssertEqual(document.steps, ["load", "merge"])
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
+    func testProfileIdsThatDoNotSaveStopThePass() async throws {
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.failsToUpdateIdentities = true
+
+        let outcome = await engine(
+            document: FakeDocument(), targets: targets, state: state, local: local
+        ).run(.now)
+
+        guard case .failed(let reason) = outcome else {
+            return XCTFail("the pass went on with ids that did not save: \(outcome)")
+        }
+        XCTAssertTrue(reason.hasPrefix("the profile identities were not saved"))
         XCTAssertTrue(local.applied.isEmpty)
         XCTAssertTrue(targets.puts.isEmpty)
     }
