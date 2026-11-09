@@ -128,9 +128,9 @@ final class BackupPass {
             BackupLog.line("BackupPass", "\(descriptor.label) ledger rebuild failed: \(error)")
         }
 
-        var conflicts: WriterConflicts
+        let writerAnswer: WriterConflicts.Answer?
         do {
-            conflicts = try BackupRoot.writerConflicts()
+            writerAnswer = try BackupRoot.writerConflicts().answer(for: descriptor.id)
         } catch {
             BackupLog.line("BackupPass", "\(descriptor.label) could not read the writer answers: \(error)")
             return nil
@@ -157,7 +157,7 @@ final class BackupPass {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerAnswer: conflicts.answer(for: descriptor.id),
+            writerAnswer: writerAnswer,
             syncGroup: syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
@@ -175,8 +175,14 @@ final class BackupPass {
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
-        conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
         do {
+            // The user can answer on the Backups screen while the run uploads.
+            var conflicts = try BackupRoot.writerConflicts()
+            if conflicts.answer(for: descriptor.id) == writerAnswer {
+                conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
+            } else if result.didSplit {
+                conflicts.showsTheSplitLine = true
+            }
             try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
         } catch {
             BackupLog.line("BackupPass", "\(descriptor.label) writer answers were not saved: \(error)")
