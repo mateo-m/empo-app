@@ -162,11 +162,7 @@ public actor RestoreEngine {
                 replaced, mode: request.mode, snapshot: manifest)
             result.droppedFromReplacedTree = decision.drop.count
             result.replacedTreeKeptBytes = decision.keptBytes
-            if decision.clearsItself {
-                // The whole tree was provably covered, so it clears
-                // itself and leaves nothing for the user to sweep
-                // up, per 11.12.
-                try? fm.removeItem(at: replaced)
+            if removeIfEmpty(replaced) {
                 result.replacedTreeName = nil
             }
         }
@@ -312,6 +308,23 @@ public actor RestoreEngine {
             try? fm.removeItem(at: tree.appendingPathComponent(path))
         }
         return decision
+    }
+
+    /// Deletes the folders under `folder` that hold nothing, then
+    /// `folder` itself when it holds nothing. A link, or a file the
+    /// walk could not list or hash, keeps its folder, per 11.12.
+    private func removeIfEmpty(_ folder: URL) -> Bool {
+        guard let names = try? fm.contentsOfDirectory(atPath: folder.path) else { return false }
+        var left = names.count
+        for name in names {
+            let child = folder.appendingPathComponent(name)
+            let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            if values?.isDirectory == true, values?.isSymbolicLink != true, removeIfEmpty(child) {
+                left -= 1
+            }
+        }
+        guard left == 0 else { return false }
+        return (try? fm.removeItem(at: folder)) != nil
     }
 
     // MARK: - Staged blobs

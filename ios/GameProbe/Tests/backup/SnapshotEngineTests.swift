@@ -1476,10 +1476,10 @@ final class SnapshotEngineTests: XCTestCase {
     /// Every file of the container with its hash, as the app lists it.
     private func localFiles(of folderName: String) throws -> [RestoreLocalFile] {
         let root = container(folderName)
-        return try BackupSetResolver.files(under: root, fm: fm).map {
+        return BackupSetResolver.files(under: root, fm: fm).map {
             RestoreLocalFile(
                 root: .container, path: $0.path, size: $0.size,
-                hash: try ContentHash.hexOfFile(at: root.appendingPathComponent($0.path)))
+                hash: try? ContentHash.hexOfFile(at: root.appendingPathComponent($0.path)))
         }
     }
 
@@ -1691,6 +1691,47 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertFalse(
             fm.fileExists(
                 atPath: container(gameName).appendingPathComponent("\(moved)/Game.ini").path))
+    }
+
+    func testAReplaceKeepsTheMovedTreeWhenItHoldsALinkTheBackupDoesNotList() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        try fm.createSymbolicLink(
+            atPath: container(gameName).appendingPathComponent("Game/shortcut").path,
+            withDestinationPath: "save1.dat")
+
+        let outcome = try await replace(with: snapshotId, on: target)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        let moved = try XCTUnwrap(result.replacedTreeName, "the moved tree is gone")
+        let link = container(gameName).appendingPathComponent("\(moved)/shortcut").path
+        XCTAssertEqual(try fm.destinationOfSymbolicLink(atPath: link), "save1.dat")
+    }
+
+    func testAReplaceKeepsTheMovedTreeWhenItHoldsAFileEmpoCannotRead() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let locked = container(gameName).appendingPathComponent("Game/locked.sav")
+        try write("a save no backup holds", to: locked)
+        try fm.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+
+        let outcome = try await replace(with: snapshotId, on: target)
+
+        guard case .finished(let result) = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        let moved = try XCTUnwrap(result.replacedTreeName, "the moved tree is gone")
+        let kept = container(gameName).appendingPathComponent("\(moved)/locked.sav")
+        try fm.setAttributes([.posixPermissions: 0o644], ofItemAtPath: kept.path)
+        XCTAssertEqual(try String(contentsOf: kept, encoding: .utf8), "a save no backup holds")
     }
 
     // MARK: - 22. The run plan the pill and the badge read, per 13.2
