@@ -170,10 +170,11 @@ final class PlayerActionRegistry {
         EmpoActionCatalog.toggleCheats: ActionBehavior(
             handle: Self.pressOnly { [engine] in
                 // The cheat scripts of the engine open their menu on HOME
-                // while the bridge flag is on.
+                // while the bridge flag is on. The key-up must come at
+                // least one RGSS tick after the key-down, or
+                // Input.trigger?(HOME) never sees the press.
                 engine.setCheatsEnabled(true)
-                engine.tapKey(
-                    Int32(GAMECORE_SCANCODE_HOME), HeldKeys<KeyHolder>.tapHoldMilliseconds)
+                engine.tapKey(Int32(GAMECORE_SCANCODE_HOME), 100)
             }),
         EmpoActionCatalog.toggleTouchControls: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.toggleTouchControls() }),
