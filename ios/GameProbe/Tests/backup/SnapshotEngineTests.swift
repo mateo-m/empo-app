@@ -1753,6 +1753,34 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(save, "played after the backup")
     }
 
+    func testAFinishedReplaceWhoseRecordDoesNotClearAsksNothing() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run(
+            "CREATE TRIGGER keep BEFORE DELETE ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
+
+        let outcome = await restore
+            .run(try replaceRequest(snapshotId))
+
+        guard case .finished = outcome else {
+            return XCTFail("the replace did not finish: \(outcome)")
+        }
+        let layout = BackupRootLayout(root: localRoot)
+        XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
+        try store.database.run("DROP TRIGGER keep")
+        XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
+        XCTAssertNil(try store.intent(kind: .interruptedRestore))
+        XCTAssertFalse(fm.fileExists(atPath: layout.finishedRestoreMark.path))
+    }
+
     func testAReplaceThatCannotMoveTheTreeLeavesNoRestoreRecord() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

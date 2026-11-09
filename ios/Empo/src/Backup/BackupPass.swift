@@ -192,7 +192,9 @@ final class BackupPass: BackupRunning {
         var restoring: String?
         if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             dirty = (try? store.dirtyGames()) ?? []
-            restoring = (try? store.intent(kind: .interruptedRestore))?.gameKey
+            restoring =
+                (try? RestoreResumeQuestion.unfinishedRecord(
+                    in: store, layout: BackupRoot.layout))?.gameKey
             store.close()
         }
         if let restoring, byKey[restoring] != nil {

@@ -15,6 +15,7 @@ import Foundation
 ///       packages/<package id>/     <- the backup packages of 12.5
 ///     outbox/
 ///     restore/<blob hash>
+///     restore/finished
 /// ```
 ///
 /// The two files beside the root are there on purpose. The root holds
@@ -26,6 +27,7 @@ public struct BackupRootLayout: Equatable, Sendable {
     public static let stagingDirectoryName = "staging"
     public static let outboxDirectoryName = "outbox"
     public static let restoreDirectoryName = "restore"
+    public static let finishedRestoreMarkName = "finished"
     /// The backup packages of 12.5, while they build and while they
     /// wait for Files to confirm a save.
     public static let packagesDirectoryName = "packages"
@@ -88,6 +90,12 @@ public struct BackupRootLayout: Equatable, Sendable {
     /// restore re-verifies what is there and skips it for free.
     public func restoreBlob(hash: String) -> URL {
         restore.appendingPathComponent(hash)
+    }
+
+    /// A restore writes it after its last file, before it clears its
+    /// record. A record next to it belongs to a finished restore.
+    public var finishedRestoreMark: URL {
+        restore.appendingPathComponent(Self.finishedRestoreMarkName)
     }
 
     public var targetsFile: URL {

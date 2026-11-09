@@ -120,9 +120,16 @@ public actor RestoreEngine {
 
         // Without the record, a process that dies mid-restore leaves a
         // silent mix of old and restored files, per 6.5.
+        let layout = BackupRootLayout(root: localRoot)
         let resumes: Bool
         do {
-            resumes = try store.intent(kind: .interruptedRestore) != nil
+            resumes =
+                try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout, fm: fm) != nil
+            // A mark left from an earlier restore would make this
+            // record read as finished.
+            if fm.fileExists(atPath: layout.finishedRestoreMark.path) {
+                try fm.removeItem(at: layout.finishedRestoreMark)
+            }
             try store.saveIntent(
                 RestoreResumeQuestion.record(
                     targetId: request.targetId,
@@ -195,7 +202,13 @@ public actor RestoreEngine {
             }
         }
 
-        try? store.clearIntent(kind: .interruptedRestore)
+        // The mark goes down before the record clears, so a record
+        // that does not clear reads as finished at the next launch.
+        try? fm.createDirectory(at: layout.restore, withIntermediateDirectories: true)
+        try? Data().write(to: layout.finishedRestoreMark)
+        if (try? store.clearIntent(kind: .interruptedRestore)) != nil {
+            try? fm.removeItem(at: layout.finishedRestoreMark)
+        }
         clearStagedBlobs()
         return .finished(result)
     }
@@ -376,7 +389,7 @@ public actor RestoreEngine {
     private func clearStagedBlobs() {
         let directory = BackupRootLayout(root: localRoot).restore
         for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
-        where !name.hasPrefix(Self.scratchPrefix) {
+        where !name.hasPrefix(Self.scratchPrefix) && name != BackupRootLayout.finishedRestoreMarkName {
             try? fm.removeItem(at: directory.appendingPathComponent(name))
         }
     }
