@@ -16,7 +16,8 @@ import Foundation
 /// 3. Write the intent record of 6.5, before the first byte lands.
 /// 4. Stage and check each blob under `restore/<hash>`, then write
 ///    the files.
-/// 5. Write the finished mark under `restore/`.
+/// 5. Write the finished mark under `restore/`, or clear the intent
+///    record when the mark does not write.
 /// 6. Drop from a replaced tree only what proven coverage allows.
 /// 7. Clear the intent record, then the mark.
 ///
@@ -202,7 +203,10 @@ public actor RestoreEngine {
         // The mark goes down before the cleanup and before the record
         // clears, so a stop after the last file never asks to resume.
         try? fm.createDirectory(at: layout.restore, withIntermediateDirectories: true)
-        try? Data().write(to: layout.finishedRestoreMark)
+        let marked = (try? Data().write(to: layout.finishedRestoreMark)) != nil
+        guard marked || (try? store.clearIntent(kind: .interruptedRestore)) != nil else {
+            return .failed(RestoreNotices.recordsUnavailableLine)
+        }
 
         if let replaced {
             let decision = dropFromTheReplacedTree(
@@ -214,7 +218,7 @@ public actor RestoreEngine {
             }
         }
 
-        if (try? store.clearIntent(kind: .interruptedRestore)) != nil {
+        if marked, (try? store.clearIntent(kind: .interruptedRestore)) != nil {
             try? fm.removeItem(at: layout.finishedRestoreMark)
         }
         clearStagedBlobs()
