@@ -80,7 +80,9 @@ final class BackupScheduler {
     private var pauses = 0
     private var holds = 0
     private var runAskedDuringHold = false
-    private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
+    private var store: BackupStateStore? {
+        try? BackupRoot.openStateStore()
+    }
 
     // MARK: - Launch
 
