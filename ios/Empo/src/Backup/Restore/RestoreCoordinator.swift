@@ -181,8 +181,16 @@ final class RestoreCoordinator {
         // The downloads ride the background session and survive on
         // their own. The grant covers the hash check and the copy
         // between two of them once the user has left the app.
+        // `BackupBackgroundTask` cancels the body when the grant ends,
+        // and the restore runs in its own task.
         _ = await withTaskCancellationHandler {
-            await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
+            await BackupBackgroundTask.run(named: "restore") {
+                await withTaskCancellationHandler {
+                    _ = await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            }
         } onCancel: {
             task.cancel()
         }

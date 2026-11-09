@@ -44,8 +44,8 @@ enum BackupBackgroundTask {
             identifier = .invalid
         }
         guard identifier != .invalid else {
-            // iOS refused the task, which means no grant at all. The
-            // run stays in the foreground and the next trigger takes
+            // iOS refused the task, so it can suspend the app at any
+            // time. The work stops now, and the next trigger takes
             // what is left.
             log("iOS granted no background task for \(name)")
             work.cancel()
