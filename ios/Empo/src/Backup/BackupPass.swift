@@ -190,7 +190,8 @@ final class BackupPass {
             } catch {
                 BackupLog.line(
                     "BackupPass",
-                    "\(descriptor.label) split to \(result.namespaceId) but the Keychain kept the old id")
+                    "\(descriptor.label) split to \(result.namespaceId), but the move did not finish: \(error)"
+                )
             }
         }
         return result

@@ -15,24 +15,22 @@ enum BackupNamespaceMove {
     /// `except` is the target whose run made the move. Its engine
     /// cleared its own rows.
     static func move(to namespaceId: String, except: String? = nil) throws {
+        var targets = Set(BackupTargets.load().map(\.id))
+        if let except { targets.remove(except) }
+        // The list goes first, so a target whose rows do not clear below
+        // still clears before its next run.
+        try waiting.add(targets)
         try BackupKeychain.adoptNamespaceId(namespaceId)
-        var left = Set(BackupTargets.load().map(\.id))
-        if let except { left.remove(except) }
-        if let store = try? BackupRoot.openStateStore() {
-            defer { store.close() }
-            for targetId in left {
-                do {
-                    try store.clearNamespaceState(targetId: targetId)
-                    left.remove(targetId)
-                } catch {
-                    BackupLog.line("BackupNamespaceMove", "\(targetId) kept the old rows: \(error)")
-                }
+        guard let store = try? BackupRoot.openStateStore() else { return }
+        defer { store.close() }
+        for targetId in targets {
+            do {
+                try store.clearNamespaceState(targetId: targetId)
+                try waiting.remove(targetId)
+            } catch {
+                BackupLog.line(
+                    "BackupNamespaceMove", "\(targetId) clears its old rows at its next run: \(error)")
             }
-        }
-        do {
-            try waiting.add(left)
-        } catch {
-            BackupLog.line("BackupNamespaceMove", "The clear was not marked for \(left): \(error)")
         }
     }
 
