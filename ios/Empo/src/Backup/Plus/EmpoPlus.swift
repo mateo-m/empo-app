@@ -180,7 +180,11 @@ final class EmpoPlus {
         if status == 401 {
             // Patreon refused the sign-in. The pass stays good until it
             // ends, and the Plus screen asks for a new sign-in.
-            try? BackupKeychain.removePlusRenewal()
+            do {
+                try BackupKeychain.removePlusRenewal()
+            } catch {
+                BackupLog.line("EmpoPlus", "The refused renewal stays in the Keychain: \(error)")
+            }
             self.renewal = nil
             return true
         }

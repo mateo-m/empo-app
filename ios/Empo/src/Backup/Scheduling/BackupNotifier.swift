@@ -51,9 +51,19 @@ enum BackupNotifier {
     /// every cause, which costs the user one repeated notification
     /// and never a missed one.
     static func report(_ targets: [BackupPassTarget], store: BackupStateStore) {
-        var ledger = (try? store.notificationLedger()) ?? BackupNotificationLedger()
+        var ledger: BackupNotificationLedger
+        do {
+            ledger = try store.notificationLedger()
+        } catch {
+            BackupLog.line("BackupNotifier", "The ledger was not read, every cause posts: \(error)")
+            ledger = BackupNotificationLedger()
+        }
         let toPost = ledger.post(pass: targets.map { ($0.id, $0.causes) })
-        try? store.saveNotificationLedger(ledger)
+        do {
+            try store.saveNotificationLedger(ledger)
+        } catch {
+            BackupLog.line("BackupNotifier", "The ledger was not saved: \(error)")
+        }
         for (target, posts) in zip(targets, toPost) {
             BackupLog.line(
                 "BackupNotifier",

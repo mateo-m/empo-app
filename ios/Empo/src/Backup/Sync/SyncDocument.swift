@@ -42,7 +42,10 @@ enum SyncDocument {
     }
 
     private static func setActor(_ actorId: String, on document: Document) {
-        guard let uuid = UUID(uuidString: actorId) else { return }
+        guard let uuid = UUID(uuidString: actorId) else {
+            BackupLog.line("SyncDocument", "The actor id \(actorId) is not a UUID, so a random one writes")
+            return
+        }
         document.actor = ActorId(uuid: uuid)
     }
 

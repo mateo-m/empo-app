@@ -310,20 +310,22 @@ enum BackupTargetAdd {
                 }
             }
         }
-        guard
-            let result = try? await BackupTargets.addAfterPermissionCheck(
-                descriptor, provider: provider)
-        else {
+        let result: PermissionCheckResult
+        do {
+            result = try await BackupTargets.addAfterPermissionCheck(descriptor, provider: provider)
+        } catch {
+            BackupLog.line("BackupTargetAdd", "The check of \(descriptor.label) failed: \(error)")
             return .failed(String(localized: "Empo couldn't check this location. Try again."))
         }
-        if let store = try? BackupRoot.openStateStore() {
-            try? store.recordTargetQuota(
-                targetId: descriptor.id, reading: result.quota)
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            try store.recordTargetQuota(targetId: descriptor.id, reading: result.quota)
             if result.allowsAdd {
-                try? store.recordTargetFailure(
-                    targetId: descriptor.id, failure: nil, at: Date())
+                try store.recordTargetFailure(targetId: descriptor.id, failure: nil, at: Date())
             }
-            store.close()
+        } catch {
+            BackupLog.line("BackupTargetAdd", "The check of \(descriptor.label) was not recorded: \(error)")
         }
         return .checked(descriptor, result)
     }

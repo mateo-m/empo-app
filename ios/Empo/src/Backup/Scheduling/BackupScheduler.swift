@@ -446,24 +446,32 @@ final class BackupScheduler {
 
     private func closeTheRunsThatVanished() {
         guard let store else { return }
-        let open = ((try? store.runHistory()) ?? []).filter { $0.end == nil }
-        guard !open.isEmpty else { return }
+        do {
+            let open = try store.runHistory().filter { $0.end == nil }
+            guard !open.isEmpty else { return }
 
-        // One launch counts one interrupted run, however many targets
-        // the run covered.
-        record(.interrupted)
+            // One launch counts one interrupted run, however many
+            // targets the run covered.
+            record(.interrupted)
 
-        // The process died at an unknown time after the start.
-        for var row in open {
-            row.end = BackupRunEnd(
-                outcome: .failed, finishedAt: row.startedAt, detail: Self.interruptedDetail)
-            try? store.recordRun(row)
+            // The process died at an unknown time after the start.
+            for var row in open {
+                row.end = BackupRunEnd(
+                    outcome: .failed, finishedAt: row.startedAt, detail: Self.interruptedDetail)
+                try store.recordRun(row)
+            }
+        } catch {
+            BackupLog.line("BackupScheduler", "The vanished runs were not closed: \(error)")
         }
     }
 
     private func record(_ ending: InterruptedRunEnding) {
-        guard let store, let tally = try? store.interruptedRunTally() else { return }
-        try? store.saveInterruptedRunTally(tally.recording(ending))
+        guard let store else { return }
+        do {
+            try store.saveInterruptedRunTally(store.interruptedRunTally().recording(ending))
+        } catch {
+            BackupLog.line("BackupScheduler", "The interrupted run tally was not saved: \(error)")
+        }
     }
 
     // MARK: - The three notifications

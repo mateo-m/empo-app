@@ -128,11 +128,13 @@ final class BackupSheetModel {
     /// Answering here satisfies the ask of 3.5, so the sheet never
     /// fires it.
     func setMode(_ mode: BackupMode) async {
-        guard (try? GameBackupSets.setMode(mode, for: container)) == true else {
-            await load()
-            return
+        do {
+            if try GameBackupSets.setMode(mode, for: container) {
+                BackupScheduler.shared.markDirty(container: container)
+            }
+        } catch {
+            BackupLog.line("BackupSheetModel", "The backup mode was not saved: \(error)")
         }
-        BackupScheduler.shared.markDirty(container: container)
         await load()
     }
 

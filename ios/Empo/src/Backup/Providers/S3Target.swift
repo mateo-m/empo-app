@@ -318,7 +318,10 @@ actor S3Target: BackupProvider {
         // refuse the upload. The next `CreateMultipartUpload` still
         // works, and the parts of the older one stay until a rule of
         // the bucket clears them.
-        guard answer.isSuccess else { return }
+        guard answer.isSuccess else {
+            BackupLog.line("S3Target", "the list of the open uploads answered \(answer.status)")
+            return
+        }
         for uploadId in S3.abandonedUploadIds(
             fromBody: answer.body, key: key, ownUploadId: ownUploadId, now: Date())
         {
@@ -378,15 +381,19 @@ actor S3Target: BackupProvider {
         await s3MultipartUploads.forget(targetId: targetId, path: key)
     }
 
-    /// One `AbortMultipartUpload`. It reports nothing, because the
-    /// caller is already on its way out with the failure that brought
-    /// it here.
+    /// It throws nothing, because the caller is already on its way out
+    /// with the failure that brought it here.
     private func abort(uploadId: String, key: String) async {
-        guard
-            let request = try? signed(
-                method: "DELETE", key: key, query: S3.uploadQuery(uploadId: uploadId))
-        else { return }
-        _ = try? await BackupAPISession.shared.send(request)
+        do {
+            let answer = try await BackupAPISession.shared.send(
+                try signed(method: "DELETE", key: key, query: S3.uploadQuery(uploadId: uploadId)))
+            guard answer.isSuccess else {
+                BackupLog.line("S3Target", "the abort of \(uploadId) answered \(answer.status)")
+                return
+            }
+        } catch {
+            BackupLog.line("S3Target", "the abort of \(uploadId) failed: \(error)")
+        }
     }
 
     // MARK: - The two ways to sign

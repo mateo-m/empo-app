@@ -145,7 +145,7 @@ final class BackupPass: BackupRunning {
             deviceName: BackupDevice.name,
             deviceModel: BackupDevice.model,
             retentionPreset: BackupSettings.retention,
-            freeSpaceBytes: Self.freeSpaceBytes,
+            freeSpaceBytes: BackupRoot.freeSpaceBytes,
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
@@ -250,14 +250,6 @@ final class BackupPass: BackupRunning {
     }
 
     // MARK: - The device
-
-    /// What the budget of 6.4 may spend. The engine takes it as an
-    /// input, so no rule inside it reads the host.
-    private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.layout.root.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? 0
-    }
 
     /// What the pill says after the run, per 13.2. The target row
     /// names the stop, so the pill uses the same words.

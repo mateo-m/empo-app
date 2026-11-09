@@ -150,9 +150,13 @@ enum BackupTargets {
             guard let reader = await provider(for: target) as? any AccountReading,
                 let account = await reader.account()
             else { continue }
-            try? update { targets in
-                guard let index = targets.firstIndex(where: { $0.id == target.id }) else { return }
-                targets[index].take(account)
+            do {
+                try update { targets in
+                    guard let index = targets.firstIndex(where: { $0.id == target.id }) else { return }
+                    targets[index].take(account)
+                }
+            } catch {
+                BackupLog.line("BackupTargets", "The account of \(target.label) was not saved: \(error)")
             }
         }
     }

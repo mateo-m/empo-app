@@ -262,7 +262,7 @@ final class RestoreCoordinator {
             destination: destination,
             localFiles: localFiles,
             localVersionMarker: container.map(GameIdentities.versionMarker(for:)),
-            freeSpaceBytes: Self.freeSpaceBytes,
+            freeSpaceBytes: BackupRoot.freeSpaceBytes,
             mode: manifest.mode,
             movedAsideTree: movedAsideTree)
 
@@ -572,12 +572,5 @@ final class RestoreCoordinator {
     nonisolated private static func directory(of path: String) -> String {
         guard let slash = path.lastIndex(of: "/") else { return "" }
         return String(path[path.startIndex..<slash])
-    }
-
-    /// What the space check of 11.8 measures against.
-    private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.layout.root.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
 }

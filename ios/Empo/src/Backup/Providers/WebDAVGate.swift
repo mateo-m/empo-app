@@ -73,7 +73,10 @@ final class WebDAVGate {
             connection.server.answersQuota != answers
         else { return }
         connection.server.answersQuota = answers
-        guard (try? BackupKeychain.setSecret(json: connection, targetId: targetId)) != nil else {
+        do {
+            try BackupKeychain.setSecret(json: connection, targetId: targetId)
+        } catch {
+            BackupLog.line("WebDAVGate", "The space query answer was not saved: \(error)")
             return
         }
         targets[targetId] = WebDAVTarget(connection: connection)

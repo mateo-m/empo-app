@@ -67,7 +67,7 @@ final class PackageExportModel {
     private func build(_ plan: PackagePlan) async {
         let localRoot = localRoot
         let device = UIDevice.current.name
-        let freeSpaceBytes = Self.freeSpaceBytes
+        let freeSpaceBytes = BackupRoot.freeSpaceBytes
         do {
             let show: @MainActor @Sendable (PackageBuildProgress) -> Void = { [weak self] value in
                 self?.progress = value
@@ -142,12 +142,6 @@ final class PackageExportModel {
         let total = BackupText.bytes(progress.totalBytes)
         return String(
             localized: "\(progress.fileCount) of \(progress.totalFileCount) files, \(done) of \(total)")
-    }
-
-    private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.layout.root.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
 }
 

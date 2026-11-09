@@ -204,7 +204,11 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         if let url = GoogleDrive.filesURL(id: id) {
             var delete = URLRequest(url: url)
             delete.httpMethod = "DELETE"
-            _ = try? await api(delete)
+            do {
+                _ = try await api(delete)
+            } catch {
+                BackupLog.line("GoogleDriveTarget", "the empty folder \(id) stays: \(error)")
+            }
         }
         return oldest
     }
