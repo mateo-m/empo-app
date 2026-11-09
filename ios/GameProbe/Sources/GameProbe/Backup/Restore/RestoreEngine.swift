@@ -16,10 +16,11 @@ import Foundation
 /// 3. Write the intent record of 6.5, before the first byte lands.
 /// 4. Stage and check each blob under `restore/<hash>`, then write
 ///    the files.
-/// 5. Drop from a replaced tree only what proven coverage allows.
-/// 6. Clear the intent record.
+/// 5. Write the finished mark under `restore/`.
+/// 6. Drop from a replaced tree only what proven coverage allows.
+/// 7. Clear the intent record, then the mark.
 ///
-/// A restore that stops between steps 3 and 6 leaves the record and
+/// A restore that stops between steps 3 and 5 leaves the record and
 /// the staged blobs, so the next launch asks once and a resume skips
 /// the blobs it already has.
 ///
@@ -125,10 +126,10 @@ public actor RestoreEngine {
         do {
             resumes =
                 try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout, fm: fm) != nil
-            // A mark left from an earlier restore would make this
-            // record read as finished.
-            if fm.fileExists(atPath: layout.finishedRestoreMark.path) {
-                try fm.removeItem(at: layout.finishedRestoreMark)
+            // The mark is still there only when the record of a finished
+            // restore did not clear. A new record would leave that one unmarked.
+            guard !fm.fileExists(atPath: layout.finishedRestoreMark.path) else {
+                return .failed(RestoreNotices.recordsUnavailableLine)
             }
             try store.saveIntent(
                 RestoreResumeQuestion.record(
@@ -192,6 +193,11 @@ public actor RestoreEngine {
             if case .writeAfterDisplacing = step.action { result.displacedFileCount += 1 }
         }
 
+        // The mark goes down before the cleanup and before the record
+        // clears, so a stop after the last file never asks to resume.
+        try? fm.createDirectory(at: layout.restore, withIntermediateDirectories: true)
+        try? Data().write(to: layout.finishedRestoreMark)
+
         if let replaced {
             let decision = dropFromTheReplacedTree(
                 replaced, mode: request.mode, snapshot: manifest)
@@ -202,10 +208,6 @@ public actor RestoreEngine {
             }
         }
 
-        // The mark goes down before the record clears, so a record
-        // that does not clear reads as finished at the next launch.
-        try? fm.createDirectory(at: layout.restore, withIntermediateDirectories: true)
-        try? Data().write(to: layout.finishedRestoreMark)
         if (try? store.clearIntent(kind: .interruptedRestore)) != nil {
             try? fm.removeItem(at: layout.finishedRestoreMark)
         }
