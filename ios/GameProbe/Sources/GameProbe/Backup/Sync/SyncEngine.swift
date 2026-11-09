@@ -224,9 +224,15 @@ public final class SyncEngine {
             held.progress(ofTarget: descriptor.id) ?? SyncTargetProgress(targetId: descriptor.id)
 
         for namespace in namespaces where namespace.id != namespaceId {
+            // A copy whose device record did not read may be one of
+            // this group.
+            guard let record = namespace.record else {
+                if namespace.document != nil { isComplete = false }
+                continue
+            }
             // A copy of another group belongs to another person, per
             // 10.4, so the pass never reads it.
-            guard namespace.record?.syncGroupId == groupId, let object = namespace.document,
+            guard record.syncGroupId == groupId, let object = namespace.document,
                 progress.readsAgain(namespaceId: namespace.id, copy: object)
             else { continue }
             guard let bytes = await targets.read(object.path, from: descriptor) else {

@@ -467,6 +467,28 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(targets.puts.isEmpty)
     }
 
+    func testANewDocumentWritesNothingWhileTheDeviceRecordOfACopyDoesNotRead() async throws {
+        let document = FakeDocument()
+        document.heldHeads = []
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("dark")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [
+            SyncNamespace(
+                id: "other", record: nil,
+                document: RemoteObject(path: "other/document", sizeBytes: 10, modifiedAt: stamp))
+        ]
+
+        let outcome = await engine(
+            document: document, targets: targets, state: FakeState(groupId: "g1"), local: local
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .failed("a new document waits for every copy of the group"))
+        XCTAssertTrue(local.applied.isEmpty)
+        XCTAssertTrue(targets.puts.isEmpty)
+    }
+
     func testProfileIdsThatDoNotSaveStopThePass() async throws {
         let local = FakeLocalValues()
         local.mine.preferences = ["theme": .string("dark")]
