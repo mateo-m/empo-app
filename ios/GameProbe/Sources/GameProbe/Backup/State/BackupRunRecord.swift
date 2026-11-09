@@ -37,7 +37,7 @@ public struct BackupRunEnd: Equatable, Sendable {
 public struct BackupRunRecord: Equatable, Sendable {
 
     /// How long a row stays, per 6.6.
-    public static let retention: TimeInterval = 90 * 86_400
+    public static let retention: TimeInterval = 90 * .day
 
     public var id: String
     public var targetId: String

@@ -39,7 +39,7 @@ public struct S3MultipartUpload: Codable, Equatable, Sendable {
     /// or a rule of the bucket removes it, so nothing forces this
     /// number. 7 days is the life of a presigned URL in 9.4, and a
     /// run that has not finished in a week is a run that failed.
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
+    public static let lifetime: TimeInterval = 7 * .day
 
     public init(
         uploadId: String,

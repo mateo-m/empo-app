@@ -25,7 +25,7 @@ public struct DropboxUploadSession: Codable, Equatable, Sendable {
     public var startedAt: Date
 
     /// How long Dropbox keeps a session, per 9.2.
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
+    public static let lifetime: TimeInterval = 7 * .day
 
     public init(sessionId: String, offset: Int64, fileSize: Int64, startedAt: Date) {
         self.sessionId = sessionId

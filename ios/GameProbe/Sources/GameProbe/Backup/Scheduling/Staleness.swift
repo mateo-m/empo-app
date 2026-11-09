@@ -214,9 +214,9 @@ public struct LibraryStaleBanner: Equatable, Sendable {
 public enum Staleness {
 
     /// The card badge appears here, per 7.1.
-    public static let staleAfter: TimeInterval = 7 * 86_400
+    public static let staleAfter: TimeInterval = 7 * .day
     /// The one library banner appears here.
-    public static let bannerAfter: TimeInterval = 21 * 86_400
+    public static let bannerAfter: TimeInterval = 21 * .day
 
     /// When one game stopped being protected on one target, or `nil`
     /// where the newest snapshot covers the newest play.

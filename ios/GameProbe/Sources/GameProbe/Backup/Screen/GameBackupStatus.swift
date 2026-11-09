@@ -221,6 +221,6 @@ public enum GameBackupStatusRules {
 
     private static func days(since date: Date?, now: Date) -> Int? {
         guard let date else { return nil }
-        return Int(now.timeIntervalSince(date) / 86_400)
+        return Int(now.timeIntervalSince(date) / TimeInterval.day)
     }
 }

@@ -49,7 +49,7 @@ public struct PreferenceRollbackPlan: Equatable, Sendable {
 public struct PreferenceRollbackUndo: Codable, Equatable, Sendable {
 
     public static let currentVersion = 1
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
+    public static let lifetime: TimeInterval = 7 * .day
 
     public var version: Int
     public var savedAt: Date

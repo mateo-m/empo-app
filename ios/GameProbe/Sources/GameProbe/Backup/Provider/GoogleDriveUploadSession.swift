@@ -30,7 +30,7 @@ public struct GoogleDriveUploadSession: Codable, Equatable, Sendable {
     public var startedAt: Date
 
     /// How long Drive keeps a session URI, per 9.3.
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
+    public static let lifetime: TimeInterval = 7 * .day
 
     public init(sessionURI: String, offset: Int64, fileSize: Int64, startedAt: Date) {
         self.sessionURI = sessionURI
