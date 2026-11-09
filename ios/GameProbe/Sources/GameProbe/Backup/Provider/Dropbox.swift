@@ -110,9 +110,6 @@ public enum Dropbox {
     /// trades disk against the work a failed append repeats.
     public static let uploadChunkBytes: Int64 = 16 * 1024 * 1024
 
-    /// An upload session stays valid for 7 days, per 9.2.
-    public static let uploadSessionLifetime: TimeInterval = 7 * 24 * 60 * 60
-
     /// One append of an upload session.
     public struct Chunk: Equatable, Sendable {
         public let offset: Int64

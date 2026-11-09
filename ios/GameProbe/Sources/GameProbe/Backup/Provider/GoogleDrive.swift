@@ -198,9 +198,6 @@ public enum GoogleDrive {
     /// chunk repeats.
     public static let uploadChunkBytes: Int64 = 64 * chunkAlignmentBytes
 
-    /// A session URI expires after one week, per 9.3.
-    public static let uploadSessionLifetime: TimeInterval = 7 * 24 * 60 * 60
-
     /// One chunk of a resumable upload.
     public struct Chunk: Equatable, Sendable {
         public let offset: Int64

@@ -238,7 +238,6 @@ final class GoogleDriveTests: XCTestCase {
 
     func testTheSessionLifetimeIsTheWeekOfNineThree() {
         XCTAssertEqual(GoogleDriveUploadSession.lifetime, 7 * 24 * 60 * 60)
-        XCTAssertEqual(GoogleDrive.uploadSessionLifetime, GoogleDriveUploadSession.lifetime)
     }
 
     // MARK: - 6. Paging returns every object across more than one page
