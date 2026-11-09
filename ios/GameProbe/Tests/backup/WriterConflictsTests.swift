@@ -102,15 +102,21 @@ final class WriterConflictsTests: XCTestCase {
         XCTAssertEqual(try WriterConflicts.read(applicationSupport: support), WriterConflicts())
     }
 
-    func testADamagedFileIsAnError() throws {
+    func testADamagedFileMovesAsideAndReadsAsEmpty() throws {
         let support = FileManager.default.temporaryDirectory
             .appendingPathComponent("writer-conflicts-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: support) }
-        try Data("{\"questions\":".utf8).write(
-            to: support.appendingPathComponent(WriterConflicts.fileName))
+        let damaged = Data("{\"questions\":".utf8)
+        try damaged.write(to: support.appendingPathComponent(WriterConflicts.fileName))
 
-        XCTAssertThrowsError(try WriterConflicts.read(applicationSupport: support))
+        XCTAssertEqual(try WriterConflicts.read(applicationSupport: support), WriterConflicts())
+        let kept = try FileManager.default.contentsOfDirectory(atPath: support.path)
+            .filter { $0.hasPrefix(WriterConflicts.fileName + ".damaged-") }
+        XCTAssertEqual(kept.count, 1)
+        XCTAssertEqual(
+            try Data(contentsOf: support.appendingPathComponent(try XCTUnwrap(kept.first))),
+            damaged)
     }
 
     func testTheQuestionNamesTheOtherDeviceAndTheTarget() {

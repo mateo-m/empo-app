@@ -516,19 +516,34 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertNil(read.knownId(ofProfile: "Small hands"))
     }
 
-    func testADamagedStateFileIsAnError() throws {
+    func testADamagedStateFileMovesAsideAndReadsAsAFreshState() throws {
         let support = try temporaryDirectory()
-        try Data("{\"actorId\":".utf8).write(to: support.appendingPathComponent(SyncState.fileName))
+        let damaged = Data("{\"actorId\":".utf8)
+        try damaged.write(to: support.appendingPathComponent(SyncState.fileName))
 
-        XCTAssertThrowsError(try SyncState.read(applicationSupport: support, actorId: "actor-2"))
+        XCTAssertEqual(
+            try SyncState.read(applicationSupport: support, actorId: "actor-2").actorId, "actor-2")
+        let kept = try FileManager.default.contentsOfDirectory(atPath: support.path)
+            .filter { $0.hasPrefix(SyncState.fileName + ".damaged-") }
+        XCTAssertEqual(kept.count, 1)
+        XCTAssertEqual(
+            try Data(contentsOf: support.appendingPathComponent(try XCTUnwrap(kept.first))),
+            damaged)
     }
 
-    func testADamagedIdentityFileIsAnError() throws {
+    func testADamagedIdentityFileMovesAsideAndReadsAsEmpty() throws {
         let support = try temporaryDirectory()
-        try Data("{\"ids\":".utf8).write(
-            to: support.appendingPathComponent(SyncProfileIdentities.fileName))
+        let damaged = Data("{\"ids\":".utf8)
+        try damaged.write(to: support.appendingPathComponent(SyncProfileIdentities.fileName))
 
-        XCTAssertThrowsError(try SyncProfileIdentities.read(applicationSupport: support))
+        XCTAssertEqual(
+            try SyncProfileIdentities.read(applicationSupport: support), SyncProfileIdentities())
+        let kept = try FileManager.default.contentsOfDirectory(atPath: support.path)
+            .filter { $0.hasPrefix(SyncProfileIdentities.fileName + ".damaged-") }
+        XCTAssertEqual(kept.count, 1)
+        XCTAssertEqual(
+            try Data(contentsOf: support.appendingPathComponent(try XCTUnwrap(kept.first))),
+            damaged)
     }
 
     // MARK: - Fixtures

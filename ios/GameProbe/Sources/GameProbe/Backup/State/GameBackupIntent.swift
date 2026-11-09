@@ -108,9 +108,9 @@ public struct GameBackupIntent: Equatable, Sendable {
     // MARK: - The file
 
     public static func load(from stateDirectory: URL) throws -> GameBackupIntent {
-        guard let data = try SettingsFile.data(at: stateDirectory.appendingPathComponent(fileName))
-        else { return GameBackupIntent() }
-        return try decode(json: data)
+        try SettingsFile.value(
+            at: stateDirectory.appendingPathComponent(fileName), empty: { GameBackupIntent() },
+            decode: decode(json:))
     }
 
     /// Writes `EmpoState/backup.json`, and makes `EmpoState/` first

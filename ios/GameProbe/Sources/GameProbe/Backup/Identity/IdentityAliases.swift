@@ -108,9 +108,9 @@ public struct IdentityAliases: Equatable, Sendable {
     // MARK: - The file
 
     public static func load(from stateDirectory: URL) throws -> IdentityAliases {
-        guard let data = try SettingsFile.data(at: stateDirectory.appendingPathComponent(fileName))
-        else { return IdentityAliases() }
-        return try decode(json: data)
+        try SettingsFile.value(
+            at: stateDirectory.appendingPathComponent(fileName), empty: { IdentityAliases() },
+            decode: decode(json:))
     }
 
     /// Writes `EmpoState/identity_aliases.json`, and makes

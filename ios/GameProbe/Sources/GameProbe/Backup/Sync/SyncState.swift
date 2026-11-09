@@ -151,11 +151,12 @@ public struct SyncState: Codable, Equatable, Sendable {
     public static func read(
         applicationSupport: URL, actorId: @autoclosure () -> String
     ) throws -> SyncState {
-        guard let data = try SettingsFile.data(at: applicationSupport.appendingPathComponent(fileName))
-        else { return SyncState(actorId: actorId()) }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(SyncState.self, from: data)
+        return try SettingsFile.value(
+            at: applicationSupport.appendingPathComponent(fileName),
+            empty: { SyncState(actorId: actorId()) },
+            decode: { try decoder.decode(SyncState.self, from: $0) })
     }
 
     public func write(applicationSupport: URL) throws {

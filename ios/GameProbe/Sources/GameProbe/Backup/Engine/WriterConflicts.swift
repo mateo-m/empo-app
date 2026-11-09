@@ -95,11 +95,11 @@ public struct WriterConflicts: Codable, Equatable, Sendable {
     }
 
     public static func read(applicationSupport: URL) throws -> WriterConflicts {
-        guard let data = try SettingsFile.data(at: applicationSupport.appendingPathComponent(fileName))
-        else { return WriterConflicts() }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(WriterConflicts.self, from: data)
+        return try SettingsFile.value(
+            at: applicationSupport.appendingPathComponent(fileName), empty: { WriterConflicts() },
+            decode: { try decoder.decode(WriterConflicts.self, from: $0) })
     }
 
     public func write(applicationSupport: URL) throws {

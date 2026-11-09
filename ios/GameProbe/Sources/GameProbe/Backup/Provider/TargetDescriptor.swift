@@ -155,10 +155,8 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
         targets = try container.decode([StoredTarget].self, forKey: .targets).compactMap(\.target)
     }
 
-    /// `BackupTargets.load` in the app reads a file that fails to
-    /// decode as no targets, and its next write then drops them all.
-    /// So a target whose service this build does not know is skipped,
-    /// and the rest still read.
+    /// A target whose service this build does not know is skipped, so
+    /// the rest still read.
     private struct StoredTarget: Decodable {
         let target: TargetDescriptor?
 
@@ -176,8 +174,8 @@ public struct TargetDescriptorFile: Codable, Equatable, Sendable {
 
     public static func read(applicationSupport: URL) throws -> TargetDescriptorFile {
         let url = BackupRootLayout(applicationSupport: applicationSupport).targetsFile
-        guard let data = try SettingsFile.data(at: url) else { return TargetDescriptorFile() }
-        return try decode(json: data)
+        return try SettingsFile.value(
+            at: url, empty: { TargetDescriptorFile() }, decode: decode(json:))
     }
 
     public func write(applicationSupport: URL) throws {
