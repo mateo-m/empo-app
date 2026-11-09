@@ -49,6 +49,13 @@ final class EmpoPlus {
 
     var hasPlus: Bool { (pass?.grantsPlus(at: .now) ?? false) || PlusStore.shared.isSubscribed }
 
+    /// `hasPlus` is current when this returns.
+    func refresh() async {
+        async let renewed = renew()
+        await PlusStore.shared.refresh()
+        _ = await renewed
+    }
+
     /// With `replace`, the server signs out the other devices of the
     /// account when it is at its device limit.
     func signIn(using session: WebAuthenticationSession, replace: Bool = false) async throws(SignInFailure) {
