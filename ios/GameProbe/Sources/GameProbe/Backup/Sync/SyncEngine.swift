@@ -115,10 +115,19 @@ public final class SyncEngine {
         }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
         // Order: the restore saves this list, the pass saves the document, then it clears the list. An
-        // entry the held document lacks already went out, so it drops here. A new document keeps all.
+        // entry the held document lacks already went out, so it leaves the list before the merge can
+        // bring the key back. A new document keeps all.
         let removed = isNew
             ? current.removedPreferenceKeys
             : current.removedPreferenceKeys.filter { held.preferences[$0] != nil }
+        let wentOut = current.removedPreferenceKeys.filter { !removed.contains($0) }
+        if !wentOut.isEmpty {
+            do {
+                try state.update { $0.removedPreferenceKeys.removeAll { wentOut.contains($0) } }
+            } catch {
+                return .failed("the removals that already went out were not cleared: \(error)")
+            }
+        }
         let removedBindings = current.heldBindingIds.filter {
             mine.controllerBindings[$0] == nil
         }
