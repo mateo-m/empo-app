@@ -276,6 +276,34 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(state.value.removedPreferenceKeys, [])
     }
 
+    func testARemovalThatDidNotClearDoesNotDeleteAValueSetAgain() async throws {
+        let document = FakeDocument()
+        document.held.preferences = ["theme": .string("light"), "titlePosition": .string("below")]
+        let local = FakeLocalValues()
+        local.mine.preferences = ["theme": .string("light")]
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        let state = FakeState(groupId: "g1")
+        state.value.removedPreferenceKeys = ["titlePosition"]
+        state.failsToUpdate = true
+        let engine = engine(document: document, targets: targets, state: state, local: local)
+
+        let first = await engine.run(.now)
+        XCTAssertEqual(first, .done)
+        XCTAssertNil(document.saved?.preferences["titlePosition"])
+        XCTAssertEqual(state.value.removedPreferenceKeys, ["titlePosition"])
+
+        state.failsToUpdate = false
+        targets.held["t1"] = [namespace("other", group: "g1", modifiedAt: stamp)]
+        targets.bytes["other/document"] = try copyBytes(["titlePosition": .string("above")])
+        let second = await engine.run(.now)
+
+        XCTAssertEqual(second, .done)
+        XCTAssertEqual(document.saved?.preferences["titlePosition"], .string("above"))
+        XCTAssertEqual(local.applied.last?.preferences["titlePosition"], .string("above"))
+        XCTAssertEqual(state.value.removedPreferenceKeys, [])
+    }
+
     /// A binding the user cleared here, or a settings restore took
     /// away, is missing from the local map. The pass deletes it from
     /// the document, or the merge would bring it back.

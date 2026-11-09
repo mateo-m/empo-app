@@ -114,7 +114,13 @@ public final class SyncEngine {
             return failure
         }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
-        let removed = current.removedPreferenceKeys
+        // The restore saves this list, the pass saves the document, then it clears the list. A stop
+        // before the save keeps the key in the document, so its entry stays. A stop before the clear
+        // leaves an entry the saved document no longer holds, and it drops here, so it cannot delete
+        // a value another device sets again.
+        let removed = isNew
+            ? current.removedPreferenceKeys
+            : current.removedPreferenceKeys.filter { held.preferences[$0] != nil }
         let removedBindings = current.heldBindingIds.filter {
             mine.controllerBindings[$0] == nil
         }
@@ -193,8 +199,10 @@ public final class SyncEngine {
                 }
             }
         }
-        if !removed.isEmpty {
-            try? state.update { $0.removedPreferenceKeys.removeAll { removed.contains($0) } }
+        if !current.removedPreferenceKeys.isEmpty {
+            updateState("the removed preferences") {
+                $0.removedPreferenceKeys.removeAll { current.removedPreferenceKeys.contains($0) }
+            }
         }
 
         // A join that landed during this pass left the group this
