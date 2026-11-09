@@ -65,16 +65,16 @@ enum GameBackupSets {
     /// card shows.
     static func resolveMode(
         for container: GameContainer, targets: [BackupTargetThreshold]
-    ) async -> BackupModeResolution {
+    ) async throws -> BackupModeResolution {
         let intent: GameBackupIntent
         do {
             intent = try GameBackupIntent.load(from: container.empoStateURL)
-        } catch {
+        } catch is DecodingError {
             // The rule picks full or the ask for a game with no mode, never
             // slim, so the marks of the damaged file are not needed.
             BackupLog.line(
                 "GameBackupSets",
-                "\(container.folderName) backup settings did not read, so the mode is asked again: \(error)")
+                "\(container.folderName) backup settings are damaged, so the mode is asked again")
             intent = GameBackupIntent()
         }
         if let answered = intent.mode { return .mode(answered) }

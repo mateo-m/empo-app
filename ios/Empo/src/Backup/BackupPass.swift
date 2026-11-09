@@ -176,14 +176,8 @@ final class BackupPass {
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
         do {
-            // The user can answer on the Backups screen while the run uploads.
-            var conflicts = try BackupRoot.writerConflicts()
-            if conflicts.answer(for: descriptor.id) == writerAnswer {
-                conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
-            } else if result.didSplit {
-                conflicts.showsTheSplitLine = true
-            }
-            try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+            try Self.recordTheWriterAnswers(
+                targetId: descriptor.id, answerAtStart: writerAnswer, result: result)
         } catch {
             BackupLog.line("BackupPass", "\(descriptor.label) writer answers were not saved: \(error)")
         }
@@ -199,6 +193,20 @@ final class BackupPass {
             }
         }
         return result
+    }
+
+    /// The user can answer on the Backups screen while the run uploads,
+    /// and that answer wins over the end of the run.
+    static func recordTheWriterAnswers(
+        targetId: String, answerAtStart: WriterConflicts.Answer?, result: BackupRunResult
+    ) throws {
+        var conflicts = try BackupRoot.writerConflicts()
+        if conflicts.answer(for: targetId) == answerAtStart {
+            conflicts.runEnded(targetId: targetId, stop: result.stop, didSplit: result.didSplit)
+        } else if result.didSplit {
+            conflicts.showsTheSplitLine = true
+        }
+        try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     // MARK: - The games
@@ -243,16 +251,16 @@ final class BackupPass {
             // before the run stages `EmpoState/`, or the layout goes
             // up in neither place.
             ControlsLayout.migrateLegacyPersistence(container: container)
-            guard
-                case .mode(let mode) = await GameBackupSets.resolveMode(
-                    for: container, targets: thresholds)
-            else {
-                // The ask of 3.5 has no answer yet, so this game
-                // waits for it.
-                continue
-            }
             let set: GameBackupSetRequest
             do {
+                guard
+                    case .mode(let mode) = try await GameBackupSets.resolveMode(
+                        for: container, targets: thresholds)
+                else {
+                    // The ask of 3.5 has no answer yet, so this game
+                    // waits for it.
+                    continue
+                }
                 set = try await GameBackupSets.request(for: container, mode: mode)
             } catch {
                 BackupLog.line("BackupPass", "\(key) sits out, its backup settings did not read: \(error)")

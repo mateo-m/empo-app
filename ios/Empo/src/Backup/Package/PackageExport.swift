@@ -34,10 +34,9 @@ enum PackageExport {
     private static func stream(
         of container: GameContainer, gameName: String
     ) async throws -> PackagePlan.Stream {
-        let mode = await self.mode(of: container)
         let request: GameBackupSetRequest
         do {
-            request = try await GameBackupSets.request(for: container, mode: mode)
+            request = try await GameBackupSets.request(for: container, mode: try await mode(of: container))
         } catch {
             BackupLog.line("PackageExport", "\(gameName) backup settings did not read: \(error)")
             throw SettingsUnread(gameName: gameName)
@@ -79,8 +78,8 @@ enum PackageExport {
     }
 
     @MainActor
-    private static func mode(of container: GameContainer) async -> BackupMode {
-        let resolution = await GameBackupSets.resolveMode(
+    private static func mode(of container: GameContainer) async throws -> BackupMode {
+        let resolution = try await GameBackupSets.resolveMode(
             for: container, targets: BackupTargets.thresholds())
         // A game that never answered the ask of 3.5 exports its save
         // members, which is what the ask's own default is.

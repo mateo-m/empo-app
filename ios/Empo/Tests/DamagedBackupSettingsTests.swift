@@ -29,6 +29,8 @@ final class DamagedBackupSettingsTests: XCTestCase {
         let kept = [
             conflictsFile, layout.targetsFile,
             layout.applicationSupport.appendingPathComponent(SyncState.fileName),
+            layout.root.appendingPathComponent("ledger-rebuild.json"),
+            layout.root.appendingPathComponent("namespace-clear.json"),
         ]
         for url in kept {
             saved[url] = try? Data(contentsOf: url)
@@ -62,18 +64,73 @@ final class DamagedBackupSettingsTests: XCTestCase {
         let target = try addATarget()
         try damaged.write(to: conflictsFile)
 
-        var conflicts = try BackupRoot.writerConflicts()
-        let claim = WriterClaim(
-            namespaceId: "other", deviceId: "other-device", deviceName: "Other iPad",
-            claimedAt: Date())
-        conflicts.runEnded(targetId: target.id, stop: .writerConflict(claim), didSplit: false)
-        try conflicts.write(applicationSupport: layout.applicationSupport)
+        try BackupPass.recordTheWriterAnswers(
+            targetId: target.id, answerAtStart: nil,
+            result: runResult(stop: .writerConflict(otherDevice)))
 
         let model = BackupsScreenModel()
         await model.refresh()
 
         XCTAssertEqual(model.writerQuestions.map(\.deviceName), ["Other iPad"])
         XCTAssertEqual(try damagedCopies(of: conflictsFile), [damaged])
+    }
+
+    func testAnAnswerGivenDuringARunStaysAfterTheRun() throws {
+        let target = try addATarget()
+        var conflicts = WriterConflicts()
+        conflicts.runEnded(targetId: target.id, stop: .writerConflict(otherDevice), didSplit: false)
+        try conflicts.write(applicationSupport: layout.applicationSupport)
+
+        var answered = try BackupRoot.writerConflicts()
+        answered.answer(targetId: target.id, resolution: .takeOver)
+        try answered.write(applicationSupport: layout.applicationSupport)
+        try BackupPass.recordTheWriterAnswers(
+            targetId: target.id, answerAtStart: nil,
+            result: runResult(stop: .writerConflict(otherDevice)))
+
+        XCTAssertEqual(try BackupRoot.writerConflicts().answer(for: target.id), .takeOver)
+    }
+
+    func testTheBackupSheetAsksForTheModeAgainOverADamagedSettingsFile() async throws {
+        try damaged.write(to: intentFile)
+        let model = BackupSheetModel(container: container, gameName: "Test")
+
+        await model.load()
+        XCTAssertTrue(model.settingsUnread)
+        XCTAssertNil(model.editor)
+
+        await model.setMode(.slim)
+        XCTAssertFalse(model.settingsUnread)
+        XCTAssertNotNil(model.editor)
+        XCTAssertEqual(model.mode, .slim)
+    }
+
+    func testAnExportOfABigGameWithDamagedSettingsStopsAndNamesTheGame() async throws {
+        let target = TargetDescriptor(
+            id: "damaged-settings-\(UUID().uuidString)", provider: .webdav, label: "Test",
+            root: "Empo", sizeThresholdBytes: 0)
+        try BackupTargets.add(target)
+        try damaged.write(to: intentFile)
+
+        do {
+            _ = try await PackageExport.plan(game: container)
+            XCTFail("A slim export must not read a damaged file as no marks")
+        } catch let unread as PackageExport.SettingsUnread {
+            XCTAssertEqual(unread.gameName, BackupGameNames.name(of: container))
+        }
+    }
+
+    func testADamagedNamespaceListRebuildsTheSnapshotListOfEveryTarget() throws {
+        let target = try addATarget()
+        let clearList = BackupTargetWaitList(fileName: "namespace-clear.json")
+        try damaged.write(to: clearList.fileURL)
+        let store = try BackupRoot.openStateStore()
+        defer { store.close() }
+
+        try BackupNamespaceMove.clearIfWaiting(targetId: target.id, store: store)
+
+        XCTAssertTrue(
+            try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
     }
 
     func testAModeChoiceOverADamagedSettingsFileIsSavedAndTheOldFileStays() async throws {
@@ -114,6 +171,13 @@ final class DamagedBackupSettingsTests: XCTestCase {
         try list.remove(target.id)
         XCTAssertFalse(try list.ids().contains(target.id))
         XCTAssertEqual(try damagedCopies(of: list.fileURL), [damaged])
+    }
+
+    private let otherDevice = WriterClaim(
+        namespaceId: "other", deviceId: "other-device", deviceName: "Other iPad", claimedAt: Date())
+
+    private func runResult(stop: BackupRunStop?) -> BackupRunResult {
+        BackupRunResult(runId: "run", namespaceId: "mine", outcome: .failed, stop: stop)
     }
 
     private func addATarget() throws -> TargetDescriptor {
