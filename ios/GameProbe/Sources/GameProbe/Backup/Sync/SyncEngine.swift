@@ -314,7 +314,10 @@ public final class SyncEngine {
             note("\(descriptor.label) took no copy: \(reason)")
             return false
         }
-        await writeTheDeviceRecord(groupId: groupId, paths: paths, target: descriptor)
+        guard await writeTheDeviceRecord(groupId: groupId, paths: paths, target: descriptor) else {
+            note("\(descriptor.label) took no device record")
+            return false
+        }
         return true
     }
 
@@ -323,7 +326,7 @@ public final class SyncEngine {
     /// device of the same person finds no group to join.
     private func writeTheDeviceRecord(
         groupId: String, paths: BackupNamespacePaths, target: TargetDescriptor
-    ) async {
+    ) async -> Bool {
         let date = now()
         let known = await targets.read(paths.deviceFile, from: target)
             .flatMap { try? DeviceRecord.decode(json: $0) }
@@ -331,8 +334,8 @@ public final class SyncEngine {
         if known == nil { record.lastWriteAt = date }
         record.syncGroupId = groupId
         record.syncUpdatedAt = date
-        guard let data = try? record.jsonData() else { return }
-        _ = await targets.write(data, to: paths.deviceFile, on: target)
+        guard let data = try? record.jsonData() else { return false }
+        return await targets.write(data, to: paths.deviceFile, on: target)
     }
 
     // MARK: - The state files

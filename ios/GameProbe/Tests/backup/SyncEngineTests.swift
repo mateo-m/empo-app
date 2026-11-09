@@ -100,7 +100,10 @@ final class SyncEngineTests: XCTestCase {
             return bytes[path]
         }
 
+        var refusesWrites = false
+
         func write(_ data: Data, to path: String, on target: TargetDescriptor) async -> Bool {
+            guard !refusesWrites else { return false }
             written[path] = data
             return true
         }
@@ -719,6 +722,20 @@ final class SyncEngineTests: XCTestCase {
     }
 
     // MARK: - Steps 5 and 6
+
+    func testATargetWithoutTheDeviceRecordGetsTheCopyAgain() async throws {
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.refusesWrites = true
+        let state = FakeState(groupId: "g1")
+
+        let outcome = await engine(
+            document: FakeDocument(), targets: targets, state: state, local: FakeLocalValues()
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertNil(state.value.progress(ofTarget: "t1")?.confirmedHeads)
+    }
 
     func testATargetThatRefusesTheCopyTakesNothingFromTheOthers() async throws {
         let document = FakeDocument()
