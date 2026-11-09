@@ -91,19 +91,30 @@ enum SyncLocalValues {
 
         for (id, profile) in model.liveProfiles
         where LayoutProfileStore.validatedName(profile.name) == profile.name {
+            // Each failed step skips the profile. The next steps would
+            // write over a local profile that holds the same name.
             let local = identities.name(ofId: id)
             if let local, local != profile.name {
-                _ = store.renameProfile(from: local, to: profile.name)
+                guard store.renameProfile(from: local, to: profile.name) else {
+                    BackupLog.line("SyncLocalValues", "\(local) was not renamed to \(profile.name)")
+                    continue
+                }
                 identities.rename(from: local, to: profile.name)
             }
             if local == nil, store.profileExists(profile.name) {
-                displace(profile.name, store: store, identities: &identities)
+                guard displace(profile.name, store: store, identities: &identities) else {
+                    BackupLog.line("SyncLocalValues", "\(profile.name) was not moved aside")
+                    continue
+                }
             }
             let touch = TouchSectionSyncCoder.section(of: profile.controls)
-            if store.profileExists(profile.name) {
-                _ = store.writeProfile(profile.name, touch: touch)
-            } else {
-                _ = store.createProfile(profile.name, touch: touch)
+            let written =
+                store.profileExists(profile.name)
+                ? store.writeProfile(profile.name, touch: touch)
+                : store.createProfile(profile.name, touch: touch)
+            guard written else {
+                BackupLog.line("SyncLocalValues", "\(profile.name) was not written")
+                continue
             }
             identities.ids[profile.name] = id
             applyScreen(profile.screen, name: profile.name, store: store)
@@ -115,11 +126,12 @@ enum SyncLocalValues {
     /// profile-folder exception to the per-file rule of 11.1.
     private static func displace(
         _ name: String, store: LayoutProfileStore, identities: inout SyncProfileIdentities
-    ) {
+    ) -> Bool {
         let taken = Set(store.listProfiles())
         let moved = DisplacedCopy.nextTreeName(for: name, taken: taken)
-        guard store.renameProfile(from: name, to: moved) else { return }
+        guard store.renameProfile(from: name, to: moved) else { return false }
         identities.rename(from: name, to: moved)
+        return true
     }
 
     private static func applyScreen(_ value: JSONValue?, name: String, store: LayoutProfileStore) {
@@ -135,14 +147,18 @@ enum SyncLocalValues {
     /// and a target this device removed does not come back.
     private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
         let removed = Set(SyncStore.state().removedTargetIds)
-        try? BackupTargets.update { local in
-            for (id, incoming) in descriptors {
-                guard let index = local.firstIndex(where: { $0.id == id }) else {
-                    if !removed.contains(id) { local.append(incoming) }
-                    continue
+        do {
+            try BackupTargets.update { local in
+                for (id, incoming) in descriptors {
+                    guard let index = local.firstIndex(where: { $0.id == id }) else {
+                        if !removed.contains(id) { local.append(incoming) }
+                        continue
+                    }
+                    local[index] = local[index].withSyncedFields(from: incoming)
                 }
-                local[index] = local[index].withSyncedFields(from: incoming)
             }
+        } catch {
+            BackupLog.line("SyncLocalValues", "The synced locations were not saved: \(error)")
         }
     }
 }
