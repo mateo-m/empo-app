@@ -147,6 +147,11 @@ public actor SnapshotEngine {
             return finish(
                 context, startedAt: startedAt,
                 stop: Task.isCancelled ? .paused : .blocked(reason: reason))
+        } catch is SQLiteError {
+            return finish(
+                context, startedAt: startedAt,
+                stop: Task.isCancelled
+                    ? .paused : .rejected(message: RestoreNotices.recordsUnavailableLine))
         } catch {
             // A pause cancels the upload in flight, and that error
             // arrives before the file boundary reads the cancel.

@@ -964,6 +964,7 @@ final class SnapshotEngineTests: XCTestCase {
         let result = await engine.run(request(games: [game(gameName)]))
 
         XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.stop, .rejected(message: RestoreNotices.recordsUnavailableLine))
         XCTAssertTrue(manifestPaths(target).isEmpty)
     }
 
