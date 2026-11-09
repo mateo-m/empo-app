@@ -37,6 +37,8 @@ protocol AccountReading: Sendable {
 @MainActor
 final class OAuthSignIn {
 
+    struct NoToken: Error {}
+
     static let shared = OAuthSignIn()
 
     /// The sign-in in flight. AppAuth needs it to take the callback.
@@ -188,8 +190,9 @@ final class OAuthSignIn {
         }
         if session === mine { session = nil }
 
-        guard let response = state?.lastTokenResponse, let access = response.accessToken else {
-            return nil
+        guard let state else { return nil }
+        guard let response = state.lastTokenResponse, let access = response.accessToken else {
+            throw NoToken()
         }
         return OAuthTokens(
             accessToken: access,

@@ -141,7 +141,11 @@ actor ICloudDriveTarget: BackupProvider {
     /// next pass asks again.
     private func download(_ url: URL) async throws(BackupProviderError) {
         if let reading = await watch.reading(for: url), reading.isDownloaded { return }
-        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        do {
+            try FileManager.default.startDownloadingUbiquitousItem(at: url)
+        } catch {
+            throw Self.mapped(error)
+        }
 
         var progress = ICloudDownloadProgress(startedAt: Date())
         while true {
