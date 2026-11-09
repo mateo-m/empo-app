@@ -53,7 +53,7 @@ enum BackupRoot {
     /// The caller can then write a new file, and each damaged copy stays
     /// on the device.
     static func setAside(_ file: URL, caller: String = #fileID) throws {
-        let stamp = Int(Date().timeIntervalSince1970)
+        let stamp = "\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8))"
         let aside = file.deletingPathExtension().appendingPathExtension("damaged-\(stamp).json")
         try FileManager.default.moveItem(at: file, to: aside)
         BackupLog.line(

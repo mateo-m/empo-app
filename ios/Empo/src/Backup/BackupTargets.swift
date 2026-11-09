@@ -14,12 +14,7 @@ enum BackupTargets {
     /// A damaged file throws. A caller that read it as "no targets"
     /// and wrote the list back would delete every target.
     static func read() throws -> [TargetDescriptor] {
-        let data: Data
-        do {
-            data = try Data(contentsOf: BackupRoot.layout.targetsFile)
-        } catch CocoaError.fileReadNoSuchFile {
-            return []
-        }
+        guard let data = try SettingsFile.data(at: BackupRoot.layout.targetsFile) else { return [] }
         return try TargetDescriptorFile.decode(json: data).targets
     }
 
