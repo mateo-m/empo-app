@@ -226,10 +226,19 @@ final class SnapshotEngineTests: XCTestCase {
     func testAStateWriteThatFailsReachesTheNote() async throws {
         try makeGameTree(gameName)
         let store = try BackupStateStore(url: nil)
-        // The state database is a cache. A run whose writes all fail
-        // still reaches the target, and every failure reaches the
-        // note.
-        store.close()
+        // The state database is a cache. A run whose inserts and
+        // updates fail still reaches the target, and every failure
+        // reaches the note. A namespace clear that fails stops the
+        // run, so deletes still work.
+        for row in try store.database.query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+        {
+            guard let table = row[0].string else { continue }
+            for event in ["INSERT", "UPDATE"] {
+                try store.database.run(
+                    "CREATE TRIGGER no_\(event)_\(table) BEFORE \(event) ON \(table) BEGIN SELECT RAISE(ABORT, 'held'); END")
+            }
+        }
         let notes = NoteRecorder()
         let clock = self.clock!
         let engine = SnapshotEngine(
@@ -876,6 +885,27 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertEqual(result.outcome, .success)
         XCTAssertEqual(result.stream(key(gameName))?.uploadedBlobCount, 4)
         XCTAssertEqual(target.objectPaths().filter { $0.contains("/blobs/") }.count, 4)
+    }
+
+    func testANamespaceClearThatFailsStopsTheRunBeforeASnapshotWithoutItsFiles() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let engine = try makeEngine(target, stateURL: stateURL)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        _ = await engine.run(request(games: [game(gameName)]))
+
+        try FileManager.default.removeItem(at: targetDirectory)
+        await target.forgetCommittedPaths()
+        try store.database.run(
+            "CREATE TRIGGER keep BEFORE DELETE ON uploaded_manifest BEGIN SELECT RAISE(ABORT, 'held'); END")
+
+        clock.advance(3_600)
+        let result = await engine.run(request(games: [game(gameName)]))
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertTrue(manifestPaths(target).isEmpty)
     }
 
     // MARK: - 8. The prune ladder, per 5.14

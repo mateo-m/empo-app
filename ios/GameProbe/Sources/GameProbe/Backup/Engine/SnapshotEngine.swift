@@ -309,9 +309,7 @@ public actor SnapshotEngine {
             // wrote: another account behind the same target id, or a
             // deleted folder. The blobs the store remembers are not
             // here, so the run starts from a full upload.
-            save(
-                try store.clearNamespaceState(targetId: context.request.descriptor.id),
-                "the namespace state of a place with no claim")
+            try store.clearNamespaceState(targetId: context.request.descriptor.id)
             try await writeClaim(context)
         case .conflict(let claim):
             guard let answer = context.request.writerAnswer else {
@@ -321,9 +319,7 @@ public actor SnapshotEngine {
                 context.paths = context.paths.inNamespace(fresh)
                 // No namespace may reference another's blobs, per
                 // 5.12, so the split starts from a full upload.
-                save(
-                    try store.clearNamespaceState(targetId: context.request.descriptor.id),
-                    "the namespace state the split drops")
+                try store.clearNamespaceState(targetId: context.request.descriptor.id)
             }
             try await writeClaim(context)
         }
