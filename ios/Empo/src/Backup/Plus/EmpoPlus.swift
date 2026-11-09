@@ -26,11 +26,23 @@ final class EmpoPlus {
     private(set) var pass: PlusPass?
     private var renewal: String?
     private var renewing: Task<Bool, Never>?
+    /// The Keychain can refuse a read, for example on a launch before
+    /// the first unlock. `renew` reads it again.
+    private var keychainWasRead = false
 
     private init() {
-        let stored = try? BackupKeychain.plus()
-        renewal = stored?.renewal
-        pass = stored?.pass.flatMap { PlusPass($0, publicKey: Self.publicKey) }
+        readTheKeychain()
+    }
+
+    private func readTheKeychain() {
+        do {
+            let stored = try BackupKeychain.plus()
+            renewal = stored.renewal
+            pass = stored.pass.flatMap { PlusPass($0, publicKey: Self.publicKey) }
+            keychainWasRead = true
+        } catch {
+            BackupLog.line("EmpoPlus", "The Plus sign-in was not read: \(error)")
+        }
     }
 
     var isSignedIn: Bool { renewal != nil }
@@ -104,6 +116,7 @@ final class EmpoPlus {
     @discardableResult
     func renew(force: Bool = false) async -> Bool {
         if let renewing { return await renewing.value }
+        if !keychainWasRead { readTheKeychain() }
         guard let renewal, force || pass?.needsRenewal(at: .now) ?? true else { return true }
         let task = Task { await self.renew(with: renewal) }
         renewing = task
@@ -119,7 +132,11 @@ final class EmpoPlus {
                 Task { _ = try? await URLSession.shared.data(for: request) }
             }
         }
-        try? BackupKeychain.removePlus()
+        do {
+            try BackupKeychain.removePlus()
+        } catch {
+            BackupLog.line("EmpoPlus", "The Plus sign-in was not removed: \(error)")
+        }
         pass = nil
         renewal = nil
     }
@@ -170,7 +187,13 @@ final class EmpoPlus {
     @discardableResult
     private func keep(pass text: String, renewal: String) -> Bool {
         guard let pass = PlusPass(text, publicKey: Self.publicKey) else { return false }
-        try? BackupKeychain.setPlus(pass: text, renewal: renewal)
+        do {
+            try BackupKeychain.setPlus(pass: text, renewal: renewal)
+        } catch {
+            // A sign-in kept only in memory is gone at the next launch.
+            BackupLog.line("EmpoPlus", "The Plus sign-in was not saved: \(error)")
+            return false
+        }
         self.pass = pass
         self.renewal = renewal
         return true
