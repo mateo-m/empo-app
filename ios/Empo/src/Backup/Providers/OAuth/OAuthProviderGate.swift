@@ -41,9 +41,6 @@ protocol OAuthProviderGate: AnyObject {
 
 extension OAuthProviderGate {
 
-    /// Whether the add flow of 13.7 shows this service at all.
-    var showsInAddFlow: Bool { Self.service != nil }
-
     func cannotOpenLine(for target: TargetDescriptor) -> String? {
         guard target.provider == Self.kind else { return nil }
         if Self.service == nil { return Self.noKeyLine }

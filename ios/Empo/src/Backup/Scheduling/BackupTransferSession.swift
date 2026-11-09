@@ -164,22 +164,17 @@ final class BackupTransferSession: NSObject {
         return try result.get()
     }
 
-    /// The tasks the daemon still holds for this app.
-    ///
-    /// The launch recovery of 7.10 reads it. A run that never
-    /// finished and has no task left here died with the process.
     /// iOS 27 keeps a task that finished while the app was dead in
     /// `allTasks` as `.completed` until the delegate hears about it,
     /// so only a running or suspended task counts as live. A
     /// download is a restore's, and the resume question of 11.9
     /// owns that one, so it does not count here.
-    func liveTaskPaths() async -> Set<String> {
-        let tasks = await session.allTasks
-        return Set(
-            tasks
-                .filter { $0.state == .running || $0.state == .suspended }
-                .compactMap(\.taskDescription)
-                .filter { !$0.hasPrefix(Self.downloadMark) })
+    func holdsALiveUpload() async -> Bool {
+        await session.allTasks.contains { task in
+            guard let path = task.taskDescription else { return false }
+            return (task.state == .running || task.state == .suspended)
+                && !path.hasPrefix(Self.downloadMark)
+        }
     }
 
     private static let downloadMark = "get "

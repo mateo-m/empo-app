@@ -40,10 +40,7 @@ enum GameBackupSets {
     /// The stream that belongs to no game, per 5.3: the layout
     /// profiles, the UserDefaults export, and every Rescued Saves
     /// bucket that matches no installed game.
-    ///
-    /// Ticket 015 writes the UserDefaults export, so the caller
-    /// names the file once it exists.
-    static func libraryRequest(userDefaultsExportFile: URL? = nil) -> LibraryBackupSetRequest {
+    static func libraryRequest(userDefaultsExportFile: URL?) -> LibraryBackupSetRequest {
         let installed = GameContainer.discover().map(\.folderName)
         var matched: Set<String> = []
         for folderName in installed {

@@ -31,9 +31,6 @@ final class ICloudDriveGate {
 
     private init() {}
 
-    /// What the last probe found, or `nil` before the first one.
-    var lastAnswer: ICloudAvailability? { cache.value }
-
     /// Starts the reprobe of 9.1 and takes the first reading. The
     /// scheduler calls this once.
     func start() {

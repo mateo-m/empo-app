@@ -43,10 +43,6 @@ enum GameIdentities {
     /// Records the snapshot's old folder name as an alias of
     /// `container`, in the game's `EmpoState/`. Answers whether the
     /// store changed.
-    ///
-    /// The second place the alias goes is the header of every later
-    /// manifest, per 4.3. The snapshot engine reads it from
-    /// `manifestAlias`.
     @discardableResult
     static func attach(
         _ snapshot: SnapshotIdentity, to container: GameContainer
@@ -58,11 +54,6 @@ enum GameIdentities {
         else { return false }
         try updated.save(to: container.empoStateURL)
         return true
-    }
-
-    /// The alias a later manifest header carries for this game.
-    static func manifestAlias(for container: GameContainer) -> String? {
-        IdentityAliases.load(from: container.empoStateURL).manifestAlias
     }
 
     // MARK: - The version marker, per 4.4

@@ -403,8 +403,7 @@ actor S3Target: BackupProvider {
         method: String,
         key: String = "",
         query: [URLQueryItem] = [],
-        body: Data? = nil,
-        headers extra: [String: String] = [:]
+        body: Data? = nil
     ) throws(BackupProviderError) -> URLRequest {
         if let refusal = bucket.refusal { throw refusal }
         guard let url = bucket.url(key: key, query: query), let host = bucket.hostHeader else {
@@ -412,7 +411,7 @@ actor S3Target: BackupProvider {
         }
 
         let payloadHash = body.map { ContentHash.hex(of: $0) } ?? S3SigV4.emptyPayloadHash
-        var headers = extra
+        var headers: [String: String] = [:]
         headers["host"] = host
         if body != nil { headers["Content-Type"] = "application/xml" }
 

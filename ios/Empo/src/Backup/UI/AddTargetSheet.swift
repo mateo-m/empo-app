@@ -18,14 +18,14 @@ struct AddTargetSheet: View {
             List {
                 Section {
                     serviceRows(
-                        BackupTargetAdd.services.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
+                        BackupProviderKind.allCases.filter { !BackupTargetAdd.signsInThroughTheForm($0) })
                 } header: {
                     Text("Accounts")
                 } footer: {
                     Text("Sign in with an account you already have.")
                 }
                 Section {
-                    serviceRows(BackupTargetAdd.services.filter(BackupTargetAdd.signsInThroughTheForm))
+                    serviceRows(BackupProviderKind.allCases.filter(BackupTargetAdd.signsInThroughTheForm))
                 } header: {
                     Text("Servers and storage")
                 } footer: {

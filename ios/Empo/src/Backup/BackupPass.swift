@@ -13,12 +13,14 @@ import UIKit
 /// A game whose mode is still unanswered is skipped, per 3.5. The
 /// Backups screen asks about every such game before it starts a run.
 @MainActor
-final class BackupPass: BackupRunning {
+final class BackupPass {
 
     static let shared = BackupPass()
 
     private init() {}
 
+    /// `progress` belongs to a continued-processing task, which must
+    /// report progress or the system expires it.
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult {

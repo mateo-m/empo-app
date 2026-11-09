@@ -24,8 +24,6 @@ enum BackupTargetAdd {
         }
     }
 
-    static let services: [BackupProviderKind] = [.iCloudDrive, .dropbox, .googleDrive, .s3, .webdav]
-
     static func iCloud() async -> Outcome {
         let descriptor = TargetDescriptor(
             id: "icloud-drive",

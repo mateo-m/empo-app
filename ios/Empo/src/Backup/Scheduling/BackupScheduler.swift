@@ -2,25 +2,6 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// What one backup pass does.
-///
-/// The scheduler owns when a pass runs. It owns nothing about what a
-/// pass does, because that needs a provider and ticket 008 brings the
-/// first one. Until a runner registers, every trigger does its gate
-/// work and stops.
-@MainActor
-protocol BackupRunning: AnyObject {
-    /// Runs one pass.
-    ///
-    /// `progress` belongs to a continued-processing task, which must
-    /// report progress or the system expires it. The pass must check
-    /// `Task.isCancelled` at every file boundary, per 7.6.
-    func runBackup(
-        scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
-    ) async -> BackupPassResult
-}
-
-/// What a pass reports back to the scheduler.
 struct BackupPassResult: Sendable {
     /// True when the pass did all the work it planned.
     var didFinish: Bool
@@ -59,9 +40,6 @@ final class BackupScheduler {
 
     private init() {}
 
-    /// What one pass does. Ticket 008 set it to `BackupPass`.
-    var runner: (any BackupRunning)?
-
     /// The network cause the stale line carries, per 7.4. It is
     /// `waitingForWiFi` while the switch is off and the device is on
     /// cellular.
@@ -94,7 +72,6 @@ final class BackupScheduler {
         BackupNetwork.start()
         BackupTransferSession.shared.start()
         ICloudDriveGate.shared.start()
-        runner = BackupPass.shared
         BackupTaskScheduler.scheduleNightly()
         PackageRecord.deleteThePackagesWithoutARecord(localRoot: BackupRoot.layout.root)
         BackupLog.debug("BackupScheduler", "the schedule started")
@@ -372,8 +349,8 @@ final class BackupScheduler {
             BackupRunMonitor.shared.pause = nil
         }
 
-        guard let runner else {
-            BackupLog.debug("BackupScheduler", "\(trigger.rawValue) has no runner yet")
+        guard didStart else {
+            BackupLog.debug("BackupScheduler", "\(trigger.rawValue) came before the start")
             close(progress)
             return false
         }
@@ -399,7 +376,7 @@ final class BackupScheduler {
                 BackupRunMonitor.shared.runEnds(cancelled: Task.isCancelled)
                 inFlight = nil
             }
-            return await runner.runBackup(
+            return await BackupPass.shared.runBackup(
                 scope: BackupTriggerPlan.scope(of: trigger, press: press),
                 trigger: trigger,
                 progress: progress)
@@ -436,10 +413,9 @@ final class BackupScheduler {
     /// no task for it. The foreground pass then restarts the work.
     private func countTheRunsThatVanished() {
         Task { [weak self] in
-            let live = await BackupTransferSession.shared.liveTaskPaths()
             // The daemon still carries the run, so the process death
             // cost nothing.
-            guard live.isEmpty else { return }
+            guard await !BackupTransferSession.shared.holdsALiveUpload() else { return }
             self?.closeTheRunsThatVanished()
         }
     }
