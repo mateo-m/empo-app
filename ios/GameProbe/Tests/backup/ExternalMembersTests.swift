@@ -130,9 +130,7 @@ final class ExternalMembersTests: XCTestCase {
         // what 4.4 warns on, and the tree did not change.
         XCTAssertFalse(
             VersionMarkerBuilder.warnsBeforeRestore(
-                mode: .full,
-                snapshot: newer.versionMarker,
-                local: older.versionMarker))
+                mode: .full, differs: newer.versionMarker != older.versionMarker))
     }
 
     // MARK: - The Rescued Saves buckets, per 4.5

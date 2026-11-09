@@ -80,17 +80,6 @@ public enum VersionMarkerSheet {
     /// can bury nothing and the sheet's three actions would read as
     /// noise.
     public static func shows(
-        mode: BackupMode,
-        scope: RestoreScope,
-        snapshot: SnapshotManifest.VersionMarker,
-        local: SnapshotManifest.VersionMarker
-    ) -> Bool {
-        shows(mode: mode, scope: scope, markerDiffers: snapshot != local)
-    }
-
-    /// The same rule from a picker row of 11.6, which carries the
-    /// compare result instead of the two markers.
-    public static func shows(
         mode: BackupMode, scope: RestoreScope, markerDiffers: Bool
     ) -> Bool {
         guard scope == .wholeGame else { return false }

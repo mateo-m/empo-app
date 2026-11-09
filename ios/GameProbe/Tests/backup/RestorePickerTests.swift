@@ -331,7 +331,7 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertTrue(
             VersionMarkerSheet.shows(
                 mode: built.mode, scope: .wholeGame,
-                snapshot: built.versionMarker, local: SnapshotManifest.VersionMarker()))
+                markerDiffers: built.versionMarker != SnapshotManifest.VersionMarker()))
     }
 
     // MARK: - The edges, per 11.14

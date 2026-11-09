@@ -182,7 +182,7 @@ public enum RestorePlanner {
         if let localVersionMarker {
             showsSheet = VersionMarkerSheet.shows(
                 mode: manifest.mode, scope: scope,
-                snapshot: manifest.versionMarker, local: localVersionMarker)
+                markerDiffers: manifest.versionMarker != localVersionMarker)
         }
 
         return RestorePlan(

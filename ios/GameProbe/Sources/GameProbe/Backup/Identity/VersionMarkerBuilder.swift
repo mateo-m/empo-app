@@ -63,16 +63,6 @@ public enum VersionMarkerBuilder {
     /// and no mismatch ever refuses a restore.
     ///
     /// Ticket 014 builds the sheet. Section 11.10 holds its copy.
-    public static func warnsBeforeRestore(
-        mode: BackupMode,
-        snapshot: SnapshotManifest.VersionMarker,
-        local: SnapshotManifest.VersionMarker
-    ) -> Bool {
-        warnsBeforeRestore(mode: mode, differs: snapshot != local)
-    }
-
-    /// The same rule where the caller already compared the two
-    /// markers.
     public static func warnsBeforeRestore(mode: BackupMode, differs: Bool) -> Bool {
         mode == .full && differs
     }

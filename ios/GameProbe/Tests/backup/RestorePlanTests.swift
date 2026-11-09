@@ -360,15 +360,15 @@ final class RestorePlanTests: XCTestCase {
         XCTAssertFalse(
             VersionMarkerSheet.shows(
                 mode: .slim, scope: .wholeGame,
-                snapshot: SnapshotManifest.VersionMarker(fileCount: 4),
-                local: SnapshotManifest.VersionMarker(fileCount: 9)))
+                markerDiffers: SnapshotManifest.VersionMarker(fileCount: 4)
+                    != SnapshotManifest.VersionMarker(fileCount: 9)))
     }
 
     func testTheSheetNeverFiresWhenTheMarkersMatch() {
         let marker = SnapshotManifest.VersionMarker(gameINIHash: "abc", fileCount: 4)
         XCTAssertFalse(
             VersionMarkerSheet.shows(
-                mode: .full, scope: .wholeGame, snapshot: marker, local: marker))
+                mode: .full, scope: .wholeGame, markerDiffers: marker != marker))
     }
 
     func testTheThreeActionsCarryTheirScopeAndTheirReplace() {
