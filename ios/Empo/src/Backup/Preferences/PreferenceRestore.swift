@@ -82,7 +82,7 @@ enum PreferenceRestore {
     /// A removal the sync state did not record comes back from the
     /// group on the next pass, so nothing changes without it.
     private static func apply(_ plan: PreferenceRollbackPlan) throws {
-        if try SyncStore.state().hasJoined, !plan.deletes.isEmpty {
+        if !plan.deletes.isEmpty, try SyncStore.state().hasJoined {
             try SyncStore.update {
                 $0.removedPreferenceKeys = Array(Set($0.removedPreferenceKeys).union(plan.deletes))
                     .sorted()

@@ -268,7 +268,13 @@ final class BackupsScreenModel {
             let store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
             defer { store.close() }
             try store.removeTarget(targetId: targetId)
-            try SyncStore.update { $0.forget(targetId: targetId) }
+            do {
+                try SyncStore.update { $0.forget(targetId: targetId) }
+            } catch {
+                // Sync stays stopped while its settings do not read, so nothing reads this target.
+                BackupLog.line(
+                    "BackupsScreenModel", "the sync settings do not read, so \(targetId) stays in them")
+            }
             updateTheConflicts { $0.forget(targetId: targetId) }
             try BackupKeychain.removeSecret(targetId: targetId)
             BackupTargets.forget(targetId: targetId)
