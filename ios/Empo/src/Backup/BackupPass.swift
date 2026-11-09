@@ -201,7 +201,9 @@ final class BackupPass {
         targetId: String, answerAtStart: WriterConflicts.Answer?, result: BackupRunResult
     ) throws {
         var conflicts = try BackupRoot.writerConflicts()
-        if conflicts.answer(for: targetId) == answerAtStart {
+        let answerNow = conflicts.answer(for: targetId)
+        // No answer now also covers a file that was damaged during the run.
+        if answerNow == answerAtStart || answerNow == nil {
             conflicts.runEnded(targetId: targetId, stop: result.stop, didSplit: result.didSplit)
         } else if result.didSplit {
             conflicts.showsTheSplitLine = true

@@ -75,6 +75,19 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try damagedCopies(of: conflictsFile), [damaged])
     }
 
+    func testAStoppedRunOverAnswersDamagedDuringTheRunStillLeavesAQuestion() async throws {
+        let target = try addATarget()
+        try damaged.write(to: conflictsFile)
+
+        try BackupPass.recordTheWriterAnswers(
+            targetId: target.id, answerAtStart: .takeOver,
+            result: runResult(stop: .writerConflict(otherDevice)))
+
+        let model = BackupsScreenModel()
+        await model.refresh()
+        XCTAssertEqual(model.writerQuestions.map(\.deviceName), ["Other iPad"])
+    }
+
     func testAnAnswerGivenDuringARunStaysAfterTheRun() throws {
         let target = try addATarget()
         var conflicts = WriterConflicts()
