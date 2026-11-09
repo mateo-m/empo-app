@@ -39,12 +39,7 @@ public enum DisplacedCopy {
         marked(name, number: number)
     }
 
-    /// The first free displaced name for a file, given the names the
-    /// directory already holds.
-    public static func nextFileName(for name: String, taken: Set<String>) -> String {
-        nextFileName(for: name, isTaken: taken.contains)
-    }
-
+    /// The first free displaced name for a file.
     public static func nextFileName(for name: String, isTaken: (String) -> Bool) -> String {
         next(name, isTaken: isTaken, build: fileName(for:number:))
     }

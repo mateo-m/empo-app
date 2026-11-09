@@ -28,10 +28,9 @@ public struct RestoreLocalFile: Equatable, Sendable {
 public enum RestoreAction: Equatable, Sendable {
     /// The local tree holds nothing there. The restore is additive.
     case write
-    /// The local tree holds a different file there. It moves aside
-    /// under the named path, and the restored file takes the real
-    /// name.
-    case writeAfterDisplacing(String)
+    /// The local tree holds a different file there. It moves aside,
+    /// and the restored file takes the real name.
+    case writeAfterDisplacing
     /// The local bytes already match the snapshot's. Nothing is
     /// written and nothing is displaced.
     case unchanged
@@ -132,10 +131,8 @@ public enum RestorePlanner {
 
     /// The plan for one snapshot at one scope.
     ///
-    /// - `localFiles`: every file under the roots the snapshot
-    ///   names, displaced copies included. The copies have to be in
-    ///   the list, because a second displacement of one file numbers
-    ///   against the names already there.
+    /// - `localFiles`: the files this device holds at the paths the
+    ///   snapshot names. A path not in the list counts as absent.
     /// - `localVersionMarker`: the marker of the local `Game/` tree,
     ///   or `nil` where this device holds no tree.
     /// - `stagedBlobHashes`: the blobs already under `restore/`. A
@@ -149,11 +146,8 @@ public enum RestorePlanner {
         stagedBlobHashes: Set<String> = []
     ) -> RestorePlan {
         var local: [Key: RestoreLocalFile] = [:]
-        var taken: [Key: Set<String>] = [:]
         for file in localFiles {
             local[Key(root: file.root, path: file.path)] = file
-            taken[directoryKey(root: file.root, path: file.path), default: []]
-                .insert(fileName(of: file.path))
         }
 
         var steps: [RestoreStep] = []
@@ -164,8 +158,7 @@ public enum RestorePlanner {
         var partialPaths: [String] = []
 
         for entry in manifest.entries where scope.covers(entry) {
-            let action = decide(
-                entry: entry, local: local, taken: &taken)
+            let action = decide(entry: entry, local: local)
             steps.append(RestoreStep(entry: entry, action: action))
 
             guard action != .unchanged else { continue }
@@ -196,9 +189,7 @@ public enum RestorePlanner {
     }
 
     private static func decide(
-        entry: SnapshotManifest.Entry,
-        local: [Key: RestoreLocalFile],
-        taken: inout [Key: Set<String>]
+        entry: SnapshotManifest.Entry, local: [Key: RestoreLocalFile]
     ) -> RestoreAction {
         guard let here = local[Key(root: entry.root, path: entry.path)] else {
             // Additive. The result is the union, and the user sees
@@ -212,13 +203,7 @@ public enum RestorePlanner {
             // hand.
             return .unchanged
         }
-
-        let directory = directoryKey(root: entry.root, path: entry.path)
-        let name = fileName(of: entry.path)
-        let displaced = DisplacedCopy.nextFileName(
-            for: name, taken: taken[directory] ?? [])
-        taken[directory, default: []].insert(displaced)
-        return .writeAfterDisplacing(join(directoryOf(entry.path), displaced))
+        return .writeAfterDisplacing
     }
 
     // MARK: - Paths
@@ -226,23 +211,5 @@ public enum RestorePlanner {
     private struct Key: Hashable {
         var root: EntryRoot
         var path: String
-    }
-
-    private static func directoryKey(root: EntryRoot, path: String) -> Key {
-        Key(root: root, path: directoryOf(path))
-    }
-
-    private static func directoryOf(_ path: String) -> String {
-        guard let slash = path.lastIndex(of: "/") else { return "" }
-        return String(path[path.startIndex..<slash])
-    }
-
-    private static func fileName(of path: String) -> String {
-        guard let slash = path.lastIndex(of: "/") else { return path }
-        return String(path[path.index(after: slash)...])
-    }
-
-    private static func join(_ directory: String, _ name: String) -> String {
-        directory.isEmpty ? name : directory + "/" + name
     }
 }

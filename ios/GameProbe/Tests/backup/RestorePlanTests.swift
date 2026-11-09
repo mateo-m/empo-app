@@ -48,7 +48,7 @@ final class RestorePlanTests: XCTestCase {
 
         XCTAssertEqual(
             plan.steps.map(\.action),
-            [.writeAfterDisplacing("UserData/save.rxdata.empo-displaced.bak")])
+            [.writeAfterDisplacing])
         XCTAssertEqual(plan.displacementCount, 1)
     }
 
@@ -169,20 +169,11 @@ final class RestorePlanTests: XCTestCase {
     // MARK: - Displacement, per 11.1
 
     func testASecondDisplacementOfOneFileIsNumbered() {
-        let plan = RestorePlanner.plan(
-            manifest: manifest([entry("UserData/save.rxdata", hash: "new")]),
-            scope: .wholeGame,
-            localFiles: [
-                RestoreLocalFile(
-                    root: .container, path: "UserData/save.rxdata", size: 90, hash: "old"),
-                RestoreLocalFile(
-                    root: .container, path: "UserData/save.rxdata.empo-displaced.bak",
-                    size: 80, hash: "older"),
-            ])
-
         XCTAssertEqual(
-            plan.steps.map(\.action),
-            [.writeAfterDisplacing("UserData/save.rxdata.empo-displaced-2.bak")])
+            DisplacedCopy.nextFileName(for: "save.rxdata") {
+                $0 == "save.rxdata.empo-displaced.bak"
+            },
+            "save.rxdata.empo-displaced-2.bak")
     }
 
     func testADisplacedCopyStaysOutOfTheBackupSet() {

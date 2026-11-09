@@ -35,8 +35,7 @@ public struct RestoreRequest: Sendable {
     public var choice: RestoreChoice
     /// Where each named root of the manifest writes on this device.
     public var destination: MemberSource
-    /// Every file the local tree already holds under those roots,
-    /// displaced copies included.
+    /// The files this device already holds at the paths the snapshot names.
     public var localFiles: [RestoreLocalFile]
     public var localVersionMarker: SnapshotManifest.VersionMarker?
     public var freeSpaceBytes: Int64
