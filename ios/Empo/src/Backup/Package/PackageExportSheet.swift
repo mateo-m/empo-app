@@ -58,7 +58,7 @@ final class PackageExportModel {
                 phase = .failed(
                     String(
                         localized:
-                            "Empo couldn't read what \(unread.gameName) backs up. Open the game's settings, tap Backup, and choose what gets backed up again."
+                            "Empo couldn't read your backup choices for \(unread.gameName). Open the game's settings, tap Backup, and choose again."
                     ))
                 return
             } catch {

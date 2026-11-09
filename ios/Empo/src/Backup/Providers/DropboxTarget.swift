@@ -425,7 +425,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
             let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
             let text = String(bytes: data, encoding: .utf8)
         else {
-            throw .rejected(message: "Empo built no request body")
+            throw .rejected(message: String(localized: "Empo couldn't send a request to Dropbox. Try again."))
         }
         return text
     }

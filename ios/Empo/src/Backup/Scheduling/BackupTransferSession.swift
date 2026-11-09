@@ -365,7 +365,10 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
         guard !didNotMove else {
             finish(
                 taskIdentifier: task.taskIdentifier,
-                with: .failure(.rejected(message: "this device could not save the download")))
+                with: .failure(
+                    .rejected(
+                        message: String(
+                            localized: "Empo couldn't save the download on this device. Try again."))))
             return
         }
         guard let http else {

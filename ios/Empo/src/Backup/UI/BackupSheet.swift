@@ -147,7 +147,7 @@ struct BackupSheet: View {
                         Text("\(editor.entries.count)")
                             .foregroundStyle(.secondary)
                     } else if model.settingsUnread {
-                        Text("Choose what gets backed up again")
+                        Text(BackupModePicker.notChosenYet)
                             .foregroundStyle(.secondary)
                     } else {
                         ProgressView()
@@ -161,12 +161,18 @@ struct BackupSheet: View {
                 BackupText.bytes(model.mode == .slim ? model.slimBytes : model.fullBytes))
             row(String(localized: "Stored remotely"), BackupText.bytes(model.storedBytes))
         } footer: {
-            Text(
-                String(
-                    localized:
-                        "If you switch to saves and settings only, Empo keeps the whole-game backups it already made until they're old enough to delete."
+            if model.settingsUnread {
+                Text(
+                    "Empo couldn't read your backup choices for this game. Choose what gets backed up, then check your save files."
                 )
-            )
+            } else {
+                Text(
+                    String(
+                        localized:
+                            "If you switch to saves and settings only, Empo keeps the whole-game backups it already made until they're old enough to delete."
+                    )
+                )
+            }
         }
     }
 
