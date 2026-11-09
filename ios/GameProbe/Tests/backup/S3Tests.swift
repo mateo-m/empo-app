@@ -306,7 +306,7 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(parts.map(\.eTag), ["\"5f363e0e58a95f06cbe9bbc662c5dfb6\"", "\"two\""])
         let commit = String(decoding: S3.completeBody(parts: parts), as: UTF8.self)
         XCTAssertTrue(commit.contains("<ETag>&quot;5f363e0e58a95f06cbe9bbc662c5dfb6&quot;</ETag>"))
-        XCTAssertEqual(S3XML.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
+        XCTAssertEqual(XMLText.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
     }
 
     func testTheCommitBodyListsThePartsInOrder() {

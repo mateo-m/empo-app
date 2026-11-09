@@ -197,7 +197,7 @@ public enum S3 {
         var text = "<CompleteMultipartUpload>"
         for part in parts.sorted(by: { $0.number < $1.number }) {
             text += "<Part><PartNumber>\(part.number)</PartNumber>"
-            text += "<ETag>\(S3XML.escape(part.eTag))</ETag></Part>"
+            text += "<ETag>\(XMLText.escape(part.eTag))</ETag></Part>"
         }
         text += "</CompleteMultipartUpload>"
         return Data(text.utf8)

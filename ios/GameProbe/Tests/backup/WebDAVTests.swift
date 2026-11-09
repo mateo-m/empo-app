@@ -84,6 +84,17 @@ final class WebDAVTests: XCTestCase {
             """.utf8)
     }
 
+    func testANumericEntityInAnAnswerReadsAsItsCharacter() {
+        let body = Data(
+            """
+            <D:multistatus xmlns:D="DAV:"><D:response>
+            <D:href>/dav/Empo/it&#39;s &#x26; more.sav</D:href>
+            <D:propstat><D:prop><D:resourcetype/></D:prop>
+            <D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response></D:multistatus>
+            """.utf8)
+        XCTAssertEqual(WebDAV.entries(fromBody: body).map(\.href), ["/dav/Empo/it's & more.sav"])
+    }
+
     func testItReadsTheNextcloudShape() {
         let entries = WebDAV.entries(fromBody: nextcloudBody())
         XCTAssertEqual(entries.count, 2)
