@@ -183,9 +183,6 @@ public struct ICloudProbeCache: Equatable, Sendable {
 
     private var cached: ICloudAvailability?
 
-    /// How many probes the cache took. The reprobe of 9.1 raises it.
-    public private(set) var probeCount = 0
-
     public init() {}
 
     /// The cached answer, or `nil` when the next read must probe.
@@ -194,7 +191,6 @@ public struct ICloudProbeCache: Equatable, Sendable {
     /// Keeps what a probe found for the rest of the launch.
     public mutating func record(_ availability: ICloudAvailability) {
         cached = availability
-        probeCount += 1
     }
 
     /// `NSUbiquityIdentityDidChange` arrived, so the next read
