@@ -67,7 +67,7 @@ const size = Number(sizeString);
 
 const manifest = (await Bun.file(sourcePath).json()) as Manifest;
 const versions = manifest.apps?.[0]?.versions;
-if (!versions) {
+if (!Array.isArray(versions)) {
   console.error("error: the manifest has no apps[0].versions array");
   process.exit(1);
 }
