@@ -39,6 +39,10 @@ final class BackupTransferSession: NSObject {
         /// Where a download lands. A successful download moves its
         /// file here before it completes, and the body stays empty.
         var localFile: URL?
+        /// The download landed but did not reach `localFile`. Its 200
+        /// must not read as a success, because the caller then reads a
+        /// missing or an old file.
+        var didNotMove = false
 
         init(path: String, resume: @escaping (Result<HTTPAnswer, BackupProviderError>) -> Void) {
             self.path = path
@@ -304,6 +308,7 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
             }
             try manager.moveItem(at: location, to: localFile)
         } catch {
+            lock.withLock { transfer?.didNotMove = true }
             BackupLog.line(
                 "BackupTransferSession",
                 "\(downloadTask.taskDescription ?? "?") landed but could not move: \(error.localizedDescription)"
@@ -361,7 +366,8 @@ extension BackupTransferSession: URLSessionDataDelegate, URLSessionDownloadDeleg
                 with: .failure(gaveUp ? .offline : TransportSecurity.transportError(error)))
             return
         }
-        guard let http else {
+        let didNotMove = lock.withLock { pending[task.taskIdentifier]?.didNotMove ?? false }
+        guard let http, !didNotMove else {
             finish(taskIdentifier: task.taskIdentifier, with: .failure(.offline))
             return
         }
