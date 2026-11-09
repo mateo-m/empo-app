@@ -23,7 +23,8 @@ final class BackupPass {
             return BackupPassResult(didFinish: true)
         }
 
-        let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
+        guard let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
+        else { return BackupPassResult(didFinish: false) }
         BackupGameNames.remember(names)
         BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
@@ -218,7 +219,7 @@ final class BackupPass {
     /// 13.2 name the game they upload.
     private func gamesInScope(
         _ scope: BackupScanScope, targetIds: Set<String>
-    ) async -> (games: [BackupRunGame], names: [String: String]) {
+    ) async -> (games: [BackupRunGame], names: [String: String])? {
         let containers = GameContainer.discover()
         let byKey = Dictionary(
             uniqueKeysWithValues: containers.map {
@@ -234,8 +235,8 @@ final class BackupPass {
             restoring = try RestoreResumeQuestion.unfinishedRecord(
                 in: store, layout: BackupRoot.layout)?.gameKey
         } catch {
-            BackupLog.line("BackupPass", "No game is backed up, the records were not read: \(error)")
-            return ([], [:])
+            BackupLog.line("BackupPass", "The pass stops, the records were not read: \(error)")
+            return nil
         }
         if let restoring, byKey[restoring] != nil {
             BackupLog.debug("BackupPass", "\(restoring) sits out, its restore has not finished")
