@@ -1,21 +1,20 @@
 import Foundation
 import GameProbe
 
-/// The reads and writes section 10 makes on a target.
-///
-/// The provider takes a file and not bytes, per 8.1, so every call
-/// here goes through a temporary file.
 enum SyncRemote {
 
-    static func read(_ path: String, from provider: some BackupProvider) async -> Data? {
+    /// `nil` only where the target holds no file at `path`. Every
+    /// other failure throws, so that a caller cannot read it as
+    /// "absent" and write a fresh file over one it could not read.
+    static func read(_ path: String, from provider: some BackupProvider) async throws -> Data? {
         let file = temporaryFile()
         defer { try? FileManager.default.removeItem(at: file) }
-        do {
+        do throws(BackupProviderError) {
             try await provider.get(path: path, localFile: file)
-        } catch {
+        } catch .notFound {
             return nil
         }
-        return try? Data(contentsOf: file)
+        return try Data(contentsOf: file)
     }
 
     static func write(
@@ -27,17 +26,20 @@ enum SyncRemote {
         try await provider.put(localFile: file, path: path)
     }
 
-    /// What one target holds for every namespace, per 5.1.
-    ///
-    /// One listing answers both readers: the join step of 10.4 reads
-    /// the group of each record, and the pass of 10.5 reads the copy
-    /// of each namespace that shares its group.
+    /// `nil` where the target did not answer the listing, or where a
+    /// `device.json` that it holds could not be read.
     static func namespaces(
         root: String, provider: some BackupProvider
     ) async -> [SyncNamespace]? {
         let empo = BackupNamespacePaths(root: root, namespaceId: "")
         let prefix = empo.devicesPrefix + "/"
-        guard let objects = try? await provider.list(prefix: prefix) else { return nil }
+        let objects: [RemoteObject]
+        do {
+            objects = try await provider.list(prefix: prefix)
+        } catch {
+            BackupLog.line("SyncRemote", "\(prefix) was not listed: \(error)")
+            return nil
+        }
 
         var documents: [String: RemoteObject] = [:]
         var ids: Set<String> = []
@@ -53,8 +55,14 @@ enum SyncRemote {
         var out: [SyncNamespace] = []
         for id in ids.sorted() {
             let paths = BackupNamespacePaths(root: root, namespaceId: id)
-            let record = await read(paths.deviceFile, from: provider)
-                .flatMap { try? DeviceRecord.decode(json: $0) }
+            let record: DeviceRecord?
+            do {
+                record = try await read(paths.deviceFile, from: provider)
+                    .map { try DeviceRecord.decode(json: $0) }
+            } catch {
+                BackupLog.line("SyncRemote", "\(paths.deviceFile) was not read: \(error)")
+                return nil
+            }
             out.append(SyncNamespace(id: id, record: record, document: documents[id]))
         }
         return out
@@ -65,9 +73,20 @@ enum SyncRemote {
     }
 }
 
-/// The targets one pass reads and writes, per SPEC 10.5.
 @MainActor
 final class ProviderSyncTargets: SyncTargets {
+
+    private struct FileOnTarget: Hashable {
+        let targetId: String
+        let path: String
+    }
+
+    /// The files whose last read failed for a reason other than "not
+    /// found". `SyncTargets.read` answers `nil` for both, and
+    /// `SyncEngine` writes a fresh `device.json` where it reads `nil`.
+    /// `write` refuses these files, so that a fresh file cannot
+    /// replace one that this device could not read.
+    private var unreadFiles: Set<FileOnTarget> = []
 
     func enabled() -> [TargetDescriptor] {
         BackupTargets.writable()
@@ -79,13 +98,35 @@ final class ProviderSyncTargets: SyncTargets {
     }
 
     func read(_ path: String, from target: TargetDescriptor) async -> Data? {
-        guard let provider = await BackupTargets.provider(for: target) else { return nil }
-        return await SyncRemote.read(path, from: provider)
+        let file = FileOnTarget(targetId: target.id, path: path)
+        guard let provider = await BackupTargets.provider(for: target) else {
+            unreadFiles.insert(file)
+            return nil
+        }
+        do {
+            let data = try await SyncRemote.read(path, from: provider)
+            unreadFiles.remove(file)
+            return data
+        } catch {
+            unreadFiles.insert(file)
+            BackupLog.line("SyncRemote", "\(path) on \(target.label) was not read: \(error)")
+            return nil
+        }
     }
 
     func write(_ data: Data, to path: String, on target: TargetDescriptor) async -> Bool {
+        guard !unreadFiles.contains(FileOnTarget(targetId: target.id, path: path)) else {
+            BackupLog.line("SyncRemote", "\(path) on \(target.label) was not written: its read failed")
+            return false
+        }
         guard let provider = await BackupTargets.provider(for: target) else { return false }
-        return (try? await SyncRemote.write(data, to: path, with: provider)) != nil
+        do {
+            try await SyncRemote.write(data, to: path, with: provider)
+            return true
+        } catch {
+            BackupLog.line("SyncRemote", "\(path) on \(target.label) was not written: \(error)")
+            return false
+        }
     }
 
     func putTheDocument(to path: String, on target: TargetDescriptor) async -> String? {
