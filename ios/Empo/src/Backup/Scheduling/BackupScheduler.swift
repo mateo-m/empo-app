@@ -56,8 +56,11 @@ final class BackupScheduler {
     private var pauses = 0
     private var holds = 0
     private var runAskedDuringHold = false
+    private var openedStore: BackupStateStore?
+    /// A failed open tries again at the next use.
     private var store: BackupStateStore? {
-        try? BackupRoot.openStateStore()
+        if openedStore == nil { openedStore = try? BackupRoot.openStateStore() }
+        return openedStore
     }
 
     // MARK: - Launch
