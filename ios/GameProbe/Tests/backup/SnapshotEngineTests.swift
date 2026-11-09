@@ -1702,6 +1702,50 @@ final class SnapshotEngineTests: XCTestCase {
         }
     }
 
+    func testASettingsRestoreMovesAsideAChangedSettingsFile() async throws {
+        try makeGameTree(gameName)
+        let export = documents.appendingPathComponent("userdefaults.json")
+        try write("{\"keys\":1}", to: export)
+        let preferences = LibraryBackupSetRequest(
+            profilesDirectory: documents.appendingPathComponent("Profiles", isDirectory: true),
+            userDefaultsExportFile: export)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName)], preferences: preferences))
+        let snapshotId = try snapshotId(of: backup, stream: BackupStream.preferencesKey)
+        try write("{\"keys\":2}", to: export)
+        let changed = try Data(contentsOf: export)
+
+        let outcome = await RestoreEngine(
+            provider: target, store: try BackupStateStore(url: nil), localRoot: localRoot
+        ).run(
+            RestoreRequest(
+                targetId: targetId,
+                root: "",
+                namespaceId: namespaceId,
+                stream: .preferences,
+                snapshotId: snapshotId,
+                choice: .restore(.preferences),
+                destination: MemberSource(library: preferences),
+                localFiles: [
+                    RestoreLocalFile(
+                        root: .preferences, path: PreferencesMemberPath.userDefaultsExportName,
+                        size: Int64(changed.count), hash: ContentHash.hex(of: changed))
+                ],
+                freeSpaceBytes: .max))
+
+        guard case .finished = outcome else {
+            return XCTFail("the settings restore did not finish: \(outcome)")
+        }
+        XCTAssertEqual(try String(contentsOf: export, encoding: .utf8), "{\"keys\":1}")
+        let aside = try fm.contentsOfDirectory(atPath: documents.path)
+            .filter { $0 != export.lastPathComponent && $0.hasPrefix(export.lastPathComponent) }
+        XCTAssertEqual(aside.count, 1)
+        XCTAssertEqual(
+            try aside.first.map { try Data(contentsOf: documents.appendingPathComponent($0)) },
+            changed)
+    }
+
     // MARK: - Use only this backup
 
     /// Every file of the container with its hash, as the app lists it.

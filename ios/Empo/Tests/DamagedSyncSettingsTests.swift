@@ -26,7 +26,7 @@ final class DamagedSyncSettingsTests: XCTestCase {
             PreferenceRestore.restoredFile,
         ]
         for url in kept {
-            saved[url] = try? Data(contentsOf: url)
+            saved[url] = .some(try? Data(contentsOf: url))
         }
         try damaged.write(to: syncFile)
     }
