@@ -50,6 +50,31 @@ enum BackupRoot {
         }
     }
 
+    /// A settings file that does not decode moves to
+    /// `<name>.damaged.json`, so the caller can write a new file and the
+    /// old bytes stay on the device.
+    static func setAside(_ file: URL, caller: String = #fileID) throws {
+        let aside = file.deletingPathExtension().appendingPathExtension("damaged.json")
+        let manager = FileManager.default
+        if manager.fileExists(atPath: aside.path) {
+            try manager.removeItem(at: aside)
+        }
+        try manager.moveItem(at: file, to: aside)
+        BackupLog.line(
+            caller, "\(file.lastPathComponent) did not read, so it moved to \(aside.lastPathComponent)")
+    }
+
+    static func writerConflicts(caller: String = #fileID) throws -> WriterConflicts {
+        let applicationSupport = layout.applicationSupport
+        do {
+            return try WriterConflicts.read(applicationSupport: applicationSupport)
+        } catch is DecodingError {
+            try setAside(
+                applicationSupport.appendingPathComponent(WriterConflicts.fileName), caller: caller)
+            return WriterConflicts()
+        }
+    }
+
     @MainActor
     static func openStateStore(caller: String = #fileID) throws -> BackupStateStore {
         let store: BackupStateStore

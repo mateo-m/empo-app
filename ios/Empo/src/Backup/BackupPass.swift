@@ -128,13 +128,20 @@ final class BackupPass {
             BackupLog.line("BackupPass", "\(descriptor.label) ledger rebuild failed: \(error)")
         }
 
-        var conflicts = try? WriterConflicts.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
+        var conflicts: WriterConflicts
+        do {
+            conflicts = try BackupRoot.writerConflicts()
+        } catch {
+            BackupLog.line("BackupPass", "\(descriptor.label) could not read the writer answers: \(error)")
+            return nil
+        }
         let syncGroup: BackupRunRequest.SyncGroupChoice
         do {
             syncGroup = .known(try SyncStore.state().groupId)
         } catch {
-            log("\(descriptor.label) could not read the sync settings, so it keeps the recorded group")
+            BackupLog.line(
+                "BackupPass",
+                "\(descriptor.label) could not read the sync settings, so it keeps the recorded group")
             syncGroup = .keepRecorded
         }
         let request = BackupRunRequest(
@@ -150,7 +157,7 @@ final class BackupPass {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerAnswer: conflicts?.answer(for: descriptor.id),
+            writerAnswer: conflicts.answer(for: descriptor.id),
             syncGroup: syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
@@ -168,9 +175,9 @@ final class BackupPass {
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
-        conflicts?.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
+        conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
         do {
-            try conflicts?.write(applicationSupport: BackupRoot.layout.applicationSupport)
+            try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
         } catch {
             BackupLog.line("BackupPass", "\(descriptor.label) writer answers were not saved: \(error)")
         }
