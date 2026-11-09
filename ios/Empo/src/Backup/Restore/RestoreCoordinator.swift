@@ -272,6 +272,17 @@ final class RestoreCoordinator {
         // `EmpoState/` always restores, so the snapshot's alias file
         // replaces this one, the attach of 4.3 included.
         let aliasesBefore = container.flatMap { try? IdentityAliases.load(from: $0.empoStateURL) }
+        if request.stream == .preferences {
+            // Applying the file deletes it, so a file here comes from a
+            // restore that stopped before it applied, and nothing applies
+            // it later. The engine would move it aside and keep it.
+            do {
+                try FileManager.default.removeItem(at: PreferenceRestore.restoredFile)
+            } catch CocoaError.fileNoSuchFile {
+            } catch {
+                BackupLog.line("RestoreCoordinator", "The old settings file stays: \(error)")
+            }
+        }
         let engine = RestoreEngine(provider: provider, store: store, localRoot: BackupRoot.layout.root)
         var outcome = await engine.run(request)
         if let container, let aliasesBefore,
