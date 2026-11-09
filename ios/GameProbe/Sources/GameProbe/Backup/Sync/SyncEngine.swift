@@ -117,7 +117,8 @@ public final class SyncEngine {
         // Order: the restore saves this list, the pass saves the document, then it clears the list. An
         // entry the held document lacks already went out, so it leaves the list before the merge can
         // bring the key back. A new document keeps all.
-        let removed = isNew
+        let removed =
+            isNew
             ? current.removedPreferenceKeys
             : current.removedPreferenceKeys.filter { held.preferences[$0] != nil }
         let wentOut = current.removedPreferenceKeys.filter { !removed.contains($0) }
@@ -133,8 +134,9 @@ public final class SyncEngine {
         }
         if publishes, !isNew {
             do {
-                try document.write(held.overlaid(
-                    with: mine, removingPreferences: removed, removingBindings: removedBindings))
+                try document.write(
+                    held.overlaid(
+                        with: mine, removingPreferences: removed, removingBindings: removedBindings))
             } catch {
                 return .failed("the local change could not be written: \(error)")
             }
@@ -156,9 +158,10 @@ public final class SyncEngine {
         if isNew, let fetched = try? document.model(),
             !SyncCopyValidation.readsButDoesNotPublish(fetched)
         {
-            try? document.write(fetched.overlaid(
-                with: mine, removingPreferences: removed, removingBindings: removedBindings,
-                keepsTheirs: true))
+            try? document.write(
+                fetched.overlaid(
+                    with: mine, removingPreferences: removed, removingBindings: removedBindings,
+                    keepsTheirs: true))
         }
 
         guard let merged = try? document.model() else {
