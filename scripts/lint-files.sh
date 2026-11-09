@@ -24,6 +24,13 @@ esac
 # Third-party code keeps the format of its project.
 VENDORED='^ios/Empo/vendor/|^ios/Json5/Sources/json5cpp/json5pp\.hpp$'
 PENDING=$(sed -n "s/^$TOOL //p" scripts/lint-pending.txt)
+while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    if ! git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+        echo "error: scripts/lint-pending.txt names $file, which git does not track" >&2
+        exit 1
+    fi
+done <<<"$PENDING"
 
 FILES=$(git ls-files "${PATTERNS[@]}")
 printf '%s\n' "$FILES" |

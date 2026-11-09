@@ -21,7 +21,7 @@ match() {
 
 # The staged files that CI checks with one lint tool.
 staged_for() {
-    LINTED=$(scripts/lint-files.sh "$1")
+    LINTED=$(scripts/lint-files.sh "$1") || exit 1
     [ -n "$LINTED" ] || return 0
     printf '%s\n' "$STAGED" | grep -x -F -e "$LINTED" || true
 }

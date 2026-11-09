@@ -9,6 +9,7 @@
   "devDependencies": {
     "@types/bun": "^1.3.14",
     "cf": "1.0.0-beta.28",
+    "typescript": "^6.0.3",
     "wrangler": "4.158.0"
   },
   "type": "module",
