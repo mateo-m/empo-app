@@ -1,73 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import GameProbe
 import SwiftUI
-
-// The strip of game keys above the system keyboard, rendered with
-// SwiftUI + the Liquid Glass material to match the on-screen controls
-// in GameControls.swift.
-//
-// The bar floats: a rounded container with a margin to the screen
-// edges and a gap above the keyboard. It follows the app theme, so
-// it always matches the system keyboard under it.
-//
-// Layout follows the system keyboard's own pattern: every visible
-// key gets an equal share of the row width, and the keys split into
-// two balanced rows (one row when few keys remain). Nothing scrolls,
-// so every key stays one tap away.
-//
-// The bar only lists keys the player cannot reach any other way:
-//   - Enter, Backspace, and every typeable character are not here,
-//     because the system keyboard under the bar already has them.
-//   - Keys the visible on-screen controls or a connected controller
-//     cover are filtered out. The host view refreshes that set on
-//     every keyboard presentation.
-//
-// Key semantics:
-//   - Tap keys (F1-F12, Esc, Tab) fire once, on a confirmed
-//     touch-up. The injected press spans a 120 ms floor so it covers
-//     at least one engine frame on a slow scene.
-//   - Modifier keys (Ctrl, Shift, Alt) hold while the finger stays
-//     down, like a hardware keyboard. A long press locks the key
-//     down, shown as a solid accent key cap. A tap on a locked key
-//     releases it. The lock makes combos like Alt+F8 possible with
-//     one finger, and covers games that treat a modifier as a plain
-//     key (Anil toggles turbo on Alt).
-//   - Arrow keys hold while the finger stays down.
-//   - Every press goes through `EngineSessionCoordinator.holdKey/
-//     releaseKey`, so the bar shares the same per-key holder
-//     ref-counting as the D-pad, buttons, and hardware keyboards.
-//   - `releaseAll()` runs when the bar leaves the window (keyboard
-//     dismissed) and on view teardown, so no key can stay stuck.
 
 // MARK: - Key state
 
-/// Tracks which keys the bar holds at the engine, including locked
-/// modifiers. Owned by `KeyboardAccessoryHostView`, which releases
-/// everything when the bar leaves the window.
 @MainActor
 @Observable
 final class KeyboardAccessoryKeyState {
-    /// True while the keyboard, and so the bar, is on screen. Drives
-    /// the enter and exit transition: the bar fades and blurs out on
-    /// dismissal, and plays the inverse on presentation.
     var visible = false
 
-    /// Scancodes of locked modifiers, for the lit visual.
     private(set) var latched: Set<Int32> = []
 
-    /// Scancodes the bar hides because another input path already
-    /// covers them.
+    /// Keys that another input already covers.
     private(set) var excluded: Set<Int32> = []
 
-    /// Holder per held scancode. The bar never presses one scancode
-    /// from two keys, so scancode is a sufficient map key.
     private var held: [Int32: KeyHolder] = [:]
-
-    /// Floor for a key's hold time. Heavy scenes poll input well
-    /// below 40 fps. A shorter press can fall between two polls, and
-    /// the game never sees the key.
-    static let tapHold: Duration = .milliseconds(120)
 
     func press(_ key: AccessoryKey) {
         let holder = KeyHolder.touch("acckey:\(key.id)")
@@ -75,37 +24,32 @@ final class KeyboardAccessoryKeyState {
         EngineSessionCoordinator.shared.holdKey(scancode: key.scancode, by: holder)
     }
 
-    /// Releases the key. The hold stays alive until the `tapHold`
-    /// floor has passed. A new press of the key before that cancels
-    /// the waiting release.
+    /// A new press of the key before the tap hold ends cancels the
+    /// release.
     func release(_ key: AccessoryKey) {
         guard let holder = held.removeValue(forKey: key.scancode) else { return }
         EngineSessionCoordinator.shared.releaseKey(
-            scancode: key.scancode, by: holder, notBefore: Self.tapHold)
+            scancode: key.scancode, by: holder,
+            notBefore: .milliseconds(HeldKeys<KeyHolder>.tapHoldMilliseconds))
     }
 
-    /// One full press for a tap key: press now, release after the
-    /// floor.
     func tap(_ key: AccessoryKey) {
         press(key)
         release(key)
     }
 
-    /// Marks a held modifier as locked. The key is already down from
-    /// the touch, so there is no extra press here.
+    /// The touch already holds the key.
     func latch(_ key: AccessoryKey) {
         latched.insert(key.scancode)
     }
 
-    /// Unlocks the modifier and releases its hold.
     func unlatch(_ key: AccessoryKey) {
         guard latched.remove(key.scancode) != nil else { return }
         release(key)
     }
 
-    /// Swaps the hidden-key set. A key that becomes hidden while
-    /// held or locked releases at once, because its key cap is about
-    /// to disappear.
+    /// A held key that becomes hidden releases at once, because no
+    /// touch end comes from a key cap that is gone.
     func setExcluded(_ scancodes: Set<Int32>) {
         excluded = scancodes
         for (scancode, holder) in held where scancodes.contains(scancode) {
@@ -115,9 +59,7 @@ final class KeyboardAccessoryKeyState {
         }
     }
 
-    /// Drops every held key and clears the locks. The keyboard can
-    /// dismiss while a key is held, and no touch-up arrives after
-    /// that, so the host view calls this on window removal.
+    /// No touch end comes after the keyboard closes during a press.
     func releaseAll() {
         for (scancode, holder) in held {
             EngineSessionCoordinator.shared.releaseKey(scancode: scancode, by: holder)
@@ -145,8 +87,6 @@ struct AccessoryKey: Identifiable {
     let face: Face
     let scancode: Int32
     let kind: Kind
-    /// VoiceOver name. The visible face alone reads as a bare letter
-    /// or symbol, which gives no hint that it is a game key.
     let name: LocalizedStringResource
 
     static func fKey(_ number: Int32) -> AccessoryKey {
@@ -163,25 +103,19 @@ struct AccessoryKey: Identifiable {
 // MARK: - Bar
 
 struct KeyboardAccessoryBar: View {
-    /// The accessory view's fixed height: the two-row container plus
-    /// the gap above the keyboard. UIKit reads the frame once at
-    /// creation and ignores later changes. When fewer keys remain,
-    /// the container shrinks and pins to the bottom of this space.
+    /// UIKit reads the frame of an accessory view once, when it makes
+    /// the view, so this height fits two rows and the gap.
     static let height: CGFloat = 80 + Spacing.md
 
-    /// Keys stay in one row up to this count. Beyond it, the split
-    /// into two rows keeps every key cap wide enough to hit.
     private static let singleRowLimit = 8
 
     @Environment(\.colorScheme) private var colorScheme
 
     let keys: KeyboardAccessoryKeyState
 
-    /// Everything the bar can show, most-used last so the balanced
-    /// split puts modifiers and arrows in the bottom row, nearest
-    /// the thumbs. Enter, Backspace, and typeable characters are
-    /// absent on purpose: the system keyboard under the bar covers
-    /// them.
+    /// The keys used most come last, so the modifiers and arrows go in
+    /// the bottom row. The system keyboard has Enter, Backspace, and
+    /// the characters.
     private static let allKeys: [AccessoryKey] =
         (1...12).map { .fKey(Int32($0)) } + [
             AccessoryKey(
@@ -231,10 +165,8 @@ struct KeyboardAccessoryBar: View {
                 .background(backdrop)
                 .clipShape(shape)
                 .padding(.horizontal, Spacing.md)
-                // Enter and exit transition. UIKit slides the whole
-                // input stack, and the bare slide reads as a glitch
-                // for a floating container. The fade + blur tracks
-                // the keyboard: out on dismissal, in on presentation.
+                // UIKit slides the full input stack, and a bare slide
+                // looks wrong for a floating container.
                 .opacity(keys.visible ? 1 : 0)
                 .blur(radius: keys.visible ? 0 : 10)
                 .animation(Motion.standard, value: keys.visible)
@@ -244,16 +176,12 @@ struct KeyboardAccessoryBar: View {
         .padding(.bottom, Spacing.md)
     }
 
-    /// Balanced rows in the manner of the system keyboard: the split
-    /// point is the middle, so no row ends up near-empty.
     private func rows(_ visible: [AccessoryKey]) -> [[AccessoryKey]] {
         guard visible.count > Self.singleRowLimit else { return [visible] }
         let split = (visible.count + 1) / 2
         return [Array(visible[..<split]), Array(visible[split...])]
     }
 
-    /// Container backdrop in the tone of the system keyboard for the
-    /// active theme.
     private var backdrop: Color {
         colorScheme == .dark
             ? Color(white: 0.08).opacity(0.96)
@@ -271,9 +199,8 @@ struct KeyboardAccessoryBar: View {
 
 // MARK: - Key cap
 
-/// Reports a Button's press edges, so press begins on touch-down
-/// (hold keys need that) while the tap action still waits for a
-/// confirmed touch-up.
+/// Hold keys press on touch down. The button action of a tap key comes
+/// only on a touch up inside the key.
 private struct PressReportingStyle: ButtonStyle {
     let onPressChange: (Bool) -> Void
 
@@ -285,15 +212,10 @@ private struct PressReportingStyle: ButtonStyle {
     }
 }
 
-/// One key cap: a theme-toned backing under Liquid Glass, a highlight
-/// while pressed, a solid accent fill while locked, and the standard
-/// press scale. The same visual language as `CircularControlButton`,
-/// in key-cap shape. Every cap flexes to an equal share of its row.
 private struct AccessoryKeyButton: View {
     let key: AccessoryKey
     let keys: KeyboardAccessoryKeyState
 
-    /// How long a modifier must stay pressed before it locks down.
     private static let latchDelay: Duration = .milliseconds(500)
 
     @Environment(\.colorScheme) private var colorScheme
@@ -308,8 +230,6 @@ private struct AccessoryKeyButton: View {
 
     var body: some View {
         Button {
-            // Runs on a confirmed touch-up inside the key. Tap keys
-            // inject here, so a drag off the key fires nothing.
             if key.kind == .tap {
                 keys.tap(key)
             }
@@ -338,11 +258,8 @@ private struct AccessoryKeyButton: View {
         .onDisappear {
             latchTask?.cancel()
             latchTask = nil
-            // The view can go away mid-press. A change in the hidden
-            // set re-splits the rows, and a key that only MOVES rows
-            // gets its view rebuilt, so no touch-up edge arrives. A
-            // locked modifier keeps its hold on purpose: the lock
-            // lives in the shared state and survives the rebuild.
+            // A key that moves to the other row gets a new view, and
+            // no touch end comes. A locked modifier keeps its hold.
             if isPressed && !isLatched {
                 keys.release(key)
             }
@@ -354,9 +271,8 @@ private struct AccessoryKeyButton: View {
         let shape = RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
 
         return ZStack {
-            // Opaque backing under glass, for the same reason as the
-            // D-pad: with the game view embedded in AppWindow, Liquid
-            // Glass otherwise samples the Metal layer on device.
+            // With the game view in AppWindow, Liquid Glass with no
+            // opaque backing samples the Metal layer on device.
             shape
                 .fill(colorScheme == .dark ? Color.black : Color.white)
 
@@ -364,9 +280,7 @@ private struct AccessoryKeyButton: View {
                 .fill(.clear)
                 .glassEffect(.regular.interactive(), in: shape)
 
-            // A locked modifier turns solid accent. This layer sits
-            // above the glass: under it, the material washes the
-            // brand color out.
+            // Under the glass, the material makes the brand color pale.
             shape
                 .fill(Color.brand)
                 .opacity(isLatched ? 1 : 0)
@@ -419,8 +333,6 @@ private struct AccessoryKeyButton: View {
 
         switch key.kind {
         case .tap:
-            // Injection waits for the confirmed touch-up in the
-            // Button action.
             break
         case .hold:
             keys.press(key)
@@ -451,14 +363,10 @@ private struct AccessoryKeyButton: View {
             keys.release(key)
         case .modifier:
             if unlatchedOnThisTouch {
-                // This touch only unlocked the key. The release
-                // already happened on touch-down.
                 unlatchedOnThisTouch = false
                 return
             }
             if isLatched {
-                // The long press locked the key during this touch.
-                // Keep the hold alive after the finger lifts.
                 return
             }
             keys.release(key)
@@ -468,17 +376,11 @@ private struct AccessoryKeyButton: View {
 
 // MARK: - UIKit host
 
-/// UIKit container for the bar, assignable to a text field's
-/// `inputAccessoryView`. Keeps a strong reference to the hosting
-/// controller (a hosting view does not retain its controller) and
-/// releases every held key when the keyboard dismisses.
+/// A hosting view does not keep its controller, so this view keeps it.
 final class KeyboardAccessoryHostView: UIView {
     private let keyState = KeyboardAccessoryKeyState()
     private let host: UIHostingController<KeyboardAccessoryBar>
 
-    /// Scancodes to hide from the bar, asked fresh on every keyboard
-    /// presentation: keys the visible on-screen controls or a
-    /// connected controller already cover.
     var excludedScancodes: () -> Set<Int32> {
         didSet {
             if window != nil {
@@ -487,9 +389,8 @@ final class KeyboardAccessoryHostView: UIView {
         }
     }
 
-    /// Fires before the dismissal animation, early enough for the
-    /// exit transition to play while the input stack slides down.
-    /// Window removal happens only after the slide, too late for it.
+    /// UIKit removes the view from the window only after the slide, too
+    /// late for the exit transition.
     private var hideObserver: NSObjectProtocol?
 
     init(excludedScancodes: @escaping () -> Set<Int32> = { [] }) {
@@ -499,12 +400,10 @@ final class KeyboardAccessoryHostView: UIView {
             frame: CGRect(x: 0, y: 0, width: 0, height: KeyboardAccessoryBar.height))
         autoresizingMask = [.flexibleWidth]
 
-        // The hosting controller sees the keyboard frame overlap its
-        // own view (the reported keyboard rect includes the accessory
-        // area) and pads the content bottom to avoid it. That opened
-        // a large gap between the bar and the keyboard. Keep only
-        // the container region, which lifts the bar over the home
-        // indicator when the accessory docks without a keyboard.
+        // The keyboard rect includes the accessory area, so the
+        // hosting controller pads the bottom of the content to avoid
+        // it. The container region still lifts the bar over the home
+        // indicator when the accessory shows with no keyboard.
         host.safeAreaRegions = .container
 
         host.view.backgroundColor = .clear
@@ -547,17 +446,13 @@ final class KeyboardAccessoryHostView: UIView {
             keyState.visible = false
             keyState.releaseAll()
         } else {
-            // Re-read theme and coverage on every presentation. Both
-            // can change between two keyboard sessions.
             applyAppTheme()
             keyState.setExcluded(excludedScancodes())
         }
     }
 
-    /// The accessory view lives in the keyboard's window, and the
-    /// theme override on `AppWindow` does not reach it. Mirror the
-    /// app theme here so the bar matches the keyboard, which follows
-    /// the first responder's traits.
+    /// The accessory view is in the keyboard window, and the theme
+    /// override on `AppWindow` does not reach it.
     private func applyAppTheme() {
         overrideUserInterfaceStyle = AppSettings.shared.theme.userInterfaceStyle
     }
