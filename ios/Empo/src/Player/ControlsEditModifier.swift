@@ -9,12 +9,8 @@ struct AddButtonSheet: View {
     var actions: PlayerActionRegistry?
     @Environment(\.dismiss) private var dismiss
 
-    /// The file format caps key buttons + action buttons at 21 per
-    /// orientation. A layout saved over the cap would fail validation
-    /// on its next load and silently reset, so the add rows disable
-    /// at the limit instead.
     private var atCap: Bool {
-        layout.combinedButtonCount >= ControlsManifestLoader.maxButtonsPerOrientation
+        layout.combinedButtonCount >= ControlLimits.maxButtonsPerOrientation
     }
 
     var body: some View {
@@ -23,7 +19,7 @@ struct AddButtonSheet: View {
                 if atCap {
                     Section {
                         Text(
-                            "This layout has the maximum of \(ControlsManifestLoader.maxButtonsPerOrientation) buttons. Delete one to add another."
+                            "This layout has the maximum of \(ControlLimits.maxButtonsPerOrientation) buttons. Delete one to add another."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -139,23 +135,17 @@ struct AddButtonSheet: View {
     }
 }
 
-/// Size presets shared by the edit sheets, so the progressions
-/// cannot drift between the button kinds.
 enum ControlSizePresets {
     static let button: [(LocalizedStringResource, CGFloat)] = [
         ("Small", 44), ("Medium", 50),
-        ("Standard", 56), ("Large", 68), ("Extra large", 80),
+        ("Standard", CGFloat(ControlLimits.defaultButtonSize)), ("Large", 68), ("Extra large", 80),
     ]
-    /// Matches the button progression's feel. The D-pad's default
-    /// (140pt) is the middle preset.
     static let dpad: [(LocalizedStringResource, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
-        ("Standard", 140), ("Large", 160), ("Extra large", 180),
+        ("Standard", CGFloat(ControlLimits.defaultDPadSize)), ("Large", 160), ("Extra large", 180),
     ]
 }
 
-/// The Size / Opacity / Delete sections every control edit sheet
-/// shares. One implementation, so the sheets cannot drift.
 struct ControlSizeSection: View {
     let sizes: [(LocalizedStringResource, CGFloat)]
     let current: CGFloat
@@ -188,9 +178,6 @@ struct ControlOpacitySection: View {
 
     var body: some View {
         Section("Opacity") {
-            // The integer-percent label mirrors the Photos
-            // adjust-panel idiom, so the exact slider value stays
-            // visible while you drag.
             HStack {
                 Slider(
                     value: Binding(get: { opacity }, set: onChange),
@@ -340,9 +327,6 @@ struct ButtonEditSheet: View {
     }
 }
 
-/// Edit sheet for a function button. The action is fixed at add time
-/// (a read-only row shows its name and description). Only size,
-/// opacity, and delete apply.
 struct ActionButtonEditSheet: View {
     var layout: ControlsLayout
     let buttonID: UUID
@@ -409,10 +393,6 @@ struct ActionButtonEditSheet: View {
     }
 }
 
-/// Edit sheet specific to the movement control. Unlike an action
-/// button, it has no label, no key assignment, and no delete option.
-/// So it gets its own smaller sheet with style, size, and opacity
-/// controls.
 struct DPadEditSheet: View {
     var layout: ControlsLayout
     @Environment(\.dismiss) private var dismiss
@@ -421,9 +401,6 @@ struct DPadEditSheet: View {
         NavigationStack {
             List {
                 Section("Style") {
-                    // Applies to the ACTIVE orientation only, same
-                    // scope as size and opacity (and the same
-                    // single-orientation undo snapshot).
                     Picker("Style", selection: styleBinding) {
                         Text("D-pad").tag(MovementStyle.dpad)
                         Text("Joystick").tag(MovementStyle.stick)

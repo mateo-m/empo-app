@@ -3,10 +3,6 @@
 
 import Foundation
 
-/// File-backed store for layout profiles: one folder per profile
-/// under the profiles root, holding a plain v1 `controls.json`. The
-/// games root is injected too, because rename and delete must walk
-/// every game's pin file.
 public struct LayoutProfileStore {
     public let profilesRoot: URL
     public let gamesRoot: URL
@@ -20,45 +16,56 @@ public struct LayoutProfileStore {
 
     public static let maxNameLength = 64
 
-    /// Extends the game-folder rule with a leading-`$` rejection so a
-    /// profile can never collide with the pin sentinels. Returns nil
-    /// for an unusable name. Never silently strips.
     public static func validatedName(_ raw: String) -> String? {
         let name = raw.precomposedStringWithCanonicalMapping
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.count <= maxNameLength else { return nil }
-        guard !name.hasPrefix("$"), !name.hasPrefix(".") else { return nil }
-        guard !name.contains("/"), !name.contains("\\"), name != ".." else { return nil }
+        guard !name.hasPrefix(LayoutPinFile.sentinelPrefix), !name.hasPrefix(".") else {
+            return nil
+        }
+        guard !name.contains("/"), !name.contains("\\") else { return nil }
         return name
     }
 
-    /// "Firered", "Firered 2", "Firered 3", …
+    /// Two names that differ only by case name one profile, because
+    /// the disk of the device ignores case.
+    public static func nameKey(_ name: String) -> String {
+        name.precomposedStringWithCanonicalMapping.lowercased()
+    }
+
     public func uniqueName(base: String) -> String {
-        let existing = Set(listProfiles())
-        let cleanBase = Self.validatedName(base) ?? "Layout"
-        if !existing.contains(cleanBase) { return cleanBase }
-        var index = 2
-        while existing.contains("\(cleanBase) \(index)") {
-            index += 1
-        }
-        return "\(cleanBase) \(index)"
+        let taken = Set(listProfiles().map(Self.nameKey))
+        let name = Self.validatedName(base) ?? "Layout"
+        guard taken.contains(Self.nameKey(name)) else { return name }
+        let suffixRoom = " 999".count
+        let stem = String(name.prefix(Self.maxNameLength - suffixRoom))
+            .trimmingCharacters(in: .whitespaces)
+        return GameFolderName.uniqueName(preferring: stem) { taken.contains(Self.nameKey($0)) }
+    }
+
+    /// The name of the folder on disk for `name`, in the case of the folder.
+    public func storedName(_ name: String) -> String? {
+        let key = Self.nameKey(name)
+        return listProfiles().first { Self.nameKey($0) == key }
     }
 
     // MARK: - Paths
 
     public func profileURL(_ name: String) -> URL {
-        profilesRoot.appendingPathComponent(name, isDirectory: true)
+        profilesRoot.appendingPathComponent(storedName(name) ?? name, isDirectory: true)
     }
 
     public func controlsURL(_ name: String) -> URL {
-        profileURL(name).appendingPathComponent("controls.json")
+        profileURL(name).appendingPathComponent(ControlsManifestLoader.ManifestLocation.root.rawValue)
     }
 
     public func screenURL(_ name: String) -> URL {
         profileURL(name).appendingPathComponent(ScreenRegionFile.fileName)
     }
 
-    private func logURL(_ name: String, file: String = "controls.json") -> URL {
+    private func logURL(
+        _ name: String, file: String = ControlsManifestLoader.ManifestLocation.root.rawValue
+    ) -> URL {
         profileURL(name).appendingPathComponent(file + ".log")
     }
 
@@ -87,147 +94,139 @@ public struct LayoutProfileStore {
     public struct ProfileRead {
         public var touch: TouchSection?
         public var bindings: BindingMap?
-        /// True when the file exists but did not yield a usable touch
-        /// section (parse errors, or no touch key). The chain treats
-        /// this as missing.
-        public var invalid: Bool
-        /// Error findings behind `invalid`, for the edit-mode footnote.
-        public var errorCount: Int = 0
+        public var errors: [ControlsManifestLoader.Finding]
+        public var ignoredNewerVersion: Bool
     }
 
-    /// The profile's touch section when the file exists and parses
-    /// valid, or nil for missing OR invalid. `readProfile` sets
-    /// `invalid` exactly when `touch` is nil, so this is the ONE
-    /// predicate resolution callers need.
     public func validTouch(_ name: String) -> TouchSection? {
         readProfile(name)?.touch
     }
 
-    /// Reads a profile's touch section. Error findings go to the
-    /// profile's own log file. A `bindings` section is carried (for
-    /// preservation on save) but ignored at resolution.
     public func readProfile(_ name: String) -> ProfileRead? {
-        let url = controlsURL(name)
-        guard let data = try? Data(contentsOf: url) else { return nil }
+        guard let data = try? Data(contentsOf: controlsURL(name)) else { return nil }
         let result = ControlsManifestLoader.parse(data: data)
         let errors = result.findings.filter { $0.severity == .error }
-        if !errors.isEmpty || result.ignoredNewerVersion {
-            appendLog(name, line: "controls.json: rejected (\(errors.count) errors)")
-            for finding in errors {
+        let usable = errors.isEmpty && !result.ignoredNewerVersion
+        return ProfileRead(
+            touch: usable ? result.manifest?.touch : nil,
+            bindings: usable ? result.manifest?.bindings : nil,
+            errors: errors,
+            ignoredNewerVersion: result.ignoredNewerVersion)
+    }
+
+    public func logProblems(_ name: String, read: ProfileRead) {
+        let file = ControlsManifestLoader.ManifestLocation.root.rawValue
+        if read.ignoredNewerVersion {
+            appendLog(name, line: "\(file): rejected (newer version)")
+        } else if !read.errors.isEmpty {
+            appendLog(name, line: "\(file): rejected (\(read.errors.count) errors)")
+            for finding in read.errors {
                 appendLog(name, line: "  [\(finding.code)] \(finding.path): \(finding.message)")
             }
-            return ProfileRead(
-                touch: nil, bindings: nil, invalid: true, errorCount: max(errors.count, 1))
+        } else if read.bindings != nil {
+            appendLog(name, line: "\(file): bindings section ignored (profiles hold touch only)")
         }
-        if result.manifest?.bindings != nil {
-            appendLog(name, line: "controls.json: bindings section ignored (profiles hold touch only)")
-        }
-        guard let touch = result.manifest?.touch else {
-            return ProfileRead(
-                touch: nil, bindings: result.manifest?.bindings, invalid: true, errorCount: 1)
-        }
-        return ProfileRead(touch: touch, bindings: result.manifest?.bindings, invalid: false)
     }
 
     // MARK: - Writing
 
-    /// Writes a profile's touch section. A `bindings` section a user
-    /// hand-added to the file is preserved verbatim-parsed, and stays
-    /// ignored at resolution.
-    @discardableResult
-    public func writeProfile(_ name: String, touch: TouchSection) -> Bool {
+    public enum StoreError: Error, Equatable {
+        case invalidName(String)
+        case nameTaken(String)
+        case missing(String)
+    }
+
+    /// A `bindings` section that a user added to the file by hand
+    /// stays in the file.
+    public func writeProfile(_ name: String, touch: TouchSection) throws {
         // A synced name such as ".." would resolve outside the root.
-        guard Self.validatedName(name) != nil else { return false }
-        let preservedBindings = readProfile(name)?.bindings
-        guard
-            let data = ControlsManifestSerializer.serialize(
-                touch: touch, bindings: preservedBindings)
-        else { return false }
+        guard Self.validatedName(name) != nil else { throw StoreError.invalidName(name) }
+        let data = ControlsManifestSerializer.serialize(
+            touch, bindings: readProfile(name)?.bindings)
+        try FileManager.default.createDirectory(
+            at: profileURL(name), withIntermediateDirectories: true)
+        try data.write(to: controlsURL(name), options: .atomic)
+    }
+
+    public func createProfile(_ name: String, touch: TouchSection) throws {
+        guard Self.validatedName(name) == name else { throw StoreError.invalidName(name) }
+        guard !profileExists(name) else { throw StoreError.nameTaken(name) }
+        try writeProfile(name, touch: touch)
+    }
+
+    /// Copy, then move the pins and the record, then delete: a crash
+    /// at any step leaves each pin on a profile that exists. A failed
+    /// copy, pin, or record step undoes the steps before it. A failed
+    /// delete keeps both folders, because a partial delete can leave
+    /// the new folder as the only full copy.
+    public func renameProfile(from oldName: String, to newName: String) throws {
+        guard Self.validatedName(newName) == newName else { throw StoreError.invalidName(newName) }
+        guard profileExists(oldName) else { throw StoreError.missing(oldName) }
+        guard !profileExists(newName) else { throw StoreError.nameTaken(newName) }
         let fm = FileManager.default
+        let pinned = gamesPinned(to: oldName)
+        try fm.copyItem(at: profileURL(oldName), to: profileURL(newName))
         do {
-            try fm.createDirectory(at: profileURL(name), withIntermediateDirectories: true)
-            try data.write(to: controlsURL(name), options: .atomic)
-            return true
+            for folder in pinned {
+                try writePin(.profile(newName), forGameFolder: folder)
+            }
+            try renameInMigrationRecord(from: oldName, to: newName)
         } catch {
-            return false
+            for folder in pinned {
+                try? writePin(.profile(oldName), forGameFolder: folder)
+            }
+            try? fm.removeItem(at: profileURL(newName))
+            throw error
+        }
+        do {
+            try fm.removeItem(at: profileURL(oldName))
+        } catch {
+            appendLog(newName, line: "rename: could not delete \(oldName): \(error)")
         }
     }
 
-    @discardableResult
-    public func createProfile(_ name: String, touch: TouchSection) -> Bool {
-        guard Self.validatedName(name) == name, !profileExists(name) else { return false }
-        return writeProfile(name, touch: touch)
-    }
-
-    /// Copy → walk pins → delete: every midpoint leaves a working
-    /// state (old pins still resolve until the old folder goes).
-    @discardableResult
-    public func renameProfile(from oldName: String, to newName: String) -> Bool {
-        guard Self.validatedName(newName) == newName, profileExists(oldName),
-            !profileExists(newName)
-        else { return false }
-        let fm = FileManager.default
-        do {
-            try fm.copyItem(at: profileURL(oldName), to: profileURL(newName))
-        } catch {
-            return false
-        }
-        updatePins(matching: oldName, to: .profile(newName))
-        renameInMigrationRecord(from: oldName, to: newName)
-        try? fm.removeItem(at: profileURL(oldName))
-        return true
-    }
-
-    private func renameInMigrationRecord(from oldName: String, to newName: String) {
+    /// An unreadable record stays as it is, so that the next launch
+    /// does not read it as empty and migrate every game again.
+    private func renameInMigrationRecord(from oldName: String, to newName: String) throws {
         let url = profilesRoot.appendingPathComponent(MigrationRecord.fileName)
-        let old = MigrationRecord.load(at: url)
+        guard let old = MigrationRecord.load(at: url) else { return }
         var record = old
         record.renameProfile(from: oldName, to: newName)
-        if record != old { record.save(to: url) }
+        if record != old { try record.save(to: url) }
     }
 
     /// Clears every pin to the profile first, so no game dangles.
-    @discardableResult
-    public func deleteProfile(_ name: String) -> Bool {
-        guard Self.validatedName(name) != nil else { return false }
-        updatePins(matching: name, to: .followChain)
-        do {
-            try FileManager.default.removeItem(at: profileURL(name))
-            return true
-        } catch {
-            return false
-        }
+    public func deleteProfile(_ name: String) throws {
+        guard Self.validatedName(name) != nil else { throw StoreError.invalidName(name) }
+        try updatePins(matching: name, to: .followChain)
+        try FileManager.default.removeItem(at: profileURL(name))
     }
 
     /// Folder copy, so `screen.json` travels with the profile. The
     /// copy drops the log files (they describe the original) and
     /// re-serializes `controls.json` for canonical bytes.
-    @discardableResult
-    public func duplicateProfile(_ name: String) -> String? {
-        guard let read = readProfile(name), let touch = read.touch else { return nil }
+    public func duplicateProfile(_ name: String) throws -> String {
+        guard let touch = readProfile(name)?.touch else { throw StoreError.missing(name) }
         let copyName = uniqueName(base: name)
-        guard Self.validatedName(copyName) == copyName, !profileExists(copyName) else {
-            return nil
-        }
+        guard Self.validatedName(copyName) == copyName else { throw StoreError.invalidName(copyName) }
+        guard !profileExists(copyName) else { throw StoreError.nameTaken(copyName) }
         let fm = FileManager.default
+        try fm.copyItem(at: profileURL(name), to: profileURL(copyName))
         do {
-            try fm.copyItem(at: profileURL(name), to: profileURL(copyName))
+            for log in [logURL(copyName), logURL(copyName, file: ScreenRegionFile.fileName)]
+            where fm.fileExists(atPath: log.path) {
+                try fm.removeItem(at: log)
+            }
+            try writeProfile(copyName, touch: touch)
         } catch {
-            return nil
-        }
-        try? fm.removeItem(at: logURL(copyName))
-        try? fm.removeItem(at: logURL(copyName, file: ScreenRegionFile.fileName))
-        guard writeProfile(copyName, touch: touch) else {
             try? fm.removeItem(at: profileURL(copyName))
-            return nil
+            throw error
         }
         return copyName
     }
 
     // MARK: - Screen region
 
-    /// nil when the file is absent. Invalid content parses to a
-    /// result with findings and nil regions. The caller logs.
     public func readScreen(_ name: String) -> ScreenRegionFile.ReadResult? {
         guard let data = try? Data(contentsOf: screenURL(name)) else { return nil }
         return ScreenRegionFile.parse(data)
@@ -235,22 +234,15 @@ public struct LayoutProfileStore {
 
     /// Both orientations nil deletes the file: an empty
     /// `screen.json` must not exist.
-    @discardableResult
     public func writeScreen(
         _ name: String, portrait: ScreenPlacement?, landscape: ScreenPlacement?
-    ) -> Bool {
-        guard profileExists(name) else { return false }
-        let fm = FileManager.default
-        guard let data = ScreenRegionFile.serialize(portrait: portrait, landscape: landscape)
-        else {
-            try? fm.removeItem(at: screenURL(name))
-            return true
-        }
-        do {
-            try data.write(to: screenURL(name), options: .atomic)
-            return true
-        } catch {
-            return false
+    ) throws {
+        guard profileExists(name) else { throw StoreError.missing(name) }
+        let url = screenURL(name)
+        if let data = ScreenRegionFile.serialize(portrait: portrait, landscape: landscape) {
+            try data.write(to: url, options: .atomic)
+        } else if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.removeItem(at: url)
         }
     }
 
@@ -264,18 +256,11 @@ public struct LayoutProfileStore {
         LayoutPinFile.load(from: pinURL(forGameFolder: folder))
     }
 
-    @discardableResult
-    public func writePin(_ pin: LayoutPin, forGameFolder folder: URL) -> Bool {
+    public func writePin(_ pin: LayoutPin, forGameFolder folder: URL) throws {
         let url = pinURL(forGameFolder: folder)
-        let fm = FileManager.default
-        do {
-            try fm.createDirectory(
-                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try LayoutPinFile.serialize(pin).write(to: url, options: .atomic)
-            return true
-        } catch {
-            return false
-        }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try LayoutPinFile.serialize(pin).write(to: url, options: .atomic)
     }
 
     public func gameFolders() -> [URL] {
@@ -290,25 +275,29 @@ public struct LayoutProfileStore {
         }
     }
 
-    /// Folders whose pin names the profile.
     public func gamesPinned(to name: String) -> [URL] {
         gameFolders().filter { folder in
             if case .profile(let pinned) = loadPin(forGameFolder: folder).pin {
-                return pinned == name
+                return Self.nameKey(pinned) == Self.nameKey(name)
             }
             return false
         }
     }
 
-    private func updatePins(matching name: String, to newPin: LayoutPin) {
+    private func updatePins(matching name: String, to newPin: LayoutPin) throws {
         for folder in gamesPinned(to: name) {
-            writePin(newPin, forGameFolder: folder)
+            try writePin(newPin, forGameFolder: folder)
         }
     }
 
     // MARK: - Log
 
-    public func appendLog(_ name: String, file: String = "controls.json", line: String) {
+    /// A log line that cannot be written is lost. The log is the place
+    /// where a failure would go.
+    public func appendLog(
+        _ name: String, file: String = ControlsManifestLoader.ManifestLocation.root.rawValue,
+        line: String
+    ) {
         guard Self.validatedName(name) != nil else { return }
         let url = logURL(name, file: file)
         let fm = FileManager.default

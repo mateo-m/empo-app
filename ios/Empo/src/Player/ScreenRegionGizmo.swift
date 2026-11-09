@@ -4,24 +4,11 @@
 import GameProbe
 import SwiftUI
 
-/// Edit-mode drag/resize gizmo for the screen region: the outline,
-/// the move surface, and the corner grabbers. Pure geometry: the
-/// parent supplies the rect to show and receives fraction regions
-/// through callbacks. ControlsLayout and the bridge applier stay in
-/// the parent's hands, so the same gizmo works in the player and on
-/// the profile editor's mock canvas. The chips are a separate view
-/// (`ScreenRegionChips`) so the player can layer them ABOVE the
-/// controls overlay while the gesture surfaces stay below it.
 struct ScreenRegionGizmo: View {
+    static let moveAnimation = Animation.easeInOut(duration: 0.25)
+
     let canvasSize: CGSize
-    /// Where the region may live, in canvas points. The parent
-    /// passes the safe-area rect (matching the applier's clamp
-    /// policy), so the outline can never disagree with the clamped
-    /// region the engine draws.
     let allowedRect: CGRect
-    /// The rect to draw when no drag is in flight, in canvas points.
-    /// The parent derives it from the pending edit, the resolved
-    /// region, or the automatic placement.
     let baseRect: CGRect
     let onDragBegan: () -> Void
     let onDragChanged: (ScreenRegion) -> Void
@@ -47,11 +34,9 @@ struct ScreenRegionGizmo: View {
         surfaces
     }
 
-    /// Captures the anchor on the first event of a drag, shrunk
-    /// into `allowedRect`. A stored rect that violates the limits
-    /// (cross-device restore, controls grown after authoring) must
-    /// not invert the clamps. Returns false for events from a
-    /// gesture that does not own the in-flight drag.
+    /// Shrinks the anchor into `allowedRect`. A stored rect can break
+    /// the limits after a restore from another device, or after the
+    /// controls grow. Without the shrink, the clamps invert.
     private func claimDrag(owner: Int) -> Bool {
         if anchorRect == nil {
             var anchor = rect
@@ -84,17 +69,6 @@ struct ScreenRegionGizmo: View {
             .accessibilityLabel("Game screen position")
             .accessibilityHint("Drag to move the game screen")
 
-            // Crop-style corner grabber: reads as "drag to resize"
-            // where the small circle did not. It sits ON the border
-            // corner (like a photo-crop handle on its frame), a
-            // touch thicker than the dashes, with a soft shadow so
-            // it separates from bright game content. The gesture
-            // surface is a larger invisible square so the target
-            // stays easy to hit.
-            // Brackets on ALL FOUR corners, all draggable. The
-            // photo-crop convention users already know. Each one
-            // sits fully inside the frame (the viewport edge can
-            // never trim it) with an invisible 44 pt touch square.
             ForEach(Corner.allCases, id: \.self) { corner in
                 CornerGrabber()
                     .stroke(
@@ -133,7 +107,6 @@ struct ScreenRegionGizmo: View {
         onDragChanged(region(from: moved))
     }
 
-    /// The dragged corner moves. The opposite corner anchors.
     private func resizeChanged(_ value: DragGesture.Value, corner: Corner) {
         guard claimDrag(owner: corner.owner), let anchor = anchorRect
         else { return }
@@ -233,8 +206,6 @@ struct ScreenRegionGizmo: View {
     }
 
     private func region(from rect: CGRect) -> ScreenRegion {
-        // The overlay flag rides along: a drag must not strip the
-        // choice the toggle just made.
         ScreenRegion(
             x: rect.minX / canvasSize.width,
             y: rect.minY / canvasSize.height,
@@ -244,21 +215,12 @@ struct ScreenRegionGizmo: View {
     }
 }
 
-/// The gizmo's floating chips: the "Screen" label, the reset chip,
-/// and the overlay toggle. A separate view from the gesture
-/// surfaces, so the player can render the chips above the controls
-/// overlay (overlay mode puts controls on the game area) while the
-/// drag surfaces stay below it. The parent positions both from the
-/// same effective rect, so the chips follow a drag live.
+/// The player draws the chips above the controls overlay and the
+/// gizmo below it, so they are two views.
 struct ScreenRegionChips: View {
-    /// The region rect on the canvas, in canvas points.
     let rect: CGRect
-    /// Shows the "Reset screen" chip: an entry or a pending
-    /// non-auto edit exists for this orientation.
     let showsReset: Bool
     let onReset: () -> Void
-    /// "Controls over game" toggle. nil hides the chip (the profile
-    /// editor's mock canvas has no controls zone to flip).
     var overlayOn: Bool = false
     var onToggleOverlay: (() -> Void)?
 
@@ -314,16 +276,10 @@ struct ScreenRegionChips: View {
                         : Text("Off", comment: "Spoken state of a switch."))
             }
         }
-        // Pin the glass chips to the dark variant like the rest of
-        // the player chrome.
         .darkGlass()
     }
 }
 
-/// Crop-style L bracket for the resize corner: a square corner
-/// stroke (matching the square outline) that opens toward the
-/// region's inside. The round line caps and join keep it soft
-/// without lying about the corner shape.
 private struct CornerGrabber: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -334,12 +290,9 @@ private struct CornerGrabber: Shape {
     }
 }
 
-/// The gizmo border. SQUARE corners. The game picture has square
-/// edges, so a rounded frame would lie about the content. Each edge
-/// starts and ends with a HALF dash, so adjacent edges meet in a
-/// crisp L-shaped corner dash and all four corners look identical
-/// at any size (a plain dashed stroke starts its pattern at one
-/// corner only).
+/// Each edge starts and ends with a half dash, so all four corners
+/// look the same. A plain dashed stroke starts its pattern at one
+/// corner only.
 private struct GizmoOutline: View {
     private static let lineWidth: CGFloat = 2
     private static let dashUnit: CGFloat = 8

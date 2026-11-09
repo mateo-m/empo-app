@@ -9,13 +9,7 @@ final class OrientationDerivationTests: XCTestCase {
 
     private let metrics = TouchZoneMetrics.reference
 
-    private let defaultDpad = TouchSectionCompletion.DefaultDpadSpec(
-        portraitX: 0.13,
-        portraitY: 0.72,
-        landscapeX: 0.10,
-        landscapeY: 0.65,
-        size: 140
-    )
+    private let landscapeDefaultDpad = BuiltinLayout.dpad(isLandscape: true)
 
     // MARK: - Derivation transform
 
@@ -180,15 +174,15 @@ final class OrientationDerivationTests: XCTestCase {
         )
 
         let defaultObstacle = (
-            x: defaultDpad.landscapeX * metrics.landscapeWidth,
-            y: defaultDpad.landscapeY * metrics.landscapeHeight,
-            size: defaultDpad.size
+            x: landscapeDefaultDpad.x * metrics.landscapeWidth,
+            y: landscapeDefaultDpad.y * metrics.landscapeHeight,
+            size: landscapeDefaultDpad.size ?? ControlLimits.defaultDPadSize
         )
         let derived = OrientationDerivation.derive(
             from: source,
             sourceIsLandscape: false,
             metrics: metrics,
-            defaultDpad: defaultObstacle
+            defaultDpad: landscapeDefaultDpad
         )
 
         XCTAssertNil(derived.dpad)
@@ -217,7 +211,7 @@ final class OrientationDerivationTests: XCTestCase {
         let portrait = samplePortraitLayout()
         let section = TouchSection(portrait: portrait, landscape: nil)
         let (completed, involved) = TouchSectionCompletion.complete(
-            section, metrics: metrics, defaultDpad: defaultDpad)
+            section, metrics: metrics)
 
         XCTAssertTrue(involved)
         guard let landscape = completed.landscape else {
@@ -235,11 +229,7 @@ final class OrientationDerivationTests: XCTestCase {
                 from: portrait,
                 sourceIsLandscape: false,
                 metrics: metrics,
-                defaultDpad: (
-                    x: defaultDpad.landscapeX * metrics.landscapeWidth,
-                    y: defaultDpad.landscapeY * metrics.landscapeHeight,
-                    size: defaultDpad.size
-                )
+                defaultDpad: landscapeDefaultDpad
             )
         )
     }
@@ -248,7 +238,7 @@ final class OrientationDerivationTests: XCTestCase {
         let portrait = samplePortraitLayout()
         let section = TouchSection(portrait: portrait, landscape: TouchLayout())
         let (completed, involved) = TouchSectionCompletion.complete(
-            section, metrics: metrics, defaultDpad: defaultDpad)
+            section, metrics: metrics)
 
         XCTAssertFalse(involved)
         XCTAssertNil(completed.landscape?.dpad)
@@ -261,7 +251,7 @@ final class OrientationDerivationTests: XCTestCase {
             landscape: sampleLandscapeLayout()
         )
         let (completed, involved) = TouchSectionCompletion.complete(
-            section, metrics: metrics, defaultDpad: defaultDpad)
+            section, metrics: metrics)
 
         XCTAssertFalse(involved)
         XCTAssertEqual(completed, section)
@@ -275,11 +265,7 @@ final class OrientationDerivationTests: XCTestCase {
             from: portrait,
             sourceIsLandscape: false,
             metrics: metrics,
-            defaultDpad: (
-                x: defaultDpad.landscapeX * metrics.landscapeWidth,
-                y: defaultDpad.landscapeY * metrics.landscapeHeight,
-                size: defaultDpad.size
-            )
+            defaultDpad: landscapeDefaultDpad
         )
 
         let manifest = ControlsManifest(
@@ -411,10 +397,10 @@ final class OrientationDerivationTests: XCTestCase {
 
         if let buttons = layout.buttons {
             for button in buttons {
-                XCTAssertGreaterThanOrEqual(button.x, OrientationDerivation.coordMin)
-                XCTAssertLessThanOrEqual(button.x, OrientationDerivation.coordMax)
-                XCTAssertGreaterThanOrEqual(button.y, OrientationDerivation.coordMin)
-                XCTAssertLessThanOrEqual(button.y, OrientationDerivation.coordMax)
+                XCTAssertGreaterThanOrEqual(button.x, ControlLimits.placedCoordinate.lowerBound)
+                XCTAssertLessThanOrEqual(button.x, ControlLimits.placedCoordinate.upperBound)
+                XCTAssertGreaterThanOrEqual(button.y, ControlLimits.placedCoordinate.lowerBound)
+                XCTAssertLessThanOrEqual(button.y, ControlLimits.placedCoordinate.upperBound)
 
                 let size = button.size ?? 56
                 let centerX = button.x * width
@@ -427,10 +413,10 @@ final class OrientationDerivationTests: XCTestCase {
         }
 
         if let dpad = layout.dpad {
-            XCTAssertGreaterThanOrEqual(dpad.x, OrientationDerivation.coordMin)
-            XCTAssertLessThanOrEqual(dpad.x, OrientationDerivation.coordMax)
-            XCTAssertGreaterThanOrEqual(dpad.y, OrientationDerivation.coordMin)
-            XCTAssertLessThanOrEqual(dpad.y, OrientationDerivation.coordMax)
+            XCTAssertGreaterThanOrEqual(dpad.x, ControlLimits.placedCoordinate.lowerBound)
+            XCTAssertLessThanOrEqual(dpad.x, ControlLimits.placedCoordinate.upperBound)
+            XCTAssertGreaterThanOrEqual(dpad.y, ControlLimits.placedCoordinate.lowerBound)
+            XCTAssertLessThanOrEqual(dpad.y, ControlLimits.placedCoordinate.upperBound)
         }
     }
 

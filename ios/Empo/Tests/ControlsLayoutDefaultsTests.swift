@@ -69,7 +69,7 @@ final class ControlsLayoutDefaultsTests: XCTestCase {
     }
 
     private func scancodes() -> [Int32] {
-        ControlsLayout.defaultButtonsPortrait.map(\.scancode)
+        ControlsLayout.defaultButtons(.portrait).map(\.scancode)
     }
 
     /// A game folder the core detection accepts. `PsdkGame.isGameRoot`

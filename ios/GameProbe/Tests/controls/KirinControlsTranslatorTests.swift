@@ -63,7 +63,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         }
 
         for button in portraitButtons {
-            XCTAssertGreaterThanOrEqual(button.size ?? 0, KirinControlsTranslator.minButtonSize)
+            XCTAssertGreaterThanOrEqual(button.size ?? 0, ControlLimits.buttonSize.lowerBound)
             XCTAssertLessThanOrEqual(button.size ?? 0, 56)
         }
 
@@ -112,12 +112,12 @@ final class KirinControlsTranslatorTests: XCTestCase {
             landscape.buttons?.map { ($0.y * 669) + ($0.size ?? 0) / 2 }.max())
         let dpad = try XCTUnwrap(landscape.dpad)
         let dpadBottom = dpad.y * 669 + (dpad.size ?? 0) / 2
-        let floor = 669 - tall.landscapeBottomInset - KirinControlsTranslator.edgeMargin
+        let floor = 669 - tall.landscapeBottomInset - TranslatorLayout.edgeMargin
         XCTAssertEqual(max(lowestButton, dpadBottom), floor, accuracy: 1)
 
         let highestButton = try XCTUnwrap(
             landscape.buttons?.map { ($0.y * 669) - ($0.size ?? 0) / 2 }.min())
-        XCTAssertGreaterThan(highestButton, tall.landscapeTopInset + KirinControlsTranslator.edgeMargin)
+        XCTAssertGreaterThan(highestButton, tall.landscapeTopInset + TranslatorLayout.edgeMargin)
     }
 
     // MARK: - Round-trip
@@ -203,22 +203,22 @@ final class KirinControlsTranslatorTests: XCTestCase {
             """
 
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: highScale.data(using: .utf8)!).manifest?
+            KirinControlsTranslator.translate(data: highScale.data(using: .utf8)!, metrics: .reference).manifest?
                 .touch?.portrait?.buttons?.first?.size,
             52
         )
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: lowScale.data(using: .utf8)!).manifest?
+            KirinControlsTranslator.translate(data: lowScale.data(using: .utf8)!, metrics: .reference).manifest?
                 .touch?.portrait?.buttons?.first?.size,
             40
         )
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: lowOpacity.data(using: .utf8)!).manifest?
+            KirinControlsTranslator.translate(data: lowOpacity.data(using: .utf8)!, metrics: .reference).manifest?
                 .touch?.portrait?.buttons?.first?.opacity,
             0.2
         )
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: highOpacity.data(using: .utf8)!).manifest?
+            KirinControlsTranslator.translate(data: highOpacity.data(using: .utf8)!, metrics: .reference).manifest?
                 .touch?.portrait?.buttons?.first?.opacity,
             1.0
         )
@@ -228,20 +228,20 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
     func testVersionTwoIgnored() {
         let json = #"{"version": 2, "rightGrid": {"slots": [29]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("unsupported version 2") })
     }
 
     func testNonObjectJSONIgnored() {
-        let translation = KirinControlsTranslator.translate(data: "[1,2,3]".data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: "[1,2,3]".data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertFalse(translation.notes.isEmpty)
     }
 
     func testUnmappedKeycodeDroppedWithNote() {
         let json = #"{"rightGrid": {"slots": [999, 29]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 1)
         XCTAssertTrue(translation.notes.contains { $0.contains("keycode 999") })
     }
@@ -251,21 +251,21 @@ final class KirinControlsTranslatorTests: XCTestCase {
         // cap. A full file translates with nothing dropped.
         let slots = (0..<20).map { _ in "29" }.joined(separator: ", ")
         let json = "{\"rightGrid\": {\"slots\": [\(slots)]}}"
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 20)
         XCTAssertFalse(translation.notes.contains { $0.contains("dropped") })
     }
 
     func testAllNullSlotsIgnored() {
         let json = #"{"rightGrid": {"slots": [null, null]}, "leftGrid": {"slots": [null]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("no usable buttons") })
     }
 
     func testMissingVersionStillTranslates() throws {
         let json = #"{"rightGrid": {"slots": [29]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!)
+        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
         let buttons = try XCTUnwrap(translation.manifest?.touch?.portrait?.buttons)
         XCTAssertEqual(buttons.count, 1)
     }
@@ -431,20 +431,20 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let height = metrics.height(isLandscape: isLandscape)
 
         for button in buttons {
-            XCTAssertGreaterThanOrEqual(button.x, KirinControlsTranslator.coordMin)
-            XCTAssertLessThanOrEqual(button.x, KirinControlsTranslator.coordMax)
-            XCTAssertGreaterThanOrEqual(button.y, KirinControlsTranslator.coordMin)
-            XCTAssertLessThanOrEqual(button.y, KirinControlsTranslator.coordMax)
+            XCTAssertGreaterThanOrEqual(button.x, ControlLimits.placedCoordinate.lowerBound)
+            XCTAssertLessThanOrEqual(button.x, ControlLimits.placedCoordinate.upperBound)
+            XCTAssertGreaterThanOrEqual(button.y, ControlLimits.placedCoordinate.lowerBound)
+            XCTAssertLessThanOrEqual(button.y, ControlLimits.placedCoordinate.upperBound)
         }
 
-        XCTAssertGreaterThanOrEqual(dpad.x, KirinControlsTranslator.coordMin)
-        XCTAssertLessThanOrEqual(dpad.x, KirinControlsTranslator.coordMax)
-        XCTAssertGreaterThanOrEqual(dpad.y, KirinControlsTranslator.coordMin)
-        XCTAssertLessThanOrEqual(dpad.y, KirinControlsTranslator.coordMax)
+        XCTAssertGreaterThanOrEqual(dpad.x, ControlLimits.placedCoordinate.lowerBound)
+        XCTAssertLessThanOrEqual(dpad.x, ControlLimits.placedCoordinate.upperBound)
+        XCTAssertGreaterThanOrEqual(dpad.y, ControlLimits.placedCoordinate.lowerBound)
+        XCTAssertLessThanOrEqual(dpad.y, ControlLimits.placedCoordinate.upperBound)
 
-        let dpadSize = dpad.size ?? KirinControlsTranslator.minDpadSize
-        XCTAssertGreaterThanOrEqual(dpadSize, KirinControlsTranslator.minDpadSize)
-        XCTAssertLessThanOrEqual(dpadSize, KirinControlsTranslator.maxDpadSize)
+        let dpadSize = dpad.size ?? ControlLimits.dpadSize.lowerBound
+        XCTAssertGreaterThanOrEqual(dpadSize, ControlLimits.dpadSize.lowerBound)
+        XCTAssertLessThanOrEqual(dpadSize, ControlLimits.dpadSize.upperBound)
 
         XCTAssertTrue(
             pairwiseNonOverlapping(buttons: buttons, dpad: dpad, width: width, height: height),
@@ -552,7 +552,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let topInset = metrics.topInset(isLandscape: isLandscape)
         let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
         for button in buttons {
-            let size = button.size ?? KirinControlsTranslator.defaultButtonSize
+            let size = button.size ?? ControlLimits.defaultButtonSize
             let centerY = button.y * height
             XCTAssertGreaterThanOrEqual(
                 centerY - size * 0.5, topInset - 1,
@@ -571,14 +571,14 @@ final class KirinControlsTranslatorTests: XCTestCase {
         width: Double,
         height: Double
     ) -> Bool {
-        let dpadSize = dpad.size ?? KirinControlsTranslator.minDpadSize
+        let dpadSize = dpad.size ?? ControlLimits.dpadSize.lowerBound
         let dpadPoint = (x: dpad.x * width, y: dpad.y * height, size: dpadSize)
 
         let points = buttons.map { button in
             (
                 x: button.x * width,
                 y: button.y * height,
-                size: button.size ?? KirinControlsTranslator.defaultButtonSize
+                size: button.size ?? ControlLimits.defaultButtonSize
             )
         }
         for i in 0..<points.count {
@@ -598,7 +598,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let height = metrics.height(isLandscape: isLandscape)
         let topInset = metrics.topInset(isLandscape: isLandscape)
         let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
-        let size = dpad.size ?? KirinControlsTranslator.minDpadSize
+        let size = dpad.size ?? ControlLimits.dpadSize.lowerBound
         let centerY = dpad.y * height
         XCTAssertGreaterThanOrEqual(centerY - size * 0.5, topInset - 1)
         XCTAssertLessThanOrEqual(centerY + size * 0.5, height - bottomInset + 1)
@@ -616,9 +616,9 @@ final class KirinControlsTranslatorTests: XCTestCase {
             expectedX = columnXs[columnXs.count / 2]
         } else {
             let leadingInset = metrics.leadingInset(isLandscape: isLandscape)
-            let buttonSize = leftGrid.first?.size ?? KirinControlsTranslator.defaultButtonSize
-            let pitch = buttonSize + KirinControlsTranslator.cellGap
-            expectedX = leadingInset + KirinControlsTranslator.edgeMargin + buttonSize * 0.5 + pitch
+            let buttonSize = leftGrid.first?.size ?? ControlLimits.defaultButtonSize
+            let pitch = buttonSize + TranslatorLayout.cellGap
+            expectedX = leadingInset + TranslatorLayout.edgeMargin + buttonSize * 0.5 + pitch
         }
         XCTAssertEqual(dpad.x * width, expectedX, accuracy: 2.0)
     }
@@ -632,16 +632,16 @@ final class KirinControlsTranslatorTests: XCTestCase {
     ) {
         let dpadTop = dpad.y * height - dpadSize * 0.5
         guard !leftGrid.isEmpty else {
-            let bandTop = metrics.topInset(isLandscape: isLandscape) + KirinControlsTranslator.edgeMargin
+            let bandTop = metrics.topInset(isLandscape: isLandscape) + TranslatorLayout.edgeMargin
             XCTAssertGreaterThanOrEqual(dpadTop, bandTop - 1)
             return
         }
         let bottomYs = leftGrid.map {
-            ($0.y * height) + (($0.size ?? KirinControlsTranslator.defaultButtonSize) * 0.5)
+            ($0.y * height) + (($0.size ?? ControlLimits.defaultButtonSize) * 0.5)
         }
         let lastLeftBottom = bottomYs.max() ?? 0
         XCTAssertGreaterThanOrEqual(
-            dpadTop, lastLeftBottom + KirinControlsTranslator.cellGap - 1)
+            dpadTop, lastLeftBottom + TranslatorLayout.cellGap - 1)
     }
 
     private func assertColumnPitchesEqual(buttons: [ButtonSpec], width: Double, height: Double) {

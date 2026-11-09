@@ -5,13 +5,16 @@ import Foundation
 
 public enum ButtonSeparation {
     public static let minimumGap: Double = 2
+    /// A new value changes derived layouts, and with them the hashes in
+    /// the migration record.
     public static let maxIterations: Int = 24
 
-    /// Separates intersecting circles in point space, one step at a
-    /// time. Returns the adjusted centers and how many buttons moved
-    /// from their inputs. Obstacles are fixed circles (for example,
-    /// the d-pad). Walls are fixed rectangles no button may overlap
-    /// (for example, a toolbar column). Only buttons move.
+    /// Steps of the golden angle (in radians) never repeat a
+    /// direction, so buttons on one point part in different ways.
+    private static let goldenAngle = 2.399_963_229_728_653
+
+    /// All values are in points. Obstacles and walls stay fixed. Only
+    /// buttons move.
     public static func separate(
         _ buttons: [(x: Double, y: Double, size: Double)],
         width: Double,
@@ -92,24 +95,14 @@ public enum ButtonSeparation {
         sizeJ: Double,
         moved: inout Bool
     ) {
-        let required = (sizeI + sizeJ) * 0.5 + minimumGap
+        guard
+            let overlap = overlap(
+                from: positions[i], to: positions[j],
+                required: (sizeI + sizeJ) * 0.5 + minimumGap, seed: i + 1)
+        else { return }
 
-        var dx = positions[j].x - positions[i].x
-        var dy = positions[j].y - positions[i].y
-        var dist = hypot(dx, dy)
-
-        if dist < 1e-9 {
-            let angle = Double(i + 1) * 2.399_963_229_728_653
-            dx = cos(angle) * 1e-3
-            dy = sin(angle) * 1e-3
-            dist = hypot(dx, dy)
-        }
-
-        guard dist < required else { return }
-
-        let penetration = required - dist
-        let pushX = dx / dist * penetration * 0.5
-        let pushY = dy / dist * penetration * 0.5
+        let pushX = overlap.x * overlap.depth * 0.5
+        let pushY = overlap.y * overlap.depth * 0.5
 
         positions[i].x -= pushX
         positions[i].y -= pushY
@@ -126,34 +119,39 @@ public enum ButtonSeparation {
         positions: inout [(x: Double, y: Double)],
         moved: inout Bool
     ) {
-        let required = (buttonSize + obstacle.size) * 0.5 + minimumGap
+        guard
+            let overlap = overlap(
+                from: (obstacle.x, obstacle.y), to: positions[buttonIndex],
+                required: (buttonSize + obstacle.size) * 0.5 + minimumGap,
+                seed: buttonIndex + 1 + obstacleIndex)
+        else { return }
 
-        var dx = positions[buttonIndex].x - obstacle.x
-        var dy = positions[buttonIndex].y - obstacle.y
+        positions[buttonIndex].x += overlap.x * overlap.depth
+        positions[buttonIndex].y += overlap.y * overlap.depth
+        moved = true
+    }
+
+    private static func overlap(
+        from a: (x: Double, y: Double), to b: (x: Double, y: Double),
+        required: Double, seed: Int
+    ) -> (x: Double, y: Double, depth: Double)? {
+        var dx = b.x - a.x
+        var dy = b.y - a.y
         var dist = hypot(dx, dy)
-
         if dist < 1e-9 {
-            let angle = Double(buttonIndex + 1 + obstacleIndex) * 2.399_963_229_728_653
+            let angle = Double(seed) * goldenAngle
             dx = cos(angle) * 1e-3
             dy = sin(angle) * 1e-3
             dist = hypot(dx, dy)
         }
-
-        guard dist < required else { return }
-
-        let penetration = required - dist
-        positions[buttonIndex].x += dx / dist * penetration
-        positions[buttonIndex].y += dy / dist * penetration
-        moved = true
+        guard dist < required else { return nil }
+        return (dx / dist, dy / dist, required - dist)
     }
 
-    /// Leaves to the nearest point on the wall's outline that keeps
-    /// the button in bounds and clear of every obstacle and neighbor.
-    /// An exit onto one would push it straight back in. Next best is
-    /// a point clear of the obstacles alone, because neighbors can
-    /// still move apart later and obstacles cannot. Then the nearest
-    /// direct exit in bounds. Without any, the button stays where the
-    /// bounds clamp put it.
+    /// An exit onto an obstacle or a neighbor pushes the button
+    /// straight back in. A point clear of the obstacles only comes
+    /// next, because neighbors can move apart later and obstacles
+    /// cannot.
     private static func pushOutOfWall(
         index: Int,
         wall: EditDragSolver.Rect,
@@ -184,9 +182,9 @@ public enum ButtonSeparation {
             hypot(exit.x - point.x, exit.y - point.y)
         }
 
-        // Each outline edge clipped to bounds. On an edge, a blocker
-        // blocks one interval, so the nearest clear point is the
-        // point's own projection or the end of a blocked interval.
+        // On an edge, each blocker blocks one interval. Thus the
+        // nearest clear point is the projection of the point or an end
+        // of a blocked interval.
         var direct: [(x: Double, y: Double)] = []
         var candidates: [(x: Double, y: Double)] = []
         let edges: [(fixed: Double, vertical: Bool)] = [
@@ -235,7 +233,7 @@ public enum ButtonSeparation {
         }
         guard duplicates.count > 1 else { return (button.x, button.y) }
 
-        let angle = Double(index + 1) * 2.399_963_229_728_653
+        let angle = Double(index + 1) * goldenAngle
         let epsilon = 0.5
         return (
             button.x + cos(angle) * epsilon,

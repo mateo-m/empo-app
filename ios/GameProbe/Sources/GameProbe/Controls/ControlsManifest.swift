@@ -45,9 +45,8 @@ public struct TouchLayout: Equatable, Sendable {
     }
 }
 
-/// Visual style of the single movement control. The file key stays
-/// `dpad` for both. `style` picks the renderer. Same key mapping and
-/// direction math either way.
+/// The file key stays `dpad` for both styles. Both styles use the same
+/// key mapping and direction math.
 public enum MovementStyle: String, Equatable, Sendable, CaseIterable, Codable {
     case dpad
     case stick
@@ -58,9 +57,8 @@ public struct DPadSpec: Equatable, Sendable {
     public var y: Double
     public var size: Double?
     public var opacity: Double?
-    /// Never optional: an absent file field IS the d-pad, and the
-    /// serializer omits the field for `.dpad`, so no consumer ever
-    /// needs to tell nil from `.dpad`.
+    /// An absent file field means `.dpad`, and the serializer omits the
+    /// field for `.dpad`.
     public var style: MovementStyle
 
     public init(
@@ -103,8 +101,8 @@ public struct ButtonSpec: Equatable, Sendable {
     }
 }
 
-/// A touch button bound to an Empo action instead of a game key.
-/// It has no label: rendering uses the action's fixed icon.
+/// This button has no label. The renderer shows the fixed icon of the
+/// action.
 public struct ActionButtonSpec: Equatable, Sendable {
     public var action: String
     public var x: Double
@@ -127,13 +125,9 @@ public struct ActionButtonSpec: Equatable, Sendable {
     }
 }
 
-/// What a physical input does: press a game key, act as a controller
-/// element, run an Empo action, or nothing at all.
-///
-/// The `element` target is what makes one set of binds serve every
-/// pad. A controller in keyboard mode sends keys, so `"KeyJ": "a"`
-/// files that key under the A button. Every A binding then applies
-/// to it: Empo's default, the game's manifest, and the player's own.
+/// A controller in keyboard mode sends keys. `"KeyJ": "a"` puts that
+/// key under the A button, so every A binding applies to it: the Empo
+/// default, the manifest of the game, and the player's own.
 public enum ControlsTarget: Equatable, Sendable {
     case key(String)
     case element(String)
@@ -141,17 +135,12 @@ public enum ControlsTarget: Equatable, Sendable {
     case unbound
 }
 
-/// What a binding reads: a controller element or a keyboard key. The
-/// two vocabularies are disjoint (a test enforces it), so one name
-/// always decides one kind, and one map holds both.
-///
-/// Every layer takes this type instead of a bare name. Nothing
-/// downstream has to ask "is this an element?" again.
+/// The element names and the key names are disjoint, and a test
+/// enforces it. Thus one name always gives one kind.
 public enum BindingSource: Hashable, Sendable {
     case element(String)
     case key(String)
 
-    /// nil for a name in neither vocabulary.
     public init?(name: String) {
         if ControllerElement.allNames.contains(name) {
             self = .element(name)
@@ -162,7 +151,6 @@ public enum BindingSource: Hashable, Sendable {
         }
     }
 
-    /// The name as it appears in the file and in stored maps.
     public var name: String {
         switch self {
         case .element(let name), .key(let name): return name
@@ -175,11 +163,6 @@ public enum BindingSource: Hashable, Sendable {
     }
 }
 
-/// Source -> target map (SPEC section 9).
-///
-/// A key that no source names passes through to the game unchanged.
-/// That keeps typing, and the engine hotkeys, alive on a real
-/// keyboard. `unbound` makes a source do nothing.
 public struct BindingMap: Equatable, Sendable {
     public typealias Target = ControlsTarget
 
@@ -189,7 +172,6 @@ public struct BindingMap: Equatable, Sendable {
         self.entries = entries
     }
 
-    /// Element name -> target. The one place the map splits by kind.
     public var elementEntries: [String: Target] {
         var out: [String: Target] = [:]
         for (source, target) in entries {
@@ -198,7 +180,6 @@ public struct BindingMap: Equatable, Sendable {
         return out
     }
 
-    /// Key code -> target.
     public var keyEntries: [String: Target] {
         var out: [String: Target] = [:]
         for (source, target) in entries {
@@ -208,7 +189,6 @@ public struct BindingMap: Equatable, Sendable {
     }
 }
 
-/// Closed SDL controller element vocabulary (SPEC section 7).
 public enum ControllerElement {
     public static let allNames: Set<String> = Set(allElements)
 
@@ -221,7 +201,19 @@ public enum ControllerElement {
         "paddle1", "paddle2", "paddle3", "paddle4",
         "touchpad",
         "lefttrigger", "righttrigger",
-        "-leftx", "+leftx", "-lefty", "+lefty",
-        "-rightx", "+rightx", "-righty", "+righty",
     ]
+        + ["left", "right"].flatMap { stick in
+            [ControlDirection.left, .right, .up, .down].map { halfAxis(stick: stick, direction: $0) }
+        }
+
+    /// SDL names a stick direction by the sign and the axis: `-lefty`
+    /// is the left stick pushed up.
+    public static func halfAxis(stick: String, direction: ControlDirection) -> String {
+        switch direction {
+        case .up: "-\(stick)y"
+        case .down: "+\(stick)y"
+        case .left: "-\(stick)x"
+        case .right: "+\(stick)x"
+        }
+    }
 }

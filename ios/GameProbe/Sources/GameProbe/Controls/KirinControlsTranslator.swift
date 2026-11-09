@@ -4,41 +4,20 @@
 import Foundation
 
 public enum KirinControlsTranslator {
-    public static let fileName = "kirin-touch-controls.json"
+    public static let fileName = ControlsManifestLoader.ManifestLocation.kirin.rawValue
 
     public struct Translation: Sendable {
-        /// nil when the file contributed nothing usable.
         public var manifest: ControlsManifest?
-        /// Human-readable notes for the game's log. Never errors.
         public var notes: [String]
     }
 
-    // Geometry constants chosen in this implementation. The ticket
-    // requires a gap of 12pt or more.
-    static let cellGap: Double = 14
-    static let edgeMargin: Double = 16
-    static let minButtonSize: Double = 40
-    static let defaultButtonSize: Double = 56
-    static let minDpadSize: Double = 100
-    static let maxDpadSize: Double = 200
-    static let coordMin: Double = 0.02
-    static let coordMax: Double = 0.98
-
     private static let columnsPerRow = 3
-    /// Kirin's own structural capacity (15 right-grid + 6 left-grid
-    /// slots). The translation layer follows Kirin's limit and does
-    /// not add one of its own, so a full file translates whole. The
-    /// guard below can only fire if the format ever grows.
-    private static let maxButtons = 21
-    private static let maxFileSize = 128 * 1024
-
-    public static func translate(data: Data) -> Translation {
-        translate(data: data, metrics: .reference)
-    }
 
     public static func translate(data: Data, metrics: TouchZoneMetrics) -> Translation {
-        if data.count > maxFileSize {
-            return Translation(manifest: nil, notes: ["file is larger than 128 KiB, ignored"])
+        if data.count > ControlLimits.maxFileSize {
+            return Translation(
+                manifest: nil,
+                notes: ["file is larger than \(ControlLimits.maxFileSizeText), ignored"])
         }
 
         guard let text = String(data: data, encoding: .utf8),
@@ -50,20 +29,23 @@ public enum KirinControlsTranslator {
         var notes: [String] = []
 
         if let versionValue = root["version"] {
-            if let version = asInt(versionValue) {
+            if let version = JSONNumber.int(versionValue) {
                 if version != 1 {
                     return Translation(
                         manifest: nil,
                         notes: ["unsupported version \(version); ignored"]
                     )
                 }
+            } else {
+                notes.append("version is not an integer; read as version 1")
             }
         }
 
-        let scale = asDouble(root["scale"]) ?? 100
-        let opacityPercent = asDouble(root["opacity"]) ?? 100
-        let baseButtonSize = clamp(defaultButtonSize * scale / 100, min: minButtonSize, max: 100)
-        let buttonOpacity = clamp(opacityPercent / 100, min: 0.2, max: 1.0)
+        let scale = JSONNumber.double(root["scale"]) ?? 100
+        let opacityPercent = JSONNumber.double(root["opacity"]) ?? 100
+        let baseButtonSize = ControlLimits.buttonSize.clamp(
+            ControlLimits.defaultButtonSize * scale / 100)
+        let buttonOpacity = ControlLimits.opacity.clamp(opacityPercent / 100)
 
         var rightSlots: [Int?] = []
         var leftSlots: [Int?] = []
@@ -80,7 +62,7 @@ public enum KirinControlsTranslator {
                     continue
                 }
 
-                guard let keycode = asInt(slot) else {
+                guard let keycode = JSONNumber.int(slot) else {
                     if !hadInvalidSlot {
                         notes.append("non-integer slot value in \(gridName); treated as empty")
                         hadInvalidSlot = true
@@ -107,6 +89,13 @@ public enum KirinControlsTranslator {
             }
         }
 
+        let dropped = dropSlotsOverLimit(rightSlots: &rightSlots, leftSlots: &leftSlots)
+        if dropped > 0 {
+            notes.append(
+                "\(dropped) buttons beyond the \(ControlLimits.maxButtonsPerOrientation)-button limit dropped"
+            )
+        }
+
         let portraitLayout = buildLayout(
             rightSlots: rightSlots,
             leftSlots: leftSlots,
@@ -125,38 +114,33 @@ public enum KirinControlsTranslator {
             buttonOpacity: buttonOpacity
         )
 
-        let portraitButtons = portraitLayout?.buttons ?? []
-        let landscapeButtons = landscapeLayout?.buttons ?? []
-
-        if portraitButtons.isEmpty && landscapeButtons.isEmpty {
+        guard portraitLayout != nil || landscapeLayout != nil else {
             return Translation(manifest: nil, notes: notes + ["no usable buttons, ignored"])
         }
 
-        var finalPortrait = portraitLayout
-        var finalLandscape = landscapeLayout
-
-        if portraitButtons.count > maxButtons {
-            let dropped = portraitButtons.count - maxButtons
-            notes.append("\(dropped) buttons beyond the 21-button limit dropped")
-            finalPortrait = TouchLayout(
-                dpad: portraitLayout?.dpad,
-                buttons: Array(portraitButtons.prefix(maxButtons))
-            )
-        }
-        if landscapeButtons.count > maxButtons {
-            finalLandscape = TouchLayout(
-                dpad: landscapeLayout?.dpad,
-                buttons: Array(landscapeButtons.prefix(maxButtons))
-            )
-        }
-
-        let touch = TouchSection(
-            portrait: finalPortrait,
-            landscape: finalLandscape
-        )
+        let touch = TouchSection(portrait: portraitLayout, landscape: landscapeLayout)
         let manifest = ControlsManifest(version: 1, touch: touch)
 
         return Translation(manifest: manifest, notes: notes)
+    }
+
+    /// The slots stay, so the rows keep their places.
+    private static func dropSlotsOverLimit(rightSlots: inout [Int?], leftSlots: inout [Int?]) -> Int {
+        var kept = 0
+        var dropped = 0
+        func trim(_ slots: inout [Int?]) {
+            for index in slots.indices where slots[index] != nil {
+                if kept < ControlLimits.maxButtonsPerOrientation {
+                    kept += 1
+                } else {
+                    slots[index] = nil
+                    dropped += 1
+                }
+            }
+        }
+        trim(&rightSlots)
+        trim(&leftSlots)
+        return dropped
     }
 
     // MARK: - Grid geometry
@@ -203,8 +187,8 @@ public enum KirinControlsTranslator {
         let buttonSize = fit.buttonSize
         let dpadSize = fit.dpadSize
 
-        let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: edgeMargin)
-        let leftKeyAvailable = available - cellGap - dpadSize
+        let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
+        let leftKeyAvailable = available - TranslatorLayout.cellGap - dpadSize
         let rowPitch = effectivePitch(
             buttonSize: buttonSize, rowCount: maxRowCount, available: available)
         let leftPitch = effectivePitch(
@@ -216,15 +200,15 @@ public enum KirinControlsTranslator {
         let leftBandSpan =
             leftRowCount > 0
             ? keyRowsSpan(rowCount: leftRowCount, buttonSize: buttonSize, pitch: pitch)
-                + cellGap + dpadSize
+                + TranslatorLayout.cellGap + dpadSize
             : dpadSize
         let bandSpan = max(
             keyRowsSpan(rowCount: maxRowCount, buttonSize: buttonSize, pitch: pitch),
             leftBandSpan)
         let bandTop =
             isLandscape
-            ? max(topInset + edgeMargin, height - bottomInset - edgeMargin - bandSpan)
-            : topInset + edgeMargin
+            ? max(topInset + TranslatorLayout.edgeMargin, height - bottomInset - TranslatorLayout.edgeMargin - bandSpan)
+            : topInset + TranslatorLayout.edgeMargin
         let firstRowCenterY = bandTop + buttonSize * 0.5
         let rowCenters = (0..<maxRowCount).map { firstRowCenterY + Double($0) * pitch }
 
@@ -248,8 +232,8 @@ public enum KirinControlsTranslator {
                 ButtonSpec(
                     label: nil,
                     key: w3c,
-                    x: clampFraction(x / width),
-                    y: clampFraction(y / height),
+                    x: ControlLimits.placedCoordinate.clamp(x / width),
+                    y: ControlLimits.placedCoordinate.clamp(y / height),
                     size: buttonSize,
                     opacity: buttonOpacity
                 )
@@ -288,34 +272,34 @@ public enum KirinControlsTranslator {
         buttonOpacity: Double,
         firstRowCenterY: Double
     ) -> DPadSpec {
-        let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
+        let leftmost = leadingInset + TranslatorLayout.edgeMargin + buttonSize * 0.5
         let centerX = leftmost + pitch
 
-        let bandBottom = height - bottomInset - edgeMargin
+        let bandBottom = height - bottomInset - TranslatorLayout.edgeMargin
 
         let centerY: Double
         if leftRowCount > 0 {
             let lastLeftKeyRowCenter = firstRowCenterY + Double(leftRowCount - 1) * pitch
-            centerY = lastLeftKeyRowCenter + buttonSize * 0.5 + cellGap + dpadSize * 0.5
+            centerY = lastLeftKeyRowCenter + buttonSize * 0.5 + TranslatorLayout.cellGap + dpadSize * 0.5
         } else {
             centerY = bandTop + dpadSize * 0.5
         }
 
         let half = dpadSize * 0.5
-        let clampedX = clamp(
+        let clampedX = TranslatorLayout.clamp(
             centerX,
-            min: leadingInset + edgeMargin + half,
-            max: width - trailingInset - edgeMargin - half
+            min: leadingInset + TranslatorLayout.edgeMargin + half,
+            max: width - trailingInset - TranslatorLayout.edgeMargin - half
         )
-        let clampedY = clamp(
+        let clampedY = TranslatorLayout.clamp(
             centerY,
             min: bandTop + half,
             max: bandBottom - half
         )
 
         return DPadSpec(
-            x: clampFraction(clampedX / width),
-            y: clampFraction(clampedY / height),
+            x: ControlLimits.placedCoordinate.clamp(clampedX / width),
+            y: ControlLimits.placedCoordinate.clamp(clampedY / height),
             size: dpadSize,
             opacity: buttonOpacity
         )
@@ -354,10 +338,10 @@ public enum KirinControlsTranslator {
         trailingInset: Double
     ) -> Double {
         if isRightGrid {
-            let rightmost = width - trailingInset - edgeMargin - buttonSize * 0.5
-            return rightmost - Double(2 - col) * pitch
+            let rightmost = width - trailingInset - TranslatorLayout.edgeMargin - buttonSize * 0.5
+            return rightmost - Double(columnsPerRow - 1 - col) * pitch
         }
-        let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
+        let leftmost = leadingInset + TranslatorLayout.edgeMargin + buttonSize * 0.5
         return leftmost + Double(col) * pitch
     }
 
@@ -367,7 +351,7 @@ public enum KirinControlsTranslator {
     }
 
     private static func nominalDpadSize(buttonSize: Double) -> Double {
-        clamp(3 * buttonSize, min: minDpadSize, max: maxDpadSize)
+        ControlLimits.dpadSize.clamp(3 * buttonSize)
     }
 
     private static func fitButtonSizeAndDpad(
@@ -379,7 +363,7 @@ public enum KirinControlsTranslator {
     ) -> FitResult {
         var size = buttonSize
         var dpad = nominalDpadSize(buttonSize: size)
-        let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: edgeMargin)
+        let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
 
         while true {
             if layoutFits(
@@ -394,13 +378,13 @@ public enum KirinControlsTranslator {
                 return FitResult(buttonSize: size, dpadSize: dpad)
             }
 
-            if size > minButtonSize {
+            if size > ControlLimits.buttonSize.lowerBound {
                 size -= 1
                 dpad = nominalDpadSize(buttonSize: size)
-            } else if dpad > minDpadSize {
+            } else if dpad > ControlLimits.dpadSize.lowerBound {
                 dpad -= 1
             } else {
-                return FitResult(buttonSize: minButtonSize, dpadSize: minDpadSize)
+                return FitResult(buttonSize: ControlLimits.buttonSize.lowerBound, dpadSize: ControlLimits.dpadSize.lowerBound)
             }
         }
     }
@@ -414,9 +398,9 @@ public enum KirinControlsTranslator {
         metrics: TouchZoneMetrics,
         isLandscape: Bool
     ) -> Bool {
-        let pitch = buttonSize + cellGap
+        let pitch = buttonSize + TranslatorLayout.cellGap
         let leftKeysSpan = keyRowsSpan(rowCount: leftRowCount, buttonSize: buttonSize, pitch: pitch)
-        let leftBandSpan = leftKeysSpan + cellGap + dpadSize
+        let leftBandSpan = leftKeysSpan + TranslatorLayout.cellGap + dpadSize
         let sharedRowsSpan = keyRowsSpan(
             rowCount: maxRowCount, buttonSize: buttonSize, pitch: pitch)
         guard max(sharedRowsSpan, leftBandSpan) <= available else { return false }
@@ -430,8 +414,6 @@ public enum KirinControlsTranslator {
         )
     }
 
-    /// Two 3-column bands (left keys + d-pad, right keys) must clear
-    /// each other horizontally when the zone is narrow.
     private static func horizontalFit(
         buttonSize: Double,
         dpadSize: Double,
@@ -442,15 +424,16 @@ public enum KirinControlsTranslator {
         let width = metrics.width(isLandscape: isLandscape)
         let leadingInset = metrics.leadingInset(isLandscape: isLandscape)
         let trailingInset = metrics.trailingInset(isLandscape: isLandscape)
-        let leftmost = leadingInset + edgeMargin + buttonSize * 0.5
-        let rightmost = width - trailingInset - edgeMargin - buttonSize * 0.5
+        let leftmost = leadingInset + TranslatorLayout.edgeMargin + buttonSize * 0.5
+        let rightmost = width - trailingInset - TranslatorLayout.edgeMargin - buttonSize * 0.5
 
-        let columnGap = rightmost - 2 * pitch - (leftmost + 2 * pitch)
+        let gridSpan = Double(columnsPerRow - 1) * pitch
+        let columnGap = rightmost - gridSpan - (leftmost + gridSpan)
         guard columnGap >= buttonSize else { return false }
 
         let dpadCenterX = leftmost + pitch
         let dpadRight = dpadCenterX + dpadSize * 0.5
-        let rightGridLeft = rightmost - 2 * pitch - buttonSize * 0.5
+        let rightGridLeft = rightmost - gridSpan - buttonSize * 0.5
         return rightGridLeft >= dpadRight
     }
 
@@ -459,48 +442,15 @@ public enum KirinControlsTranslator {
         return Double(rowCount - 1) * pitch + buttonSize
     }
 
-    /// If the standard pitch overflows the usable band, compress the
-    /// row spacing evenly so the grid still fits. If even compression
-    /// is not enough, the separation step handles the rest.
+    /// When the compressed pitch still does not fit, the separation
+    /// step at display time removes the overlap.
     private static func effectivePitch(
         buttonSize: Double, rowCount: Int, available: Double
     ) -> Double {
-        let standard = buttonSize + cellGap
+        let standard = buttonSize + TranslatorLayout.cellGap
         guard rowCount > 1 else { return standard }
         let span = Double(rowCount - 1) * standard + buttonSize
         if span <= available { return standard }
         return max((available - buttonSize) / Double(rowCount - 1), buttonSize + 1)
-    }
-
-    private static func clampFraction(_ value: Double) -> Double {
-        clamp(value, min: coordMin, max: coordMax)
-    }
-
-    // MARK: - JSON helpers (Linux-safe, mirrors ControlsManifestLoader)
-
-    private static func isJSONBool(_ value: Any) -> Bool {
-        guard let number = value as? NSNumber else { return value is Bool }
-        return String(cString: number.objCType) == "c"
-    }
-
-    private static func asDouble(_ value: Any?) -> Double? {
-        guard let value else { return nil }
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return number.doubleValue }
-        if let double = value as? Double { return double }
-        if let int = value as? Int { return Double(int) }
-        return nil
-    }
-
-    private static func asInt(_ value: Any) -> Int? {
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return Int(exactly: number) }
-        if let int = value as? Int { return int }
-        if let double = value as? Double { return Int(exactly: double) }
-        return nil
-    }
-
-    private static func clamp(_ value: Double, min minimum: Double, max maximum: Double) -> Double {
-        Swift.max(minimum, Swift.min(maximum, value))
     }
 }

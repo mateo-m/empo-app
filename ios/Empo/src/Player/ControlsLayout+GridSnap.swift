@@ -1,72 +1,61 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import GameProbe
 import SwiftUI
 
-/// Grid snap for the controls edit mode, split out of
-/// ControlsLayout.swift: rounding every control onto the lattice,
-/// plus the spawn solve that places freshly added controls through
-/// the same clamp + collision + chrome-wall pipeline a drag gets.
-/// The stored state backing this (restore records, the active flag,
-/// the last-published canvas geometry) lives in the main file,
-/// because extensions cannot add stored properties.
 extension ControlsLayout {
-    /// The canvas geometry an edit surface renders with.
     struct EditGeometry: Equatable {
         var geoSize: CGSize
         var safeArea: EdgeInsets
         var controlsMinY: CGFloat
     }
 
-    /// Size a freshly added control gets: the default preset,
-    /// snapped to the grid step while grid mode is on.
     var newControlSize: CGFloat {
-        gridSnapActive ? Self.gridSnappedSize(56) : 56
+        let size = CGFloat(ControlLimits.defaultButtonSize)
+        return gridSnapActive ? Self.gridSnappedSize(size) : size
     }
 
-    /// Rounds every active-orientation control's size to a multiple
-    /// of the grid step and its center onto the lattice. Records the
-    /// old values first, so untoggling before Done can put them back
-    /// exactly. A second call while already applied does nothing.
+    private func snappedToGrid(
+        _ point: CGPoint, size: CGFloat, in geometry: EditGeometry
+    )
+        -> CGPoint
+    {
+        ControlsZone.pushedOutOfKeepout(
+            ControlsZone.snappedToEditGrid(
+                point, controlSize: size, geoSize: geometry.geoSize,
+                safeArea: geometry.safeArea, controlsMinY: geometry.controlsMinY),
+            controlHalf: size / 2, keepout: toolbarKeepout,
+            geoSize: geometry.geoSize, safeArea: geometry.safeArea,
+            controlsMinY: geometry.controlsMinY)
+    }
+
+    /// The old values stay in a record, so a toggle off before Done
+    /// puts them back.
     func applyGridSnap(geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat) {
         guard !gridSnapActive else { return }
+        let geometry = EditGeometry(geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
         func snappedCenter(_ relative: CGPoint, size: CGFloat) -> CGPoint {
             let absolute = ControlsZone.absolutePosition(
                 for: relative, in: geoSize,
                 controlSize: CGSize(width: size, height: size),
                 safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout)
-            let snapped = ControlsZone.pushedOutOfKeepout(
-                ControlsZone.snappedToEditGrid(
-                    absolute, controlSize: size, geoSize: geoSize,
-                    safeArea: safeArea, controlsMinY: controlsMinY),
-                controlHalf: size / 2, keepout: toolbarKeepout,
-                geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
+            let snapped = snappedToGrid(absolute, size: size, in: geometry)
             return CGPoint(x: snapped.x / geoSize.width, y: snapped.y / geoSize.height)
         }
-
-        var buttons = self.buttons
-        for index in buttons.indices {
-            gridSnapOriginals[buttons[index].id] = GridSnapOriginal(
-                size: buttons[index].size,
-                relativeCenter: buttons[index].relativeCenter)
-            let size = Self.gridSnappedSize(buttons[index].size)
-            buttons[index].relativeCenter = snappedCenter(
-                buttons[index].relativeCenter, size: size)
-            buttons[index].size = size
+        func snapped<Control: PlacedControl>(_ controls: [Control]) -> [Control] {
+            controls.map { control in
+                gridSnapOriginals[control.id] = GridSnapOriginal(
+                    size: control.size, relativeCenter: control.relativeCenter)
+                var control = control
+                control.size = Self.gridSnappedSize(control.size)
+                control.relativeCenter = snappedCenter(control.relativeCenter, size: control.size)
+                return control
+            }
         }
-        self.buttons = buttons
 
-        var actionButtons = self.actionButtons
-        for index in actionButtons.indices {
-            gridSnapOriginals[actionButtons[index].id] = GridSnapOriginal(
-                size: actionButtons[index].size,
-                relativeCenter: actionButtons[index].relativeCenter)
-            let size = Self.gridSnappedSize(actionButtons[index].size)
-            actionButtons[index].relativeCenter = snappedCenter(
-                actionButtons[index].relativeCenter, size: size)
-            actionButtons[index].size = size
-        }
-        self.actionButtons = actionButtons
+        buttons = snapped(buttons)
+        actionButtons = snapped(actionButtons)
 
         gridSnapDPadOriginals[currentOrientation] = GridSnapOriginal(
             size: dpadSize, relativeCenter: dpadRelativeCenter)
@@ -77,11 +66,6 @@ extension ControlsLayout {
         gridSnapActive = true
     }
 
-    /// A legal spawn center for a newly added control, in the
-    /// relative space the model stores: the clamped window center,
-    /// pushed out of neighbors and chrome walls by the drag solver,
-    /// then snapped if grid mode is on. Without a published geometry
-    /// it falls back to the plain window center.
     func resolvedSpawnRelativeCenter(size: CGFloat) -> CGPoint {
         guard let geometry = editGeometry else { return CGPoint(x: 0.5, y: 0.5) }
         let geoSize = geometry.geoSize
@@ -105,12 +89,7 @@ extension ControlsLayout {
                 controlsMinY: controlsMinY, keepout: toolbarKeepout)
         }
         if gridSnapActive {
-            center = ControlsZone.pushedOutOfKeepout(
-                ControlsZone.snappedToEditGrid(
-                    center, controlSize: size, geoSize: geoSize,
-                    safeArea: safeArea, controlsMinY: controlsMinY),
-                controlHalf: size / 2, keepout: toolbarKeepout,
-                geoSize: geoSize, safeArea: safeArea, controlsMinY: controlsMinY)
+            center = snappedToGrid(center, size: size, in: geometry)
         }
         return CGPoint(
             x: center.x / max(geoSize.width, 1),

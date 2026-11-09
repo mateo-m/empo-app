@@ -3,7 +3,6 @@
 
 import Foundation
 
-/// Grouping for controller-remap key pickers (ticket 005).
 public enum KeyCodePickerGroup: String, CaseIterable, Sendable {
     case common
     case letters
@@ -16,7 +15,6 @@ public enum KeyCodePickerGroup: String, CaseIterable, Sendable {
 }
 
 public extension KeyCodeTable {
-    /// Picker section title.
     static func pickerGroupTitle(_ group: KeyCodePickerGroup) -> String {
         switch group {
         case .common: return "Common keys"
@@ -30,9 +28,8 @@ public extension KeyCodeTable {
         }
     }
 
-    /// Codes in `allCodes` order, put into picker sections. Common
-    /// keys also appear in their natural group, so for example the
-    /// Letters section stays a complete alphabet.
+    /// Common keys also appear in their natural group, so the Letters
+    /// section keeps the full alphabet.
     static var codesByPickerGroup: [KeyCodePickerGroup: [String]] {
         var buckets = Dictionary(uniqueKeysWithValues: KeyCodePickerGroup.allCases.map { ($0, [String]()) })
         for code in allCodes {
@@ -44,7 +41,6 @@ public extension KeyCodeTable {
         return buckets
     }
 
-    /// Primary group (Common wins). It drives the annotation display.
     static func pickerGroup(for code: String) -> KeyCodePickerGroup {
         commonPickerCodes.contains(code) ? .common : naturalGroup(for: code)
     }
@@ -54,7 +50,9 @@ public extension KeyCodeTable {
         if code.hasPrefix("Digit") { return .numbers }
         if code.hasPrefix("F"), let n = Int(code.dropFirst()), (1...12).contains(n) { return .function }
         if code.hasPrefix("Numpad") || code == "NumLock" { return .numpad }
-        if modifierPickerCodes.contains(code) { return .modifiers }
+        if let scancode = scancode(for: code), modifierScancodes.contains(scancode) {
+            return .modifiers
+        }
         if symbolPickerCodes.contains(code) { return .symbols }
         return .navigation
     }
@@ -65,10 +63,9 @@ public extension KeyCodeTable {
         "F5", "F6", "F7", "F8", "F9",
     ]
 
-    private static let modifierPickerCodes: Set<String> = [
-        "ControlLeft", "ShiftLeft", "AltLeft", "MetaLeft",
-        "ControlRight", "ShiftRight", "AltRight", "MetaRight",
-    ]
+    /// The USB HID modifier keys: Control, Shift, Alt, and Meta, left
+    /// then right.
+    private static let modifierScancodes: ClosedRange<Int32> = 224...231
 
     private static let symbolPickerCodes: Set<String> = [
         "Minus", "Equal", "BracketLeft", "BracketRight", "Backslash",

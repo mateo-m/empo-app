@@ -3,31 +3,24 @@
 
 import Foundation
 
-/// Per-game layout-profile pin, stored in
-/// `EmpoState/layout_profile.json`. A dedicated file: older app
-/// versions rewrite `game_settings.json` and would strip unknown
-/// keys.
+/// The pin has its own file, `EmpoState/layout_profile.json`. Older app
+/// versions rewrite `game_settings.json` and strip unknown keys.
 public enum LayoutPin: Equatable, Sendable {
-    /// File absent, `pin` key absent, or unreadable: resolve the
-    /// chain (game layout, then default profile, then builtin).
     case followChain
-    /// Pinned to a named profile.
     case profile(String)
-    /// Force the game-shipped layout (`"$game"`).
     case gameLayout
-    /// Always follow the current default profile (`"$default"`).
     case defaultProfile
 }
 
 public enum LayoutPinFile {
     public static let fileName = "layout_profile.json"
 
-    static let gameSentinel = "$game"
-    static let defaultSentinel = "$default"
+    /// A pin that starts with it names no profile, so no profile name
+    /// may start with it.
+    static let sentinelPrefix = "$"
+    static let gameSentinel = sentinelPrefix + "game"
+    static let defaultSentinel = sentinelPrefix + "default"
 
-    /// Absent file = follow the chain. An unreadable file or an
-    /// unknown version also resolves as follow-the-chain, with a
-    /// note for the log.
     public static func load(from url: URL) -> (pin: LayoutPin, note: String?) {
         guard let data = try? Data(contentsOf: url) else {
             return (.followChain, nil)
@@ -54,7 +47,7 @@ public enum LayoutPinFile {
         case defaultSentinel:
             return (.defaultProfile, nil)
         default:
-            if raw.hasPrefix("$") {
+            if raw.hasPrefix(sentinelPrefix) {
                 return (.followChain, "layout_profile.json: unknown pin \(raw), following the chain")
             }
             // The pin file sits in the game folder, so users can
@@ -71,7 +64,7 @@ public enum LayoutPinFile {
     /// `followChain` still writes `{"version":1}`: an explicit
     /// "Automatic" choice must be distinguishable from a game the
     /// migration has never seen (which has no file).
-    public static func serialize(_ pin: LayoutPin) -> Data {
+    public static func serialize(_ pin: LayoutPin) throws -> Data {
         var object: [String: Any] = ["version": 1]
         switch pin {
         case .followChain:
@@ -83,13 +76,10 @@ public enum LayoutPinFile {
         case .defaultProfile:
             object["pin"] = defaultSentinel
         }
-        let data = try? JSONSerialization.data(
-            withJSONObject: object, options: [.sortedKeys])
-        return data ?? Data("{\"version\":1}".utf8)
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     }
 }
 
-/// Which chain level won, for banners and pickers.
 public enum LayoutProvenance: Equatable, Sendable {
     case pinnedProfile(String)
     case gameLayout
@@ -97,20 +87,10 @@ public enum LayoutProvenance: Equatable, Sendable {
     case builtin
 }
 
-/// Pure chain resolution over per-level occupancy. Payload fetch
-/// stays with the caller, and the game-layout level is an optional
-/// slot, so the same resolver serves `controls.json` now and
-/// `screen.json` later (which has no game level). The levels carry
-/// their profile NAMES, so the outcome is a full `LayoutProvenance`
-/// and no caller re-joins names to levels.
 public enum LayoutChainResolver {
     public struct Levels: Sendable {
-        /// nil when the pin names no profile. Else the pinned name
-        /// plus whether that profile's section exists and is valid.
         public var pinnedProfile: (name: String, valid: Bool)?
-        /// Whether the game ships a usable layout at this level.
         public var gameLayoutOccupied: Bool
-        /// nil when no default profile is set.
         public var defaultProfile: (name: String, valid: Bool)?
 
         public init(
@@ -126,8 +106,6 @@ public enum LayoutChainResolver {
 
     public struct Outcome: Equatable, Sendable {
         public var provenance: LayoutProvenance
-        /// Set when the pinned target was missing or invalid and the
-        /// resolution fell through. The caller surfaces it once.
         public var fellThrough: Bool
 
         public init(provenance: LayoutProvenance, fellThrough: Bool) {
@@ -143,8 +121,6 @@ public enum LayoutChainResolver {
                 return Outcome(
                     provenance: .pinnedProfile(pinned.name), fellThrough: false)
             }
-            // Missing or invalid named pin: resume the chain at the
-            // game level.
             return Outcome(provenance: chainTail(levels), fellThrough: true)
         case .gameLayout:
             if levels.gameLayoutOccupied {

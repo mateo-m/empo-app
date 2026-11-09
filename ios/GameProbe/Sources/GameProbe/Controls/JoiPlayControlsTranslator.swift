@@ -4,7 +4,7 @@
 import Foundation
 
 public enum JoiPlayControlsTranslator {
-    public static let fileName = "gamepad.json"
+    public static let fileName = ControlsManifestLoader.ManifestLocation.joiplay.rawValue
 
     public struct Translation: Sendable {
         public var manifest: ControlsManifest?
@@ -56,25 +56,16 @@ public enum JoiPlayControlsTranslator {
             portraitRow: 0, portraitCol: 0, landscapeRow: 0, landscapeCol: 0, cluster: .topRight),
     ]
 
-    static let cellGap: Double = 14
-    static let edgeMargin: Double = 16
-    static let coordMin: Double = 0.02
-    static let coordMax: Double = 0.98
-
     private static let knownKeys: Set<String> = [
         "btnOpacity", "btnScale",
         "aKeyCode", "bKeyCode", "cKeyCode", "xKeyCode", "yKeyCode", "zKeyCode", "lKeyCode", "rKeyCode",
     ]
 
-    private static let maxFileSize = 128 * 1024
-
-    public static func translate(data: Data) -> Translation {
-        translate(data: data, metrics: .reference)
-    }
-
     public static func translate(data: Data, metrics: TouchZoneMetrics) -> Translation {
-        if data.count > maxFileSize {
-            return Translation(manifest: nil, notes: ["file is larger than 128 KiB, ignored"])
+        if data.count > ControlLimits.maxFileSize {
+            return Translation(
+                manifest: nil,
+                notes: ["file is larger than \(ControlLimits.maxFileSizeText), ignored"])
         }
 
         guard let text = String(data: data, encoding: .utf8),
@@ -91,7 +82,7 @@ public enum JoiPlayControlsTranslator {
 
         let scalePercent: Double
         if let scaleValue = root["btnScale"] {
-            if let scale = asDouble(scaleValue) {
+            if let scale = JSONNumber.double(scaleValue) {
                 scalePercent = scale
             } else {
                 scalePercent = 100
@@ -103,7 +94,7 @@ public enum JoiPlayControlsTranslator {
 
         let opacityPercent: Double
         if let opacityValue = root["btnOpacity"] {
-            if let opacity = asDouble(opacityValue) {
+            if let opacity = JSONNumber.double(opacityValue) {
                 opacityPercent = opacity
             } else {
                 opacityPercent = 100
@@ -113,24 +104,35 @@ public enum JoiPlayControlsTranslator {
             opacityPercent = 100
         }
 
-        let buttonOpacity = clamp(opacityPercent / 100, min: 0.2, max: 1.0)
-        let sizes = slots.map { clamp($0.baseSize * scalePercent / 100, min: 40, max: 100) }
+        let buttonOpacity = ControlLimits.opacity.clamp(opacityPercent / 100)
+        let sizes = slots.map { ControlLimits.buttonSize.clamp($0.baseSize * scalePercent / 100) }
+        let keys = slots.map { slot -> String in
+            guard let keyValue = root[slot.keyField] else { return slot.defaultKey }
+            guard let keycode = JSONNumber.int(keyValue) else {
+                notes.append("\(slot.keyField) is not an integer; using default")
+                return slot.defaultKey
+            }
+            guard let w3c = AndroidKeycodeTable.w3cCode(for: keycode) else {
+                notes.append(
+                    "\(slot.keyField): Android keycode \(keycode) has no keyboard equivalent; using default")
+                return slot.defaultKey
+            }
+            return w3c
+        }
 
         let portraitButtons = buildButtons(
-            root: root,
             metrics: metrics,
             isLandscape: false,
             sizes: sizes,
-            buttonOpacity: buttonOpacity,
-            notes: &notes
+            keys: keys,
+            buttonOpacity: buttonOpacity
         )
         let landscapeButtons = buildButtons(
-            root: root,
             metrics: metrics,
             isLandscape: true,
             sizes: sizes,
-            buttonOpacity: buttonOpacity,
-            notes: &notes
+            keys: keys,
+            buttonOpacity: buttonOpacity
         )
 
         let touch = TouchSection(
@@ -143,27 +145,29 @@ public enum JoiPlayControlsTranslator {
     }
 
     private static func buildButtons(
-        root: [String: Any],
         metrics: TouchZoneMetrics,
         isLandscape: Bool,
         sizes: [Double],
-        buttonOpacity: Double,
-        notes: inout [String]
+        keys: [String],
+        buttonOpacity: Double
     ) -> [ButtonSpec] {
         let width = metrics.width(isLandscape: isLandscape)
         let height = metrics.height(isLandscape: isLandscape)
         let topInset = metrics.topInset(isLandscape: isLandscape)
         let bottomInset = metrics.bottomInset(isLandscape: isLandscape)
 
+        func row(_ slot: Slot) -> Int { isLandscape ? slot.landscapeRow : slot.portraitRow }
+        func col(_ slot: Slot) -> Int { isLandscape ? slot.landscapeCol : slot.portraitCol }
+
         var clusterSizes = sizes
-        let clusterSlotCount = 6
-        let maxClusterRow = slots.filter { $0.cluster == .bottomRightArc }
-            .map { isLandscape ? $0.landscapeRow : $0.portraitRow }.max() ?? 0
-        let maxClusterCol = slots.filter { $0.cluster == .bottomRightArc }
-            .map { isLandscape ? $0.landscapeCol : $0.portraitCol }.max() ?? 0
+        let clusterIndexes = slots.indices.filter { slots[$0].cluster == .bottomRightArc }
+        let cornerIndexes = slots.indices.filter { slots[$0].cluster != .bottomRightArc }
+        let anchorIndex = clusterIndexes.first { row(slots[$0]) == 0 && col(slots[$0]) == 0 }!
+        let maxClusterRow = clusterIndexes.map { row(slots[$0]) }.max() ?? 0
+        let maxClusterCol = clusterIndexes.map { col(slots[$0]) }.max() ?? 0
 
         func clusterAnchorY(cSize: Double) -> Double {
-            height - bottomInset - edgeMargin - cSize * 0.5
+            height - bottomInset - TranslatorLayout.edgeMargin - cSize * 0.5
         }
 
         var clusterPitch: Double = 0
@@ -171,28 +175,29 @@ public enum JoiPlayControlsTranslator {
         var clusterAnchorYValue: Double = 0
 
         while true {
-            let maxClusterSize = clusterSizes.prefix(clusterSlotCount).max() ?? 56
-            clusterPitch = maxClusterSize + cellGap
-            let cSize = clusterSizes[0]
+            let maxClusterSize = clusterIndexes.reduce(0) { max($0, clusterSizes[$1]) }
+            clusterPitch = maxClusterSize + TranslatorLayout.cellGap
+            let cSize = clusterSizes[anchorIndex]
             clusterAnchorX =
-                width - metrics.trailingInset(isLandscape: isLandscape) - edgeMargin - cSize * 0.5
+                width - metrics.trailingInset(isLandscape: isLandscape) - TranslatorLayout.edgeMargin - cSize * 0.5
             clusterAnchorYValue = clusterAnchorY(cSize: cSize)
 
             let spanY = Double(maxClusterRow) * clusterPitch + maxClusterSize
             let spanX = Double(maxClusterCol) * clusterPitch + maxClusterSize
             let topClusterEdge = clusterAnchorYValue - Double(maxClusterRow) * clusterPitch - maxClusterSize * 0.5
-            let topCornerBottom = topInset + edgeMargin + max(clusterSizes[6], clusterSizes[7])
-            let usableHeight = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: edgeMargin)
+            let topCornerBottom =
+                topInset + TranslatorLayout.edgeMargin + cornerIndexes.reduce(0) { max($0, clusterSizes[$1]) }
+            let usableHeight = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
 
             let fits =
                 spanY <= usableHeight
-                && spanX <= width - 2 * edgeMargin
-                && topClusterEdge >= topCornerBottom + cellGap
+                && spanX <= width - 2 * TranslatorLayout.edgeMargin
+                && topClusterEdge >= topCornerBottom + TranslatorLayout.cellGap
 
             if fits { break }
 
             var shrunk = false
-            for index in 0 ..< clusterSlotCount where clusterSizes[index] > minButtonSize {
+            for index in clusterIndexes where clusterSizes[index] > ControlLimits.buttonSize.lowerBound {
                 clusterSizes[index] -= 1
                 shrunk = true
             }
@@ -209,38 +214,24 @@ public enum JoiPlayControlsTranslator {
 
         for (index, slot) in slots.enumerated() {
             let size = slot.cluster == .bottomRightArc ? clusterSizes[index] : sizes[index]
-            var key = slot.defaultKey
-
-            if let keyValue = root[slot.keyField] {
-                if let keycode = asInt(keyValue) {
-                    if let w3c = AndroidKeycodeTable.w3cCode(for: keycode) {
-                        key = w3c
-                    } else {
-                        notes.append(
-                            "\(slot.keyField): Android keycode \(keycode) has no keyboard equivalent; using default"
-                        )
-                    }
-                }
-            }
+            let key = keys[index]
 
             let point: (x: Double, y: Double)
-            let row = isLandscape ? slot.landscapeRow : slot.portraitRow
-            let col = isLandscape ? slot.landscapeCol : slot.portraitCol
             switch slot.cluster {
             case .bottomRightArc:
                 point = (
-                    clusterAnchorX - Double(col) * clusterPitch,
-                    clusterAnchorYValue - Double(row) * clusterPitch
+                    clusterAnchorX - Double(col(slot)) * clusterPitch,
+                    clusterAnchorYValue - Double(row(slot)) * clusterPitch
                 )
             case .topLeft:
                 point = (
-                    metrics.leadingInset(isLandscape: isLandscape) + edgeMargin + size * 0.5,
-                    topInset + edgeMargin + size * 0.5
+                    metrics.leadingInset(isLandscape: isLandscape) + TranslatorLayout.edgeMargin + size * 0.5,
+                    topInset + TranslatorLayout.edgeMargin + size * 0.5
                 )
             case .topRight:
                 point = (
-                    width - metrics.trailingInset(isLandscape: isLandscape) - edgeMargin - size * 0.5,
-                    topInset + edgeMargin + size * 0.5
+                    width - metrics.trailingInset(isLandscape: isLandscape) - TranslatorLayout.edgeMargin - size * 0.5,
+                    topInset + TranslatorLayout.edgeMargin + size * 0.5
                 )
             }
 
@@ -248,8 +239,8 @@ public enum JoiPlayControlsTranslator {
                 ButtonSpec(
                     label: slot.label,
                     key: key,
-                    x: clampFraction(point.x / width),
-                    y: clampFraction(point.y / height),
+                    x: ControlLimits.placedCoordinate.clamp(point.x / width),
+                    y: ControlLimits.placedCoordinate.clamp(point.y / height),
                     size: size,
                     opacity: buttonOpacity
                 )
@@ -258,38 +249,4 @@ public enum JoiPlayControlsTranslator {
 
         return buttons
     }
-
-    private static func clampFraction(_ value: Double) -> Double {
-        clamp(value, min: coordMin, max: coordMax)
-    }
-
-    // MARK: - JSON helpers (Linux-safe, mirrors KirinControlsTranslator)
-
-    private static func isJSONBool(_ value: Any) -> Bool {
-        guard let number = value as? NSNumber else { return value is Bool }
-        return String(cString: number.objCType) == "c"
-    }
-
-    private static func asDouble(_ value: Any?) -> Double? {
-        guard let value else { return nil }
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return number.doubleValue }
-        if let double = value as? Double { return double }
-        if let int = value as? Int { return Double(int) }
-        return nil
-    }
-
-    private static func asInt(_ value: Any) -> Int? {
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return Int(exactly: number) }
-        if let int = value as? Int { return int }
-        if let double = value as? Double { return Int(exactly: double) }
-        return nil
-    }
-
-    private static func clamp(_ value: Double, min minimum: Double, max maximum: Double) -> Double {
-        Swift.max(minimum, Swift.min(maximum, value))
-    }
-
-    private static let minButtonSize: Double = 40
 }

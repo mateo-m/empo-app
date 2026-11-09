@@ -7,14 +7,17 @@ import Observation
 import SwiftUI
 import UIKit
 
-struct ButtonModel: Identifiable, Equatable, Codable {
+protocol PlacedControl: Identifiable where ID == UUID {
+    var relativeCenter: CGPoint { get set }
+    var size: CGFloat { get set }
+}
+
+struct ButtonModel: PlacedControl, Equatable, Codable {
     let id: UUID
     var label: String
     var scancode: Int32
     var relativeCenter: CGPoint  // fraction of superview size
     var size: CGFloat
-    /// Per-button opacity in [0, 1]. Applied to the whole button view,
-    /// so it tones down both the glass background and the label.
     var opacity: Double
 
     enum CodingKeys: String, CodingKey {
@@ -41,7 +44,8 @@ struct ButtonModel: Identifiable, Equatable, Codable {
         let rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? 0.5
         let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
         self.relativeCenter = CGPoint(x: rx, y: ry)
-        self.size = try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? 56
+        self.size =
+            try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? CGFloat(ControlLimits.defaultButtonSize)
         self.opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
     }
 
@@ -56,11 +60,7 @@ struct ButtonModel: Identifiable, Equatable, Codable {
     }
 }
 
-/// A touch button bound to an Empo action instead of a game key.
-/// No label: rendering uses the action's fixed icon and the registry
-/// display name. Codable so `PersistedLayout` stays decodable, though
-/// legacy UserDefaults blobs never contain these.
-struct ActionButtonModel: Identifiable, Equatable, Codable {
+struct ActionButtonModel: PlacedControl, Equatable, Codable {
     let id: UUID
     var action: String
     var relativeCenter: CGPoint  // fraction of superview size
@@ -87,7 +87,8 @@ struct ActionButtonModel: Identifiable, Equatable, Codable {
         let rx = try c.decodeIfPresent(CGFloat.self, forKey: .rx) ?? 0.5
         let ry = try c.decodeIfPresent(CGFloat.self, forKey: .ry) ?? 0.5
         self.relativeCenter = CGPoint(x: rx, y: ry)
-        self.size = try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? 56
+        self.size =
+            try c.decodeIfPresent(CGFloat.self, forKey: .size) ?? CGFloat(ControlLimits.defaultButtonSize)
         self.opacity = try c.decodeIfPresent(Double.self, forKey: .opacity) ?? 1.0
     }
 
@@ -101,11 +102,9 @@ struct ActionButtonModel: Identifiable, Equatable, Codable {
     }
 }
 
-/// Active orientation for the controls overlay. Each game keeps a
-/// layout per orientation, because fractional sizes do not survive
-/// a flip. A portrait 0.09 vertical gap is 79pt, but the
-/// same fraction in landscape collapses to 37pt and overlaps the
-/// 56pt button. So we keep two layouts instead.
+/// Each game keeps one layout for each orientation. Fractions do not
+/// survive a rotation: a portrait 0.09 vertical gap is 79pt, but on a
+/// wide screen it is 37pt and overlaps the 56pt button.
 enum ControlsOrientation: String, Codable {
     case portrait
     case landscape
@@ -120,13 +119,7 @@ private struct PersistedLayout: Codable {
         var rx: CGFloat
         var ry: CGFloat
         var size: CGFloat
-        /// Per-D-pad opacity in [0, 1].
         var opacity: Double?
-        /// Never optional in memory. The custom decoder maps a
-        /// missing key (legacy blobs) to `.dpad`, so a nil-vs-.dpad
-        /// mismatch can never make `hasTouchCustomization` true for
-        /// an untouched game. The type enforces what a comment
-        /// used to ask for.
         var style: MovementStyle
 
         init(
@@ -153,8 +146,8 @@ private struct PersistedLayout: Codable {
     struct Oriented: Codable, Equatable {
         var dpad: DPad
         var buttons: [ButtonModel]
-        /// Optional so legacy UserDefaults blobs (no such key) still
-        /// decode. nil and [] mean the same thing.
+        /// Legacy UserDefaults blobs do not have this key.
+        /// nil and [] mean the same thing.
         var actionButtons: [ActionButtonModel]?
 
         init(dpad: DPad, buttons: [ButtonModel], actionButtons: [ActionButtonModel]? = nil) {
@@ -167,18 +160,11 @@ private struct PersistedLayout: Codable {
     var landscape: Oriented
 }
 
-/// V1 (pre-orientation) on-disk shape. The decoder tries V2 first.
-/// If that fails, we fall through to V1 and migrate: we treat it as
-/// the portrait layout, and we seed landscape from defaults.
 private struct PersistedLayoutV1: Codable {
     var dpad: PersistedLayout.DPad
     var buttons: [ButtonModel]
 }
 
-/// The engine-preview hooks ControlsLayout needs while screen edits
-/// run. The player wires the applier in. Editor and viewer instances
-/// leave the slot nil, so every preview call no-ops there without a
-/// per-call mode check.
 @MainActor
 protocol ScreenEditSyncing {
     func endPreview()
@@ -194,75 +180,45 @@ class ControlsLayout {
         return layout
     }()
 
-    /// nil on editor and viewer instances. See `ScreenEditSyncing`.
     @ObservationIgnored var screenSync: ScreenEditSyncing?
 
-    /// Stable identifier of the game these controls are currently
-    /// bound to. `switchGame(id:container:)` updates this. Mutators
-    /// save to the matching per-game file. `nil` means no game is
-    /// active, so mutations stay in memory and never reach disk.
+    /// nil means that no game is active. Mutations then stay in memory.
     private(set) var currentGameID: String?
 
-    /// Container for the active game (EmpoState paths). `switchGame`
-    /// sets it together with `currentGameID`.
     private(set) var currentContainer: GameContainer?
 
-    /// Accepted developer manifest for the active game, if any.
     private(set) var activeManifest: ControlsManifest?
 
-    /// Loader source for `activeManifest` (kirin / joiplay / empo / root).
     private(set) var activeManifestSource: ControlsManifestLoader.ManifestLocation?
 
-    /// True when the active touch resolution derived one orientation
-    /// from the other (metrics-dependent, see `refreshForGameGeometryChange`).
     private(set) var resolutionInvolvesDerivation = false
 
-    /// Error findings from a rejected shipped `controls.json`, for edit-mode surfacing.
     private(set) var manifestRejectionErrorCount = 0
 
-    /// Error findings from a rejected pinned profile file.
     private(set) var profileRejectionErrorCount = 0
 
-    /// Which chain level currently drives the layout. Banners,
-    /// pickers, and the save target all key off this.
     private(set) var provenance: LayoutProvenance = .builtin
 
-    /// True when a pinned target was missing or invalid and the
-    /// resolution fell through to a lower level.
     private(set) var pinFellThrough = false
 
-    /// A migrated-then-changed per-game controls file waits for the
-    /// user's import decision.
     private(set) var importOfferPending = false
 
-    /// One-time notice: the game ships its own layout while a default
-    /// profile is set, so the default did not apply.
     private(set) var gameLayoutNoticePending = false
 
-    /// Display title of the bound game, for auto-created profile names.
     private(set) var currentGameTitle: String?
 
-    /// What the chain yields when no named pin applies, snapshotted at
-    /// resolution time. Gates auto-create: comparing against a live
-    /// recomputation could misread metrics drift as a user edit.
+    /// A snapshot from resolution time. A live recomputation can show
+    /// metrics drift as a user edit, so auto-create compares with this.
     private var ambientBaseline: PersistedLayout?
 
-    /// Which surface this instance serves. ONE stored value: the
-    /// viewer is its own case, not an implicit editor-with-no-name,
-    /// and a profile name cannot exist without the editor role.
     enum Role: Equatable {
-        /// The shared singleton: binds games, saves through the
-        /// chain.
         case player
-        /// The out-of-player editor: writes one named profile.
         case profileEditor(name: String)
-        /// Read-only builtin viewer: every write path is inert.
         case builtinViewer
     }
 
     private(set) var role: Role = .player
 
-    /// Any out-of-player instance (editor or viewer).
     var isEditorInstance: Bool { role != .player }
 
     var editorProfileName: String? {
@@ -270,11 +226,8 @@ class ControlsLayout {
         return nil
     }
 
-    /// Editor instances inject synthetic metrics. A nil override
-    /// uses the live screen state.
     var metricsOverride: TouchZoneMetrics?
 
-    /// True when the active game ships an accepted manifest with a `touch` section.
     var hasManifestTouchSection: Bool {
         activeManifest?.touch != nil
     }
@@ -293,9 +246,8 @@ class ControlsLayout {
         return "Reset"
     }
 
-    /// A method, not a property: building the message resolves the
-    /// post-reset screen chain (two file reads). Call it when the
-    /// confirm alert shows, not per render.
+    /// This reads two files. Call it when the confirm alert shows,
+    /// not on each render.
     func resetConfirmationMessage() -> LocalizedStringResource {
         if case .pinnedProfile(let name) = provenance {
             return screenChangesOnReset()
@@ -307,10 +259,6 @@ class ControlsLayout {
             : "This deletes your custom layout. You can't undo this."
     }
 
-    /// The reset clause must only promise "automatic placement" when
-    /// the reset delivers it: a region is active now, and
-    /// the post-reset chain (unpinned for pinned provenance, session
-    /// edits dropped) resolves to none.
     private func screenChangesOnReset() -> Bool {
         let isPortrait = currentOrientation == .portrait
         let current = effectiveScreenPlacement(
@@ -331,23 +279,12 @@ class ControlsLayout {
         return (isPortrait ? postReset.portrait : postReset.landscape).placement == nil
     }
 
-    /// Dedupes display-time separation log lines per layout + geometry signature.
     private var separationLogSignature: String?
 
-    /// Current device orientation as far as the layout is concerned.
-    /// PlayerView updates this via `setOrientation(_:)` when geometry
-    /// flips. An orientation change saves the current "active" values
-    /// into the matching snapshot before it loads the other.
     private(set) var currentOrientation: ControlsOrientation = .portrait
 
     // MARK: - Oriented control state
 
-    /// One orientation's complete control set. Views read and write
-    /// `active` through the forwarding properties below, and the
-    /// other orientation waits in `inactive`. Everything moves whole
-    /// values: `setOrientation(_:)` swaps, undo snapshots copy,
-    /// resets assign. A new field pays its cost here once, not at
-    /// twenty call sites.
     struct OrientedControls: Equatable {
         var dpadRelativeCenter: CGPoint
         var dpadSize: CGFloat = ControlsLayout.defaultDPadSize
@@ -358,12 +295,11 @@ class ControlsLayout {
     }
 
     private var active = OrientedControls(
-        dpadRelativeCenter: ControlsLayout.defaultDPadCenterPortrait, buttons: [])
+        dpadRelativeCenter: ControlsLayout.defaultDPadCenter(.portrait), buttons: [])
     private var inactive = OrientedControls(
-        dpadRelativeCenter: ControlsLayout.defaultDPadCenterLandscape,
-        buttons: ControlsLayout.defaultButtonsLandscape)
+        dpadRelativeCenter: ControlsLayout.defaultDPadCenter(.landscape),
+        buttons: ControlsLayout.defaultButtons(.landscape))
 
-    // Views read/write these directly. They forward to `active`.
     var dpadRelativeCenter: CGPoint {
         get { active.dpadRelativeCenter }
         set { active.dpadRelativeCenter = newValue }
@@ -392,8 +328,8 @@ class ControlsLayout {
         set { active.actionButtons = newValue }
     }
 
-    /// The add UI gates on the loader's cap, so a saved layout
-    /// can never fail V015 on its next load.
+    /// The add UI checks this against the loader's cap. Thus a saved
+    /// layout cannot fail V015 on its next load.
     var combinedButtonCount: Int { buttons.count + actionButtons.count }
 
     // MARK: - Edit-session undo (in-memory only, never persisted)
@@ -401,7 +337,6 @@ class ControlsLayout {
     private static let maxEditUndoDepth = 50
 
     private var editUndoStack: [OrientedControls] = []
-    /// The edit mode of the player and of the profile editor.
     private(set) var editSessionActive = false
 
     var canUndo: Bool { editSessionActive && !editUndoStack.isEmpty }
@@ -411,8 +346,6 @@ class ControlsLayout {
         observeProfileNotifications()
     }
 
-    /// Out-of-player profile editor instance. It never binds a game,
-    /// never runs `save()`, and writes only through `editorSave()`.
     init(editorForProfile name: String, metrics: TouchZoneMetrics) {
         role = .profileEditor(name: name)
         metricsOverride = metrics
@@ -421,9 +354,6 @@ class ControlsLayout {
         reloadEditorProfile()
     }
 
-    /// Read-only viewer for the built-in layout: an editor instance
-    /// with no backing profile, so every write path is inert. The
-    /// built-ins never change, so it observes nothing.
     init(viewerForBuiltins metrics: TouchZoneMetrics) {
         role = .builtinViewer
         metricsOverride = metrics
@@ -459,11 +389,9 @@ class ControlsLayout {
         }
     }
 
-    /// A save never re-resolves the saving instance: posts carry the
-    /// originator and self-originated posts are ignored.
     private func handleProfileChange(_ note: Notification) {
         guard note.object as AnyObject? !== self else { return }
-        guard let name = note.userInfo?["name"] as? String else { return }
+        guard let name = note.userInfo?[LayoutProfilesManager.profileNameKey] as? String else { return }
         if isEditorInstance {
             if editorProfileName == name, !editSessionActive {
                 reloadEditorProfile()
@@ -484,12 +412,11 @@ class ControlsLayout {
     private func handlePinChange(_ note: Notification) {
         guard note.object as AnyObject? !== self, !isEditorInstance else { return }
         guard !editSessionActive, let container = currentContainer else { return }
-        guard note.userInfo?["gameID"] as? String == currentGameID else { return }
+        guard note.userInfo?[LayoutProfilesManager.gameIDKey] as? String == currentGameID else { return }
         staggerGeneration += 1
         resolveChain(container: container)
     }
 
-    /// Fresh undo history for a new edit-controls session.
     func beginEditSession() {
         editUndoStack.removeAll()
         editSessionActive = true
@@ -497,22 +424,17 @@ class ControlsLayout {
 
     func endEditSession() {
         editSessionActive = false
-        // Player path: drop abandoned screen edits, and ALWAYS end
-        // the preview. save() commits before this, so a leftover
-        // means the session was torn down. A stuck preview would
-        // freeze the applier for the rest of the session, and a
-        // snapped-back drag previews without leaving an edit behind.
-        // Done can arrive MID-drag, because the toolbar stays
-        // tappable by design, and the gizmo unmounts with edit mode
-        // so its own recovery never runs. The profile editor saves
-        // AFTER ending its session, so its edits must survive here.
+        // Always end the preview. A stuck preview freezes the applier
+        // for the rest of the session. Done can arrive in the middle
+        // of a drag, and the gizmo unmounts with edit mode, so its own
+        // recovery does not run. The profile editor saves after it
+        // ends its session, so its edits must stay.
         if !isEditorInstance {
             screenEdits.removeAll()
             activeScreenDrag = nil
             screenSync?.endPreview()
         }
-        // Exit keeps the snapped values (Done while the toggle is
-        // on commits them), so only the restore record dies here.
+        // Done keeps the snapped values. Only the restore record goes.
         gridSnapOriginals = [:]
         gridSnapDPadOriginals = [:]
         gridSnapActive = false
@@ -520,71 +442,43 @@ class ControlsLayout {
 
     // MARK: - Grid snap state
 
-    /// One control's pre-snap size and center. The snap logic that
-    /// consumes this lives in ControlsLayout+GridSnap.swift; these
-    /// stored members back it from the main file (extensions cannot
-    /// add stored properties).
     struct GridSnapOriginal {
         var size: CGFloat
         var relativeCenter: CGPoint
     }
 
-    /// What applyGridSnap changed, keyed per control ID. The D-pad
-    /// has no UUID, so its originals key by orientation instead.
-    /// Non-empty ONLY while an edit session runs with the toggle on:
-    /// revertGridSnap empties it on untoggle, endEditSession empties
-    /// it on Done.
     var gridSnapOriginals: [UUID: GridSnapOriginal] = [:]
     var gridSnapDPadOriginals: [ControlsOrientation: GridSnapOriginal] = [:]
 
-    /// True between applyGridSnap and its revert/discard. An explicit
-    /// flag, NOT "the restore dicts are non-empty": mode and restore
-    /// bookkeeping are separate concerns, and inferring one from the
-    /// other breaks the moment a wholesale replacement (reset) clears
-    /// the record without leaving grid mode. The size mutators
-    /// consult this so a size picked from a sheet while the toggle is
-    /// on also lands on a multiple of the grid step.
+    /// A reset clears the restore record but stays in grid mode.
+    /// Thus this flag cannot come from an empty record.
     var gridSnapActive = false
 
     static func gridSnappedSize(_ value: CGFloat) -> CGFloat {
         (value / ControlsZone.editGridStep).rounded() * ControlsZone.editGridStep
     }
 
-    /// The D-pad's arms are exact thirds of its size (classic plus
-    /// proportions), so only sizes in steps of 30 put the inner
-    /// branch borders on the 10 pt lattice. Buttons stay on 10s.
+    /// The arms of the D-pad are thirds of its size, so only a size
+    /// in steps of 3 grid steps puts the inner arm borders on the grid.
     static func gridSnappedDPadSize(_ value: CGFloat) -> CGFloat {
-        (value / 30).rounded() * 30
+        let step = ControlsZone.editGridStep * 3
+        return (value / step).rounded() * step
     }
 
-    /// Restores one control's pre-snap values in whichever
-    /// orientation slot currently holds its ID (the user may have
-    /// rotated mid-session, moving IDs between the slots).
+    /// The user can rotate during the session. Thus the ID can be in
+    /// either orientation slot.
     func restoreGridSnapOriginal(_ id: UUID, _ original: GridSnapOriginal) {
-        // An ID can sit in either orientation slot, so both get the
-        // lookup. The active slot forwards through the properties;
-        // the inactive slot is written in place.
-        if let index = buttons.firstIndex(where: { $0.id == id }) {
-            buttons[index].size = original.size
-            buttons[index].relativeCenter = original.relativeCenter
+        func restore<Control: PlacedControl>(in controls: inout [Control]) {
+            guard let index = controls.firstIndex(where: { $0.id == id }) else { return }
+            controls[index].size = original.size
+            controls[index].relativeCenter = original.relativeCenter
         }
-        if let index = actionButtons.firstIndex(where: { $0.id == id }) {
-            actionButtons[index].size = original.size
-            actionButtons[index].relativeCenter = original.relativeCenter
-        }
-        if let index = inactive.buttons.firstIndex(where: { $0.id == id }) {
-            inactive.buttons[index].size = original.size
-            inactive.buttons[index].relativeCenter = original.relativeCenter
-        }
-        if let index = inactive.actionButtons.firstIndex(where: { $0.id == id }) {
-            inactive.actionButtons[index].size = original.size
-            inactive.actionButtons[index].relativeCenter = original.relativeCenter
-        }
+        restore(in: &buttons)
+        restore(in: &actionButtons)
+        restore(in: &inactive.buttons)
+        restore(in: &inactive.actionButtons)
     }
 
-    /// Puts back exactly what applyGridSnap recorded and empties the
-    /// record. Controls added or deleted while the snap was on keep
-    /// their current values; they have nothing to go back to.
     func revertGridSnap() {
         let buttonOriginals = gridSnapOriginals
         let dpadOriginals = gridSnapDPadOriginals
@@ -609,34 +503,21 @@ class ControlsLayout {
 
     // MARK: - Screen region editing
 
-    /// One screen edit for one orientation. The enum replaces a
-    /// `ScreenRegion??` whose `.some(nil)` case needed a comment at
-    /// every call site.
     enum ScreenEdit: Equatable {
         case set(ScreenPlacement)
         case resetToAuto
 
-        /// The placement a surface draws or a commit writes: nil IS
-        /// engine-auto.
         var placement: ScreenPlacement? {
             if case .set(let placement) = self { return placement }
             return nil
         }
     }
 
-    /// Pending screen edits for this edit session, keyed by
-    /// orientation. Absent key = untouched. Cleared when a save
-    /// commits them.
     private var screenEdits: [ControlsOrientation: ScreenEdit] = [:]
     var screenEditsDirty: Bool { !screenEdits.isEmpty }
 
-    /// The pending edit for the active orientation, or nil when the
-    /// orientation is untouched this session. The gizmo reads it to
-    /// draw the dragged region before any save.
     var pendingScreenEdit: ScreenEdit? { screenEdits[currentOrientation] }
 
-    /// This session's edit for `orientation`, or the caller's stored
-    /// fallback when the orientation is untouched.
     private func editedPlacement(
         _ orientation: ControlsOrientation, fallback: ScreenPlacement?
     ) -> ScreenPlacement? {
@@ -644,37 +525,20 @@ class ControlsLayout {
         return edit.placement
     }
 
-    /// The placement every surface should draw RIGHT NOW: the
-    /// in-flight drag, then this session's pending edit, then the
-    /// caller's stored fallback (the resolved chain in the player,
-    /// the profile file in the editor). The player and the settings
-    /// editor both go through here, so a drag follows live in both.
     func effectiveScreenPlacement(stored: ScreenPlacement?) -> ScreenPlacement? {
         if let live = activeScreenDrag?.liveRegion { return .region(live) }
         return editedPlacement(currentOrientation, fallback: stored)
     }
 
-    /// A screen-gizmo drag in flight. One value carries every
-    /// drag-scoped field, so ending a drag is a single nil
-    /// assignment. No path can clear one flag and forget another.
     private struct ActiveScreenDrag {
-        /// Auto-placement reference captured at drag start when the
-        /// orientation had no entry. Ending a drag within 1% of it
-        /// discards the edit (snap back to engine-auto). nil when an
-        /// entry already existed. Then the explicit reset is the
-        /// only path back.
+        /// nil when the orientation already had an entry. Then only
+        /// the explicit reset goes back to engine auto placement.
         var autoReference: ScreenRegion?
-        /// The region under the finger, so every surface (chips
-        /// copy, controls zone, editor placeholder) tracks the
-        /// outline live.
         var liveRegion: ScreenRegion?
     }
 
     private var activeScreenDrag: ActiveScreenDrag?
 
-    /// True while a screen-gizmo drag is in flight. The chrome
-    /// follows the region LIVE during the drag (user ruling
-    /// 2026-08-06). The edit toolbar fades on this flag instead.
     var screenDragActive: Bool { activeScreenDrag != nil }
 
     func beginScreenDrag(autoReference: ScreenRegion?) {
@@ -682,7 +546,6 @@ class ControlsLayout {
         activeScreenDrag = ActiveScreenDrag(autoReference: autoReference)
     }
 
-    /// Live update from the gizmo while the finger moves.
     func screenDragChanged(_ region: ScreenRegion) {
         activeScreenDrag?.liveRegion = region
     }
@@ -694,24 +557,19 @@ class ControlsLayout {
             abs(region.x - auto.x) < 0.01, abs(region.y - auto.y) < 0.01,
             abs(region.w - auto.w) < 0.01, abs(region.h - auto.h) < 0.01
         {
-            // The auto reference only exists when the orientation had
-            // no entry, so a snapped-back drag is NO change. A stored
-            // edit would count as dirty and mint a profile on Done.
+            // The orientation had no entry, so a snapped-back drag is
+            // no change. A stored edit would make Done create a profile.
             screenEdits.removeValue(forKey: currentOrientation)
             return
         }
         screenEdits[currentOrientation] = region.map { .set(.region($0)) } ?? .resetToAuto
     }
 
-    /// Records a screen edit for the active orientation without a
-    /// gesture (the overlay toggle, the editor's position row).
     func recordScreenEdit(_ placement: ScreenPlacement) {
         guard editSessionActive else { return }
         screenEdits[currentOrientation] = .set(placement)
     }
 
-    /// Abandon all drag and edit state without committing, and end
-    /// any engine preview. Every teardown path funnels through here.
     private func abandonScreenEdits() {
         guard !screenEdits.isEmpty || activeScreenDrag != nil else { return }
         screenEdits.removeAll()
@@ -719,10 +577,8 @@ class ControlsLayout {
         screenSync?.endPreview()
     }
 
-    /// "Reset screen": back to engine-auto for the active
-    /// orientation. Dirties the commit only when a stored entry
-    /// exists to delete. Resetting a drag that never saved is a
-    /// no-change and must not mint a profile on Done.
+    /// A reset of a drag that was never saved is no change. It must
+    /// not make Done create a profile.
     func resetScreenEdit() {
         guard editSessionActive else { return }
         activeScreenDrag = nil
@@ -741,20 +597,17 @@ class ControlsLayout {
         } else if targetName == nil,
             screenSync?.resolvedPlacement(isPortrait: currentOrientation == .portrait) != nil
         {
-            // The region resolves from the DEFAULT profile (ambient
-            // provenance): nothing to delete in place, so the reset
-            // must dirty the commit. Done then mints a terminal
-            // pinned profile without a screen entry, which IS
-            // engine-auto. A silent drop would snap the default's
-            // region back after Done.
+            // The region comes from the default profile, so there is
+            // nothing to delete in place. Done then creates a pinned
+            // profile with no screen entry, which is engine auto. If
+            // this edit is dropped, the region of the default comes
+            // back after Done.
             screenEdits[currentOrientation] = .resetToAuto
         } else {
             screenEdits.removeValue(forKey: currentOrientation)
         }
     }
 
-    /// Disk regions overlaid with this session's edits. What a
-    /// commit writes for the named profile.
     private func mergedScreenPlacements(
         profile name: String, store: LayoutProfileStore
     ) -> (portrait: ScreenPlacement?, landscape: ScreenPlacement?) {
@@ -769,8 +622,6 @@ class ControlsLayout {
         editUndoStack.removeAll()
     }
 
-    /// Push the active orientation's layout before a user-initiated
-    /// edit. No-op outside an edit session.
     func recordEditSnapshot() {
         guard editSessionActive else { return }
         editUndoStack.append(active)
@@ -787,10 +638,6 @@ class ControlsLayout {
         }
     }
 
-    /// Bind the layout instance to a specific game's stored layout.
-    /// `AppState.selectGame(_:)` calls this when a game starts.
-    /// `returnToLibrary()` calls it again with `nil` when the user
-    /// exits.
     func switchGame(id newGameID: String?, container: GameContainer?, title: String? = nil) {
         if currentGameID != nil {
             save()
@@ -826,17 +673,11 @@ class ControlsLayout {
         applyDefaultsForCurrentOrientation()
     }
 
-    /// Switch the active orientation: snapshot the active values
-    /// into their slot, then load the other slot back. Does nothing
-    /// if `new == currentOrientation`. PlayerView's
-    /// `.onChange(of: isPortrait)` calls this, so the layout follows
-    /// device rotation live.
     func setOrientation(_ new: ControlsOrientation) {
         guard new != currentOrientation else { return }
 
-        // Abort an in-flight screen drag: its rect lives in the OLD
-        // orientation's canvas space and must not commit under the
-        // new orientation.
+        // The drag rect uses the canvas of the old orientation. It
+        // must not commit in the new orientation.
         if activeScreenDrag != nil {
             activeScreenDrag = nil
             screenSync?.endPreview()
@@ -849,11 +690,8 @@ class ControlsLayout {
         currentOrientation = new
     }
 
-    /// Re-resolve the chain when `gameRect` updates. Only translated
-    /// or derived game-shipped layouts are metrics-dependent.
-    /// Materialized profiles and the builtin are not, so other
-    /// provenances skip the churn (auto-create compares against the
-    /// baseline SNAPSHOT, so drift cannot mint a profile either way).
+    /// Only game-shipped layouts depend on the metrics. Profiles and
+    /// the builtin layout do not.
     func refreshForGameGeometryChange() {
         guard let container = currentContainer, !isEditorInstance else { return }
         guard !editSessionActive else { return }
@@ -903,91 +741,60 @@ class ControlsLayout {
     }
 
     // MARK: - Defaults
-    //
-    // Default constants are `nonisolated` so legacy migration paths can
-    // read them without a hop to the main actor. They hold value types,
-    // and only `switchGame` writes the core flag the button sets read,
-    // so any thread can read them safely.
 
-    nonisolated static let defaultDPadCenterPortrait = CGPoint(x: 0.13, y: 0.72)
-    nonisolated static let defaultDPadCenterLandscape = CGPoint(x: 0.10, y: 0.65)
-    nonisolated static let defaultDPadSize: CGFloat = 140
+    nonisolated static let defaultDPadSize = CGFloat(ControlLimits.defaultDPadSize)
 
-    /// Legacy alias. Some imports / migration paths still reference
-    /// `defaultDPadCenter` (singular). Keep it pointed at the
-    /// portrait default so callers without orientation context get
-    /// the more common case.
-    nonisolated static let defaultDPadCenter = defaultDPadCenterPortrait
+    nonisolated static func defaultDPadCenter(_ orientation: ControlsOrientation) -> CGPoint {
+        let dpad = BuiltinLayout.dpad(isLandscape: orientation == .landscape)
+        return CGPoint(x: dpad.x, y: dpad.y)
+    }
 
-    /// The keys of the core that runs the active game. `switchGame` sets
-    /// them before the layout resolves, and the builtin button sets read
-    /// them.
+    /// `switchGame` sets these before the layout resolves.
     nonisolated(unsafe) private static var activeKeys = GameKey.standard
 
-    /// 2x2 button grid in the bottom-right of a portrait viewport.
-    nonisolated static var defaultButtonsPortrait: [ButtonModel] {
-        buttons(at: [
-            CGPoint(x: 0.70, y: 0.67), CGPoint(x: 0.88, y: 0.67),
-            CGPoint(x: 0.70, y: 0.76), CGPoint(x: 0.88, y: 0.76),
-        ])
-    }
-
-    /// 2x2 button grid in the bottom-right of a landscape viewport.
-    /// Landscape holds a shorter screen and a wider one, so the grid
-    /// sits higher and further apart without covering the middle of
-    /// the game viewport.
-    nonisolated static var defaultButtonsLandscape: [ButtonModel] {
-        buttons(at: [
-            CGPoint(x: 0.80, y: 0.59), CGPoint(x: 0.88, y: 0.59),
-            CGPoint(x: 0.80, y: 0.75), CGPoint(x: 0.88, y: 0.75),
-        ])
-    }
-
-    private nonisolated static func buttons(at centers: [CGPoint]) -> [ButtonModel] {
-        zip(activeKeys, centers).map {
-            ButtonModel(label: $0.label, scancode: $0.scancode, relativeCenter: $1, size: 56)
+    nonisolated static func defaultButtons(_ orientation: ControlsOrientation) -> [ButtonModel] {
+        let centers = BuiltinLayout.buttonCenters(isLandscape: orientation == .landscape)
+        return zip(activeKeys, centers).map { key, center in
+            ButtonModel(
+                label: key.label, scancode: key.scancode,
+                relativeCenter: CGPoint(x: center.x, y: center.y),
+                size: CGFloat(ControlLimits.defaultButtonSize))
         }
     }
 
-    /// Legacy alias for callers that grab "the" defaults without
-    /// orientation. Returns the portrait set.
-    nonisolated static var defaultButtons: [ButtonModel] { defaultButtonsPortrait }
+    nonisolated static var builtinKeys: [BuiltinLayout.Key] {
+        activeKeys.map { BuiltinLayout.Key(label: $0.label, code: KeyCodeTable.code(for: $0.scancode)) }
+    }
 
     // MARK: - Reset
 
-    /// Reset per provenance. Pinned: the game UNPINS, the profile
-    /// keeps its contents, so a reset can never rewrite every game
-    /// sharing it, and the layout animates to the ambient chain
-    /// result. Ambient: an in-memory reset to the ambient baseline,
-    /// with no disk side effect.
+    /// A pinned game unpins, and the profile keeps its contents. Thus
+    /// a reset cannot change the other games that use the profile.
     func resetToResolvedDefault() {
         guard !isEditorInstance else { return }
         recordEditSnapshot()
 
-        // Screen edits from this session drop with the reset. The
-        // unpin below re-resolves the screen through the applier's
-        // pin-change observer. Ambient resets re-apply from disk.
+        // The unpin below re-resolves the screen through the
+        // pin-change observer of the applier.
         abandonScreenEdits()
 
-        // A wholesale replacement invalidates the grid-snap restore
-        // record: reverting afterwards would resurrect pre-snap
-        // values over the reset. Same reasoning as the
-        // staggerGeneration bump.
+        // A revert after the reset would put the pre-snap values back
+        // over the reset.
         gridSnapOriginals = [:]
         gridSnapDPadOriginals = [:]
         gridSnapActive = false
 
         if case .pinnedProfile = provenance, let container = currentContainer {
-            LayoutProfilesManager.store.writePin(.followChain, forGameFolder: container.url)
-            if let gameID = currentGameID {
-                LayoutProfilesManager.postPinChange(gameID: gameID, from: self)
+            do {
+                try LayoutProfilesManager.writePin(.followChain, for: container, from: self)
+            } catch {
+                NSLog("layout pin: unpin failed for \(container.id): \(error)")
             }
             pinFellThrough = false
             profileRejectionErrorCount = 0
             provenance = ambientProvenance()
-            // Undo restores the layout but not the pin, and the next
-            // commit would mint a fork instead. A confirm-gated reset
-            // is a clean break: no undo across it.
+            // Undo restores the layout but not the pin, so the next
+            // commit would create a fork. Thus undo stops at this reset.
             clearEditUndoStack()
         }
 
@@ -1017,23 +824,12 @@ class ControlsLayout {
         )
     }
 
-    /// Factory state for BOTH orientations (reset = factory state
-    /// for this game).
-    func resetToDefaults() {
-        applyDefaultsForCurrentOrientation()
-    }
-
-    /// The struct defaults carry size, opacity, style, and action
-    /// buttons. Only the per-orientation d-pad center and button
-    /// set differ.
     private static func defaultControls(
         for orientation: ControlsOrientation
     ) -> OrientedControls {
         OrientedControls(
-            dpadRelativeCenter: orientation == .portrait
-                ? defaultDPadCenterPortrait : defaultDPadCenterLandscape,
-            buttons: orientation == .portrait
-                ? defaultButtonsPortrait : defaultButtonsLandscape)
+            dpadRelativeCenter: defaultDPadCenter(orientation),
+            buttons: defaultButtons(orientation))
     }
 
     private static func orientedControls(
@@ -1086,8 +882,6 @@ class ControlsLayout {
             }
         }
 
-        // Action buttons match by action id (they have no label or
-        // scancode).
         var matchedActionIDs = Set<UUID>()
         var matchedActionTargets = Set<Int>()
         var actionMoves: [(id: UUID, center: CGPoint, size: CGFloat)] = []
@@ -1170,29 +964,17 @@ class ControlsLayout {
 
     // MARK: - Edit-drag collision
 
-    /// Edit-chrome frames (banner pill, action row) in window
-    /// space, measured by PlayerEditToolbar. They join the drag
-    /// collision as rectangular walls, so a control cannot park
-    /// underneath the header. Never persisted.
+    /// In window space.
     var editChromeFrames: [CGRect] = []
 
-    /// The play toolbar's column in a sensor strip, in window space:
-    /// `ControlsZone.toolbarKeepout`. Controls never render or drop
-    /// there. Pushed by PlayerView. Never persisted.
+    /// In window space.
     var toolbarKeepout: CGRect = .null
 
-    /// The canvas geometry an edit surface last rendered with, so
-    /// the ADD flow can run a fresh control through the same
-    /// clamp + collision + chrome-wall solve a drag gets. Pushed by
-    /// PlayerControlsOverlay. Never persisted. The EditGeometry type
-    /// and its consumers live in ControlsLayout+GridSnap.swift.
     var editGeometry: EditGeometry?
 
-    /// The zone height the screen drag blocks at: the tallest
-    /// control plus the clamp-band insets (fit-then-block, user
-    /// ruling 2026-08-06). The band insets by padding PLUS
-    /// innerPadding on each side. Using the zone padding alone
-    /// left the d-pad 12 pt short and it overflowed the border.
+    /// The clamp band insets by padding plus innerPadding on each
+    /// side. With the padding alone, the d-pad was 12 pt short and
+    /// overflowed the border.
     var requiredEditZoneHeight: CGFloat {
         let tallestButton =
             (buttons.map(\.size) + actionButtons.map(\.size)).max() ?? 0
@@ -1201,11 +983,6 @@ class ControlsLayout {
             + ControlsZone.toolbarGap
     }
 
-    /// Where the screen gizmo may drag, in canvas points. ONE policy
-    /// for the player and the profile editor: the safe-area insets
-    /// the applier's clamp uses (portrait all, landscape left/right
-    /// only), minus the fit-then-block limit unless the profile
-    /// opted into overlay mode.
     func screenDragAllowedRect(
         isPortrait: Bool, overlayOn: Bool, canvasSize: CGSize, safeArea: EdgeInsets
     ) -> CGRect {
@@ -1223,11 +1000,9 @@ class ControlsLayout {
             height: maxBottom - top)
     }
 
-    /// The overlay toggle's region math, beside the record call it
-    /// feeds. Flips the flag. When overlay turns OFF while the
-    /// region sits deep, the region shifts up and then shrinks back
-    /// above the fit limit, or the zone reappears with no space and
-    /// the controls stack at the bottom.
+    /// When overlay turns off, a deep region must move above the fit
+    /// limit. If not, the zone has no space and the controls stack at
+    /// the bottom.
     func overlayToggledRegion(
         from region: ScreenRegion, isPortrait: Bool, canvasSize: CGSize,
         safeArea: EdgeInsets
@@ -1247,9 +1022,6 @@ class ControlsLayout {
         return toggled
     }
 
-    /// Non-dragged controls as solver obstacles, clamped through the
-    /// same transform the renderer uses. The solve itself lives in
-    /// GameProbe (`EditDragSolver`), where it has unit tests.
     private func dragObstacles(
         draggedID: UUID?, draggedIsDPad: Bool, geoSize: CGSize,
         safeArea: EdgeInsets, controlsMinY: CGFloat
@@ -1285,10 +1057,8 @@ class ControlsLayout {
         }
     }
 
-    /// True when a center intersects any non-dragged control. The
-    /// drag pipeline REJECTS updates that still collide after the
-    /// solve: a wall never admits the dragged control, no matter how
-    /// the clamp and the push-out fight at the zone edges.
+    /// The clamp and the push-out can fight at the zone edges. Thus
+    /// the drag rejects an update that still collides after the solve.
     func dragPositionCollides(
         _ center: CGPoint, draggedID: UUID?, draggedIsDPad: Bool,
         controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
@@ -1303,9 +1073,7 @@ class ControlsLayout {
             walls: chromeWalls)
     }
 
-    /// Rigid collision for edit drags: neighbors are walls and the
-    /// drag slides along their rims. `previous` is the drag's side
-    /// memory.
+    /// `previous` is the side memory of the drag.
     func collisionResolvedCenter(
         _ desired: CGPoint, previous: CGPoint?, draggedID: UUID?, draggedIsDPad: Bool,
         controlSize: CGFloat, geoSize: CGSize, safeArea: EdgeInsets,
@@ -1325,14 +1093,10 @@ class ControlsLayout {
 
     // MARK: - Display-time button separation
 
-    /// The one place button centers resolve to display resolution,
-    /// for manifest, translated, user, and builtin layouts alike.
-    /// Centers pass through the renderer's own transform
-    /// (`ControlsZone.absolutePosition`) before `ButtonSeparation`,
-    /// because separating earlier misses overlaps the clamp brings
-    /// back. Adjusted positions are never persisted.
-    /// `separate: false` skips the overlap pass, so edit mode renders
-    /// raw and a drag does not shove its neighbors around live.
+    /// Separation runs after the clamp transform. A separation before
+    /// it misses the overlaps that the clamp brings back. With
+    /// `separate: false`, edit mode renders raw, so a drag does not
+    /// push its neighbors.
     func separatedDisplayPositions(
         for geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat,
         separate: Bool = true,
@@ -1345,9 +1109,6 @@ class ControlsLayout {
             geoSize.height > 0
         else { return [:] }
 
-        // Both button collections feed one separation pass. Input
-        // order is buttons, then action buttons. The id mapping at
-        // the end follows the same order.
         let allCircles: [(id: UUID, center: CGPoint, size: CGFloat)] =
             buttons.map { ($0.id, $0.relativeCenter, $0.size) }
             + visibleActionButtons.map { ($0.id, $0.relativeCenter, $0.size) }
@@ -1376,10 +1137,9 @@ class ControlsLayout {
             safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
         )
 
-        // Separation must stay inside the clamp BAND, not the full
-        // window. Pushed against the window box, a crushed zone
-        // squeezed controls straight past its borders. Translate
-        // into band space, separate, translate back.
+        // Separate inside the clamp band, not the full window. Against
+        // the window box, a crushed zone pushed controls past its
+        // borders.
         let pad = ControlsZone.padding + ControlsZone.innerPadding
         let bandMinX = Double(safeArea.leading + pad)
         let bandMinY = Double(max(safeArea.top + pad, controlsMinY + pad))
@@ -1431,9 +1191,9 @@ class ControlsLayout {
         }
 
         var centers: [UUID: CGPoint] = [:]
-        // A collapsed band (deep controlsMinY from a cross-device
-        // or editor-authored region) must not strand controls below
-        // the safe bottom: floor every center against the window.
+        // A region from another device or from the editor can give a
+        // deep controlsMinY and collapse the band. Keep each center
+        // above the safe bottom.
         let maxBottom = Double(geoSize.height - safeArea.bottom) - Double(pad)
         for (index, circle) in allCircles.enumerated() {
             let point = result.positions[index]
@@ -1447,18 +1207,14 @@ class ControlsLayout {
 
     // MARK: - Persistence
 
-    /// Persist edits per provenance. A pinned profile takes the
-    /// write-back, ambient sources are derive-only, and the first
-    /// committed change mints a profile, pins the game, and updates
-    /// provenance in place. The per-game `EmpoState/controls.json`
-    /// is never touched: its dead touch section stays byte-identical
-    /// (copy, not move), and `BindingStore` holds controller state.
+    /// Never write the per-game `EmpoState/controls.json`. Its dead
+    /// touch section must stay byte-identical (copy, not move).
     func save() {
         if isEditorInstance {
             editorSave()
             return
         }
-        guard let container = currentContainer, let gameID = currentGameID else { return }
+        guard let container = currentContainer, currentGameID != nil else { return }
         let store = LayoutProfilesManager.store
 
         switch provenance {
@@ -1471,19 +1227,25 @@ class ControlsLayout {
                         user: existing, manifest: nil,
                         builtins: LayoutProfilesManager.builtins(), metrics: layoutMetrics()))
             }
-            if controlsOnDisk != ProfileMaterializer.canonicalBytes(section) {
-                store.writeProfile(name, touch: section)
-                changed = true
+            if controlsOnDisk != ControlsManifestSerializer.serialize(section) {
+                do {
+                    try store.writeProfile(name, touch: section)
+                    changed = true
+                } catch {
+                    NSLog("layout profile: save of \(name) failed: \(error)")
+                }
             }
-            // Per-file skip: the screen write runs only when the
-            // merged regions differ from disk.
             if screenEditsDirty {
                 let merged = mergedScreenPlacements(profile: name, store: store)
                 let disk = store.readScreen(name)
                 if merged.portrait != disk?.portrait || merged.landscape != disk?.landscape {
-                    store.writeScreen(
-                        name, portrait: merged.portrait, landscape: merged.landscape)
-                    changed = true
+                    do {
+                        try store.writeScreen(
+                            name, portrait: merged.portrait, landscape: merged.landscape)
+                        changed = true
+                    } catch {
+                        NSLog("layout profile: screen save of \(name) failed: \(error)")
+                    }
                 }
                 screenEdits.removeAll()
                 screenSync?.endPreview()
@@ -1493,26 +1255,27 @@ class ControlsLayout {
             }
 
         case .gameLayout, .defaultProfile, .builtin:
-            // Auto-create fires only from edit-session commits, so a
-            // crash-teardown save can never mint a profile.
+            // Only an edit-session commit can create a profile. A save
+            // at crash teardown must not create one.
             guard editSessionActive else { return }
             guard let baseline = ambientBaseline else { return }
             let current = currentPersistedLayout()
             let layoutsChanged =
                 !Self.layoutsEquivalent(current.portrait, baseline.portrait)
                 || !Self.layoutsEquivalent(current.landscape, baseline.landscape)
-            // A screen drag is a committed change too: it must mint
-            // the profile even when no control moved.
             guard layoutsChanged || screenEditsDirty else { return }
             let base = currentGameTitle ?? container.url.lastPathComponent
             let name = store.uniqueName(base: base)
-            guard store.createProfile(name, touch: materializedTouchSection()) else { return }
-            // Screen entries for the minted profile: this session's
-            // edits (drags AND resets) win per orientation, and
-            // UNTOUCHED orientations inherit the currently resolved
-            // region. The new pin is terminal. Without the copy, a
-            // controls-only edit under a default-profile region
-            // would silently snap the screen to automatic.
+            do {
+                try store.createProfile(name, touch: materializedTouchSection())
+            } catch {
+                NSLog("layout profile: create of \(name) failed: \(error)")
+                return
+            }
+            // An orientation with no edit gets the resolved region.
+            // The new pin is terminal. Without this copy, an edit of
+            // only the controls under a default-profile region sets
+            // the screen to automatic.
             let resolvedScreen = ScreenResolution.resolve(
                 pin: store.loadPin(forGameFolder: container.url).pin,
                 defaultProfileName: LayoutProfilesManager.defaultProfileName,
@@ -1522,21 +1285,29 @@ class ControlsLayout {
             let landscape = editedPlacement(
                 .landscape, fallback: resolvedScreen.landscape.placement)
             if portrait != nil || landscape != nil {
-                store.writeScreen(name, portrait: portrait, landscape: landscape)
+                do {
+                    try store.writeScreen(name, portrait: portrait, landscape: landscape)
+                } catch {
+                    NSLog("layout profile: screen save of \(name) failed: \(error)")
+                }
             }
             screenEdits.removeAll()
-            store.writePin(.profile(name), forGameFolder: container.url)
+            do {
+                try LayoutProfilesManager.writePin(.profile(name), for: container, from: self)
+            } catch {
+                // This session still saves to the new profile, so no
+                // edit is lost. The next launch uses the old layout.
+                NSLog("layout pin: pin to \(name) failed for \(container.id): \(error)")
+            }
             provenance = .pinnedProfile(name)
             pinFellThrough = false
-            LayoutProfilesManager.postPinChange(gameID: gameID, from: self)
             LayoutProfilesManager.postProfileChange(name: name, from: self)
             screenSync?.endPreview()
         }
     }
 
-    /// The full, both-orientation form profiles store. Never sparse:
-    /// a sparse section would resolve against whatever game the
-    /// profile is pinned to next.
+    /// Never sparse. A sparse section resolves against the next game
+    /// that pins the profile.
     func materializedTouchSection() -> TouchSection {
         let layout = currentPersistedLayout()
         return TouchSection(
@@ -1545,17 +1316,18 @@ class ControlsLayout {
         )
     }
 
-    /// Editor instances write straight to the profile file. Screen
-    /// edits merge into the existing entries. Opening and closing
-    /// the editor never mints a `screen.json`.
     func editorSave() {
         guard let name = editorProfileName else { return }
         let store = LayoutProfilesManager.store
-        store.writeProfile(name, touch: materializedTouchSection())
-        if screenEditsDirty {
-            let merged = mergedScreenPlacements(profile: name, store: store)
-            store.writeScreen(name, portrait: merged.portrait, landscape: merged.landscape)
-            screenEdits.removeAll()
+        do {
+            try store.writeProfile(name, touch: materializedTouchSection())
+            if screenEditsDirty {
+                let merged = mergedScreenPlacements(profile: name, store: store)
+                try store.writeScreen(name, portrait: merged.portrait, landscape: merged.landscape)
+                screenEdits.removeAll()
+            }
+        } catch {
+            NSLog("layout profile: editor save of \(name) failed: \(error)")
         }
         LayoutProfilesManager.postProfileChange(name: name, from: self)
     }
@@ -1567,27 +1339,13 @@ class ControlsLayout {
         applyProfileSection(touch)
     }
 
-    /// The editor renamed its profile (the store rename already ran).
+    /// Call this after the store rename.
     func editorRenamed(to name: String) {
         guard case .profileEditor = role else { return }
         role = .profileEditor(name: name)
     }
 
     // MARK: - Chain resolution
-
-    /// Occupancy for the chain, from the ALREADY-LOADED manifest
-    /// (never a second disk load) and the profile files.
-    private func chainLevels(
-        pinnedProfile: (name: String, valid: Bool)?
-    ) -> LayoutChainResolver.Levels {
-        let store = LayoutProfilesManager.store
-        return LayoutChainResolver.Levels(
-            pinnedProfile: pinnedProfile,
-            gameLayoutOccupied: activeManifest?.touch != nil,
-            defaultProfile: LayoutProfilesManager.defaultProfileName.map {
-                ($0, store.validTouch($0) != nil)
-            })
-    }
 
     private func resolveChain(container: GameContainer) {
         let store = LayoutProfilesManager.store
@@ -1597,18 +1355,22 @@ class ControlsLayout {
         }
 
         var pinnedRead: LayoutProfileStore.ProfileRead?
-        var pinnedProfile: (name: String, valid: Bool)?
         if case .profile(let name) = loaded.pin {
             pinnedRead = store.readProfile(name)
-            pinnedProfile = (name, pinnedRead?.touch != nil)
+            if let pinnedRead {
+                store.logProblems(name, read: pinnedRead)
+            }
         }
 
-        let outcome = LayoutChainResolver.resolve(
-            pin: loaded.pin, levels: chainLevels(pinnedProfile: pinnedProfile))
+        let outcome = LayoutResolution.resolve(
+            pin: loaded.pin,
+            gameLayoutOccupied: activeManifest?.touch != nil,
+            store: store,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName)
 
         pinFellThrough = outcome.fellThrough
         profileRejectionErrorCount =
-            pinnedRead?.invalid == true ? (pinnedRead?.errorCount ?? 1) : 0
+            pinnedRead.map { $0.touch == nil ? max($0.errors.count, 1) : 0 } ?? 0
 
         provenance = outcome.provenance
         gameLayoutNoticePending = false
@@ -1618,8 +1380,6 @@ class ControlsLayout {
                 applyProfileSection(touch)
             }
         case .gameLayout:
-            // One-time heads-up that the game layout displaced the
-            // user's default profile (record section 8 wording).
             gameLayoutNoticePending =
                 loaded.pin == .followChain
                 && LayoutProfilesManager.defaultProfileName != nil
@@ -1637,9 +1397,8 @@ class ControlsLayout {
         ambientBaseline = ambientResolved()
     }
 
-    /// Profile gaps complete against the builtin only (never a game
-    /// manifest, that would leak per-game values into a portable
-    /// profile).
+    /// Profile gaps complete against the builtin only. A game manifest
+    /// would put values of one game into a portable profile.
     private func applyProfileSection(_ touch: TouchSection) {
         let metrics = layoutMetrics()
         let materialized = ProfileMaterializer.materialize(
@@ -1656,16 +1415,15 @@ class ControlsLayout {
                     manifest: nil, metrics: metrics)))
     }
 
-    /// The chain with no named pin. The SAME resolver as
-    /// `resolveChain`, so the ambient tail cannot drift from it.
     private func ambientProvenance() -> LayoutProvenance {
-        LayoutChainResolver.resolve(
-            pin: .followChain, levels: chainLevels(pinnedProfile: nil)
+        LayoutResolution.resolve(
+            pin: .followChain,
+            gameLayoutOccupied: activeManifest?.touch != nil,
+            store: LayoutProfilesManager.store,
+            defaultProfileName: LayoutProfilesManager.defaultProfileName
         ).provenance
     }
 
-    /// What the chain yields with no named pin: the auto-create
-    /// baseline.
     private func ambientResolved() -> PersistedLayout {
         let metrics = layoutMetrics()
         if activeManifest?.touch != nil {
@@ -1692,10 +1450,8 @@ class ControlsLayout {
             )
         }
         return PersistedLayout(
-            portrait: Self.builtinOriented(
-                dpadCenter: Self.defaultDPadCenterPortrait, buttons: Self.defaultButtonsPortrait),
-            landscape: Self.builtinOriented(
-                dpadCenter: Self.defaultDPadCenterLandscape, buttons: Self.defaultButtonsLandscape)
+            portrait: Self.builtinOriented(.portrait),
+            landscape: Self.builtinOriented(.landscape)
         )
     }
 
@@ -1708,17 +1464,16 @@ class ControlsLayout {
     private func runProfileMigration(container: GameContainer) {
         let store = LayoutProfilesManager.store
         let recordURL = Self.migrationRecordURL
-        var record = MigrationRecord.load(at: recordURL)
+        // An unreadable record must not read as empty, or every game
+        // migrates again.
+        guard var record = MigrationRecord.load(at: recordURL) else {
+            NSLog("layout migration: \(recordURL.lastPathComponent) is unreadable, migration skipped")
+            return
+        }
         let builtins = LayoutProfilesManager.builtins()
 
-        // An invalid per-game file yields no touch section here and
-        // stays on disk untouched, but its findings still reach the
-        // game's log, like the old per-game load path.
-        let userLoad = UserControlsFile.load(in: container)
-        if let findings = userLoad?.findings, !findings.isEmpty {
-            UserControlsFile.logFindings(findings, container: container)
-        }
-        let userTouch = userLoad?.manifest?.touch
+        // An invalid per-game file stays on disk as it is.
+        let userTouch = UserControlsFile.loadAndLog(in: container)?.manifest?.touch
         let pinExists = FileManager.default.fileExists(
             atPath: store.pinURL(forGameFolder: container.url).path)
 
@@ -1732,7 +1487,7 @@ class ControlsLayout {
                 record: record,
                 existingProfiles: store.listProfiles(),
                 profileCanonicalBytes: { name in
-                    guard let touch = store.readProfile(name)?.touch else { return nil }
+                    guard let touch = store.validTouch(name) else { return nil }
                     return ProfileMaterializer.canonicalBytes(
                         ProfileMaterializer.materialize(
                             user: touch, manifest: nil, builtins: builtins,
@@ -1742,7 +1497,8 @@ class ControlsLayout {
                     FileManager.default.fileExists(atPath: store.screenURL(name).path)
                 }
             ),
-            builtins: builtins
+            builtins: builtins,
+            metrics: .reference
         )
 
         switch action {
@@ -1766,16 +1522,31 @@ class ControlsLayout {
                     base: String(
                         localized: "Shared layout",
                         comment: "Name of a layout profile that Empo makes when several games share edits."))
-                if LayoutProfilesManager.renameProfile(from: profile, to: shared) {
+                do {
+                    try LayoutProfilesManager.renameProfile(from: profile, to: shared)
                     target = shared
                     record.renameProfile(from: profile, to: shared)
                     record.sharedProfiles.insert(shared)
+                } catch {
+                    NSLog("layout migration: rename of \(profile) failed: \(error)")
                 }
             }
-            store.writePin(.profile(target), forGameFolder: container.url)
-            record.games[container.id] = MigrationRecord.Entry(hash: hash, profile: target)
+            do {
+                try store.writePin(.profile(target), forGameFolder: container.url)
+                record.games[container.id] = MigrationRecord.Entry(hash: hash, profile: target)
+            } catch {
+                NSLog("layout migration: pin to \(target) failed for \(container.id): \(error)")
+            }
         }
-        record.save(to: recordURL)
+        Self.saveMigrationRecord(record, to: recordURL)
+    }
+
+    private static func saveMigrationRecord(_ record: MigrationRecord, to url: URL) {
+        do {
+            try record.save(to: url)
+        } catch {
+            NSLog("layout migration: save of \(url.lastPathComponent) failed: \(error)")
+        }
     }
 
     private static var migrationRecordURL: URL {
@@ -1783,9 +1554,6 @@ class ControlsLayout {
             .appendingPathComponent(MigrationRecord.fileName)
     }
 
-    /// The `.createAndPin` arm: materialize, create, pin, record.
-    /// Shared with the import-accept path so the two cannot drift.
-    /// nil `hash` records the materialized bytes' own hash.
     private func createAndPinProfile(
         userTouch: TouchSection?, baseName: String, hash: String?,
         container: GameContainer, record: inout MigrationRecord
@@ -1795,34 +1563,39 @@ class ControlsLayout {
             user: userTouch, manifest: activeManifest?.touch,
             builtins: LayoutProfilesManager.builtins(), metrics: .reference)
         let name = store.uniqueName(base: baseName)
-        guard store.createProfile(name, touch: materialized.section) else { return false }
-        store.writePin(.profile(name), forGameFolder: container.url)
+        do {
+            try store.createProfile(name, touch: materialized.section)
+            try store.writePin(.profile(name), forGameFolder: container.url)
+        } catch {
+            NSLog("layout migration: profile \(name) for \(container.id) failed: \(error)")
+            return false
+        }
         record.games[container.id] = MigrationRecord.Entry(
             hash: hash ?? FNV1a.hash64(ProfileMaterializer.canonicalBytes(materialized)),
             profile: name)
         return true
     }
 
-    /// The user accepted the import offer: the changed per-game file
-    /// becomes a pinned profile.
     func acceptImportOffer() {
         guard let container = currentContainer, importOfferPending else { return }
         importOfferPending = false
-        let importLoad = UserControlsFile.load(in: container)
-        if let findings = importLoad?.findings, !findings.isEmpty {
-            UserControlsFile.logFindings(findings, container: container)
-        }
-        guard let userTouch = importLoad?.manifest?.touch else { return }
+        guard let userTouch = UserControlsFile.loadAndLog(in: container)?.manifest?.touch
+        else { return }
 
         let recordURL = Self.migrationRecordURL
-        var record = MigrationRecord.load(at: recordURL)
+        let loadedRecord = MigrationRecord.load(at: recordURL)
+        var record = loadedRecord ?? MigrationRecord()
         guard
             createAndPinProfile(
                 userTouch: userTouch,
                 baseName: currentGameTitle ?? container.url.lastPathComponent,
                 hash: nil, container: container, record: &record)
         else { return }
-        record.save(to: recordURL)
+        if loadedRecord != nil {
+            Self.saveMigrationRecord(record, to: recordURL)
+        } else {
+            NSLog("layout migration: \(recordURL.lastPathComponent) is unreadable, left as it is")
+        }
 
         resolveChain(container: container)
     }
@@ -1870,9 +1643,9 @@ class ControlsLayout {
         }
     }
 
-    /// Equality that ignores `ButtonModel.id`. resolveInitialLayout mints
-    /// fresh UUIDs per call, so synthesized == would treat every
-    /// manifest-derived layout as customized.
+    /// Ignores `ButtonModel.id`. resolveInitialLayout makes new UUIDs
+    /// on each call, so the synthesized == shows each manifest layout
+    /// as customized.
     private static func layoutsEquivalent(
         _ a: PersistedLayout.Oriented,
         _ b: PersistedLayout.Oriented
@@ -1916,9 +1689,9 @@ class ControlsLayout {
                 opacity: button.opacity
             )
         }
-        // Always non-nil: an omitted key means "inherit the shipped
-        // action buttons" at load, so a user who deleted them all
-        // must save an explicit [].
+        // Always non-nil. At load, an omitted key means "inherit the
+        // shipped action buttons". A user who deleted them all must
+        // save an explicit [].
         let actionButtons = (oriented.actionButtons ?? []).map { button in
             ActionButtonSpec(
                 action: button.action,
@@ -1945,7 +1718,7 @@ class ControlsLayout {
             dpad = PersistedLayout.DPad(
                 rx: CGFloat(spec.x),
                 ry: CGFloat(spec.y),
-                size: CGFloat(spec.size ?? 140),
+                size: CGFloat(spec.size ?? ControlLimits.defaultDPadSize),
                 opacity: spec.opacity ?? 1.0,
                 style: spec.style
             )
@@ -1962,7 +1735,7 @@ class ControlsLayout {
                     label: label,
                     scancode: scancode,
                     relativeCenter: CGPoint(x: spec.x, y: spec.y),
-                    size: CGFloat(spec.size ?? 56),
+                    size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
                     opacity: spec.opacity ?? 1.0
                 )
             }
@@ -1985,16 +1758,14 @@ class ControlsLayout {
         ActionButtonModel(
             action: spec.action,
             relativeCenter: CGPoint(x: spec.x, y: spec.y),
-            size: CGFloat(spec.size ?? 56),
+            size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
             opacity: spec.opacity ?? 1.0
         )
     }
 
-    /// One-time migration from UserDefaults layout/controller keys,
-    /// per SPEC 10.2. It runs at game selection, and a backup run
-    /// calls it before it stages `EmpoState/`, so a game the player
-    /// never opened since it shipped still moves its layout into the
-    /// container. A second call finds the file and does nothing.
+    /// A backup run calls this before it stages `EmpoState/`. Thus a
+    /// game that the player did not open since the update also moves
+    /// its layout into the container.
     static func migrateLegacyPersistence(container: GameContainer) {
         guard !UserControlsFile.exists(in: container) else { return }
 
@@ -2051,14 +1822,8 @@ class ControlsLayout {
         if let v1 = try? JSONDecoder().decode(PersistedLayoutV1.self, from: data) {
             let portrait = PersistedLayout.Oriented(dpad: v1.dpad, buttons: v1.buttons)
             let landscape = PersistedLayout.Oriented(
-                dpad: .init(
-                    rx: Self.defaultDPadCenterLandscape.x,
-                    ry: Self.defaultDPadCenterLandscape.y,
-                    size: Self.defaultDPadSize,
-                    opacity: 1.0,
-                    style: .dpad
-                ),
-                buttons: Self.defaultButtonsLandscape
+                dpad: Self.builtinOriented(.landscape).dpad,
+                buttons: Self.defaultButtons(.landscape)
             )
             return PersistedLayout(portrait: portrait, landscape: landscape)
         }
@@ -2066,10 +1831,8 @@ class ControlsLayout {
         return nil
     }
 
-    /// Host metrics for Kirin/JoiPlay translation at manifest load.
-    /// Uses live safe area + toolbar geometry when available. The portrait
-    /// top falls back to a 4:3 game-bottom estimate when the engine has
-    /// not published `gameRect` yet (typical at game select).
+    /// At game select, the engine usually has no `gameRect` yet. Then
+    /// the portrait top uses an estimate from the typical game aspect.
     private static func touchZoneMetricsForManifestLoad() -> TouchZoneMetrics {
         let bounds = AppWindow.currentScreenBounds
         let safeArea = AppWindow.currentSafeArea
@@ -2093,9 +1856,8 @@ class ControlsLayout {
                     geoHeight: portraitHeight
                 ))
         } else {
-            // RPG Maker viewports are 4:3. In portrait the game bottom
-            // sits at roughly safe-area top + 0.75 × screen width.
-            portraitTop = Double(safeArea.top) + portraitWidth * 0.75 + ControlsZone.toolbarGap
+            portraitTop =
+                Double(safeArea.top) + portraitWidth / GameAspect.typical + ControlsZone.toolbarGap
         }
 
         // Side insets for the sideways layout: the notch depth, which
@@ -2160,7 +1922,7 @@ class ControlsLayout {
         let metrics = Self.touchZoneMetricsForManifestLoad()
         resolutionInvolvesDerivation = false
         if let touch = activeManifest?.touch {
-            let completion = Self.completeTouchSection(touch, metrics: metrics)
+            let completion = Self.TouchSectionCompletion.complete(touch, metrics: metrics)
             resolutionInvolvesDerivation = completion.involvedDerivation
         }
         let portrait = Self.resolveInitialLayout(
@@ -2170,48 +1932,15 @@ class ControlsLayout {
         applyV2(PersistedLayout(portrait: portrait, landscape: landscape))
     }
 
-    private static func completeTouchSection(
-        _ section: TouchSection,
-        metrics: TouchZoneMetrics
-    ) -> (section: TouchSection, involvedDerivation: Bool) {
-        TouchSectionCompletion.complete(
-            section,
-            metrics: metrics,
-            defaultDpad: defaultDpadSpec
-        )
-    }
-
-    private static let defaultDpadSpec = TouchSectionCompletion.DefaultDpadSpec(
-        portraitX: Double(defaultDPadCenterPortrait.x),
-        portraitY: Double(defaultDPadCenterPortrait.y),
-        landscapeX: Double(defaultDPadCenterLandscape.x),
-        landscapeY: Double(defaultDPadCenterLandscape.y),
-        size: Double(defaultDPadSize)
-    )
-
-    /// SPEC section 9 resolution for one orientation when UserDefaults is absent.
     fileprivate static func resolveInitialLayout(
         manifest: ControlsManifest?,
         orientation: ControlsOrientation,
         metrics: TouchZoneMetrics
     ) -> PersistedLayout.Oriented {
-        let builtinDpadCenter: CGPoint
-        let builtinButtons: [ButtonModel]
-        switch orientation {
-        case .portrait:
-            builtinDpadCenter = defaultDPadCenterPortrait
-            builtinButtons = defaultButtonsPortrait
-        case .landscape:
-            builtinDpadCenter = defaultDPadCenterLandscape
-            builtinButtons = defaultButtonsLandscape
-        }
+        let builtin = builtinOriented(orientation)
+        guard let touch = manifest?.touch else { return builtin }
 
-        guard let touch = manifest?.touch else {
-            return builtinOriented(
-                dpadCenter: builtinDpadCenter, buttons: builtinButtons)
-        }
-
-        let completed = completeTouchSection(touch, metrics: metrics).section
+        let completed = TouchSectionCompletion.complete(touch, metrics: metrics).section
 
         let touchLayout: TouchLayout?
         switch orientation {
@@ -2221,28 +1950,19 @@ class ControlsLayout {
             touchLayout = completed.landscape
         }
 
-        guard let touchLayout else {
-            return builtinOriented(
-                dpadCenter: builtinDpadCenter, buttons: builtinButtons)
-        }
+        guard let touchLayout else { return builtin }
 
         let dpad: PersistedLayout.DPad
         if let spec = touchLayout.dpad {
             dpad = PersistedLayout.DPad(
                 rx: CGFloat(spec.x),
                 ry: CGFloat(spec.y),
-                size: CGFloat(spec.size ?? 140),
+                size: CGFloat(spec.size ?? ControlLimits.defaultDPadSize),
                 opacity: spec.opacity ?? 1.0,
                 style: spec.style
             )
         } else {
-            dpad = PersistedLayout.DPad(
-                rx: builtinDpadCenter.x,
-                ry: builtinDpadCenter.y,
-                size: defaultDPadSize,
-                opacity: 1.0,
-                style: .dpad
-            )
+            dpad = builtin.dpad
         }
 
         let buttons: [ButtonModel]
@@ -2254,17 +1974,16 @@ class ControlsLayout {
                     label: label,
                     scancode: scancode,
                     relativeCenter: CGPoint(x: spec.x, y: spec.y),
-                    size: CGFloat(spec.size ?? 56),
+                    size: CGFloat(spec.size ?? ControlLimits.defaultButtonSize),
                     opacity: spec.opacity ?? 1.0
                 )
             }
         } else {
-            buttons = builtinButtons
+            buttons = builtin.buttons
         }
 
-        // Game-shipped layouts may carry action buttons. Mapping them
-        // here keeps the customization diff honest: a shipped action
-        // button must not read as a user edit.
+        // A shipped action button must not show as a user edit in the
+        // customization diff.
         let actionButtons = touchLayout.actionButtons.map { specs in
             specs.map(actionButtonModel(from:))
         }
@@ -2273,11 +1992,9 @@ class ControlsLayout {
             dpad: dpad, buttons: buttons, actionButtons: actionButtons)
     }
 
-    private static func builtinOriented(
-        dpadCenter: CGPoint,
-        buttons: [ButtonModel]
-    ) -> PersistedLayout.Oriented {
-        PersistedLayout.Oriented(
+    private static func builtinOriented(_ orientation: ControlsOrientation) -> PersistedLayout.Oriented {
+        let dpadCenter = defaultDPadCenter(orientation)
+        return PersistedLayout.Oriented(
             dpad: .init(
                 rx: dpadCenter.x,
                 ry: dpadCenter.y,
@@ -2285,7 +2002,7 @@ class ControlsLayout {
                 opacity: 1.0,
                 style: .dpad
             ),
-            buttons: buttons,
+            buttons: defaultButtons(orientation),
             actionButtons: nil
         )
     }
