@@ -523,12 +523,8 @@ final class RestoreCoordinator {
         return await localFiles(destination: destination, manifest: manifest, scope: scope)
     }
 
-    /// Every local file the plan has to know about.
-    ///
-    /// Two kinds go in. The files the snapshot names, so the planner
-    /// can tell a write from a displacement, and every other name in
-    /// the directories it touches, so a second displacement of one
-    /// file numbers against the names already there.
+    /// The local files the snapshot names, so the planner can tell a write
+    /// from a displacement.
     ///
     /// A hash costs a full read, so it is read only where the local
     /// size matches the entry's. A file of a different size can
@@ -539,15 +535,10 @@ final class RestoreCoordinator {
     ) async -> [RestoreLocalFile] {
         let fm = FileManager.default
         var files: [RestoreLocalFile] = []
-        var seen: Set<String> = []
-        var directories: Set<Folder> = []
-
         for entry in manifest.entries where scope.covers(entry) {
-            directories.insert(Folder(root: entry.root, path: directory(of: entry.path)))
             guard let url = destination.url(of: entry),
                 let stamp = BackupSetResolver.stamp(of: url, fm: fm)
             else { continue }
-            seen.insert(key(entry.root, entry.path))
             files.append(
                 RestoreLocalFile(
                     root: entry.root,
@@ -555,32 +546,6 @@ final class RestoreCoordinator {
                     size: stamp.size,
                     hash: stamp.size == entry.size ? try? ContentHash.hexOfFile(at: url) : nil))
         }
-
-        for folder in directories {
-            guard let url = destination.url(root: folder.root, path: folder.path) else { continue }
-            for name in (try? fm.contentsOfDirectory(atPath: url.path)) ?? [] {
-                let path = folder.path.isEmpty ? name : folder.path + "/" + name
-                guard seen.insert(key(folder.root, path)).inserted else { continue }
-                let stamp = BackupSetResolver.stamp(of: url.appendingPathComponent(name), fm: fm)
-                files.append(
-                    RestoreLocalFile(
-                        root: folder.root, path: path, size: stamp?.size ?? 0, hash: nil))
-            }
-        }
         return files
-    }
-
-    private struct Folder: Hashable {
-        var root: EntryRoot
-        var path: String
-    }
-
-    nonisolated private static func key(_ root: EntryRoot, _ path: String) -> String {
-        root.rawValue + "/" + path
-    }
-
-    nonisolated private static func directory(of path: String) -> String {
-        guard let slash = path.lastIndex(of: "/") else { return "" }
-        return String(path[path.startIndex..<slash])
     }
 }
