@@ -1797,17 +1797,15 @@ final class SnapshotEngineTests: XCTestCase {
         guard case .finished = await restore.run(try replaceRequest(snapshotId)) else {
             return XCTFail("the first replace did not finish")
         }
-        try store.database.run(
-            "CREATE TRIGGER hold BEFORE INSERT ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
 
         let next = await restore.run(try replaceRequest(snapshotId))
 
         guard case .failed = next else {
             return XCTFail("the second replace did not fail: \(next)")
         }
-        XCTAssertNil(
-            try RestoreResumeQuestion.unfinishedRecord(
-                in: store, layout: BackupRootLayout(root: localRoot)))
+        let layout = BackupRootLayout(root: localRoot)
+        XCTAssertTrue(fm.fileExists(atPath: layout.finishedRestoreMark.path))
+        XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
     }
 
     func testAReplaceThatCannotMoveTheTreeLeavesNoRestoreRecord() async throws {
