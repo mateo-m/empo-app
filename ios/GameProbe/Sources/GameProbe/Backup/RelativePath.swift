@@ -1,7 +1,5 @@
 import Foundation
 
-/// The rule for a path that a manifest or a package names under one
-/// of its roots.
 public enum RelativePath {
 
     /// A path that is not empty, does not start at `/`, and has no

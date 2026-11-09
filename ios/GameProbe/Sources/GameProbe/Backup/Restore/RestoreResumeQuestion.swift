@@ -80,9 +80,8 @@ public enum RestoreResumeQuestion {
         return record.asksAtNextLaunch
     }
 
-    /// The record of a restore that did not finish, or `nil`. A
-    /// finished restore whose record did not clear left the finished
-    /// mark, so this clears that record and returns `nil`.
+    /// A finished restore whose record did not clear left the
+    /// finished mark, so this clears that record and returns `nil`.
     public static func unfinishedRecord(
         in store: BackupStateStore, layout: BackupRootLayout, fm: FileManager = .default
     ) throws -> BackupIntentRecord? {
