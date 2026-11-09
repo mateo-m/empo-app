@@ -123,6 +123,15 @@ final class GoogleDriveTests: XCTestCase {
         XCTAssertEqual(RetryWait.seconds(retryAfter: "inf", attempt: 2), 2)
     }
 
+    func testAStatedRetryAfterStopsAtTheHeaderCeiling() {
+        XCTAssertEqual(RetryWait.seconds(retryAfter: "1e20", attempt: 1), RetryWait.headerCeilingSeconds)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertEqual(
+            RetryWait.seconds(
+                retryAfter: "Wed, 01 Jan 2600 00:00:00 GMT", attempt: 1, now: now),
+            RetryWait.headerCeilingSeconds)
+    }
+
     // MARK: - 2. Which upload path a file takes, per 9.3
 
     func testAFileUnderFiveMegabytesTakesTheSimpleUpload() {
