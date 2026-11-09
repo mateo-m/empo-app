@@ -199,7 +199,7 @@ extension SnapshotEngine {
             do {
                 try await provider.delete(paths: full)
             } catch {
-                throw mapped(error)
+                throw error.runStop ?? error
             }
         }
         save(try store.recordSweep(targetId: targetId, at: now), "the sweep time of \(targetId)")
@@ -248,7 +248,7 @@ extension SnapshotEngine {
         do {
             return try await provider.list(prefix: prefix)
         } catch {
-            throw mapped(error)
+            throw error.runStop ?? error
         }
     }
 

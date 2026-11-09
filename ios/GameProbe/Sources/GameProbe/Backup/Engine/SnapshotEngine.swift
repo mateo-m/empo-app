@@ -274,7 +274,7 @@ public actor SnapshotEngine {
         do {
             _ = try await provider.list(prefix: context.paths.formatFile)
         } catch {
-            if error != .notFound { throw mapped(error) }
+            if error != .notFound { throw error.runStop ?? error }
         }
         let formatData = try await fetch(context.paths.formatFile)
         if let formatData {
@@ -650,7 +650,7 @@ public actor SnapshotEngine {
         } catch {
             try? fm.removeItem(at: scratch)
             if error == .notFound { return nil }
-            throw mapped(error)
+            throw error.runStop ?? error
         }
         defer { try? fm.removeItem(at: scratch) }
         return try Data(contentsOf: scratch)
@@ -666,7 +666,7 @@ public actor SnapshotEngine {
             try await provider.put(localFile: scratch, path: path)
         } catch {
             try? fm.removeItem(at: scratch)
-            throw mapped(error)
+            throw error.runStop ?? error
         }
         try? fm.removeItem(at: scratch)
     }
@@ -680,7 +680,7 @@ public actor SnapshotEngine {
             try await provider.put(localFile: file, path: path)
             return
         } catch {
-            guard error == .outOfSpace else { throw mapped(error) }
+            guard error == .outOfSpace else { throw error.runStop ?? error }
         }
 
         // 1. Prune to the retention policy, because that is deletion
@@ -704,7 +704,7 @@ public actor SnapshotEngine {
             try await provider.put(localFile: file, path: path)
             return
         } catch {
-            guard error == .outOfSpace else { throw mapped(error) }
+            guard error == .outOfSpace else { throw error.runStop ?? error }
         }
 
         // 3. Stop, and mark the target blocked with a stated reason.
@@ -750,32 +750,6 @@ public actor SnapshotEngine {
     /// counts.
     func storedBytes(targetId: String) throws -> Int64 {
         try store.usage(targetId: targetId).reduce(0) { $0 + $1.bytes }
-    }
-
-    /// The one effect of 8.4, as a run stop. A transient error keeps
-    /// the run's own error, and the caller decides.
-    func mapped(_ error: BackupProviderError) -> Error {
-        switch error {
-        case .authExpired:
-            return BackupRunStop.needsSignIn
-        case .permissionDenied:
-            // `run` names the fix, because only the request knows the service.
-            return error
-        case .rejected(let message):
-            return BackupRunStop.rejected(message: message)
-        case .offline:
-            return BackupRunStop.offline
-        case .serverError(let status):
-            return BackupRunStop.serverError(status: status)
-        case .throttled(let retryAfter):
-            return BackupRunStop.throttled(retryAfter: retryAfter)
-        case .outOfSpace:
-            return BackupRunStop.full(reason: QuotaCheck.prunedAndStillFullLine)
-        case .notFound:
-            return BackupRunStop.rejected(
-                message: screenText(
-                    "A backup file is missing from this location. Back up again to replace it."))
-        }
     }
 
     func scratchFile() -> URL {
