@@ -81,8 +81,18 @@ enum SyncLocalValues {
             // A failed step skips the profile, so that the incoming
             // profile never writes over a local one.
             do {
-                let local = identities.name(ofId: id)
+                var local = identities.name(ofId: id)
+                if let missing = local, !store.profileExists(missing) {
+                    // The Files app can delete or rename the folder.
+                    identities.forget(profile: missing)
+                    local = nil
+                }
                 if let local, local != profile.name {
+                    if store.profileExists(profile.name),
+                        store.storedName(profile.name) != store.storedName(local)
+                    {
+                        try displace(profile.name, store: store, identities: &identities)
+                    }
                     try store.renameProfile(from: local, to: profile.name)
                     identities.rename(from: local, to: profile.name)
                 }

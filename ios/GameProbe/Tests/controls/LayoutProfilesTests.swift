@@ -243,6 +243,15 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: file), Data("mine".utf8))
     }
 
+    func testANewProfileTakesItsOwnCaseOverAnEmptyFolder() throws {
+        try FileManager.default.createDirectory(
+            at: profilesRoot.appendingPathComponent("Foo"), withIntermediateDirectories: true)
+
+        try store.createProfile("foo", touch: sampleTouch())
+        XCTAssertEqual(store.listProfiles(), ["foo"])
+        XCTAssertNotNil(store.readProfile("foo")?.touch)
+    }
+
     func testARenameOfOnlyTheCaseMovesTheFolderAndThePins() throws {
         try store.createProfile("Foo", touch: sampleTouch())
         let game = try makeGame("A", pin: .profile("Foo"))

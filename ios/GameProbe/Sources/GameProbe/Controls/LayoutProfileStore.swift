@@ -163,6 +163,12 @@ public struct LayoutProfileStore {
     public func createProfile(_ name: String, touch: TouchSection) throws {
         guard Self.validatedName(name) == name else { throw StoreError.invalidName(name) }
         guard !profileExists(name) else { throw StoreError.nameTaken(name) }
+        if let stored = storedName(name), stored != name {
+            // A folder with no controls file, in another case.
+            try FileManager.default.moveItem(
+                at: profilesRoot.appendingPathComponent(stored, isDirectory: true),
+                to: profilesRoot.appendingPathComponent(name, isDirectory: true))
+        }
         let folderExisted = FileManager.default.fileExists(atPath: profileURL(name).path)
         do {
             try writeProfile(name, touch: touch)
