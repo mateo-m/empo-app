@@ -28,6 +28,7 @@ final class SyncEngineTests: XCTestCase {
         var losing: [String: [[String: JSONValue]]] = [:]
         var failsToWrite = false
         var resolved: [String] = []
+        private var merged: Set<Data> = []
 
         func load() {
             loads += 1
@@ -47,6 +48,9 @@ final class SyncEngineTests: XCTestCase {
             if let rejects { return .failure(rejects) }
             guard let values = try? JSONDecoder().decode([String: JSONValue].self, from: bytes)
             else { return .failure(.unreadable("the test copy did not read")) }
+            // Automerge skips the changes it already holds, so a copy merged again
+            // cannot bring back a key that a later pass removed.
+            guard merged.insert(bytes).inserted else { return .success(()) }
             // A copy that arrived wins over what the document held,
             // which is the case a local change has to survive.
             // A copy fills the keys the document does not hold. The
