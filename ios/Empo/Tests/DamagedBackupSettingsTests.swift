@@ -157,7 +157,7 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertTrue(try GameBackupSets.setMode(.slim, for: container))
 
         XCTAssertEqual(try GameBackupIntent.load(from: container.empoStateURL).mode, .slim)
-        let resolution = await GameBackupSets.resolveMode(for: container, targets: [])
+        let resolution = try await GameBackupSets.resolveMode(for: container, targets: [])
         XCTAssertEqual(resolution, .mode(.slim))
         XCTAssertEqual(try damagedCopies(of: intentFile), [damaged])
     }
@@ -166,8 +166,8 @@ final class DamagedBackupSettingsTests: XCTestCase {
         try damaged.write(to: intentFile)
         let lowLimit = BackupTargetThreshold(targetId: "low", displayName: "Low", overrideBytes: 0)
 
-        let small = await GameBackupSets.resolveMode(for: container, targets: [])
-        let big = await GameBackupSets.resolveMode(for: container, targets: [lowLimit])
+        let small = try await GameBackupSets.resolveMode(for: container, targets: [])
+        let big = try await GameBackupSets.resolveMode(for: container, targets: [lowLimit])
         let full = try await GameBackupSets.request(for: container, mode: .full)
 
         XCTAssertEqual(small, .mode(.full))
