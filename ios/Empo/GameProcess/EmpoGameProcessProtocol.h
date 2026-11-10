@@ -12,10 +12,11 @@
 #import <Foundation/Foundation.h>
 #import <xpc/xpc.h>
 
+#import "GameCoreRelay.h"
+
 NS_ASSUME_NONNULL_BEGIN
 
-// App -> game process.
-@protocol EmpoGameProcess
+@protocol EmpoGameProcess <EmpoGameCoreRelay>
 
 // A block of the app's memory, with the keys EmpoGameProcessMemory*
 // below. The app sends it before openCore. The reply is nil when the
@@ -26,31 +27,11 @@ NS_ASSUME_NONNULL_BEGIN
 // reply is nil on success, or the reason.
 - (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable error))reply;
 
-- (void)setGamePath:(NSString *)path;
-// gamecore_run_app with the process arguments.
+// gamecore_run_app with argv[0] of the game process.
 - (void)runApp;
-- (void)injectKeyEvent:(int)scancode pressed:(int)pressed;
-- (void)setLauncherIdentity:(nullable NSString *)name version:(nullable NSString *)version;
-- (void)setCABundlePath:(nullable NSString *)path;
-- (void)pushTextInput:(NSString *)text;
-- (void)setSafeAreaInsetsTop:(float)top bottom:(float)bottom left:(float)left right:(float)right;
-- (void)setHostViewportRegionX:(float)x y:(float)y width:(float)width height:(float)height portrait:(BOOL)portrait;
-- (void)clearHostViewportRegion;
 - (void)applySessionConfigUserData:(nullable NSString *)userDataDirectory
                              fonts:(nullable NSString *)sharedFontsDirectory
                  verticalAlignment:(int)verticalAlignment;
-- (void)setSetting:(NSString *)key value:(NSString *)value;
-- (void)setShowViewportBounds:(BOOL)enabled;
-- (void)setViewportBoundsColorRed:(float)red green:(float)green blue:(float)blue alpha:(float)alpha;
-- (void)setCheatsEnabled:(BOOL)enabled;
-- (void)setGameControllerCaptureEnabled:(BOOL)enabled;
-- (void)setTouchMouseEnabled:(BOOL)enabled;
-- (void)signalErrorDismissed;
-- (void)signalInfoDismissed;
-- (void)requestPause;
-- (void)requestResume;
-- (void)setFastForwardMultiplier:(int)multiplier;
-- (void)resetSessionState;
 - (void)setDebugLogPath:(nullable NSString *)path;
 - (void)setRespectsSilentMode:(BOOL)respects;
 

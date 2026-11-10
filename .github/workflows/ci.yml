@@ -1,8 +1,4 @@
 ---
-# The consolidated PR/main gate: every job that used to live in
-# lint.yml, format.yml, test.yml, deps-pins.yml and build.yml, in one
-# workflow with one trigger block.
-#
 # The ruleset's required context is a check-run name, which comes from
 # a JOB name, so the "CI" summary job at the bottom must keep that
 # exact name. It is the only context a merge waits on, and it needs
@@ -20,7 +16,7 @@
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
 # next. A job-completed hook on that runner that cleans the checkout
-# must run `git clean -ffdx -e /ios/Dependencies/ -e .build/` to keep them.
+# must keep them, as the prepare-xcode-project action does.
 # A GitHub-hosted Mac keeps the same folders in the GitHub cache. A pull
 # request reads the cache of its own earlier runs.
 
@@ -64,9 +60,7 @@ jobs:
   #
   # The classifier is conservative on purpose. A path that is not
   # documentation counts as code, and any failure to read the file
-  # list runs the full gate. `docs/schemas/` and `docs/examples/` are
-  # code here: ControlsSchemaTests reads both from the repository
-  # root, so a change to either must still run the tests.
+  # list runs the full gate.
   changes:
     name: Detect docs-only changes
     runs-on: ubuntu-latest
@@ -76,6 +70,8 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      # JSON for runs-on. A pull request always runs on a GitHub-hosted Mac.
+      mac_runner: ${{ github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"' }}
     steps:
       - name: Classify the changed paths
         id: classify
@@ -147,16 +143,14 @@ jobs:
           # The release job writes altstore-source.json to main. No test
           # or build reads it, and the lint job checks its format.
           CODE=$(printf '%s\n' "$FILES" |
-            grep -Ev '^(docs/|public/)|^blume\.config\.ts$|^altstore-source\.json$|\.md$') || CODE_STATUS=$?
-          FIXTURES=$(printf '%s\n' "$FILES" |
-            grep -E '^docs/(schemas|examples)/') || FIXTURE_STATUS=$?
+            grep -Ev '\.mdx?$|^docs/media/|^public/|^blume\.config\.ts$|^altstore-source\.json$') || CODE_STATUS=$?
           # grep exits 1 when nothing matches, which is an answer here,
           # not a failure. A status above 1 IS a failure, and its empty
           # output would otherwise read as "no code touched".
-          if [ "${CODE_STATUS:-0}" -gt 1 ] || [ "${FIXTURE_STATUS:-0}" -gt 1 ]; then
+          if [ "${CODE_STATUS:-0}" -gt 1 ]; then
             full_gate "::warning::could not classify the changed paths: running every job"
           fi
-          if [ -n "$CODE$FIXTURES" ]; then
+          if [ -n "$CODE" ]; then
             full_gate "the diff touches code: running every job"
           fi
           skip_gate "the diff is documentation only: skipping the test and app jobs"
@@ -169,41 +163,25 @@ jobs:
     # SwiftLint's Linux build needs libxml2.so.2, and Ubuntu 26.04 does not
     # have it.
     runs-on: ubuntu-24.04
+    defaults:
+      run:
+        # A named bash shell adds pipefail, so a failed file list fails
+        # the check.
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
 
-      - name: Find preinstalled tools
-        # GitHub's Ubuntu image ships these tools. The install steps
-        # below run only when an image update removes one.
-        id: preinstalled
-        run: |
-          if swift --version 2>/dev/null | grep -q 'Swift version 6\.4'; then
-            echo "swift=true" >>"$GITHUB_OUTPUT"
-          fi
-          if command -v shellcheck >/dev/null && command -v yamllint >/dev/null; then
-            echo "apt=true" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: Cache Swift toolchain
-        if: steps.preinstalled.outputs.swift != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.local/share/swiftly
-          key: swiftly-${{ runner.os }}-6.4
-
-      - name: Install Swift toolchain
-        if: steps.preinstalled.outputs.swift != 'true'
-        # Swiftly is Apple's official toolchain manager. On a cache hit
-        # the action finds the toolchain and skips the download.
-        uses: vapor/swiftly-action@bedb227456c5f495afbef80baebee17a8a02cef4 # v0.2.1
-        with:
-          toolchain: "6.4"
+      - uses: ./.github/actions/setup-swift
 
       - name: Install shellcheck and yamllint
-        if: steps.preinstalled.outputs.apt != 'true'
-        run: sudo apt-get update && sudo apt-get install -y shellcheck yamllint
+        # GitHub's Ubuntu image ships both. This runs only when an image
+        # update removes one.
+        run: |
+          if ! command -v shellcheck >/dev/null || ! command -v yamllint >/dev/null; then
+            sudo apt-get update && sudo apt-get install -y shellcheck yamllint
+          fi
 
       - name: Install shfmt, SwiftLint and actionlint
         run: |
@@ -226,8 +204,6 @@ jobs:
           echo "$HOME/.local/bin" >>"$GITHUB_PATH"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        # Bun's CLI replaces Node + npm. Built-in install cache
-        # keyed off bun.lock. Faster install than npm ci.
 
       - name: Install JS tools
         run: bun install --frozen-lockfile
@@ -256,43 +232,28 @@ jobs:
 
       - name: swift-format lint
         if: ${{ !cancelled() }}
-        # swift-format's lint mode reports the same rule set the
-        # formatter would apply, so a clean lint doubles as the
-        # format check.
         # GitHub's Ubuntu image ships Swift without swift-format on PATH.
         # Swift 6 runs the same tool as `swift format`.
-        run: swift format lint --strict --recursive ios/Empo/src
+        run: scripts/lint-files.sh swift-format | xargs -r swift format lint --strict
 
       - name: SwiftLint
         if: ${{ !cancelled() }}
-        run: swiftlint lint --strict --reporter github-actions-logging
+        run: scripts/lint-files.sh swiftlint | xargs -r swiftlint lint --strict --reporter github-actions-logging
 
       - name: clang-format check
         if: ${{ !cancelled() }}
-        # clang-format 18 matches local (Apple clang-format 21 is also
-        # fine, the shipped .clang-format is style-stable).
         run: |
           command -v clang-format-18 >/dev/null ||
             { sudo apt-get update && sudo apt-get install -y clang-format-18; }
-          set -o pipefail
-          git ls-files -z 'ios/Empo/src/*.'{h,m,mm,c,cpp} 'ios/Empo/shims/*.'{h,m,mm,c,cpp} |
-            xargs -0 -r clang-format-18 --dry-run --Werror
+          scripts/lint-files.sh clang-format | xargs -r clang-format-18 --dry-run --Werror
 
       - name: shellcheck
         if: ${{ !cancelled() }}
-        run: |
-          FILES=$(git ls-files 'setup.sh' 'tools/*.sh' 'scripts/*.sh' 'scripts/hooks/*.sh')
-          if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs shellcheck
-          fi
+        run: scripts/lint-files.sh shell | xargs -r shellcheck -x
 
       - name: shfmt check
         if: ${{ !cancelled() }}
-        run: |
-          FILES=$(git ls-files 'setup.sh' 'tools/*.sh' 'scripts/*.sh' 'scripts/hooks/*.sh')
-          if [ -n "$FILES" ]; then
-            echo "$FILES" | xargs shfmt -d -i 4 -ci
-          fi
+        run: scripts/lint-files.sh shell | xargs -r shfmt -d -i 4 -ci
 
       - name: actionlint
         if: ${{ !cancelled() }}
@@ -310,13 +271,18 @@ jobs:
       - name: markdownlint
         if: ${{ !cancelled() }}
         run: |
-          # Drive markdownlint from git ls-files so we only scan
-          # tracked files. Vendored upstream READMEs and build outputs
-          # are skipped because they're already gitignored.
           FILES=$(git ls-files '*.md')
           if [ -n "$FILES" ]; then
             echo "$FILES" | xargs bun x markdownlint -c .markdownlint.json
           fi
+
+      - name: The CI job needs every job
+        if: ${{ !cancelled() }}
+        run: bun tools/check-ci-needs.ts
+
+      - name: TypeScript check
+        if: ${{ !cancelled() }}
+        run: bun x tsc -p .
 
       - name: Verify pins against empo-deps
         if: ${{ !cancelled() }}
@@ -326,6 +292,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REQUIRE_PUBLISHED: "0"
         run: scripts/verify-empo-deps-pins.sh
+
+  generated:
+    name: Generated files
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Check the files that GameCore.h generates
+        run: bun tools/gamecore/generate.ts --check
 
   test:
     name: GameProbe (swift test, Linux)
@@ -340,27 +319,7 @@ jobs:
         with:
           submodules: false
 
-      - name: Find a preinstalled Swift 6.4
-        # GitHub's Ubuntu image ships Swift 6.4. The install steps
-        # below run only when an image update removes it.
-        id: preinstalled
-        run: |
-          if swift --version 2>/dev/null | grep -q 'Swift version 6\.4'; then
-            echo "swift=true" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: Cache Swift toolchain
-        if: steps.preinstalled.outputs.swift != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.local/share/swiftly
-          key: swiftly-${{ runner.os }}-6.4
-
-      - name: Install Swift toolchain
-        if: steps.preinstalled.outputs.swift != 'true'
-        uses: vapor/swiftly-action@bedb227456c5f495afbef80baebee17a8a02cef4 # v0.2.1
-        with:
-          toolchain: "6.4"
+      - uses: ./.github/actions/setup-swift
 
       # GameProbe's CSQLite target compiles against sqlite3.h. Apple
       # platforms get the header from the SDK. Linux gets it from this
@@ -378,6 +337,27 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: scripts/run-swift-tests.sh ios/GameProbe
 
+  api:
+    name: API (bun test, tsc)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun test
+
+      - run: bun x tsc -p .
+
   # The two Mac jobs run at the same time on two runners. Each keeps
   # its build data in the runner's tool cache, which no job deletes, so
   # the next run of the job builds only what changed.
@@ -385,20 +365,13 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"') }}
+    runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
           clean: false
-
-      # The checkout runs with `clean: false`, because its clean also
-      # deletes ios/Dependencies and the Swift package builds. The fetch
-      # scripts compare a stamp in ios/Dependencies with the pins, so a
-      # kept folder skips the downloads.
-      - name: Remove untracked files, but keep the downloaded cores and package builds
-        run: git clean -ffdx -e /ios/Dependencies/ -e .build/
 
       - uses: ./.github/actions/prepare-xcode-project
         with:
@@ -413,7 +386,7 @@ jobs:
           EMPO_TESTS_NO_SKIP: "1"
         run: scripts/run-swift-tests.sh
 
-      - name: Build (iOS Simulator)
+      - name: Build the app and its tests (iOS Simulator)
         working-directory: ios/Empo
         run: |
           set -o pipefail
@@ -422,7 +395,7 @@ jobs:
             -scheme Empo \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED_DATA" \
-            build 2>&1 | tail -n 60
+            build-for-testing 2>&1 | tail -n 60
 
       # A Simulator of its own for each runner: another job or a person
       # can boot a shared one, and `simctl boot` then fails. The first
@@ -466,6 +439,37 @@ jobs:
           kill -0 "$PID" 2>/dev/null || { echo "::error::Empo stopped within 10 seconds of its start"; exit 1; }
           echo "Empo still runs after 10 seconds"
 
+      # StoreKit reads the test purchase file only when the app starts, and a
+      # test run puts the file on the Simulator after that. On a new Simulator,
+      # the first run of PlusStoreTests always fails. This run puts the file
+      # there. The full run below still fails on a real purchase test failure.
+      - name: Load the test purchase file on the Simulator
+        working-directory: ios/Empo
+        timeout-minutes: 15
+        continue-on-error: true
+        run: |
+          xcodebuild \
+            -project Empo.xcodeproj \
+            -scheme Empo \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            -only-testing:EmpoTests/PlusStoreTests \
+            -collect-test-diagnostics never \
+            test-without-building 2>&1 \
+            | grep --line-buffered -E "Test Case|Test Suite|error|TEST"
+
+      - name: App tests (iOS Simulator)
+        working-directory: ios/Empo
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Empo.xcodeproj \
+            -scheme Empo \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            test-without-building 2>&1 | tail -n 200
+
       - name: Shut down the Simulator
         if: always() && env.SIM_UDID != ''
         run: xcrun simctl shutdown "$SIM_UDID"
@@ -477,16 +481,13 @@ jobs:
     name: Mac build
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ fromJSON(github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"') }}
+    runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: false
           clean: false
-
-      - name: Remove untracked files, but keep the downloaded cores and package builds
-        run: git clean -ffdx -e /ios/Dependencies/ -e .build/
 
       - uses: ./.github/actions/prepare-xcode-project
         with:
@@ -496,32 +497,19 @@ jobs:
         run: |
           EMPO_MAC_DERIVED_DATA="$DERIVED_DATA" scripts/package-mac.sh "$(sed -n 's/^ *MARKETING_VERSION: //p' ios/Empo/project.yml)"
 
-  # The aggregate gate. Its check-run name matches the ruleset's one
-  # required context, "CI", exactly. The jobs above have descriptive
-  # names the ruleset does not track one by one, so this job is what a
-  # merge waits on - and it needs EVERY one of them. Add a job above,
-  # add it here too, or a merge stops waiting for it.
-  #
-  # It carried the name "Lint" while it aggregated the lint jobs alone.
-  # A red Simulator build could then land on main and surface at the
-  # release cut instead. A "Format" twin also sat beside it, needing a
-  # subset of the same jobs: a subset cannot fail while the superset
-  # passes, so it gated nothing and cost a second required context.
-  #
-  # The required contexts live in the repository ruleset, not in this
-  # file, so the rename and the removal took a settings change as well.
-  # Keep the two in step: rename this job and the ruleset stops seeing
-  # the context it waits for.
-  #
-  # The gate also needs `changes`. A failed classifier skips the jobs
-  # that depend on it, and a skipped job passes - so without this edge,
-  # a broken classifier would wave code through on a green gate.
+  # The repository ruleset waits for the check named "CI", so a rename
+  # of this job needs a ruleset change too. GitHub has no way to need
+  # every job, so the list names each one, and the Lint job checks it.
+  # The list includes `changes`: a failed classifier skips the jobs that
+  # need it, and a skipped job counts as a pass.
   ci-summary:
     name: CI
     needs:
       - changes
       - lint
+      - generated
       - test
+      - api
       - simulator
       - mac
     if: always()

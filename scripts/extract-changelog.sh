@@ -2,10 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-# Print the CHANGELOG.md section for one version (without its heading).
-# scripts/release.sh and .github/workflows/release.yml share this
-# script, so the GitHub release and the committed changelog always
-# carry the same text.
+# Prints the CHANGELOG.md section of one version, without its heading.
 #
 # Usage: scripts/extract-changelog.sh <version> [changelog-path]
 set -euo pipefail

@@ -13,6 +13,19 @@
 DEFAULT_MIN_OS=26.0
 ARCH=arm64
 
+# Prints the Ruby of each PSDK core that cores/cores.sh lists, such as
+# 25 for Psdk25Core. Source cores/cores.sh first.
+psdk_rubies() {
+    for core in $EMPO_ALL_CORES; do
+        case "$core" in
+            Psdk*Core)
+                ruby="${core#Psdk}"
+                printf '%s ' "${ruby%Core}"
+                ;;
+        esac
+    done
+}
+
 # Runs the calling script again under lockf. Xcode and a script can link
 # at the same time, and the second run then finds the framework in place.
 # Usage: run_locked <lock file> "$0" "$@"

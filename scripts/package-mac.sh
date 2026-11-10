@@ -2,11 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-# Build the Release Mac app, check it, and pack it into a disk image.
-# The Release workflow and scripts/release.sh both run this script.
+# Builds the Release Mac app, checks it, and packs it into a disk image.
 #
 # Usage: scripts/package-mac.sh <version>
 # EMPO_CORES in the environment ships only the cores it names.
+# SENTRY_DSN in the environment turns on the error reports.
 # EMPO_MAC_DERIVED_DATA in the environment keeps the build data in that
 # folder, so the next build compiles only what changed. Without it,
 # each build starts clean.
@@ -31,6 +31,8 @@ fail() {
     echo "error: $*" >&2
     exit 1
 }
+# shellcheck source=scripts/lib/app-bundle.sh
+source "$REPO_ROOT/scripts/lib/app-bundle.sh"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -45,15 +47,15 @@ xcodebuild \
     -derivedDataPath "$DERIVED_DATA" \
     -xcconfig "$PROJECT_DIR/Sideload.xcconfig" \
     ${EMPO_CORES:+"EMPO_CORES=$EMPO_CORES"} \
+    ${SENTRY_DSN:+SENTRY_DSN="$SENTRY_DSN"} \
     build 2>&1 | grep -E "^(\*\* BUILD|error:)" >&2
 [[ -d "$APP" ]] || fail "build failed: $APP not found"
 
 PLAYER="$APP/Contents/Helpers/Empo Player.app"
 [[ -d "$PLAYER" ]] || fail "Empo Player.app missing from Contents/Helpers"
 
-BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Contents/Info.plist")
+require_release_bundle_id "$APP/Contents/Info.plist"
 APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
-[[ "$BUNDLE_ID" == "sh.mateo.empo" ]] || fail "unexpected bundle id: $BUNDLE_ID"
 [[ "$APP_VERSION" == "$VERSION" ]] || fail "Info.plist version $APP_VERSION != $VERSION"
 
 CORES=$(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*Core.framework" -exec basename {} .framework \; | sort | xargs)
@@ -61,10 +63,7 @@ CORES=$(find "$APP/Contents/Frameworks" -maxdepth 1 -name "*Core.framework" -exe
 
 codesign --verify --deep --strict "$APP" || fail "the app signature is not valid"
 
-# grep -c reads to the end. grep -q stops at the first match, and
-# strings then fails with "failed to flush output".
-[[ $(strings "$APP/Contents/MacOS/Empo" | grep -c "api.github.com/repos") -gt 0 ]] ||
-    fail "the app has no update check. Build it with -xcconfig ios/Empo/Sideload.xcconfig"
+require_update_check "$APP/Contents/MacOS/Empo"
 
 # A user plays a game only when Empo Player opens its core. The signing,
 # the entitlements and the sandbox all decide that, and only a run of

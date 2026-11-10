@@ -109,11 +109,9 @@ void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     mkxp_applySessionConfig(&mkxp);
 }
 
-// The key "configOverlay" takes a JSON object of mkxp.json keys, which
-// the engine merges over the game's own mkxp.json. "" clears it. The
-// other keys are the ones app_bridge.h lists for mkxp_setSetting.
+// The engine reads the other keys itself, in mkxp_setSetting.
 void gamecore_setSetting(const char *key, const char *value) {
-    if (key && strcmp(key, "configOverlay") == 0) {
+    if (key && strcmp(key, GAMECORE_SETTING_CONFIG_OVERLAY) == 0) {
         mkxp_setConfigOverlayJSON(value);
         return;
     }
@@ -170,10 +168,6 @@ void gamecore_requestPause(void) {
 
 void gamecore_requestResume(void) {
     mkxp_requestResume();
-}
-
-bool gamecore_isPaused(void) {
-    return mkxp_isPaused();
 }
 
 bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {

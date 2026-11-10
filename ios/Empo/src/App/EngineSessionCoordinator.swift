@@ -168,29 +168,17 @@ final class EngineSessionCoordinator {
         GameSaveWatch.shared.beginSession(container: input.container)
     }
 
-    /// Hands the engine its game path and starts it.
-    ///
-    /// The path goes in first. The core reads it as the first step of
-    /// `gamecore_run_app`, so a path that is already set lets it run
-    /// straight through.
-    ///
-    /// In the app, `RunLoop.main.perform`, not a main queue block.
-    /// `EmpoCoreRunEngine` holds the main thread until the game ends,
-    /// and a main queue block would stop that queue from draining for
-    /// the whole session. The header on `EmpoCoreRunEngine` says what
-    /// breaks.
     func launchGamePath(_ path: String) {
-        gamecore_setGamePath(path)
         switch runner {
         case .gameProcess:
-            _ = gamecore_run_app(0, nil)
+            GameCoreLaunch.run(gamePath: path)
         case .app:
             Task {
                 // A game process ends a moment after `end`, and the
                 // next game must not run beside it.
                 await GameProcessHost.waitForExit()
                 RunLoop.main.perform {
-                    _ = EmpoCoreRunEngine()
+                    GameCoreLaunch.run(gamePath: path)
                 }
             }
         }

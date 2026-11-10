@@ -43,10 +43,16 @@ static uint64_t memoryFootprint(void) {
     return info.phys_footprint;
 }
 
+// The extension sits in Empo.app/Extensions.
+NSURL *EmpoAppFrameworksURL(void) {
+    NSURL *app = NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent.URLByDeletingLastPathComponent;
+    return [app URLByAppendingPathComponent:@"Frameworks" isDirectory:YES];
+}
+
 // The app called every gamecore_* function on its main thread when the
 // core ran in the app. The process keeps that, in the order the calls
 // came. A call that comes after a core failed to open does nothing.
-static void onMain(dispatch_block_t call) {
+void EmpoGameProcessOnMain(dispatch_block_t call) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (gCoreOpen) {
             call();
@@ -198,7 +204,10 @@ static void runCore(void) {
     gRun = CoreRunStarted;
     CFRunLoopRef mainLoop = CFRunLoopGetMain();
     CFRunLoopPerformBlock(mainLoop, kCFRunLoopCommonModes, ^{
-      gamecore_run_app(*_NSGetArgc(), *_NSGetArgv());
+      // The same argv as GameCoreLaunch.run in the app: argv[0] only.
+      static char *argv[2];
+      argv[0] = (*_NSGetArgv())[0];
+      gamecore_run_app(1, argv);
     });
     CFRunLoopWakeUp(mainLoop);
 }
@@ -216,9 +225,6 @@ void EmpoGameProcessSceneHasSize(void) {
     gSceneHasSize = YES;
     runCoreWhenReady();
 }
-
-@interface EmpoGameProcessService : NSObject <EmpoGameProcess>
-@end
 
 @implementation EmpoGameProcessService
 
@@ -250,14 +256,12 @@ void EmpoGameProcessSceneHasSize(void) {
 }
 
 - (void)openCore:(NSString *)framework reply:(void (^)(NSString *_Nullable))reply {
-    // The extension sits in Empo.app/Extensions, and the cores in
-    // Empo.app/Frameworks.
-    NSURL *app = NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent.URLByDeletingLastPathComponent;
-    NSURL *binary = [[app URLByAppendingPathComponent:[NSString stringWithFormat:@"Frameworks/%@.framework", framework]]
+    NSURL *binary = [[EmpoAppFrameworksURL() URLByAppendingPathComponent:[framework stringByAppendingString:@".framework"]]
         URLByAppendingPathComponent:framework];
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (!EmpoCoreOpen(binary.fileSystemRepresentation)) {
-            reply([NSString stringWithFormat:@"cannot open %@", binary.path]);
+        const char *error = EmpoCoreOpen(binary.fileSystemRepresentation);
+        if (error != NULL) {
+            reply(@(error));
             return;
         }
         gCoreOpen = YES;
@@ -274,14 +278,8 @@ void EmpoGameProcessSceneHasSize(void) {
     });
 }
 
-- (void)setGamePath:(NSString *)path {
-    onMain(^{
-      gamecore_setGamePath(path.fileSystemRepresentation);
-    });
-}
-
 - (void)runApp {
-    onMain(^{
+    EmpoGameProcessOnMain(^{
       if (gRun != CoreRunNotAsked) {
           NSLog(@"[game-process] the core already runs, so runApp does nothing");
           return;
@@ -291,52 +289,10 @@ void EmpoGameProcessSceneHasSize(void) {
     });
 }
 
-- (void)injectKeyEvent:(int)scancode pressed:(int)pressed {
-    onMain(^{
-      gamecore_injectKeyEvent(scancode, pressed);
-    });
-}
-
-- (void)setLauncherIdentity:(NSString *)name version:(NSString *)version {
-    onMain(^{
-      gamecore_setLauncherIdentity(name.UTF8String, version.UTF8String);
-    });
-}
-
-- (void)setCABundlePath:(NSString *)path {
-    onMain(^{
-      gamecore_setCABundlePath(path.fileSystemRepresentation);
-    });
-}
-
-- (void)pushTextInput:(NSString *)text {
-    onMain(^{
-      gamecore_pushTextInput(text.UTF8String);
-    });
-}
-
-- (void)setSafeAreaInsetsTop:(float)top bottom:(float)bottom left:(float)left right:(float)right {
-    onMain(^{
-      gamecore_setSafeAreaInsets(top, bottom, left, right);
-    });
-}
-
-- (void)setHostViewportRegionX:(float)x y:(float)y width:(float)width height:(float)height portrait:(BOOL)portrait {
-    onMain(^{
-      gamecore_setHostViewportRegion(x, y, width, height, portrait);
-    });
-}
-
-- (void)clearHostViewportRegion {
-    onMain(^{
-      gamecore_clearHostViewportRegion();
-    });
-}
-
 - (void)applySessionConfigUserData:(NSString *)userDataDirectory
                              fonts:(NSString *)sharedFontsDirectory
                  verticalAlignment:(int)verticalAlignment {
-    onMain(^{
+    EmpoGameProcessOnMain(^{
       GameCoreSessionConfig config = {
           .userDataDirectory = userDataDirectory.fileSystemRepresentation,
           .sharedFontsDirectory = sharedFontsDirectory.fileSystemRepresentation,
@@ -346,86 +302,14 @@ void EmpoGameProcessSceneHasSize(void) {
     });
 }
 
-- (void)setSetting:(NSString *)key value:(NSString *)value {
-    onMain(^{
-      gamecore_setSetting(key.UTF8String, value.UTF8String);
-    });
-}
-
 - (void)setRespectsSilentMode:(BOOL)respects {
-    onMain(^{
+    EmpoGameProcessOnMain(^{
       EmpoConfigureAudioSession(respects);
     });
 }
 
-- (void)setShowViewportBounds:(BOOL)enabled {
-    onMain(^{
-      gamecore_setShowViewportBounds(enabled);
-    });
-}
-
-- (void)setViewportBoundsColorRed:(float)red green:(float)green blue:(float)blue alpha:(float)alpha {
-    onMain(^{
-      gamecore_setViewportBoundsColor(red, green, blue, alpha);
-    });
-}
-
-- (void)setCheatsEnabled:(BOOL)enabled {
-    onMain(^{
-      gamecore_setCheatsEnabled(enabled);
-    });
-}
-
-- (void)setGameControllerCaptureEnabled:(BOOL)enabled {
-    onMain(^{
-      gamecore_setGameControllerCaptureEnabled(enabled);
-    });
-}
-
-- (void)setTouchMouseEnabled:(BOOL)enabled {
-    onMain(^{
-      gamecore_setTouchMouseEnabled(enabled);
-    });
-}
-
-- (void)signalErrorDismissed {
-    onMain(^{
-      gamecore_signalErrorDismissed();
-    });
-}
-
-- (void)signalInfoDismissed {
-    onMain(^{
-      gamecore_signalInfoDismissed();
-    });
-}
-
-- (void)requestPause {
-    onMain(^{
-      gamecore_requestPause();
-    });
-}
-
-- (void)requestResume {
-    onMain(^{
-      gamecore_requestResume();
-    });
-}
-
-- (void)setFastForwardMultiplier:(int)multiplier {
-    onMain(^{
-      gamecore_setFastForwardMultiplier(multiplier);
-    });
-}
-
-- (void)resetSessionState {
-    onMain(^{
-      gamecore_resetSessionState();
-    });
-}
-
 - (void)setDebugLogPath:(NSString *)path {
-    onMain(^{
+    EmpoGameProcessOnMain(^{
       gamecore_setDebugLogPath(path.fileSystemRepresentation);
       if (path != nil) {
           captureOutput(path.fileSystemRepresentation);
