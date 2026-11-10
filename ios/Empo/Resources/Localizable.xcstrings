@@ -6513,64 +6513,6 @@
         }
       }
     },
-    "Your backups are still there. Add your locations again to keep backing up." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deine Backups sind noch da. Füge deine Speicherorte erneut hinzu, um weiter zu sichern."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tus copias siguen ahí. Vuelve a añadir tus ubicaciones para seguir haciendo copias."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tes sauvegardes sont toujours là. Ajoute à nouveau tes emplacements pour continuer à sauvegarder."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "I tuoi backup sono ancora lì. Aggiungi di nuovo le posizioni per continuare i backup."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "バックアップはそのまま残っています。バックアップを続けるには、保存先をもう一度追加してください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "백업은 그대로 남아 있습니다. 백업을 계속하려면 저장 위치를 다시 추가하세요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Seus backups continuam lá. Adicione seus locais de novo para continuar fazendo backup."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ваши резервные копии на месте. Добавьте хранилища снова, чтобы продолжить резервное копирование."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你的备份仍在原处。重新添加备份位置即可继续备份。"
-          }
-        }
-      }
-    },
     "a game is running" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -71811,6 +71753,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的 %@ 登录已过期。请重新登录。"
+          }
+        }
+      }
+    },
+    "Your backups are still there. Add your locations again to keep backing up." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Backups sind noch da. Füge deine Speicherorte erneut hinzu, um weiter zu sichern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus copias siguen ahí. Vuelve a añadir tus ubicaciones para seguir haciendo copias."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tes sauvegardes sont toujours là. Ajoute à nouveau tes emplacements pour continuer à sauvegarder."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi backup sono ancora lì. Aggiungi di nuovo le posizioni per continuare i backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップはそのまま残っています。バックアップを続けるには、保存先をもう一度追加してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "백업은 그대로 남아 있습니다. 백업을 계속하려면 저장 위치를 다시 추가하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seus backups continuam lá. Adicione seus locais de novo para continuar fazendo backup."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваши резервные копии на месте. Добавьте хранилища снова, чтобы продолжить резервное копирование."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的备份仍在原处。重新添加备份位置即可继续备份。"
           }
         }
       }
