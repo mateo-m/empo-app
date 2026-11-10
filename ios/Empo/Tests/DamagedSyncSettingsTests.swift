@@ -58,6 +58,21 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: syncFile), damaged)
     }
 
+    func testALocationRemovalStopsWhenTheSyncSettingsDoNotOpen() async throws {
+        let target = TargetDescriptor(
+            id: "unopened-sync-\(UUID().uuidString)", provider: .webdav, label: "Test",
+            root: "Empo")
+        try BackupTargets.add(target)
+        try FileManager.default.removeItem(at: syncFile)
+        try FileManager.default.createDirectory(at: syncFile, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: syncFile) }
+
+        let line = await BackupsScreenModel().remove(targetId: target.id, deleteBackups: false)
+
+        XCTAssertNotNil(line)
+        XCTAssertTrue(BackupTargets.load().contains { $0.id == target.id })
+    }
+
     func testARestoreThatDeletesNothingApplies() throws {
         UserDefaults.standard.set(true, forKey: key)
         var snapshot = DevicePreferences.currentDefaults()

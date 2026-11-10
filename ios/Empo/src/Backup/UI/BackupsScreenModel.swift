@@ -270,10 +270,12 @@ final class BackupsScreenModel {
             try store.removeTarget(targetId: targetId)
             do {
                 try SyncStore.update { $0.forget(targetId: targetId) }
-            } catch {
-                // Sync stays stopped while its settings do not read, so nothing reads this target.
+            } catch is DecodingError {
+                // Sync stays stopped while its settings are damaged, so nothing reads this target.
+                // A file that only failed to open or to save stops the removal, because the next
+                // pass would put the location back without its secret.
                 BackupLog.line(
-                    "BackupsScreenModel", "the sync settings do not read, so \(targetId) stays in them")
+                    "BackupsScreenModel", "the sync settings are damaged, so \(targetId) stays in them")
             }
             updateTheConflicts { $0.forget(targetId: targetId) }
             try BackupKeychain.removeSecret(targetId: targetId)
