@@ -269,7 +269,7 @@ struct GameMetadata: Codable {
         // NSEnumerator's `for case let x in enumerator` form
         // calls `makeIterator()`, which Swift 6 treats as
         // unavailable from async contexts. Manual `nextObject()`
-        // loop sidesteps that and still walks the whole tree.
+        // loop sidesteps that.
         var total: Int64 = 0
         while !Task.isCancelled, let next = enumerator.nextObject() {
             guard let fileURL = next as? URL else { continue }
