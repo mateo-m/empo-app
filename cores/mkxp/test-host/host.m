@@ -42,8 +42,7 @@
 #include "GameCore.h"
 
 static char *gGamePath;
-static int gArgc;
-static char **gArgv;
+static char *gArgv[2];
 
 // MKXP_KEYS drives the game without a person at the keyboard. Its
 // format is "seconds:scancode" pairs joined by commas, and the numbers
@@ -183,7 +182,7 @@ static void openCore(void) {
     openCore();
     scheduleKeys(getenv("MKXP_KEYS"));
     gamecore_setGamePath(gGamePath);
-    int result = gamecore_run_app(gArgc, gArgv);
+    int result = gamecore_run_app(1, gArgv);
     fprintf(stderr, "[host] gamecore_run_app returned %d\n", result);
     _exit(result == 0 ? 0 : 1);
 }
@@ -191,8 +190,7 @@ static void openCore(void) {
 @end
 
 int main(int argc, char *argv[]) {
-    gArgc = argc;
-    gArgv = argv;
+    gArgv[0] = argv[0];
     @autoreleasepool {
         return UIApplicationMain(argc, argv, nil, NSStringFromClass(MkxpTestHostDelegate.class));
     }
