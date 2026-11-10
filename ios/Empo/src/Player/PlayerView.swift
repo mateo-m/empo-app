@@ -264,12 +264,7 @@ struct PlayerView: View {
                 // keyboard: no binding stands between the player and
                 // the letters they type.
                 input.textInputActive = active
-                if active != keyboardMode {
-                    keyboardMode = active
-                    if active {
-                        AppWindow.claimKey(.keyboard)
-                    }
-                }
+                keyboardMode = active
             }
 
             // The registry must be wired BEFORE controller input

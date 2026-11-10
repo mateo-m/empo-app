@@ -44,13 +44,17 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         if isActive && !field.isFirstResponder {
             AppWindow.claimKey(.keyboard)
             field.becomeFirstResponder()
-        } else if !isActive && field.isFirstResponder {
+        } else if !isActive {
             // Resign first. With the key window released first, the
             // input session stays open with no key window, and the
             // keyboard window can show its own UI while it closes.
-            field.resignFirstResponder()
+            // UIKit can resign the field on its own, for example for
+            // a sheet, so the claim is released also then.
+            if field.isFirstResponder {
+                field.resignFirstResponder()
+                context.coordinator.stopTyping()
+            }
             AppWindow.releaseKey(.keyboard)
-            context.coordinator.stopTyping()
         }
     }
 
