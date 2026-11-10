@@ -266,10 +266,9 @@ GameCoreVerticalAlignment gamecore_getVerticalAlignment(void);
 void gamecore_applySessionConfig(const GameCoreSessionConfig *config);
 
 // A per-game setting that only some cores know (UI -> Engine). The
-// keys are the GAMECORE_SETTING_*
-// names below. An unknown key writes a warning to the log and changes
-// nothing. Add a field to GameCoreSessionConfig only when every core
-// needs it.
+// keys are the GAMECORE_SETTING_* names below. An unknown key writes a
+// warning to the log and changes nothing. Add a field to
+// GameCoreSessionConfig only when every core needs it.
 void gamecore_setSetting(const char *key, const char *value);
 
 // "1" or "0". The PSDK and MV/MZ cores.

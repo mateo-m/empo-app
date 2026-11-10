@@ -13,7 +13,7 @@
 
 - (void)setGamePath:(nullable NSString *)path {
     EmpoGameProcessOnMain(^{
-        gamecore_setGamePath(path.UTF8String);
+        gamecore_setGamePath(path.fileSystemRepresentation);
     });
 }
 
@@ -31,7 +31,7 @@
 
 - (void)setCABundlePath:(nullable NSString *)path {
     EmpoGameProcessOnMain(^{
-        gamecore_setCABundlePath(path.UTF8String);
+        gamecore_setCABundlePath(path.fileSystemRepresentation);
     });
 }
 

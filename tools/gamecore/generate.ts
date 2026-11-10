@@ -55,8 +55,7 @@ function parseParameter(text: string, declaration: string): Parameter {
 
 function parseHeader(text: string): CoreFunction[] {
   const code = text
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, " ")
     .replace(/^\s*#.*$/gm, "")
     .replace(/extern "C"/g, "")
     .replace(/[{}]/g, ";");
@@ -162,7 +161,12 @@ NS_ASSUME_NONNULL_END
 
 function relayService(relayed: CoreFunction[]): string {
   const methods = relayed.map((fn) => {
-    const args = fn.parameters.map((p) => (p.type === "const char *" ? `${p.name}.UTF8String` : p.name));
+    const args = fn.parameters.map((p) => {
+      if (p.type !== "const char *") {
+        return p.name;
+      }
+      return p.name === "path" ? `${p.name}.fileSystemRepresentation` : `${p.name}.UTF8String`;
+    });
     return `- (void)${selector(fn)} {
     EmpoGameProcessOnMain(^{
         gamecore_${fn.name}(${args.join(", ")});
@@ -217,6 +221,11 @@ ${functions.join("\n\n")}
 }
 
 const functions = parseHeader(fs.readFileSync(path.join(repoRoot, headerPath), "utf8"));
+for (const name of [...notRelayed, ...ownClientSide]) {
+  if (!functions.some((fn) => fn.name === name)) {
+    throw new Error(`generate.ts names gamecore_${name}, but ${headerPath} does not declare it`);
+  }
+}
 const relayed = functions.filter(isRelayed);
 const outputs: Record<string, string> = {
   "ios/Empo/GameProcess/GameCoreFunctions.h": forwarderList(functions),

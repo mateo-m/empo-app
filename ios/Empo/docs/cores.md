@@ -29,11 +29,11 @@ framework and not a static library.
 ## What a build ships
 
 A build carries one or more cores. `cores/cores.sh` lists every core, and each
-build script, the "Embed the cores" phase, and `scripts/audit-ipa.sh` read it.
+build script, the "Embed the cores" phase, and `scripts/release.sh` read it.
 The iOS app and the Mac app use the same list. The "Embed the cores" phase of
 each app runs `scripts/embed-cores.sh`, which copies the frameworks into the
-app. The script stops the build when `EMPO_CORES` names an unknown core. Ship
-one core from the command line:
+app. An empty `EMPO_CORES` ships every core. The script stops the build when
+`EMPO_CORES` names an unknown core. Ship one core from the command line:
 
 ```sh
 xcodebuild ... EMPO_CORES=Psdk30Core
@@ -238,7 +238,8 @@ does not use `dlsym`. A call made before the process connects waits, and goes
 to the process when it connects. A call outside a session goes nowhere. The
 getters answer from the last status that the process sent. The game process,
 Empo Player on macOS, and the mkxp test host open the core with steps 1 and 2
-through `EmpoCoreOpen` in `GameProcess/GameCoreForwarders.c`.
+through `EmpoCoreOpen` in `GameProcess/GameCoreForwarders.c`. There too, a call
+made before the core opens aborts with the name it wanted.
 
 ## Which thread runs the game
 

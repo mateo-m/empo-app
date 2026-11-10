@@ -5,6 +5,7 @@
 
 #include <dlfcn.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "GameCore.h"
 
@@ -37,12 +38,21 @@ const char *EmpoCoreOpen(const char *binaryPath) {
     return NULL;
 }
 
+static void notOpen(const char *name) {
+    fprintf(stderr, "EmpoCore: gamecore_%s was called before a core opened\n", name);
+    abort();
+}
+
 #define GAMECORE_FUNCTION(ret, name, params, args)                                                           \
     ret gamecore_##name params {                                                                             \
+        if (core_##name == NULL)                                                                             \
+            notOpen(#name);                                                                                  \
         return core_##name args;                                                                             \
     }
 #define GAMECORE_VOID(name, params, args)                                                                    \
     void gamecore_##name params {                                                                            \
+        if (core_##name == NULL)                                                                             \
+            notOpen(#name);                                                                                  \
         core_##name args;                                                                                    \
     }
 #include "GameCoreFunctions.h"
