@@ -185,11 +185,15 @@ build_release() {
         -derivedDataPath "$derived" \
         CODE_SIGNING_ALLOWED=NO \
         CONFIGURATION_BUILD_DIR="$products" \
+        ${SENTRY_DSN:+SENTRY_DSN="$SENTRY_DSN"} \
         -xcconfig "$PROJECT_DIR/Sideload.xcconfig" \
         EMPO_CORES="$cores" \
         build 2>&1 | tail -n 40 >&2
     app="$products/Empo.app"
     [[ -d "$app" ]] || fail "the build has no Empo.app in $products"
+    # The DSN comes from $SENTRY_DSN or from Signing.xcconfig.
+    [[ -n "$(plutil -extract EmpoSentryDSN raw "$app/Info.plist" 2>/dev/null)" ]] ||
+        fail "the app has no Sentry DSN, so it would send no error reports. Set SENTRY_DSN."
 
     # SideStore and AltStore give an extension in Extensions/ no new
     # bundle ID, and iOS then refuses to install the whole app.
@@ -206,6 +210,9 @@ build_release() {
     IPA_SIZE=$(stat -f%z "$IPA_PATH")
     log "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
 
+    # The Mac app does not read Signing.xcconfig.
+    [[ -n "${SENTRY_DSN:-}" ]] ||
+        fail "the Mac app has no Sentry DSN, so it would send no error reports. Set SENTRY_DSN."
     DMG_PATH=$(EMPO_CORES="$cores" scripts/package-mac.sh "$version" | tail -n 1)
     log "    mac: $DMG_PATH"
 }

@@ -17,6 +17,7 @@ final class EmpoAppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        ErrorReports.apply(enabled: AppSettings.shared.errorReports)
         BackupTaskScheduler.register()
         BackupNotifier.start()
         BackupScheduler.shared.start()

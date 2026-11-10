@@ -37,7 +37,8 @@ enum GameSession {
 
         crashTracker.writeMarker(for: container)
         let runner = EngineSessionCoordinator.shared.runner
-        sessionLogger.beginSession(for: game, container: container, debugLogsEnabled: input.debugLogsEnabled)
+        sessionLogger.beginSession(
+            for: game, container: container, core: input.core, debugLogsEnabled: input.debugLogsEnabled)
         GameReport.last = sessionLogger.logURL.map {
             GameReport(gameTitle: game.title, logURL: $0)
         }

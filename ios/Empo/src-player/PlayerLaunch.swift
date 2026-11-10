@@ -53,8 +53,11 @@ struct PlayerLiveSettings: Codable {
 
 extension GameCoreVerticalAlignment: @retroactive Codable {}
 
-/// A line that Empo Player writes to its standard output for Empo.
-enum PlayerMessage: String {
+/// A JSON line that Empo Player writes to its standard output for Empo.
+enum PlayerMessage: Codable {
     case paused
     case resumed
+    /// Nil when the game stopped without a message.
+    case error(String?)
+    case info(String)
 }

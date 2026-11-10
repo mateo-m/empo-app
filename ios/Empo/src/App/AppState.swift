@@ -28,6 +28,8 @@ class AppState {
     var selectedGame: GameEntry?
     private(set) var launchedSettings: LaunchedSettings?
     var shownError: ShownError?
+    /// A script error also ends the game without a clean exit.
+    private var sessionShowedError = false
     /// A deliberate in-game dialog (Ruby `msgbox` / `p`), not an error.
     /// The core blocks its game thread until the user dismisses
     /// RootView's info alert. The game then
@@ -129,6 +131,7 @@ class AppState {
         // persist to this game's layout profile.
         ControlsLayout.shared.switchGame(id: game.id, container: start.container, title: game.title)
         PauseManager.shared.reset()
+        sessionShowedError = false
         phase = .loading
 
         session.configureEngine(
@@ -237,6 +240,7 @@ class AppState {
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
+            ErrorReports.gameCrash(game: reportedGame)
             shownError = ShownError(message: message)
         }
     }
@@ -395,6 +399,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // We intentionally do NOT set phase = nil here. If phase
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
+        if !cleanExit, !sessionShowedError {
+            ErrorReports.gameCrash(game: reportedGame)
+        }
         phase = .ended(clean: cleanExit, started: phase == .playing)
         clearEndedGame()
     }
@@ -440,12 +447,20 @@ extension AppState: EngineSessionCoordinatorDelegate {
         }
     }
 
+    private var reportedGame: ErrorReports.Game? {
+        GameReport.last.map { ($0.gameTitle, $0.logURL) }
+    }
+
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
+        sessionShowedError = true
+        ErrorReports.gameError(message, game: reportedGame)
         shownError = ShownError(message: message)
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
+        session.note("Message shown: \(message)")
+        ErrorReports.gameMessage(message, game: reportedGame)
         infoMessage = message
     }
 
