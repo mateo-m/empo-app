@@ -39,6 +39,24 @@ enum SyncStore {
         return state
     }
 
+    /// Nothing repairs a damaged file, so sync stays off until the user sets it up again.
+    static func settingsAreDamaged() -> Bool {
+        do {
+            _ = try SyncState.read(applicationSupport: BackupRoot.layout.applicationSupport, actorId: "")
+            return false
+        } catch is DecodingError {
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    static func setAsideTheDamagedFile() throws {
+        guard settingsAreDamaged() else { return }
+        try BackupRoot.setAside(
+            BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName))
+    }
+
     /// Other devices hold the changes of the old id, numbered from 1.
     /// A new document that writes as that id numbers from 1 again,
     /// and Automerge refuses every copy that holds both.

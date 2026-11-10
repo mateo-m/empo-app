@@ -73,6 +73,33 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertTrue(BackupTargets.load().contains { $0.id == target.id })
     }
 
+    func testSetUpSyncAgainMovesTheDamagedFileAsideAndStartsTheJoin() async throws {
+        let folder = layout.applicationSupport
+        let before = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+        try BackupTargets.add(
+            TargetDescriptor(
+                id: "set-up-again-\(UUID().uuidString)", provider: .webdav, label: "Test",
+                root: "Empo"))
+        XCTAssertTrue(SyncStore.settingsAreDamaged())
+
+        let ask = try await SyncJoin.setUpAgain()
+
+        let asides = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+            .subtracting(before).filter { $0.hasPrefix("sync.damaged-") }
+        defer {
+            for name in asides {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
+        }
+        XCTAssertEqual(asides.count, 1)
+        XCTAssertEqual(
+            try asides.first.map { try Data(contentsOf: folder.appendingPathComponent($0)) }, damaged)
+        XCTAssertFalse(SyncStore.settingsAreDamaged())
+        XCTAssertFalse(SyncPass.shared.settingsAreDamaged)
+        XCTAssertNotNil(try SyncStore.state().groupId)
+        XCTAssertEqual(ask, SyncJoinAsk.none)
+    }
+
     func testARestoreThatDeletesNothingApplies() throws {
         UserDefaults.standard.set(true, forKey: key)
         var snapshot = DevicePreferences.currentDefaults()

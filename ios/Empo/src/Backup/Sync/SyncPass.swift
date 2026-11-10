@@ -13,6 +13,7 @@ import UIKit
 final class SyncPass {
 
     private(set) var lastPassFailed = false
+    private(set) var settingsAreDamaged = false
 
     static let shared = SyncPass()
 
@@ -122,6 +123,8 @@ final class SyncPass {
         state = .running(newsArrived: false)
         defer { runTheNextPass() }
 
+        settingsAreDamaged = SyncStore.settingsAreDamaged()
+
         guard let engine = engine ?? makeTheEngine() else { return }
         do {
             _ = try AutomergeDocumentStore.bytes()
@@ -139,6 +142,11 @@ final class SyncPass {
         case .done, .nothingToDo, .noLocalNews:
             lastPassFailed = false
         }
+    }
+
+    func settingsWereSetUpAgain() {
+        settingsAreDamaged = false
+        lastPassFailed = false
     }
 
     /// The pass that follows, where news arrived while this one ran.

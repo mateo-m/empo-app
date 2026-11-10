@@ -17,6 +17,7 @@ struct BackupsScreen: View {
     @State private var unsavedPackage: PackageRecord?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var looksForAGroup = false
+    @State private var setUpAgainFailure: String?
 
     var body: some View {
         ReadFirst(value: model.items) { items in
@@ -401,10 +402,13 @@ struct BackupsScreen: View {
     private var syncSection: some View {
         Section {
             Button {
-                lookForAGroup()
+                if SyncPass.shared.settingsAreDamaged { setUpSyncAgain() } else { lookForAGroup() }
             } label: {
                 HStack {
-                    Text("Sync settings with another device")
+                    Text(
+                        SyncPass.shared.settingsAreDamaged
+                            ? SyncGroupCopy.setUpAgainLabel
+                            : String(localized: "Sync settings with another device"))
                     Spacer()
                     if looksForAGroup { ProgressView() }
                 }
@@ -412,12 +416,35 @@ struct BackupsScreen: View {
             .disabled(looksForAGroup)
         } footer: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                if SyncPass.shared.lastPassFailed {
-                    Label(SyncGroupCopy.failedLine, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.warning)
+                if SyncPass.shared.settingsAreDamaged {
+                    Label(
+                        setUpAgainFailure ?? SyncGroupCopy.stoppedLine,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.warning)
+                } else {
+                    if SyncPass.shared.lastPassFailed {
+                        Label(SyncGroupCopy.failedLine, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.warning)
+                    }
+                    Text(SyncGroupCopy.stableLine)
                 }
-                Text(SyncGroupCopy.stableLine)
             }
+        }
+    }
+
+    private func setUpSyncAgain() {
+        looksForAGroup = true
+        setUpAgainFailure = nil
+        Task {
+            do {
+                let ask = try await SyncJoin.setUpAgain()
+                sheets.show(.join(SyncJoinPrompt(ask: ask)))
+            } catch {
+                BackupLog.line("BackupsScreen", "sync.json was not set aside: \(error)")
+                setUpAgainFailure = String(localized: "Empo couldn't set up sync again. Try again.")
+            }
+            looksForAGroup = false
         }
     }
 

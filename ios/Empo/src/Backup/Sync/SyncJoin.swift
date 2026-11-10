@@ -53,6 +53,15 @@ enum SyncJoin {
         }
     }
 
+    /// The settings on this device stay. A device with a location gets
+    /// the group that adding a location gives it.
+    static func setUpAgain() async throws -> SyncJoinAsk {
+        try SyncStore.setAsideTheDamagedFile()
+        SyncPass.shared.settingsWereSetUpAgain()
+        if !BackupTargets.load().isEmpty { startAGroup() }
+        return await ask()
+    }
+
     static func startAGroup() {
         do {
             try SyncStore.update { state in
