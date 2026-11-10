@@ -413,7 +413,7 @@ jobs:
           EMPO_TESTS_NO_SKIP: "1"
         run: scripts/run-swift-tests.sh
 
-      - name: Build (iOS Simulator)
+      - name: Build the app and its tests (iOS Simulator)
         working-directory: ios/Empo
         run: |
           set -o pipefail
@@ -422,7 +422,7 @@ jobs:
             -scheme Empo \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED_DATA" \
-            build 2>&1 | tail -n 60
+            build-for-testing 2>&1 | tail -n 60
 
       # A Simulator of its own for each runner: another job or a person
       # can boot a shared one, and `simctl boot` then fails. The first
@@ -465,6 +465,37 @@ jobs:
           sleep 10
           kill -0 "$PID" 2>/dev/null || { echo "::error::Empo stopped within 10 seconds of its start"; exit 1; }
           echo "Empo still runs after 10 seconds"
+
+      # StoreKit reads the test purchase file only when the app starts, and a
+      # test run puts the file on the Simulator after that. On a new Simulator,
+      # the first run of PlusStoreTests always fails. This run puts the file
+      # there. The full run below still fails on a real purchase test failure.
+      - name: Load the test purchase file on the Simulator
+        working-directory: ios/Empo
+        timeout-minutes: 15
+        continue-on-error: true
+        run: |
+          xcodebuild \
+            -project Empo.xcodeproj \
+            -scheme Empo \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            -only-testing:EmpoTests/PlusStoreTests \
+            -collect-test-diagnostics never \
+            test-without-building 2>&1 \
+            | grep --line-buffered -E "Test Case|Test Suite|error|TEST"
+
+      - name: App tests (iOS Simulator)
+        working-directory: ios/Empo
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Empo.xcodeproj \
+            -scheme Empo \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            test-without-building 2>&1 | tail -n 200
 
       - name: Shut down the Simulator
         if: always() && env.SIM_UDID != ''
