@@ -4,9 +4,6 @@
 import Foundation
 import Sentry
 
-/// Sends the errors that a game shows, and the game crashes that
-/// `CrashTracker` finds, to Sentry. Nothing else goes: the SDK's own
-/// crash handler, hang reports, session counts, and breadcrumbs stay off.
 @MainActor
 enum ErrorReports {
     /// The end of the session log that goes with a report. The engine
@@ -22,11 +19,9 @@ enum ErrorReports {
             guard !SentrySDK.isEnabled else { return }
             SentrySDK.start { options in
                 options.dsn = dsn
-                options.releaseName = "\(AppInfo.version) (\(AppInfo.build))"
                 #if DEBUG
                 options.environment = "development"
                 #endif
-                options.sendDefaultPii = false
                 options.attachStacktrace = false
                 // Ruby and the engine install their own signal and
                 // exception handlers each time a game starts, and Ruby
@@ -36,15 +31,13 @@ enum ErrorReports {
                 // as crashes.
                 options.enableCrashHandler = false
                 options.enableAppHangTracking = false
-                options.enableWatchdogTerminationTracking = false
                 options.enableAutoSessionTracking = false
                 options.enableAutoBreadcrumbTracking = false
                 options.enableSwizzling = false
-                options.enableNetworkTracking = false
-                options.enableCaptureFailedRequests = false
-                options.enableAutoPerformanceTracing = false
-                // A hash that stays the same for each device.
-                options.beforeSend = { event in
+                // Both stay the same for each install: the SDK sets the
+                // user to an install ID when no user is set.
+                options.beforeSend = { @Sendable event in
+                    event.user = nil
                     event.context?["app"]?["device_app_hash"] = nil
                     return event
                 }
@@ -67,9 +60,7 @@ enum ErrorReports {
     /// error.
     static func gameMessage(_ message: String, report: GameReport?) {
         guard let error = RescuedRubyError(message) else { return }
-        send(
-            message, level: .error, fingerprint: ["rescued", error.className, error.message],
-            report: report)
+        send(message, level: .error, fingerprint: error.fingerprint, report: report)
     }
 
     static func gameCrash(report: GameReport?) {
@@ -113,9 +104,16 @@ struct RescuedRubyError: Equatable {
 
     private static let className = #"((?:[A-Z]\w*::)*[A-Z]\w*)"#
     private static let inspected = try! NSRegularExpression(
-        pattern: #"\A#<"# + className + #": (.*?)>"#, options: .dotMatchesLineSeparators)
+        pattern: #"\A#<"# + className + #": (.*)>\z"#, options: .dotMatchesLineSeparators)
     private static let array = try! NSRegularExpression(
         pattern: #"\A\["# + className + #", "((?:[^"\\]|\\.)*)""#)
+
+    /// An object's address changes on each run, so it stays out.
+    var fingerprint: [String] {
+        let message = message.replacingOccurrences(
+            of: "0x[0-9a-f]+", with: "0x", options: .regularExpression)
+        return ["rescued", className, message]
+    }
 
     init(className: String, message: String) {
         self.className = className

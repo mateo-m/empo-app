@@ -17,7 +17,6 @@ packages:
   # took 23.89 ms, and the signed app-thinned payload grew by 1.35
   # MiB compressed. Empo supplies the replication over its own
   # targets, so `automerge-repo-swift` stays out.
-  # The error reports of Settings > Advanced (ErrorReports.swift).
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa.git
     revision: 2f64c77f77514acd01780d1aac86ae75b7fccd04 # 9.31.0

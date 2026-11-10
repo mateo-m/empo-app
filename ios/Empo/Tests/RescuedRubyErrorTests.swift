@@ -28,6 +28,20 @@ final class RescuedRubyErrorTests: XCTestCase {
             #"undefined method `x' for \"a\":String"#)
     }
 
+    func testMessageKeepsEveryAngleBracket() {
+        XCTAssertEqual(
+            RescuedRubyError("#<NoMethodError: undefined method `>' for #<Game_Player:0x00007f3a>>")?.message,
+            "undefined method `>' for #<Game_Player:0x00007f3a>")
+    }
+
+    func testAddressesDoNotSplitTheIssue() {
+        XCTAssertEqual(
+            RescuedRubyError(className: "NoMethodError", message: "for #<Game_Player:0x00007f3a>")
+                .fingerprint,
+            RescuedRubyError(className: "NoMethodError", message: "for #<Game_Player:0x0000beef>").fingerprint
+        )
+    }
+
     func testNormalGameMessagesAreNotErrors() {
         XCTAssertNil(RescuedRubyError("Saved the game."))
         XCTAssertNil(RescuedRubyError(#"[Pikachu, "Lv. 5"]"#))
