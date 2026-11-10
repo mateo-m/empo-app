@@ -61,7 +61,7 @@ enum SyncLocalValues {
         applyDescriptors(model.targetDescriptors)
     }
 
-    private static func applyProfiles(
+    static func applyProfiles(
         _ model: SyncDocumentModel, identities: inout SyncProfileIdentities
     ) {
         let store = LayoutProfilesManager.store
@@ -83,7 +83,11 @@ enum SyncLocalValues {
             do {
                 let local = identities.name(ofId: id)
                 if let local, local != profile.name {
-                    try store.renameProfile(from: local, to: profile.name)
+                    // The disk ignores case, so a change of only the
+                    // case keeps the local folder.
+                    if LayoutProfileStore.nameKey(local) != LayoutProfileStore.nameKey(profile.name) {
+                        try store.renameProfile(from: local, to: profile.name)
+                    }
                     identities.rename(from: local, to: profile.name)
                 }
                 if local == nil, store.profileExists(profile.name) {

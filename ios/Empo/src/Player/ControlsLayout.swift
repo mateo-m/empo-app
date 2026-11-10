@@ -1307,9 +1307,11 @@ class ControlsLayout {
             do {
                 try LayoutProfilesManager.writePin(.profile(name), for: container, from: self)
             } catch {
-                // This session still saves to the new profile, so no
-                // edit is lost. The next launch uses the old layout.
                 NSLog("layout pin: pin to \(name) failed for \(container.id): \(error)")
+                // No game points to the profile without the pin. The
+                // next save creates it again.
+                try? store.deleteProfile(name)
+                throw error
             }
             provenance = .pinnedProfile(name)
             pinFellThrough = false
@@ -1377,11 +1379,18 @@ class ControlsLayout {
         }
 
         var pinnedRead: LayoutProfileStore.ProfileRead?
+        var pinnedName: String?
         if case .profile(let name) = loaded.pin {
+            pinnedName = name
             pinnedRead = store.readProfile(name)
             if let pinnedRead {
                 store.logProblems(name, read: pinnedRead)
             }
+        }
+        if let name = LayoutProfilesManager.defaultProfileName, name != pinnedName,
+            let read = store.readProfile(name)
+        {
+            store.logProblems(name, read: read)
         }
 
         let outcome = LayoutResolution.resolve(

@@ -51,8 +51,12 @@ public struct LayoutProfileStore {
 
     // MARK: - Paths
 
+    /// A disk that ignores case finds the folder at the direct path. A
+    /// disk that does not ignore case needs the scan.
     public func profileURL(_ name: String) -> URL {
-        profilesRoot.appendingPathComponent(storedName(name) ?? name, isDirectory: true)
+        let direct = profilesRoot.appendingPathComponent(name, isDirectory: true)
+        if FileManager.default.fileExists(atPath: direct.path) { return direct }
+        return profilesRoot.appendingPathComponent(storedName(name) ?? name, isDirectory: true)
     }
 
     public func controlsURL(_ name: String) -> URL {
@@ -151,14 +155,20 @@ public struct LayoutProfileStore {
     public func createProfile(_ name: String, touch: TouchSection) throws {
         guard Self.validatedName(name) == name else { throw StoreError.invalidName(name) }
         guard !profileExists(name) else { throw StoreError.nameTaken(name) }
-        try writeProfile(name, touch: touch)
+        do {
+            try writeProfile(name, touch: touch)
+        } catch {
+            try? FileManager.default.removeItem(at: profileURL(name))
+            throw error
+        }
     }
 
     /// Copy, then move the pins and the record, then delete: a crash
     /// at any step leaves each pin on a profile that exists. A failed
     /// copy, pin, or record step undoes the steps before it. A failed
-    /// delete keeps both folders, because a partial delete can leave
-    /// the new folder as the only full copy.
+    /// undo of a pin keeps the new folder, because that pin still
+    /// points to it. A failed delete keeps both folders, because a
+    /// partial delete can leave the new folder as the only full copy.
     public func renameProfile(from oldName: String, to newName: String) throws {
         guard Self.validatedName(newName) == newName else { throw StoreError.invalidName(newName) }
         guard profileExists(oldName) else { throw StoreError.missing(oldName) }
@@ -166,16 +176,23 @@ public struct LayoutProfileStore {
         let fm = FileManager.default
         let pinned = gamesPinned(to: oldName)
         try fm.copyItem(at: profileURL(oldName), to: profileURL(newName))
+        var moved: [URL] = []
         do {
             for folder in pinned {
                 try writePin(.profile(newName), forGameFolder: folder)
+                moved.append(folder)
             }
             try renameInMigrationRecord(from: oldName, to: newName)
         } catch {
-            for folder in pinned {
-                try? writePin(.profile(oldName), forGameFolder: folder)
+            var restored = true
+            for folder in moved {
+                do {
+                    try writePin(.profile(oldName), forGameFolder: folder)
+                } catch {
+                    restored = false
+                }
             }
-            try? fm.removeItem(at: profileURL(newName))
+            if restored { try? fm.removeItem(at: profileURL(newName)) }
             throw error
         }
         do {

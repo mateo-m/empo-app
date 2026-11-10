@@ -293,7 +293,9 @@ struct LayoutProfilesSettingsView: View {
         guard let oldName = renaming else { return }
         renaming = nil
         do {
-            _ = try LayoutProfilesManager.renameProfile(oldName, toRawName: renameText)
+            if try LayoutProfilesManager.renameProfile(oldName, toRawName: renameText) == nil {
+                showNameError = true
+            }
         } catch {
             showNameError = true
         }

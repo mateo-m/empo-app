@@ -65,6 +65,33 @@ final class LayoutSaveFailureTests: XCTestCase {
         XCTAssertNotNil(LayoutProfilesManager.store.readProfile(name)?.touch)
     }
 
+    func testAFailedPinLeavesNoProfileWithoutAGame() throws {
+        layout.beginEditSession()
+        let button = try XCTUnwrap(layout.buttons.first)
+        let moved = CGPoint(x: 0.3, y: 0.6)
+        layout.updateButton(id: button.id, relativeCenter: moved)
+        let profilesBefore = LayoutProfilesManager.store.listProfiles()
+
+        let state = LayoutProfilesManager.store.pinURL(forGameFolder: game.url)
+            .deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
+        try lock(state)
+        XCTAssertThrowsError(try layout.save())
+        XCTAssertEqual(LayoutProfilesManager.store.listProfiles(), profilesBefore)
+        XCTAssertEqual(layout.buttons.first { $0.id == button.id }?.relativeCenter, moved)
+        if case .pinnedProfile = layout.provenance {
+            XCTFail("A failed pin must not pin a profile.")
+        }
+
+        unlock(state)
+        try layout.save()
+        guard case .pinnedProfile(let name) = layout.provenance else {
+            return XCTFail("The second Done did not create the profile.")
+        }
+        XCTAssertEqual(
+            LayoutProfilesManager.store.loadPin(forGameFolder: game.url).pin, .profile(name))
+    }
+
     func testAFailedScreenSaveKeepsTheScreenPosition() throws {
         layout.beginEditSession()
         let button = try XCTUnwrap(layout.buttons.first)

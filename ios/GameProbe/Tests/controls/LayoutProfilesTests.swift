@@ -235,6 +235,21 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertThrowsError(try store.renameProfile(from: "New", to: "$game"), "sentinel rejected")
     }
 
+    func testAFailedPinStepUndoesTheRename() throws {
+        try store.createProfile("Old", touch: sampleTouch())
+        let gameA = try makeGame("A", pin: .profile("Old"))
+        let gameB = try makeGame("B", pin: .profile("Old"))
+        let locked = gameB.appendingPathComponent("EmpoState")
+        let fm = FileManager.default
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: locked.path)
+        defer { try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+
+        XCTAssertThrowsError(try store.renameProfile(from: "Old", to: "New"))
+        XCTAssertEqual(store.listProfiles(), ["Old"])
+        XCTAssertEqual(store.loadPin(forGameFolder: gameA).pin, .profile("Old"))
+        XCTAssertEqual(store.loadPin(forGameFolder: gameB).pin, .profile("Old"))
+    }
+
     func testRenameUpdatesTheMigrationRecord() throws {
         let recordURL = profilesRoot.appendingPathComponent(MigrationRecord.fileName)
         try MigrationRecord(
