@@ -210,6 +210,9 @@ build_release() {
     IPA_SIZE=$(stat -f%z "$IPA_PATH")
     log "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
 
+    # The Mac app does not read Signing.xcconfig.
+    [[ -n "${SENTRY_DSN:-}" ]] ||
+        fail "the Mac app has no Sentry DSN, so it would send no error reports. Set SENTRY_DSN."
     DMG_PATH=$(EMPO_CORES="$cores" scripts/package-mac.sh "$version" | tail -n 1)
     log "    mac: $DMG_PATH"
 }

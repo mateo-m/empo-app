@@ -308,6 +308,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     private func showError(_ message: String?) {
+        send(.error(message))
         reportedError = true
         errorAlertsOnScreen += 1
         let alert = NSAlert()
@@ -323,6 +324,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     private func showInfo(_ message: String) {
+        send(.info(message))
         let alert = NSAlert()
         alert.messageText = launch.title
         alert.informativeText = message
@@ -359,8 +361,12 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             core.requestResume()
         }
         pausedOverlay.isHidden = !paused
-        let message = paused ? PlayerMessage.paused : .resumed
-        try? messages.write(contentsOf: Data((message.rawValue + "\n").utf8))
+        send(paused ? .paused : .resumed)
+    }
+
+    private func send(_ message: PlayerMessage) {
+        guard let line = try? JSONEncoder().encode(message) else { return }
+        try? messages.write(contentsOf: line + Data("\n".utf8))
     }
 
     @objc func toggleFastForward(_ sender: Any?) {

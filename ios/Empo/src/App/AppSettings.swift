@@ -197,9 +197,7 @@ class AppSettings {
     var errorReports: Bool {
         didSet {
             UserDefaults.standard.set(errorReports, forKey: DefaultsKey.errorReports)
-            #if os(iOS)
             ErrorReports.apply(enabled: errorReports)
-            #endif
         }
     }
 

@@ -240,7 +240,7 @@ class AppState {
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
-            ErrorReports.gameCrash(report: GameReport.last)
+            ErrorReports.gameCrash(game: reportedGame)
             shownError = ShownError(message: message)
         }
     }
@@ -400,7 +400,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
         if !cleanExit, !sessionShowedError {
-            ErrorReports.gameCrash(report: GameReport.last)
+            ErrorReports.gameCrash(game: reportedGame)
         }
         phase = .ended(clean: cleanExit, started: phase == .playing)
         clearEndedGame()
@@ -447,16 +447,20 @@ extension AppState: EngineSessionCoordinatorDelegate {
         }
     }
 
+    private var reportedGame: ErrorReports.Game? {
+        GameReport.last.map { ($0.gameTitle, $0.logURL) }
+    }
+
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
         sessionShowedError = true
-        ErrorReports.gameError(message, report: GameReport.last)
+        ErrorReports.gameError(message, game: reportedGame)
         shownError = ShownError(message: message)
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
         session.note("Message shown: \(message)")
-        ErrorReports.gameMessage(message, report: GameReport.last)
+        ErrorReports.gameMessage(message, game: reportedGame)
         infoMessage = message
     }
 

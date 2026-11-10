@@ -47,39 +47,40 @@ enum ErrorReports {
         }
     }
 
-    static func gameError(_ message: String, report: GameReport?) {
+    /// The game's title and its session log. Nil when debug logs are off.
+    typealias Game = (title: String, log: URL)
+
+    static func gameError(_ message: String, game: Game?) {
         let firstLine = String(message.prefix { $0 != "\n" })
         // Group by the first line, so that "File Data/Map150.rxdata not
         // found" and "Map151" land in one issue.
-        send(message, level: .error, fingerprint: ["error", firstLine], report: report)
+        send(message, level: .error, fingerprint: ["error", firstLine], game: game)
     }
 
     /// Many games rescue a script error and show it with `p`, for
     /// example `p [$!.class, $!.message, $!.backtrace]` in Insurgence's
     /// `Marshal.load`. The engine shows that as a game message, not an
     /// error.
-    static func gameMessage(_ message: String, report: GameReport?) {
+    static func gameMessage(_ message: String, game: Game?) {
         guard let error = RescuedRubyError(message) else { return }
-        send(message, level: .error, fingerprint: error.fingerprint, report: report)
+        send(message, level: .error, fingerprint: error.fingerprint, game: game)
     }
 
-    static func gameCrash(report: GameReport?) {
-        send(
-            "The game crashed.", level: .fatal, fingerprint: ["crash", report?.gameTitle ?? ""],
-            report: report)
+    static func gameCrash(game: Game?) {
+        send("The game crashed.", level: .fatal, fingerprint: ["crash", game?.title ?? ""], game: game)
     }
 
     private static func send(
-        _ message: String, level: SentryLevel, fingerprint: [String], report: GameReport?
+        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?
     ) {
         guard SentrySDK.isEnabled else { return }
         let event = Event(level: level)
         event.message = SentryMessage(formatted: message)
         event.fingerprint = fingerprint
-        let log = report.flatMap { logTail(of: $0) }
+        let log = game.flatMap { logTail(of: $0.log) }
         SentrySDK.capture(event: event) { scope in
-            if let report {
-                scope.setTag(value: report.gameTitle, key: "game")
+            if let game {
+                scope.setTag(value: game.title, key: "game")
             }
             if let log {
                 scope.addAttachment(Attachment(data: log, filename: "session.log", contentType: "text/plain"))
@@ -87,8 +88,8 @@ enum ErrorReports {
         }
     }
 
-    private static func logTail(of report: GameReport) -> Data? {
-        guard let file = try? FileHandle(forReadingFrom: report.logURL) else { return nil }
+    private static func logTail(of url: URL) -> Data? {
+        guard let file = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? file.close() }
         guard let size = try? file.seekToEnd() else { return nil }
         try? file.seek(toOffset: size > UInt64(logTailBytes) ? size - UInt64(logTailBytes) : 0)

@@ -529,7 +529,6 @@ targets:
           - App/AppState.swift
           - App/CrashTracker.swift
           - App/GameReport.swift
-          - App/ErrorReports.swift
           - App/DisclaimerView.swift
           - Library/GameLibraryView.swift
           - Library/GameLoadingView.swift
@@ -561,6 +560,8 @@ targets:
           - Backup
       - path: src-mac
         type: group
+        excludes:
+          - Info.plist
       - path: src-player/PlayerLaunch.swift
         group: src-player
       - path: src-player/SDLControllers.swift
@@ -587,6 +588,8 @@ targets:
         PRODUCT_NAME: Empo
         PRODUCT_MODULE_NAME: Empo
         GENERATE_INFOPLIST_FILE: YES # yamllint disable-line rule:truthy
+        # Xcode adds the generated keys to the keys of this file.
+        INFOPLIST_FILE: $(PROJECT_DIR)/src-mac/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Empo
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.role-playing-games
         INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 Mateo M.
@@ -636,6 +639,8 @@ targets:
           cp "${PROJECT_DIR}/../Dependencies/mkxp-core/assets/cacert.pem" "$ASSETS/"
     dependencies:
       - package: GameProbe
+      - package: Sentry
+        product: Sentry
       - target: EmpoPlayer
         embed: true
         codeSign: true
