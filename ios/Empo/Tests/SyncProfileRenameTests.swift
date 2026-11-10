@@ -33,5 +33,8 @@ final class SyncProfileRenameTests: XCTestCase {
 
         XCTAssertEqual(store.readProfile(renamed)?.touch?.portrait?.buttons?.first?.x, 0.42)
         XCTAssertEqual(identities.name(ofId: "profile-1"), renamed)
+        XCTAssertTrue(store.listProfiles().contains(renamed), "the folder takes the new case")
+        let next = SyncLocalValues.current(identities: &identities)
+        XCTAssertEqual(next.layoutProfiles["profile-1"]?.name, renamed, "no second record")
     }
 }

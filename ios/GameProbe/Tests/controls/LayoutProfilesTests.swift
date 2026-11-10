@@ -235,6 +235,47 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertThrowsError(try store.renameProfile(from: "New", to: "$game"), "sentinel rejected")
     }
 
+    func testAFailedCreateKeepsWhatWasThereBefore() throws {
+        let file = profilesRoot.appendingPathComponent("Keep")
+        try Data("mine".utf8).write(to: file)
+
+        XCTAssertThrowsError(try store.createProfile("Keep", touch: sampleTouch()))
+        XCTAssertEqual(try Data(contentsOf: file), Data("mine".utf8))
+    }
+
+    func testARenameOfOnlyTheCaseMovesTheFolderAndThePins() throws {
+        try store.createProfile("Foo", touch: sampleTouch())
+        let game = try makeGame("A", pin: .profile("Foo"))
+
+        try store.renameProfile(from: "Foo", to: "foo")
+        XCTAssertEqual(store.listProfiles(), ["foo"])
+        XCTAssertEqual(store.loadPin(forGameFolder: game).pin, .profile("foo"))
+        XCTAssertNotNil(store.readProfile("foo")?.touch)
+    }
+
+    /// An older version let an iPhone keep "Foo" and "foo" side by side.
+    func testTwoNamesThatDifferOnlyByCaseKeepTheirOwnPins() throws {
+        let fm = FileManager.default
+        try store.createProfile("Foo", touch: sampleTouch())
+        let twin = profilesRoot.appendingPathComponent("foo", isDirectory: true)
+        guard !fm.fileExists(atPath: twin.path) else {
+            throw XCTSkip("This disk ignores case, so it cannot hold both folders.")
+        }
+        try fm.copyItem(at: store.profileURL("Foo"), to: twin)
+        let gameA = try makeGame("A", pin: .profile("Foo"))
+        let gameB = try makeGame("B", pin: .profile("foo"))
+
+        try store.renameProfile(from: "Foo", to: "Bar")
+        XCTAssertEqual(store.listProfiles(), ["Bar", "foo"])
+        XCTAssertEqual(store.loadPin(forGameFolder: gameA).pin, .profile("Bar"))
+        XCTAssertEqual(store.loadPin(forGameFolder: gameB).pin, .profile("foo"))
+
+        try store.deleteProfile("Bar")
+        XCTAssertEqual(store.listProfiles(), ["foo"])
+        XCTAssertEqual(store.loadPin(forGameFolder: gameA).pin, .followChain)
+        XCTAssertEqual(store.loadPin(forGameFolder: gameB).pin, .profile("foo"))
+    }
+
     func testAFailedPinStepUndoesTheRename() throws {
         try store.createProfile("Old", touch: sampleTouch())
         let gameA = try makeGame("A", pin: .profile("Old"))

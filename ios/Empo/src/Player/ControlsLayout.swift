@@ -1494,12 +1494,7 @@ class ControlsLayout {
     private func runProfileMigration(container: GameContainer) {
         let store = LayoutProfilesManager.store
         let recordURL = Self.migrationRecordURL
-        // An unreadable record must not read as empty, or every game
-        // migrates again.
-        guard var record = MigrationRecord.load(at: recordURL) else {
-            NSLog("layout migration: \(recordURL.lastPathComponent) is unreadable, migration skipped")
-            return
-        }
+        var record = Self.loadMigrationRecord(at: recordURL)
         let builtins = LayoutProfilesManager.builtins()
 
         // An invalid per-game file stays on disk as it is.
@@ -1571,6 +1566,14 @@ class ControlsLayout {
         Self.saveMigrationRecord(record, to: recordURL)
     }
 
+    /// An unreadable record reads as empty, and the next save writes
+    /// over it.
+    private static func loadMigrationRecord(at url: URL) -> MigrationRecord {
+        if let record = MigrationRecord.load(at: url) { return record }
+        NSLog("layout migration: \(url.lastPathComponent) is unreadable, read as empty")
+        return MigrationRecord()
+    }
+
     private static func saveMigrationRecord(_ record: MigrationRecord, to url: URL) {
         do {
             try record.save(to: url)
@@ -1613,19 +1616,14 @@ class ControlsLayout {
         else { return }
 
         let recordURL = Self.migrationRecordURL
-        let loadedRecord = MigrationRecord.load(at: recordURL)
-        var record = loadedRecord ?? MigrationRecord()
+        var record = Self.loadMigrationRecord(at: recordURL)
         guard
             createAndPinProfile(
                 userTouch: userTouch,
                 baseName: currentGameTitle ?? container.url.lastPathComponent,
                 hash: nil, container: container, record: &record)
         else { return }
-        if loadedRecord != nil {
-            Self.saveMigrationRecord(record, to: recordURL)
-        } else {
-            NSLog("layout migration: \(recordURL.lastPathComponent) is unreadable, left as it is")
-        }
+        Self.saveMigrationRecord(record, to: recordURL)
 
         resolveChain(container: container)
     }

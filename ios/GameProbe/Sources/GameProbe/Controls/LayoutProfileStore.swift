@@ -27,8 +27,8 @@ public struct LayoutProfileStore {
         return name
     }
 
-    /// Two names that differ only by case name one profile, because
-    /// the disk of the device ignores case.
+    /// The Mac disk ignores case and the iPhone disk does not, so
+    /// names that differ only by case name one profile on both.
     public static func nameKey(_ name: String) -> String {
         name.precomposedStringWithCanonicalMapping.lowercased()
     }
@@ -45,8 +45,16 @@ public struct LayoutProfileStore {
 
     /// The name of the folder on disk for `name`, in the case of the folder.
     public func storedName(_ name: String) -> String? {
-        let key = Self.nameKey(name)
-        return listProfiles().first { Self.nameKey($0) == key }
+        Self.folder(named: name, in: listProfiles())
+    }
+
+    /// An older version let an iPhone keep two folders whose names
+    /// differ only by case, so the exact name comes first.
+    private static func folder(named name: String, in folders: [String]) -> String? {
+        let name = name.precomposedStringWithCanonicalMapping
+        if folders.contains(name) { return name }
+        let key = nameKey(name)
+        return folders.first { nameKey($0) == key }
     }
 
     // MARK: - Paths
@@ -155,10 +163,11 @@ public struct LayoutProfileStore {
     public func createProfile(_ name: String, touch: TouchSection) throws {
         guard Self.validatedName(name) == name else { throw StoreError.invalidName(name) }
         guard !profileExists(name) else { throw StoreError.nameTaken(name) }
+        let folderExisted = FileManager.default.fileExists(atPath: profileURL(name).path)
         do {
             try writeProfile(name, touch: touch)
         } catch {
-            try? FileManager.default.removeItem(at: profileURL(name))
+            if !folderExisted { try? FileManager.default.removeItem(at: profileURL(name)) }
             throw error
         }
     }
@@ -171,11 +180,49 @@ public struct LayoutProfileStore {
     /// partial delete can leave the new folder as the only full copy.
     public func renameProfile(from oldName: String, to newName: String) throws {
         guard Self.validatedName(newName) == newName else { throw StoreError.invalidName(newName) }
-        guard profileExists(oldName) else { throw StoreError.missing(oldName) }
+        guard profileExists(oldName), let stored = storedName(oldName) else {
+            throw StoreError.missing(oldName)
+        }
+        if storedName(newName) == stored {
+            if stored != newName { try renameCase(of: stored, to: newName) }
+            return
+        }
         guard !profileExists(newName) else { throw StoreError.nameTaken(newName) }
         let fm = FileManager.default
         let pinned = gamesPinned(to: oldName)
         try fm.copyItem(at: profileURL(oldName), to: profileURL(newName))
+        if let failure = repoint(pinned, from: oldName, to: newName) {
+            if failure.restored { try? fm.removeItem(at: profileURL(newName)) }
+            throw failure.error
+        }
+        do {
+            try fm.removeItem(at: profileURL(oldName))
+        } catch {
+            appendLog(newName, line: "rename: could not delete \(oldName): \(error)")
+        }
+    }
+
+    /// One move of the folder, because a disk that ignores case
+    /// cannot hold the copy next to the original.
+    private func renameCase(of oldName: String, to newName: String) throws {
+        let fm = FileManager.default
+        let oldURL = profilesRoot.appendingPathComponent(oldName, isDirectory: true)
+        let newURL = profilesRoot.appendingPathComponent(newName, isDirectory: true)
+        let pinned = gamesPinned(to: oldName)
+        try fm.moveItem(at: oldURL, to: newURL)
+        if let failure = repoint(pinned, from: oldName, to: newName) {
+            // A pin that keeps the new case still finds the folder by
+            // its name key.
+            try? fm.moveItem(at: newURL, to: oldURL)
+            throw failure.error
+        }
+    }
+
+    /// Moves each pin and the record to `newName`. A failure puts the
+    /// moved pins back. `restored` is false when a pin cannot go back.
+    private func repoint(
+        _ pinned: [URL], from oldName: String, to newName: String
+    ) -> (error: Error, restored: Bool)? {
         var moved: [URL] = []
         do {
             for folder in pinned {
@@ -183,6 +230,7 @@ public struct LayoutProfileStore {
                 moved.append(folder)
             }
             try renameInMigrationRecord(from: oldName, to: newName)
+            return nil
         } catch {
             var restored = true
             for folder in moved {
@@ -192,13 +240,7 @@ public struct LayoutProfileStore {
                     restored = false
                 }
             }
-            if restored { try? fm.removeItem(at: profileURL(newName)) }
-            throw error
-        }
-        do {
-            try fm.removeItem(at: profileURL(oldName))
-        } catch {
-            appendLog(newName, line: "rename: could not delete \(oldName): \(error)")
+            return (error, restored)
         }
     }
 
@@ -293,11 +335,11 @@ public struct LayoutProfileStore {
     }
 
     public func gamesPinned(to name: String) -> [URL] {
-        gameFolders().filter { folder in
-            if case .profile(let pinned) = loadPin(forGameFolder: folder).pin {
-                return Self.nameKey(pinned) == Self.nameKey(name)
-            }
-            return false
+        let folders = listProfiles()
+        let target = Self.folder(named: name, in: folders) ?? Self.nameKey(name)
+        return gameFolders().filter { folder in
+            guard case .profile(let pinned) = loadPin(forGameFolder: folder).pin else { return false }
+            return (Self.folder(named: pinned, in: folders) ?? Self.nameKey(pinned)) == target
         }
     }
 
