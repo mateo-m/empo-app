@@ -44,18 +44,22 @@ final class PlusStoreTests: XCTestCase {
         await store.loadProduct()
         try await store.purchase()
         XCTAssertTrue(store.isSubscribed)
-        let transaction = try XCTUnwrap(session.allTransactions().first)
-        try session.disableAutoRenewForTransaction(identifier: UInt(transaction.identifier))
+
+        // On Xcode 27.2, expireSubscription(productIdentifier:) leaves the
+        // expiry date of the transaction 1 month away. A purchase dated
+        // 2 months ago that never renews gives a subscription that ended.
+        session.clearTransactions()
+        let start = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -2, to: .now))
+        let ended = try await session.buyProduct(
+            identifier: PlusStore.productID,
+            options: [.purchaseDate(start, renewalBehavior: .cancelImmediately)])
+        XCTAssertLessThan(try XCTUnwrap(ended.expirationDate), .now)
 
         // StoreKit sends no update when a subscription runs out. The app
         // sees the end at its next refresh.
-        try session.expireSubscription(productIdentifier: PlusStore.productID)
         await store.refresh()
 
-        let latest = await Transaction.latest(for: PlusStore.productID)
-        XCTAssertFalse(
-            store.isSubscribed,
-            "transactions: \(session.allTransactions().count), latest: \(String(describing: latest))")
+        XCTAssertFalse(store.isSubscribed)
     }
 
     func testARefundTakesPlusAway() async throws {
