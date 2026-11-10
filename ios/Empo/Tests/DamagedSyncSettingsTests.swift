@@ -73,6 +73,16 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertTrue(BackupTargets.load().contains { $0.id == target.id })
     }
 
+    func testABackupRunGoesOnAndKeepsItsGroupWhenItsSettingsDoNotRead() throws {
+        try damaged.write(
+            to: layout.applicationSupport.appendingPathComponent(WriterConflicts.fileName))
+
+        let settings = BackupPass.shared.runSettings(label: "Test")
+
+        XCTAssertNil(settings.conflicts)
+        XCTAssertEqual(settings.syncGroup, .keepRecorded)
+    }
+
     func testARestoreThatDeletesNothingApplies() throws {
         UserDefaults.standard.set(true, forKey: key)
         var snapshot = DevicePreferences.currentDefaults()

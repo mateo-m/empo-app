@@ -116,15 +116,8 @@ final class BackupPass: BackupRunning {
             return nil
         }
 
-        var conflicts = try? WriterConflicts.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
-        let syncGroup: BackupRunRequest.SyncGroupChoice
-        do {
-            syncGroup = .known(try SyncStore.state().groupId)
-        } catch {
-            log("\(descriptor.label) could not read the sync settings, so it keeps the recorded group")
-            syncGroup = .keepRecorded
-        }
+        let settings = runSettings(label: descriptor.label)
+        var conflicts = settings.conflicts
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
@@ -139,7 +132,7 @@ final class BackupPass: BackupRunning {
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
             writerAnswer: conflicts?.answer(for: descriptor.id),
-            syncGroup: syncGroup)
+            syncGroup: settings.syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
         // its handle when the last reference goes, so nothing here
@@ -161,6 +154,19 @@ final class BackupPass: BackupRunning {
             moveTheDevice(to: result.namespaceId, after: descriptor)
         }
         return result
+    }
+
+    func runSettings(
+        label: String
+    ) -> (conflicts: WriterConflicts?, syncGroup: BackupRunRequest.SyncGroupChoice) {
+        let conflicts = try? WriterConflicts.read(
+            applicationSupport: BackupRoot.layout.applicationSupport)
+        do {
+            return (conflicts, .known(try SyncStore.state().groupId))
+        } catch {
+            log("\(label) could not read the sync settings, so it keeps the recorded group")
+            return (conflicts, .keepRecorded)
+        }
     }
 
     /// The namespace id is one per device, so a split on one target
