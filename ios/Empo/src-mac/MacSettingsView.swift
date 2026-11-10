@@ -58,6 +58,12 @@ private struct AdvancedSettings: View {
                         "Deletes games that failed to import the next time you open \(AppInfo.name). You can't undo this."
                 )
                 SettingsToggle(
+                    title: "Send error reports",
+                    isOn: $settings.errorReports,
+                    description:
+                        "When a game shows an error or crashes, \(AppInfo.name) sends the error and the game's log to me, so I can fix it."
+                )
+                SettingsToggle(
                     title: "Debug logs",
                     isOn: $settings.debugLogs,
                     description: "Saves a log for each play session."

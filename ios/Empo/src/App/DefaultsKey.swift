@@ -23,6 +23,7 @@ enum DefaultsKey {
     static let showViewportBounds = PreferenceKeys.showViewportBounds.name
     static let showTouchZone = PreferenceKeys.showTouchZone.name
     static let debugLogs = PreferenceKeys.debugLogs.name
+    static let errorReports = PreferenceKeys.errorReports.name
     static let maxLogFiles = PreferenceKeys.maxLogFiles.name
     static let interfaceHaptics = PreferenceKeys.interfaceHaptics.name
     static let controllerHaptics = PreferenceKeys.controllerHaptics.name

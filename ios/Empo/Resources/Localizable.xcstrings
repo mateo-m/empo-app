@@ -53123,6 +53123,64 @@
         }
       }
     },
+    "Send error reports" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehlerberichte senden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar informes de errores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyer les rapports d'erreur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia segnalazioni di errore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エラーレポートを送信"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "오류 보고서 보내기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar relatórios de erro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправлять отчёты об ошибках"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送错误报告"
+          }
+        }
+      }
+    },
     "Send taps and drags on the game screen to the game as mouse input." : {
       "localizations" : {
         "de" : {
@@ -70474,6 +70532,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 新功能"
+          }
+        }
+      }
+    },
+    "When a game shows an error or crashes, %@ sends the error and the game's log to me, so I can fix it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn ein Spiel einen Fehler zeigt oder abstürzt, schickt mir %@ den Fehler und das Log des Spiels, damit ich ihn beheben kann."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando un juego muestra un error o se cierra de golpe, %@ me envía el error y el registro del juego para que pueda arreglarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand un jeu affiche une erreur ou plante, %@ m'envoie l'erreur et le journal du jeu pour que je puisse la corriger."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando un gioco mostra un errore o si chiude all'improvviso, %@ mi invia l'errore e il log del gioco, così posso correggerlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームでエラーが出たりクラッシュしたりすると、%@がエラーとゲームのログを私に送ります。修正に使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임에 오류가 뜨거나 게임이 갑자기 꺼지면 %@에서 오류와 게임 로그를 저에게 보내요. 고칠 때 사용해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando um jogo mostra um erro ou trava, o %@ me envia o erro e o log do jogo para que eu possa corrigir."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Если игра показывает ошибку или вылетает, %@ отправляет мне ошибку и лог игры, чтобы её можно было исправить."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏出错或崩溃时，%@ 会把错误和游戏日志发给我，方便我修复。"
           }
         }
       }

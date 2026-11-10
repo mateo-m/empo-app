@@ -166,6 +166,7 @@ jobs:
         id: build
         env:
           VERSION: ${{ needs.cut.outputs.version || (github.event_name == 'push' && github.ref_name) || '' }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: scripts/release.sh build ${VERSION:+"${VERSION#v}"} >> "$GITHUB_OUTPUT"
 
       - name: Upload .ipa artifact

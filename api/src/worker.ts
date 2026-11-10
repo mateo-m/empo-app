@@ -1,15 +1,23 @@
+import { instrumentDurableObjectWithSentry, withSentry } from "@sentry/cloudflare";
 import { Elysia, ElysiaError, t } from "elysia";
 import { WebStandardAdapter } from "elysia/adapter/web-standard";
 import { deviceId, isDeviceKey } from "./device";
-import type { MemberRequest } from "./member";
+import { type MemberRequest, PatreonMember as Member } from "./member";
 import { parseMembership } from "./membership";
 import { fromBase64, signPass, toBase64Url } from "./pass";
 import { type Env, patreon, token, userAgent } from "./patreon";
 import { newRenewal, renewalKeys } from "./renewal";
-import { callSession, type Claimed, type SessionRequest, signedOut } from "./session";
+import { sentryOptions } from "./sentry";
+import {
+  callSession,
+  type Claimed,
+  PatreonSession as Session,
+  type SessionRequest,
+  signedOut,
+} from "./session";
 
-export { PatreonMember } from "./member";
-export { PatreonSession } from "./session";
+export const PatreonMember = instrumentDurableObjectWithSentry(sentryOptions, Member);
+export const PatreonSession = instrumentDurableObjectWithSentry(sentryOptions, Session);
 
 interface Trip {
   state: string;
@@ -120,7 +128,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
       throw error;
     }
     // The code is used, and its alarm also deletes it, so a lost call here is no fault.
-    await session(body.code, { action: "evict" }).catch((error) => console.error(error));
+    await session(body.code, { action: "evict" }).catch((error) => console.warn(error));
     if (added.status === 409) return status(409, { error: "too_many_devices" });
     return { pass: held.pass, renewal };
   })
@@ -137,12 +145,12 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     return new Response(null, { status: answer.status });
   });
 
-export default {
+export default withSentry(sentryOptions, {
   fetch(request: Request, bindings: Env) {
     env = bindings;
     return app.fetch(request);
   },
-};
+});
 
 function callbackUrl(request: Request): string {
   return `${new URL(request.url).origin}${callbackPath}`;

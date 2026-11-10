@@ -85,6 +85,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>EmpoSentryDSN</key>
+	<string>$(SENTRY_DSN)</string>
 	<!-- The Dropbox app key of SPEC 9.2. A PKCE client holds no
 	     secret, so this key is public. An empty key hides Dropbox from
 	     the add flow at runtime. -->
