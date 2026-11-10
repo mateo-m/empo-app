@@ -5,6 +5,8 @@ export default defineConfig({
     name: "empo-api",
     entrypoint: "./dist/worker.js",
     compatibilityDate: "2026-10-01",
+    // @sentry/cloudflare needs AsyncLocalStorage.
+    compatibilityFlags: ["nodejs_compat"],
     domains: ["api.empo.mateo.sh"],
     workersDev: false,
     // The callback URL carries the Patreon sign-in code.
@@ -16,6 +18,7 @@ export default defineConfig({
       PATREON_CLIENT_SECRET: bindings.secret(),
       // Ed25519 private key, PKCS8, base64.
       PASS_SIGNING_KEY: bindings.secret(),
+      SENTRY_DSN: bindings.secret(),
       SESSIONS: bindings.durableObject({ worker: "empo-api", exportName: "PatreonSession" }),
       MEMBERS: bindings.durableObject({ worker: "empo-api", exportName: "PatreonMember" }),
     },

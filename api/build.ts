@@ -4,6 +4,8 @@ const result = await Bun.build({
   entrypoints: ["src/worker.ts"],
   outdir: "dist",
   target: "browser",
+  // Workers provide the node: modules with the nodejs_compat flag.
+  external: ["node:*"],
   plugins: [aot("src/worker.ts", { target: "workerd" })],
 });
 if (!result.success) {
