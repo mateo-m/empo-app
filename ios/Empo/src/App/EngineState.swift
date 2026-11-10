@@ -34,8 +34,7 @@ class EngineState {
     }
 
     /// Resume also cancels a background pause that the core has not
-    /// reached yet. The Ruby cores report `gamecore_isPaused` only
-    /// after they block.
+    /// reached yet.
     func resumeFromBackground() {
         guard pauseRequest == .background else { return }
         pauseRequest = nil

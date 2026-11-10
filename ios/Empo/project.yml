@@ -78,11 +78,6 @@ settings:
       -Wno-unused-const-variable
       -Wno-deprecated-literal-operator
       -Wno-unused-function
-    # Which game cores the iOS and Mac apps ship. The "Embed the cores"
-    # phase reads it, and the Game cores screen lists what it finds in
-    # the bundle. Build one core only by passing it on the command line:
-    #   xcodebuild ... EMPO_CORES=Psdk30Core
-    EMPO_CORES: MkxpCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core MvmzCore
     HEADER_SEARCH_PATHS:
       # GameCore.h, the interface between Empo and every core.
       - $(PROJECT_DIR)/../../cores
@@ -152,6 +147,7 @@ targets:
         # changed. See cores/mkxp/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
+          . "${PROJECT_DIR}/../../cores/cores.sh"
           case " ${EMPO_CORES} " in
             *" MkxpCore "*) "${PROJECT_DIR}/../../cores/mkxp/build-framework-ios.sh" --sdk "${PLATFORM_NAME}" ;;
           esac
@@ -165,6 +161,7 @@ targets:
         # changed. See cores/psdk/build-framework-ios.sh.
         basedOnDependencyAnalysis: false
         script: |
+          . "${PROJECT_DIR}/../../cores/cores.sh"
           case " ${EMPO_CORES} " in
             *" Psdk"*) "${PROJECT_DIR}/../../cores/psdk/build-framework-ios.sh" --sdk "${PLATFORM_NAME}" ;;
           esac
@@ -438,13 +435,6 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           "${PROJECT_DIR}/../../cores/mvmz/fetch.sh"
-      - name: Write the core export list
-        basedOnDependencyAnalysis: false
-        outputFiles:
-          - $(TARGET_TEMP_DIR)/gamecore.exports
-        script: |
-          mkdir -p "${TARGET_TEMP_DIR}"
-          "${PROJECT_DIR}/../../cores/gamecore-exports.sh" "${TARGET_TEMP_DIR}/gamecore.exports"
     postBuildScripts: &mvmzPostBuild
       - name: Name the MV/MZ core release
         # The Game cores screen shows EmpoCoreVersion, the release tag
@@ -473,7 +463,7 @@ targets:
           - $(PROJECT_DIR)/../../cores
           - $(PROJECT_DIR)/../Dependencies/mvmz-core/include
         OTHER_LDFLAGS:
-          - -Wl,-exported_symbols_list,$(TARGET_TEMP_DIR)/gamecore.exports
+          - -Wl,-exported_symbols_list,$(PROJECT_DIR)/../../cores/gamecore.exports
           - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a
           - -framework WebKit
           - -framework UIKit
@@ -516,6 +506,7 @@ targets:
           - App/main.m
           - App/AppCoreForwarders.c
           - App/GameProcessClient.m
+          - App/GameCoreRelayClient.m
           - App/GameProcessHost.swift
           - App/GameViewEmbedder.swift
           - App/EmpoSceneDelegate.swift
@@ -523,6 +514,7 @@ targets:
           - App/AppWindow.swift
           - App/RootView.swift
           - App/EngineSessionCoordinator.swift
+          - App/GameCoreLaunch.swift
           - App/EngineState.swift
           - App/GameSession.swift
           - App/PauseManager.swift
@@ -668,8 +660,10 @@ targets:
       - path: src/App/UITestVirtualController.swift
       - path: src/Player/PlayerRuntimeState.swift
       - path: src/App/KeyHolder.swift
-      - path: src/App/GameCoreSessionConfig.swift
+      - path: src/App/GameCoreLaunch.swift
+      - path: src/Cores/CoreSetting.swift
       - path: src/App/AppInfo.swift
+      - path: GameProcess/GameCoreForwarders.c
       - path: Resources/Localizable.xcstrings
     settings:
       base:
@@ -724,7 +718,7 @@ targets:
           - $(PROJECT_DIR)/../../cores
           - $(PROJECT_DIR)/../Dependencies/mvmz-core/include
         OTHER_LDFLAGS:
-          - -Wl,-exported_symbols_list,$(TARGET_TEMP_DIR)/gamecore.exports
+          - -Wl,-exported_symbols_list,$(PROJECT_DIR)/../../cores/gamecore.exports
           - $(PROJECT_DIR)/../Dependencies/mvmz-core/$(PLATFORM_NAME)/libmvmz.a
           - -framework WebKit
           - -framework AppKit

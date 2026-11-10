@@ -42,7 +42,6 @@ protocol GameCore {
     /// probe it extracts the file.
     func validateGameRoot(_ root: URL, fetch: (String) throws -> Void) throws
 
-    /// The title the game gives itself.
     func title(at root: URL) -> String?
     func titlePicture(at root: URL) -> URL?
     /// True when a game of this core has no title of its own, so the
@@ -56,10 +55,9 @@ protocol GameCore {
     /// The games of `joiPlayTypes`, as the import error names them.
     var joiPlayGames: String? { get }
 
-    /// Makes the game ready to run and sends the per-game settings of
-    /// this core with `gamecore_setSetting`. The app calls it before
-    /// `gamecore_applySessionConfig`.
-    func launch(_ container: GameContainer)
+    /// Makes the game ready to run, and returns the settings of this
+    /// core for the game. `GameCoreLaunch.configure` sends them.
+    func launch(_ container: GameContainer) -> [CoreSetting]
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning?
 
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)?
@@ -72,7 +70,7 @@ protocol GameCore {
     func sharedDataFolder(for container: GameContainer) -> [String]?
     @MainActor func settingsPage(_ model: GameSettingsModel) -> AnyView
 
-    /// Rows for the Runtime section of Game Info. Empty hides the section.
+    /// Empty hides the Runtime section of Game Info.
     func infoRows(for container: GameContainer) async -> [InfoRow]
     /// The tool and its edition for one game, such as "RPG Maker VX Ace".
     func madeWith(at root: URL) -> String
@@ -90,6 +88,12 @@ extension GameCore {
     func titlePicture(at root: URL) -> URL? { nil }
     var usesFolderName: Bool { false }
 
+    /// The smooth scaling setting of the PSDK and MV/MZ cores.
+    func smoothScaling(_ settings: GameSettings) -> CoreSetting {
+        CoreSetting(
+            GAMECORE_SETTING_SMOOTH_SCALING, settings.smoothScaling ?? GameConfigDefaults.engineSmoothScaling)
+    }
+
     /// The title the library shows until the user sets one.
     func defaultTitle(of container: GameContainer) -> String? {
         title(at: container.gameURL) ?? (usesFolderName ? container.folderName : nil)
@@ -98,7 +102,7 @@ extension GameCore {
     func didImport(_ container: GameContainer, from source: ImportSource, replacing: Bool) {}
     var joiPlayTypes: Set<String> { [] }
     var joiPlayGames: String? { nil }
-    func launch(_ container: GameContainer) {}
+    func launch(_ container: GameContainer) -> [CoreSetting] { [] }
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? { nil }
     @MainActor func makeSettings(for container: GameContainer) -> (any CoreSettings)? { nil }
     @MainActor func launchedSettings(for container: GameContainer) -> (any CoreLaunchedSettings)? { nil }

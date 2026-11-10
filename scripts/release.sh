@@ -93,10 +93,10 @@ repo_slug() {
     echo "$slug"
 }
 
-# The project default ships every core. EMPO_CORES in the environment
-# ships only the cores it names, for example EMPO_CORES=Psdk30Core.
 release_cores() {
-    echo "${EMPO_CORES:-$(project_setting EMPO_CORES)}"
+    # shellcheck source=cores/cores.sh
+    . "$REPO_ROOT/cores/cores.sh"
+    echo "$EMPO_CORES"
 }
 
 next_version() {

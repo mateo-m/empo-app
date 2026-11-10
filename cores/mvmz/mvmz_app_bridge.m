@@ -25,6 +25,8 @@ typedef UIEdgeInsets PlatformInsets;
 #endif
 #import <WebKit/WebKit.h>
 
+#include <os/lock.h>
+
 #include "GameCore.h"
 #include "mvmz_core.h"
 
@@ -36,11 +38,9 @@ typedef struct {
 static Callback gFrameRendered;
 static Callback gEngineTerminated;
 static Callback gGameRectChanged;
-static Callback gErrorMessage;
 static Callback gInfoMessage;
 static Callback gPaused;
 static Callback gResumed;
-static Callback gTextInputMode;
 
 static NSString *gGamePath;
 static NSFileHandle *gLog;
@@ -64,7 +64,7 @@ static BOOL gHostRegionPortrait;
 static CGRect gHostRegion;
 static CGSize gGameSize;
 
-static NSLock *gSnapshotLock;
+static os_unfair_lock gSnapshotLock = OS_UNFAIR_LOCK_INIT;
 static NSData *gSnapshotRGBA;
 static int gSnapshotW;
 static int gSnapshotH;
@@ -76,10 +76,8 @@ static void logLine(NSString *line) {
     [gLog writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
 }
 
-// Puts the picture in the launcher's region and tells the launcher
-// where it landed. The same rules as placeOutputRegion in
-// psdk_app_bridge.cpp, in points: the host view is the size of the
-// launcher's window once GameViewEmbedder moves it there.
+// The host view is the size of the launcher's window once
+// GameViewEmbedder moves it there, so this places in points.
 //
 // The game scales its canvas to the page and centres it, so the web
 // view gets the picture rect itself and the page has no margin.
@@ -98,7 +96,7 @@ static void placeWebView(void) {
                          gHostRegion.size.width * bounds.size.width,
                          gHostRegion.size.height * bounds.size.height);
     } else {
-        // Landscape keeps the full height, as in the other two cores.
+        // Landscape keeps the full height.
         PlatformInsets insets = gSafeArea;
         if (!portrait) {
             insets.top = 0;
@@ -202,8 +200,6 @@ static void terminate(BOOL clean) {
     fire(gEngineTerminated);
 }
 
-// Converts the snapshot WebKit makes to the RGBA rows the launcher
-// reads, then tells the launcher the game is paused.
 static void storeSnapshotAndReportPause(PlatformImage *image, NSError *error) {
 #if TARGET_OS_OSX
     CGImageRef cg = [image CGImageForProposedRect:NULL context:nil hints:nil];
@@ -222,11 +218,11 @@ static void storeSnapshotAndReportPause(PlatformImage *image, NSError *error) {
         CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), cg);
         CGContextRelease(ctx);
         CGColorSpaceRelease(space);
-        [gSnapshotLock lock];
+        os_unfair_lock_lock(&gSnapshotLock);
         gSnapshotRGBA = rgba;
         gSnapshotW = (int)w;
         gSnapshotH = (int)h;
-        [gSnapshotLock unlock];
+        os_unfair_lock_unlock(&gSnapshotLock);
     }
     fire(gPaused);
 }
@@ -264,8 +260,6 @@ static void takeSnapshot(void *userdata) {
                               storeSnapshotAndReportPause(image, error);
                           }];
 }
-
-// MARK: - Starting the game
 
 // Makes the window, starts the game in the core's web view, then
 // returns. The launcher keeps the main thread in its run loop, and
@@ -337,13 +331,9 @@ void gamecore_setGamePath(const char *path) {
     gGamePath = path ? @(path) : nil;
 }
 
-// MARK: - Input
-
 void gamecore_injectKeyEvent(int scancode, int pressed) {
     mvmz_inject_key(scancode, pressed);
 }
-
-// MARK: - The window
 
 void *gamecore_getGameWindow(void) {
 #if TARGET_OS_OSX
@@ -352,8 +342,6 @@ void *gamecore_getGameWindow(void) {
     return (__bridge void *)gWindow;
 #endif
 }
-
-// MARK: - Callbacks
 
 void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
     gFrameRendered = (Callback){(void *)cb, userdata};
@@ -367,8 +355,8 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
     gGameRectChanged = (Callback){(void *)cb, userdata};
 }
 
+// A web game has no engine error or text input mode to report.
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
-    gErrorMessage = (Callback){(void *)cb, userdata};
 }
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
@@ -384,10 +372,7 @@ void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
 }
 
 void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
-    gTextInputMode = (Callback){(void *)cb, userdata};
 }
-
-// MARK: - Session state
 
 int gamecore_isGameReady(void) {
     return gGameReady;
@@ -414,15 +399,10 @@ void gamecore_resetSessionState(void) {
     gGameSize = CGSizeZero;
     gFastForward = 1;
     gCheatsEnabled = NO;
-    if (!gSnapshotLock) {
-        gSnapshotLock = [[NSLock alloc] init];
-    }
-    [gSnapshotLock lock];
+    os_unfair_lock_lock(&gSnapshotLock);
     gSnapshotRGBA = nil;
-    [gSnapshotLock unlock];
+    os_unfair_lock_unlock(&gSnapshotLock);
 }
-
-// MARK: - Pause
 
 void gamecore_requestPause(void) {
     if (gPausedFlag) {
@@ -435,29 +415,25 @@ void gamecore_requestPause(void) {
 void gamecore_requestResume(void) {
     gPausedFlag = NO;
     mvmz_resume();
-    [gSnapshotLock lock];
+    os_unfair_lock_lock(&gSnapshotLock);
     gSnapshotRGBA = nil;
-    [gSnapshotLock unlock];
+    os_unfair_lock_unlock(&gSnapshotLock);
     fire(gResumed);
 }
 
-bool gamecore_isPaused(void) {
-    return gPausedFlag;
-}
-
 bool gamecore_getSnapshotSize(int *width, int *height) {
-    [gSnapshotLock lock];
+    os_unfair_lock_lock(&gSnapshotLock);
     const bool has = gSnapshotRGBA != nil;
     if (has && width)
         *width = gSnapshotW;
     if (has && height)
         *height = gSnapshotH;
-    [gSnapshotLock unlock];
+    os_unfair_lock_unlock(&gSnapshotLock);
     return has;
 }
 
 bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, int *height) {
-    [gSnapshotLock lock];
+    os_unfair_lock_lock(&gSnapshotLock);
     const bool fits = dest && gSnapshotRGBA && destSize >= 0 && (NSUInteger)destSize >= gSnapshotRGBA.length;
     if (fits) {
         memcpy(dest, gSnapshotRGBA.bytes, gSnapshotRGBA.length);
@@ -466,11 +442,9 @@ bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, in
         if (height)
             *height = gSnapshotH;
     }
-    [gSnapshotLock unlock];
+    os_unfair_lock_unlock(&gSnapshotLock);
     return fits;
 }
-
-// MARK: - Text input
 
 // An MV or MZ game reads no typed text through the launcher. A plugin
 // that wants text puts a text field in the page, and WebKit brings up
@@ -481,14 +455,10 @@ int gamecore_isTextInputActive(void) {
 void gamecore_pushTextInput(const char *utf8) {
 }
 
-// MARK: - Alerts
-
 void gamecore_signalErrorDismissed(void) {
 }
 void gamecore_signalInfoDismissed(void) {
 }
-
-// MARK: - What the launcher pushes
 
 void gamecore_setDebugLogPath(const char *path) {
     [gLog closeFile];
@@ -546,9 +516,8 @@ bool gamecore_getCheatsEnabled(void) {
     return gCheatsEnabled;
 }
 
-// The one key is "smoothScaling", "1" or "0".
 void gamecore_setSetting(const char *key, const char *value) {
-    if (key && strcmp(key, "smoothScaling") == 0) {
+    if (key && strcmp(key, GAMECORE_SETTING_SMOOTH_SCALING) == 0) {
         mvmz_set_smooth(value && strcmp(value, "1") == 0);
         return;
     }
@@ -568,8 +537,6 @@ void gamecore_setGameControllerCaptureEnabled(bool enabled) {
 }
 void gamecore_setTouchMouseEnabled(bool enabled) {
 }
-
-// MARK: - What the launcher reads
 
 const char *gamecore_getGameTitle(void) {
     return "";

@@ -6,14 +6,11 @@ import AppKit
 if let index = CommandLine.arguments.firstIndex(of: PlayerLaunch.checkCoreArgument),
     index + 1 < CommandLine.arguments.count
 {
-    let path = CommandLine.arguments[index + 1]
-    do {
-        _ = try GameCoreLibrary(path: path)
-        exit(0)
-    } catch {
-        NSLog("[player] cannot open %@: %@", path, "\(error)")
+    if let error = EmpoCoreOpen(CommandLine.arguments[index + 1]) {
+        NSLog("[player] %s", error)
         exit(70)
     }
+    exit(0)
 }
 
 let app = NSApplication.shared
@@ -34,14 +31,12 @@ do {
     exit(64)
 }
 
-let core: GameCoreLibrary
-do {
-    core = try GameCoreLibrary(path: launch.corePath)
-} catch {
-    NSLog("[player] cannot open %@: %@", launch.corePath, "\(error)")
+if let error = EmpoCoreOpen(launch.corePath) {
+    let reason = String(cString: error)
+    NSLog("[player] %@", reason)
     // The core opens the debug log, so it cannot write this error there.
     if let path = launch.debugLogPath, let file = fopen(path, "a") {
-        fputs("[player] cannot open \(launch.corePath): \(error)\n", file)
+        fputs("[player] \(reason)\n", file)
         fclose(file)
     }
     exit(70)
@@ -63,7 +58,7 @@ dup2(devNull, STDIN_FILENO)
 close(devNull)
 
 let delegate = MainActor.assumeIsolated {
-    PlayerAppDelegate(launch: launch, core: core, messages: messages, liveChanges: liveChanges)
+    PlayerAppDelegate(launch: launch, messages: messages, liveChanges: liveChanges)
 }
 app.delegate = delegate
 app.run()
