@@ -33,6 +33,7 @@ struct PlayerView: View {
     @State private var sheetAction: SheetAction?
     @State private var showControllerRemap = false
     @State private var showLayoutProfilePicker = false
+    @State private var showLayoutSaveFailure = false
 
     var body: some View {
         GeometryReader { geo in
@@ -80,7 +81,9 @@ struct PlayerView: View {
                     editZoneBackground(
                         controlsMinY: controlsMinY, safeArea: controlsSafeArea, geoSize: geo.size)
                     if let caption = editZoneCaptionText {
-                        editZoneCaption(caption, safeArea: safeArea)
+                        editZoneCaption(
+                            caption, controlsMinY: controlsMinY, safeArea: controlsSafeArea,
+                            geoSize: geo.size)
                     }
 
                     screenRegionGizmo(
@@ -330,7 +333,7 @@ struct PlayerView: View {
             // player view starts outside edit mode, so the session
             // ends here, the same as Done.
             if editMode {
-                layout.save()
+                try? layout.save()
                 layout.endEditSession()
             }
             ChromeHitRegions.removeAll()
@@ -370,6 +373,7 @@ struct PlayerView: View {
                     ? { actions.handle(EmpoActionCatalog.toggleCheats, pressed: true) } : nil
             )
         }
+        .layoutSaveFailureAlert(isPresented: $showLayoutSaveFailure)
         .sheet(isPresented: $showLayoutProfilePicker) {
             if let container = layout.currentContainer {
                 LayoutProfilePickerSheet(container: container)
@@ -558,28 +562,55 @@ struct PlayerView: View {
     }
 
     private var editZoneCaptionText: LocalizedStringResource? {
-        if layout.manifestRejectionErrorCount > 0 {
-            return
-                "This game's controls file has \(layout.manifestRejectionErrorCount) errors, so Empo used its own layout."
+        Self.editZoneCaption(
+            manifest: layout.manifestRejection, profile: layout.profileRejection,
+            pinFellThrough: layout.pinFellThrough)
+    }
+
+    static func editZoneCaption(
+        manifest: ControlsRejection?, profile: ControlsRejection?, pinFellThrough: Bool
+    ) -> LocalizedStringResource? {
+        switch manifest {
+        case .newerVersion:
+            return "This game's controls need a newer version of Empo. Update Empo to use them."
+        case .errors(let count):
+            return "This game's controls file has \(count) errors, so Empo used its own layout."
+        case nil:
+            break
         }
-        if layout.profileRejectionErrorCount > 0 {
-            return
-                "Your layout profile has \(layout.profileRejectionErrorCount) errors, so Empo used its own layout."
+        switch profile {
+        case .newerVersion:
+            return "This layout profile needs a newer version of Empo. Update Empo to use it."
+        case .errors(let count):
+            return "Your layout profile has \(count) errors, so Empo used its own layout."
+        case nil:
+            break
         }
-        if layout.pinFellThrough {
+        if pinFellThrough {
             return "That layout profile is gone, so this game is using the Empo default."
         }
         return nil
     }
 
-    private func editZoneCaption(_ text: LocalizedStringResource, safeArea: EdgeInsets) -> some View {
-        Text(text)
+    private func editZoneCaption(
+        _ text: LocalizedStringResource, controlsMinY: CGFloat, safeArea: EdgeInsets,
+        geoSize: CGSize
+    ) -> some View {
+        let bounds = ControlsZone.bounds(
+            controlsMinY: controlsMinY, safeArea: safeArea, geoSize: geoSize)
+        let cornerInset = ControlsZone.cornerRadii(safeArea: safeArea).bottom
+        return Text(text)
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.white.opacity(0.85))
             .multilineTextAlignment(.center)
-            .padding(.horizontal, Spacing.lg)
+            .padding(.horizontal, Spacing.md)
+            .padding(.vertical, Spacing.xs)
+            .glassEffect(.regular, in: .capsule)
+            .darkGlass()
+            .frame(width: max(bounds.width - 2 * cornerInset, 0))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            .padding(.bottom, safeArea.bottom + Spacing.md)
+            .padding(.bottom, geoSize.height - bounds.maxY + Spacing.md)
+            .offset(x: bounds.midX - geoSize.width / 2)
             .allowsHitTesting(false)
     }
 
@@ -675,7 +706,12 @@ struct PlayerView: View {
         } else {
             // Save before `endEditSession()`. The ambient auto-create
             // in `save()` runs only during an edit session.
-            layout.save()
+            do {
+                try layout.save()
+            } catch {
+                showLayoutSaveFailure = true
+                return
+            }
             withAnimation(Motion.snappy) {
                 layout.endEditSession()
             }

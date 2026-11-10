@@ -193,9 +193,9 @@ class ControlsLayout {
 
     private(set) var resolutionInvolvesDerivation = false
 
-    private(set) var manifestRejectionErrorCount = 0
+    private(set) var manifestRejection: ControlsRejection?
 
-    private(set) var profileRejectionErrorCount = 0
+    private(set) var profileRejection: ControlsRejection?
 
     private(set) var provenance: LayoutProvenance = .builtin
 
@@ -640,7 +640,7 @@ class ControlsLayout {
 
     func switchGame(id newGameID: String?, container: GameContainer?, title: String? = nil) {
         if currentGameID != nil {
-            save()
+            try? save()
         }
         // A failed save() can leave screen edits behind. They must
         // not leak into the next game's first save.
@@ -650,7 +650,7 @@ class ControlsLayout {
         currentGameID = newGameID
         currentContainer = container
         currentGameTitle = title
-        profileRejectionErrorCount = 0
+        profileRejection = nil
         pinFellThrough = false
         importOfferPending = false
         gameLayoutNoticePending = false
@@ -791,7 +791,7 @@ class ControlsLayout {
                 NSLog("layout pin: unpin failed for \(container.id): \(error)")
             }
             pinFellThrough = false
-            profileRejectionErrorCount = 0
+            profileRejection = nil
             provenance = ambientProvenance()
             // Undo restores the layout but not the pin, so the next
             // commit would create a fork. Thus undo stops at this reset.
@@ -1209,9 +1209,12 @@ class ControlsLayout {
 
     /// Never write the per-game `EmpoState/controls.json`. Its dead
     /// touch section must stay byte-identical (copy, not move).
-    func save() {
+    ///
+    /// A failed write throws and keeps every unsaved edit, so a later
+    /// save can write it.
+    func save() throws {
         if isEditorInstance {
-            editorSave()
+            try editorSave()
             return
         }
         guard let container = currentContainer, currentGameID != nil else { return }
@@ -1220,6 +1223,7 @@ class ControlsLayout {
         switch provenance {
         case .pinnedProfile(let name):
             var changed = false
+            var failure: Error?
             let section = materializedTouchSection()
             let controlsOnDisk = store.readProfile(name)?.touch.map { existing in
                 ProfileMaterializer.canonicalBytes(
@@ -1233,11 +1237,13 @@ class ControlsLayout {
                     changed = true
                 } catch {
                     NSLog("layout profile: save of \(name) failed: \(error)")
+                    failure = error
                 }
             }
             if screenEditsDirty {
                 let merged = mergedScreenPlacements(profile: name, store: store)
                 let disk = store.readScreen(name)
+                var screenSaved = true
                 if merged.portrait != disk?.portrait || merged.landscape != disk?.landscape {
                     do {
                         try store.writeScreen(
@@ -1245,14 +1251,19 @@ class ControlsLayout {
                         changed = true
                     } catch {
                         NSLog("layout profile: screen save of \(name) failed: \(error)")
+                        failure = error
+                        screenSaved = false
                     }
                 }
-                screenEdits.removeAll()
-                screenSync?.endPreview()
+                if screenSaved {
+                    screenEdits.removeAll()
+                    screenSync?.endPreview()
+                }
             }
             if changed {
                 LayoutProfilesManager.postProfileChange(name: name, from: self)
             }
+            if let failure { throw failure }
 
         case .gameLayout, .defaultProfile, .builtin:
             // Only an edit-session commit can create a profile. A save
@@ -1270,7 +1281,7 @@ class ControlsLayout {
                 try store.createProfile(name, touch: materializedTouchSection())
             } catch {
                 NSLog("layout profile: create of \(name) failed: \(error)")
-                return
+                throw error
             }
             // An orientation with no edit gets the resolved region.
             // The new pin is terminal. Without this copy, an edit of
@@ -1284,14 +1295,15 @@ class ControlsLayout {
                 .portrait, fallback: resolvedScreen.portrait.placement)
             let landscape = editedPlacement(
                 .landscape, fallback: resolvedScreen.landscape.placement)
+            var screenFailure: Error?
             if portrait != nil || landscape != nil {
                 do {
                     try store.writeScreen(name, portrait: portrait, landscape: landscape)
                 } catch {
                     NSLog("layout profile: screen save of \(name) failed: \(error)")
+                    screenFailure = error
                 }
             }
-            screenEdits.removeAll()
             do {
                 try LayoutProfilesManager.writePin(.profile(name), for: container, from: self)
             } catch {
@@ -1302,6 +1314,15 @@ class ControlsLayout {
             provenance = .pinnedProfile(name)
             pinFellThrough = false
             LayoutProfilesManager.postProfileChange(name: name, from: self)
+            if let screenFailure {
+                // The next save takes the pinned path, which reads the
+                // screen from the new profile. Keep the resolved
+                // regions as edits so that it writes the same values.
+                if let portrait { screenEdits[.portrait] = .set(portrait) }
+                if let landscape { screenEdits[.landscape] = .set(landscape) }
+                throw screenFailure
+            }
+            screenEdits.removeAll()
             screenSync?.endPreview()
         }
     }
@@ -1316,9 +1337,10 @@ class ControlsLayout {
         )
     }
 
-    func editorSave() {
+    func editorSave() throws {
         guard let name = editorProfileName else { return }
         let store = LayoutProfilesManager.store
+        defer { LayoutProfilesManager.postProfileChange(name: name, from: self) }
         do {
             try store.writeProfile(name, touch: materializedTouchSection())
             if screenEditsDirty {
@@ -1328,8 +1350,8 @@ class ControlsLayout {
             }
         } catch {
             NSLog("layout profile: editor save of \(name) failed: \(error)")
+            throw error
         }
-        LayoutProfilesManager.postProfileChange(name: name, from: self)
     }
 
     func reloadEditorProfile() {
@@ -1369,8 +1391,7 @@ class ControlsLayout {
             defaultProfileName: LayoutProfilesManager.defaultProfileName)
 
         pinFellThrough = outcome.fellThrough
-        profileRejectionErrorCount =
-            pinnedRead.map { $0.touch == nil ? max($0.errors.count, 1) : 0 } ?? 0
+        profileRejection = pinnedRead?.rejection
 
         provenance = outcome.provenance
         gameLayoutNoticePending = false
@@ -1896,7 +1917,7 @@ class ControlsLayout {
     private func loadManifest(from gameRoot: URL?) {
         activeManifest = nil
         activeManifestSource = nil
-        manifestRejectionErrorCount = 0
+        manifestRejection = nil
         guard let gameRoot else { return }
 
         let metrics = Self.touchZoneMetricsForManifestLoad()
@@ -1910,19 +1931,15 @@ class ControlsLayout {
         for line in outcome.logLines {
             logsContainer.appendLogLine(line, fileName: UserControlsFile.logFileName)
         }
-        if let manifest = outcome.result.manifest {
-            activeManifest = manifest
-            return
-        }
-
-        manifestRejectionErrorCount = outcome.result.findings.filter { $0.severity == .error }.count
+        activeManifest = outcome.result.manifest
+        manifestRejection = outcome.result.rejection
     }
 
     private func applyResolvedLayout() {
         let metrics = Self.touchZoneMetricsForManifestLoad()
         resolutionInvolvesDerivation = false
         if let touch = activeManifest?.touch {
-            let completion = Self.TouchSectionCompletion.complete(touch, metrics: metrics)
+            let completion = TouchSectionCompletion.complete(touch, metrics: metrics)
             resolutionInvolvesDerivation = completion.involvedDerivation
         }
         let portrait = Self.resolveInitialLayout(

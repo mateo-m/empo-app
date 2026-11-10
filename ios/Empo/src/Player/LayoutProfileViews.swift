@@ -367,6 +367,9 @@ struct LayoutProfileEditorView: View {
     @State private var actions = PlayerActionRegistry()
     @State private var editingOrientation: ControlsOrientation = .portrait
     @State private var editDialog: ControlsEditDialog?
+    @State private var showSaveFailure = false
+    @State private var savedOnLeave = false
+    @Environment(\.dismiss) private var dismiss
 
     init(profileName: String) {
         self.profileName = profileName
@@ -422,7 +425,7 @@ struct LayoutProfileEditorView: View {
         VStack(spacing: Spacing.md) {
             EditorOrientationPicker(selection: $editingOrientation)
                 .onChange(of: editingOrientation) { _, new in
-                    layout.editorSave()
+                    try? layout.editorSave()
                     layout.setOrientation(new)
                     diskScreen = LayoutProfilesManager.store.readScreen(currentName)
                 }
@@ -456,7 +459,16 @@ struct LayoutProfileEditorView: View {
         }
         .navigationTitle(currentName)
         .navigationBarTitleDisplayMode(.inline)
+        // Back saves first, so a failed save keeps the editor open.
+        .navigationBarBackButtonHidden()
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: leave) {
+                    Image(systemName: "chevron.backward")
+                }
+                .tint(.primary)
+                .accessibilityLabel("Back")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     renameText = currentName
@@ -473,6 +485,7 @@ struct LayoutProfileEditorView: View {
             Button("Cancel", role: .cancel) {}
         }
         .profileNameErrorAlert(isPresented: $showRenameError)
+        .layoutSaveFailureAlert(isPresented: $showSaveFailure)
         .onAppear {
             layout.setOrientation(editingOrientation)
             layout.beginEditSession()
@@ -480,7 +493,10 @@ struct LayoutProfileEditorView: View {
         }
         .onDisappear {
             layout.endEditSession()
-            layout.editorSave()
+            // A close of the whole sheet skips Back.
+            if !savedOnLeave {
+                try? layout.editorSave()
+            }
         }
         .controlsEditDialogs(
             layout: layout,
@@ -489,6 +505,17 @@ struct LayoutProfileEditorView: View {
             actions: nil,
             dialog: $editDialog
         )
+    }
+
+    private func leave() {
+        do {
+            try layout.editorSave()
+        } catch {
+            showSaveFailure = true
+            return
+        }
+        savedOnLeave = true
+        dismiss()
     }
 
     private enum PositionChoice: Hashable {
@@ -691,6 +718,7 @@ private struct NewProfileAlert: ViewModifier {
 
     @State private var name = ""
     @State private var showNameError = false
+    @State private var showSaveFailure = false
 
     func body(content: Content) -> some View {
         content
@@ -702,6 +730,7 @@ private struct NewProfileAlert: ViewModifier {
                 Text("A new profile starts from the Empo default layout.")
             }
             .profileNameErrorAlert(isPresented: $showNameError)
+            .layoutSaveFailureAlert(isPresented: $showSaveFailure)
             .onChange(of: isPresented) { _, presented in
                 guard presented else { return }
                 name = LayoutProfilesManager.store.uniqueName(
@@ -717,6 +746,7 @@ private struct NewProfileAlert: ViewModifier {
             showNameError = true
         } catch {
             NSLog("layout profile: create of \(name) failed: \(error)")
+            showSaveFailure = true
         }
     }
 }
@@ -733,6 +763,12 @@ extension View {
             Text(
                 "That name is taken or uses characters Empo can't save. Try letters, numbers and spaces."
             )
+        }
+    }
+
+    func layoutSaveFailureAlert(isPresented: Binding<Bool>) -> some View {
+        alert("Couldn't save your layout. Free up some space and try again.", isPresented: isPresented) {
+            Button("Got it") {}
         }
     }
 }
