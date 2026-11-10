@@ -481,9 +481,9 @@ jobs:
             -destination "id=$SIM_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             -only-testing:EmpoTests/PlusStoreTests \
+            -collect-test-diagnostics never \
             test-without-building 2>&1 \
-            | grep --line-buffered -E "Test Case|Test Suite|error|Testing|TEST" \
-            | while IFS= read -r line; do echo "$(date +%T) $line"; done
+            | grep --line-buffered -E "Test Case|Test Suite|error|TEST"
 
       - name: App tests (iOS Simulator)
         working-directory: ios/Empo
