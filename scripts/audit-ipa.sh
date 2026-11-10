@@ -17,7 +17,9 @@ EXPECTED_VERSION=""
 # Empty means "audit whatever cores the bundle has". A release passes the
 # EMPO_CORES value it built with, so a core that dropped out fails here.
 EXPECTED_CORES=""
-KNOWN_CORES="MkxpCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core MvmzCore"
+# shellcheck source=cores/cores.sh
+. "$REPO_ROOT/cores/cores.sh"
+KNOWN_CORES="$EMPO_ALL_CORES"
 INPUT=""
 
 fail() {
@@ -102,7 +104,7 @@ fi
 # opens one with dlopen when the user picks a game, so nothing here names
 # them and nm on the app finds no engine symbol.
 #
-# A build ships one or more cores (EMPO_CORES in ios/Empo/project.yml), so
+# A build ships one or more cores (EMPO_CORES in cores/cores.sh), so
 # audit the cores the bundle has.
 PRESENT_CORES=""
 for core in $KNOWN_CORES; do

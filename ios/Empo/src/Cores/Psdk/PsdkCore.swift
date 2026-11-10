@@ -102,13 +102,15 @@ struct PsdkCore: GameCore {
     // ponytail: reads all of Data/Scripts.dat at each launch, 0.05 s
     // for Edelweiss Chronicles on an iPhone 13 Pro. Run it once at import
     // and keep a mark if a game shows the wait.
-    func launch(_ container: GameContainer) {
+    func launch(_ container: GameContainer) -> [CoreSetting] {
         PsdkGame.matchFileNameCase(in: container.gameURL)
         let settings = GameSettings.load(from: container.empoStateURL)
-        let smooth = settings.smoothScaling ?? GameConfigDefaults.engineSmoothScaling
-        let fixed = settings.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio
-        gamecore_setSetting("smoothScaling", smooth ? "1" : "0")
-        gamecore_setSetting("fixedAspectRatio", fixed ? "1" : "0")
+        return [
+            smoothScaling(settings),
+            CoreSetting(
+                GAMECORE_SETTING_FIXED_ASPECT_RATIO,
+                settings.fixedAspectRatio ?? GameConfigDefaults.engineFixedAspectRatio),
+        ]
     }
 
     /// A PSDK game ships no Game.ini, and its app_data.json holds

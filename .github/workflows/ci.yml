@@ -327,6 +327,19 @@ jobs:
           REQUIRE_PUBLISHED: "0"
         run: scripts/verify-empo-deps-pins.sh
 
+  generated:
+    name: Generated files
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Check the files that GameCore.h generates
+        run: bun tools/gamecore/generate.ts --check
+
   test:
     name: GameProbe (swift test, Linux)
     needs: changes
@@ -521,6 +534,7 @@ jobs:
     needs:
       - changes
       - lint
+      - generated
       - test
       - simulator
       - mac

@@ -5,53 +5,44 @@
 
 #include <dlfcn.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "GameCore.h"
 
-static void *gCore;
+#define GAMECORE_FUNCTION(ret, name, params, args) static ret(*core_##name) params;
+#define GAMECORE_VOID(name, params, args) static void(*core_##name) params;
+#include "GameCoreFunctions.h"
+#undef GAMECORE_FUNCTION
+#undef GAMECORE_VOID
 
-int EmpoCoreOpen(const char *binaryPath) {
+const char *EmpoCoreOpen(const char *binaryPath) {
+    static char error[1024];
     // RTLD_LOCAL keeps the core's names out of the global namespace.
-    // Every name below reaches this image through its own handle.
-    gCore = dlopen(binaryPath, RTLD_NOW | RTLD_LOCAL);
-    if (gCore == NULL) {
-        fprintf(stderr, "EmpoCore: cannot open %s: %s\n", binaryPath, dlerror());
-        return 0;
+    // dlsym with the core's handle searches that image only, so the
+    // core answers under the same name as the forwarders below.
+    void *core = dlopen(binaryPath, RTLD_NOW | RTLD_LOCAL);
+    if (core == NULL) {
+        snprintf(error, sizeof(error), "cannot open %s: %s", binaryPath, dlerror());
+        return error;
     }
-    return 1;
-}
-
-// dlsym with the core's handle searches that image only, so the core
-// answers under the same name without a clash with the forwarder below.
-static void *coreSymbol(const char *symbol) {
-    void *address = gCore != NULL ? dlsym(gCore, symbol) : NULL;
-    if (address == NULL) {
-        // Either the process called the core before it opened one, or
-        // the framework and this file were built from different
-        // headers. Both are build errors, and a silent no-op would hide
-        // them until a game misbehaved.
-        fprintf(stderr, "EmpoCore: %s is not available (core open: %d)\n", symbol, gCore != NULL);
-        abort();
+#define GAMECORE_VOID(name, params, args)                                                                    \
+    core_##name = dlsym(core, "gamecore_" #name);                                                            \
+    if (core_##name == NULL) {                                                                               \
+        snprintf(error, sizeof(error), "%s has no gamecore_%s", binaryPath, #name);                          \
+        return error;                                                                                        \
     }
-    return address;
+#define GAMECORE_FUNCTION(ret, name, params, args) GAMECORE_VOID(name, params, args)
+#include "GameCoreFunctions.h"
+#undef GAMECORE_FUNCTION
+#undef GAMECORE_VOID
+    return NULL;
 }
-
-#define CORE_FUNCTION(ret, name, params)                                                                     \
-    static ret(*fn) params;                                                                                  \
-    if (fn == NULL)                                                                                          \
-        fn = coreSymbol("gamecore_" #name);
 
 #define GAMECORE_FUNCTION(ret, name, params, args)                                                           \
     ret gamecore_##name params {                                                                             \
-        CORE_FUNCTION(ret, name, params)                                                                     \
-        return fn args;                                                                                      \
+        return core_##name args;                                                                             \
     }
-
 #define GAMECORE_VOID(name, params, args)                                                                    \
     void gamecore_##name params {                                                                            \
-        CORE_FUNCTION(void, name, params)                                                                    \
-        fn args;                                                                                             \
+        core_##name args;                                                                                    \
     }
-
 #include "GameCoreFunctions.h"

@@ -28,11 +28,12 @@ framework and not a static library.
 
 ## What a build ships
 
-A build carries one or more cores. `EMPO_CORES` in `ios/Empo/project.yml`
-names the cores. The iOS app and the Mac app use the same list. The "Embed the
-cores" phase of each app runs `scripts/embed-cores.sh`, which copies those
-frameworks into the app. The script stops the build when the list is empty or
-names an unknown core. Ship one core from the command line:
+A build carries one or more cores. `cores/cores.sh` lists every core, and each
+build script, the "Embed the cores" phase, and `scripts/audit-ipa.sh` read it.
+The iOS app and the Mac app use the same list. The "Embed the cores" phase of
+each app runs `scripts/embed-cores.sh`, which copies the frameworks into the
+app. The script stops the build when `EMPO_CORES` names an unknown core. Ship
+one core from the command line:
 
 ```sh
 xcodebuild ... EMPO_CORES=Psdk30Core
@@ -132,8 +133,15 @@ JSON object of `mkxp.json` keys. The debug overlay shows the lines of
 ## What a core exports
 
 A core exports the functions of `cores/GameCore.h` and nothing else. Each
-core links with the list that `cores/gamecore-exports.sh` writes from that
-header, so the link fails when the bridge leaves a function out.
+core links with the export list `cores/gamecore.exports`, so the link fails
+when the bridge leaves a function out.
+
+`cores/GameCore.h` is the only list of the core functions and the setting
+keys. `bun tools/gamecore/generate.ts` reads it and writes the export list,
+`GameCoreFunctions.h`, and the XPC relay of the game process
+(`GameCoreRelay.h`, `GameCoreRelayService.m`, and `GameCoreRelayClient.m`).
+Run it after each change to `GameCore.h`. CI fails when its output differs
+from the files in git.
 
 No core exports a Ruby name, an SDL name or an SFML name, and no core imports
 one either. `cores/mkxp/check-framework.sh` and
@@ -217,9 +225,8 @@ same `gamecore_` name, so the compiler checks each signature against it.
    never picked is never loaded.
 
 Empo does step 2 through `ios/Empo/src/App/AppCoreForwarders.c`. It makes a
-forwarder for each function of `GameCoreFunctions.h`, the list that
-`tools/gamecore/generate-core-forwarders.sh` writes from `GameCore.h`. Every
-`gamecore_*` call in the app lands in a forwarder.
+forwarder for each function of `GameCoreFunctions.h`. Every `gamecore_*`
+call in the app lands in a forwarder.
 
 When the game runs in the app, the forwarder asks the open core for the same
 name. A call made before the core opens aborts with the name it wanted,
@@ -229,8 +236,9 @@ When the game runs in a game process, the forwarder calls the `gameprocess_*`
 function of the same name in `GameProcessClient.m`. The app opens no core and
 does not use `dlsym`. A call made before the process connects waits, and goes
 to the process when it connects. A call outside a session goes nowhere. The
-getters answer from the last status that the process sent. The game process
-opens the core with steps 1 and 2 through `GameProcess/GameCoreForwarders.c`.
+getters answer from the last status that the process sent. The game process,
+Empo Player on macOS, and the mkxp test host open the core with steps 1 and 2
+through `EmpoCoreOpen` in `GameProcess/GameCoreForwarders.c`.
 
 ## Which thread runs the game
 

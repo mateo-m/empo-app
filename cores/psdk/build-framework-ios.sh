@@ -20,9 +20,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEPS="$ROOT/ios/Dependencies"
 CORE="$DEPS/psdk-core"
-RUBIES=(25 30 32 33)
 # shellcheck source=cores/framework-common.sh
 . "$ROOT/cores/framework-common.sh"
+# shellcheck source=cores/cores.sh
+. "$ROOT/cores/cores.sh"
+read -ra RUBIES <<<"$(psdk_rubies)"
 
 run_locked "$CORE.frameworks.lock" "$0" "$@"
 parse_sdk "$@"
@@ -38,7 +40,7 @@ CORE_VERSION="$(cut -d" " -f1 "$CORE/.fetched-pin")"
 
 STAMP="$TREE/.psdk-frameworks"
 WANT_STAMP="$( (echo "$MIN_OS" && cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
-    "$ROOT/cores/framework-common.sh" "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/GameCore.h" "$ROOT/cores/PrivacyInfo.xcprivacy") | shasum -a 256 | awk '{print $1}')"
+    "$ROOT/cores/framework-common.sh" "$ROOT/cores/psdk/psdk_app_bridge.cpp" "$ROOT/cores/GameCore.h" "$ROOT/cores/gamecore.exports" "$ROOT/cores/PrivacyInfo.xcprivacy") | shasum -a 256 | awk '{print $1}')"
 BUILT=yes
 for ruby in "${RUBIES[@]}"; do
     [ -f "$TREE/Psdk${ruby}Core.framework/Psdk${ruby}Core" ] || BUILT=no
@@ -82,8 +84,6 @@ else
         -weak_framework CoreBluetooth -weak_framework CoreHaptics)
 fi
 
-"$ROOT/cores/gamecore-exports.sh" "$TREE/gamecore.exports"
-
 for ruby in "${RUBIES[@]}"; do
     NAME="Psdk${ruby}Core"
     FW="$TREE/$NAME.framework"
@@ -92,7 +92,7 @@ for ruby in "${RUBIES[@]}"; do
     echo "[psdk-framework] Linking $NAME..."
     "$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
         -install_name "@rpath/$NAME.framework/$NAME" \
-        -Wl,-exported_symbols_list,"$TREE/gamecore.exports" \
+        -Wl,-exported_symbols_list,"$ROOT/cores/gamecore.exports" \
         -o "$BIN_DIR/$NAME" \
         "$BRIDGE" "$CORE/$SDK/libpsdk$ruby.a" "${LIBS[@]}"
 

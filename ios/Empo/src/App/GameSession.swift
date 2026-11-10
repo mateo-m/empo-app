@@ -33,21 +33,11 @@ enum GameSession {
         let game = input.game
         let settings = input.settings
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
-
-        // The core reads its settings in gamecore_applySessionConfig.
-        input.core.launch(container)
-
-        DataDirectory.ensureFontsRoot()
-        GameCoreSessionConfig.with(
-            userDataDirectory: input.userDataDir?.path,
-            sharedFontsDirectory: DataDirectory.fontsRootURL.path,
-            verticalAlignment: alignment.bridgeValue
-        ) { gamecore_applySessionConfig($0) }
+        let coreSettings = input.core.launch(container)
 
         crashTracker.writeMarker(for: container)
         let runner = EngineSessionCoordinator.shared.runner
         sessionLogger.beginSession(for: game, container: container, debugLogsEnabled: input.debugLogsEnabled)
-        gamecore_setDebugLogPath(sessionLogger.logURL?.path)
         GameReport.last = sessionLogger.logURL.map {
             GameReport(gameTitle: game.title, logURL: $0)
         }
@@ -55,14 +45,19 @@ enum GameSession {
             "\(game.title) starts on \(input.core.framework) \(input.core.version), runner \(runner.rawValue)"
         )
 
-        gamecore_resetSessionState()
-        // After the reset (which clears the previous session's
-        // region) and before boot: the engine's first recalc reads
-        // the bridge statics, so the region is set pre-boot.
+        DataDirectory.ensureFontsRoot()
+        GameCoreLaunch.configure(
+            settings: coreSettings,
+            userDataDirectory: input.userDataDir?.path,
+            fontsDirectory: DataDirectory.fontsRootURL.path,
+            verticalAlignment: alignment.bridgeValue,
+            debugLogPath: sessionLogger.logURL?.path)
+        // The reset in `configure` cleared the region of the game
+        // before. The engine's first layout reads the region, so it
+        // goes in before the game starts.
         ScreenRegionApplier.beginSession(container: container)
-        gamecore_setGameControllerCaptureEnabled(false)
-        // Seed the touch-mouse atomic before boot.
-        // `gamecore_resetSessionState` above leaves it alone, so without
+        // Seed the touch-mouse atomic before boot. The reset in
+        // `configure` leaves it alone, so without
         // this the new game inherits the previous game's value until
         // `PlayerRuntimeState.reconcile` runs. That call owns every
         // later push, including the one on resume.

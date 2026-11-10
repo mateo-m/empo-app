@@ -5,15 +5,12 @@
 //
 // The host owns UIApplicationMain and its own delegate. It does not
 // link the engine. It opens Frameworks/MkxpCore.framework/MkxpCore with
-// dlopen when the game starts, then calls gamecore_run_app on the main
-// thread. A launcher does the same on the game the user picks, so the
-// test host and the launcher take one path.
+// EmpoCoreOpen when the game starts, then calls gamecore_run_app on the
+// main thread, as the game process and Empo Player do.
 //
 // gamecore_run_app does not return. SDL pumps the UIKit run loop from
 // inside SDL_PumpEvents, which is how the timers below still fire and
-// how the host window still draws. This is the opposite of the PSDK
-// host, which runs its core on a worker thread because SFML marshals
-// every UIKit call to the main thread.
+// how the host window still draws.
 //
 // Five variables, all read at launch:
 //
@@ -41,9 +38,8 @@
 
 #import <UIKit/UIKit.h>
 
-static int (*gMkxpRunApp)(int, char **);
-static void (*gMkxpSetGamePath)(const char *);
-static void (*gMkxpInjectKeyEvent)(int, int);
+#include "EmpoCore.h"
+#include "GameCore.h"
 
 static char *gGamePath;
 static int gArgc;
@@ -73,25 +69,17 @@ static void scheduleKeys(const char *spec) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(when * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
                            fprintf(stderr, "[host] key down %d at %.1fs\n", scancode, when);
-                           gMkxpInjectKeyEvent(scancode, 1);
+                           gamecore_injectKeyEvent(scancode, 1);
                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
-                                          dispatch_get_main_queue(), ^{ gMkxpInjectKeyEvent(scancode, 0); });
+                                          dispatch_get_main_queue(), ^{ gamecore_injectKeyEvent(scancode, 0); });
                        });
     }
 }
 
-// RTLD_LOCAL keeps a core's names out of the global namespace, so a
-// second core opened later cannot bind to them.
-static void *openFramework(NSString *name) {
+static NSString *frameworkBinary(NSString *name) {
     NSString *bundle = [NSBundle.mainBundle.privateFrameworksPath
         stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"framework"]];
-    NSString *binary = [bundle stringByAppendingPathComponent:name];
-    void *image = dlopen(binary.fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
-    if (!image) {
-        fprintf(stderr, "[host] cannot open %s: %s\n", name.UTF8String, dlerror());
-        exit(5);
-    }
-    return image;
+    return [bundle stringByAppendingPathComponent:name];
 }
 
 // Every core keeps its own Ruby, and no core exports a Ruby name. A
@@ -108,21 +96,24 @@ static void openCore(void) {
     const char *also = getenv("MKXP_ALSO_OPEN");
     if (also && *also) {
         NSString *other = @(also).stringByDeletingPathExtension;
-        void *otherImage = openFramework(other);
+        // RTLD_LOCAL keeps a core's names out of the global namespace, so
+        // a second core opened later cannot bind to them.
+        void *otherImage = dlopen(frameworkBinary(other).fileSystemRepresentation, RTLD_NOW | RTLD_LOCAL);
+        if (!otherImage) {
+            fprintf(stderr, "[host] cannot open %s: %s\n", also, dlerror());
+            exit(5);
+        }
         fprintf(stderr, "[host] opened %s at %p\n", also, otherImage);
         reportGlobalRuby("after the first core");
     }
 
-    void *image = openFramework(@"MkxpCore");
-    fprintf(stderr, "[host] opened MkxpCore.framework at %p\n", image);
-    reportGlobalRuby("after both cores");
-    gMkxpRunApp = dlsym(image, "gamecore_run_app");
-    gMkxpSetGamePath = dlsym(image, "gamecore_setGamePath");
-    gMkxpInjectKeyEvent = dlsym(image, "gamecore_injectKeyEvent");
-    if (!gMkxpRunApp || !gMkxpSetGamePath || !gMkxpInjectKeyEvent) {
-        fprintf(stderr, "[host] the core is missing a symbol the host needs\n");
-        exit(6);
+    const char *error = EmpoCoreOpen(frameworkBinary(@"MkxpCore").fileSystemRepresentation);
+    if (error) {
+        fprintf(stderr, "[host] %s\n", error);
+        exit(5);
     }
+    fprintf(stderr, "[host] opened MkxpCore.framework\n");
+    reportGlobalRuby("after both cores");
 }
 
 @interface MkxpTestHostDelegate : UIResponder <UIApplicationDelegate>
@@ -191,8 +182,8 @@ static void openCore(void) {
     fprintf(stderr, "[host] opening the core\n");
     openCore();
     scheduleKeys(getenv("MKXP_KEYS"));
-    gMkxpSetGamePath(gGamePath);
-    int result = gMkxpRunApp(gArgc, gArgv);
+    gamecore_setGamePath(gGamePath);
+    int result = gamecore_run_app(gArgc, gArgv);
     fprintf(stderr, "[host] gamecore_run_app returned %d\n", result);
     _exit(result == 0 ? 0 : 1);
 }

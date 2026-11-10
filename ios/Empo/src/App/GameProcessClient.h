@@ -14,6 +14,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@protocol EmpoGameProcess;
+
+// Sends the call now, or keeps it for the process that did not connect
+// yet. A call outside a session goes nowhere.
+void EmpoGameProcessSend(void (^call)(id<EmpoGameProcess> process));
+
 @interface EmpoGameProcessClient : NSObject
 
 // Starts the session of a new game process that runs the core
