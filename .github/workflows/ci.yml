@@ -472,7 +472,8 @@ jobs:
       # there. The full run below still fails on a real purchase test failure.
       - name: Load the test purchase file on the Simulator
         working-directory: ios/Empo
-        timeout-minutes: 5
+        timeout-minutes: 15
+        continue-on-error: true
         run: |
           xcodebuild \
             -project Empo.xcodeproj \
@@ -480,7 +481,9 @@ jobs:
             -destination "id=$SIM_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
             -only-testing:EmpoTests/PlusStoreTests \
-            test-without-building >/dev/null 2>&1 || true
+            test-without-building 2>&1 \
+            | grep --line-buffered -E "Test Case|Test Suite|error|Testing|TEST" \
+            | while IFS= read -r line; do echo "$(date +%T) $line"; done
 
       - name: App tests (iOS Simulator)
         working-directory: ios/Empo
