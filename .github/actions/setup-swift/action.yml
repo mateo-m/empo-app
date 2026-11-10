@@ -1,0 +1,29 @@
+---
+name: Set up Swift
+description: Use the preinstalled Swift 6.4, or install it with swiftly.
+
+runs:
+  using: composite
+  steps:
+    # GitHub's Ubuntu image ships Swift 6.4. The install steps run only
+    # when an image update removes it.
+    - name: Find a preinstalled Swift 6.4
+      id: preinstalled
+      shell: bash
+      run: |
+        if swift --version 2>/dev/null | grep -q 'Swift version 6\.4'; then
+          echo "swift=true" >>"$GITHUB_OUTPUT"
+        fi
+
+    - name: Cache Swift toolchain
+      if: steps.preinstalled.outputs.swift != 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.local/share/swiftly
+        key: swiftly-${{ runner.os }}-6.4
+
+    - name: Install Swift toolchain
+      if: steps.preinstalled.outputs.swift != 'true'
+      uses: vapor/swiftly-action@bedb227456c5f495afbef80baebee17a8a02cef4 # v0.2.1
+      with:
+        toolchain: "6.4"

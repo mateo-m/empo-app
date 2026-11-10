@@ -2,7 +2,7 @@ import { signedByDevice } from "./device";
 import { type Env, SignedOut, token } from "./patreon";
 import { open, renewalKeys, seal } from "./renewal";
 
-const unusedLifetimeMs = 90 * 24 * 60 * 60 * 1000;
+export const unusedLifetimeMs = 90 * 24 * 60 * 60 * 1000;
 const heldLifetimeMs = 10 * 60 * 1000;
 // A worker that stops in the middle of a finish sends no release, so
 // a claim lapses after this time and the next finish can take it.
@@ -21,6 +21,8 @@ export interface Held {
   pass: string;
   replace: boolean;
 }
+
+export type Claimed = Held & { device: string; refreshToken: string; claim: string };
 
 export interface Finish {
   code: string;
@@ -173,7 +175,7 @@ export class PatreonSession {
       // failed step can release the code for one more finish.
       const claim = crypto.randomUUID();
       await this.state.storage.put({ phase: "claimed", claim, claimedUntil: Date.now() + claimLifetimeMs });
-      return Response.json({ ...held, device, refreshToken, claim });
+      return Response.json({ ...held, device, refreshToken, claim } satisfies Claimed);
     } catch (error) {
       console.error(error);
       return Response.json({ error: "server" }, { status: 502 });
@@ -229,6 +231,6 @@ export function callSession(env: Env, id: string, request: SessionRequest): Prom
   return stub.fetch(new Request("https://session", { method: "POST", body: JSON.stringify(request) }));
 }
 
-function signedOut(): Response {
+export function signedOut(): Response {
   return Response.json({ error: "signed_out" }, { status: 401 });
 }
