@@ -41,19 +41,13 @@ final class PlusStoreTests: XCTestCase {
 
     func testAnEndedSubscriptionTakesPlusAway() async throws {
         let store = PlusStore.shared
-        session.timeRate = .oneRenewalEveryTwoSeconds
         await store.loadProduct()
         try await store.purchase()
         XCTAssertTrue(store.isSubscribed)
-        let transaction = try XCTUnwrap(session.allTransactions().first)
-        try session.disableAutoRenewForTransaction(identifier: UInt(transaction.identifier))
-        guard case .verified(let latest)? = await Transaction.latest(for: PlusStore.productID),
-            let end = latest.expirationDate
-        else { return XCTFail("No subscription on the device") }
 
         // StoreKit sends no update when a subscription runs out. The app
         // sees the end at its next refresh.
-        try await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow) + 0.5))
+        try session.expireSubscription(productIdentifier: PlusStore.productID)
         await store.refresh()
 
         XCTAssertFalse(store.isSubscribed)
