@@ -637,19 +637,26 @@ public enum ControlsManifestLoader {
     }
 
     static func validateCoordinate(_ value: Double, path: String, findings: inout [Finding]) {
-        validate(value, in: ControlLimits.coordinate, code: .v011, name: "Coordinate", path: path, findings: &findings)
+        validate(
+            value, in: ControlLimits.coordinate, code: .v011, name: "Coordinate", path: path,
+            findings: &findings)
     }
 
     static func validateButtonSize(_ value: Double, path: String, findings: inout [Finding]) {
-        validate(value, in: ControlLimits.buttonSize, code: .v012, name: "Button size", path: path, findings: &findings)
+        validate(
+            value, in: ControlLimits.buttonSize, code: .v012, name: "Button size", path: path,
+            findings: &findings)
     }
 
     static func validateDPadSize(_ value: Double, path: String, findings: inout [Finding]) {
-        validate(value, in: ControlLimits.dpadSize, code: .v012, name: "D-pad size", path: path, findings: &findings)
+        validate(
+            value, in: ControlLimits.dpadSize, code: .v012, name: "D-pad size", path: path,
+            findings: &findings)
     }
 
     static func validateOpacity(_ value: Double, path: String, findings: inout [Finding]) {
-        validate(value, in: ControlLimits.opacity, code: .v012, name: "Opacity", path: path, findings: &findings)
+        validate(
+            value, in: ControlLimits.opacity, code: .v012, name: "Opacity", path: path, findings: &findings)
     }
 
     private static func validate(
@@ -660,7 +667,8 @@ public enum ControlsManifestLoader {
         findings.append(
             Finding(
                 severity: .error, code: code, path: path,
-                message: "\(name) must be between \(rangeText(range.lowerBound)) and \(rangeText(range.upperBound))"
+                message:
+                    "\(name) must be between \(rangeText(range.lowerBound)) and \(rangeText(range.upperBound))"
             ))
     }
 

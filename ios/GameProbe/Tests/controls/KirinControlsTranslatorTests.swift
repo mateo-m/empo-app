@@ -203,22 +203,26 @@ final class KirinControlsTranslatorTests: XCTestCase {
             """
 
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: highScale.data(using: .utf8)!, metrics: .reference).manifest?
+            KirinControlsTranslator.translate(data: highScale.data(using: .utf8)!, metrics: .reference)
+                .manifest?
                 .touch?.portrait?.buttons?.first?.size,
             52
         )
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: lowScale.data(using: .utf8)!, metrics: .reference).manifest?
+            KirinControlsTranslator.translate(data: lowScale.data(using: .utf8)!, metrics: .reference)
+                .manifest?
                 .touch?.portrait?.buttons?.first?.size,
             40
         )
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: lowOpacity.data(using: .utf8)!, metrics: .reference).manifest?
+            KirinControlsTranslator.translate(data: lowOpacity.data(using: .utf8)!, metrics: .reference)
+                .manifest?
                 .touch?.portrait?.buttons?.first?.opacity,
             0.2
         )
         XCTAssertEqual(
-            KirinControlsTranslator.translate(data: highOpacity.data(using: .utf8)!, metrics: .reference).manifest?
+            KirinControlsTranslator.translate(data: highOpacity.data(using: .utf8)!, metrics: .reference)
+                .manifest?
                 .touch?.portrait?.buttons?.first?.opacity,
             1.0
         )
@@ -228,20 +232,23 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
     func testVersionTwoIgnored() {
         let json = #"{"version": 2, "rightGrid": {"slots": [29]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = KirinControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("unsupported version 2") })
     }
 
     func testNonObjectJSONIgnored() {
-        let translation = KirinControlsTranslator.translate(data: "[1,2,3]".data(using: .utf8)!, metrics: .reference)
+        let translation = KirinControlsTranslator.translate(
+            data: "[1,2,3]".data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertFalse(translation.notes.isEmpty)
     }
 
     func testUnmappedKeycodeDroppedWithNote() {
         let json = #"{"rightGrid": {"slots": [999, 29]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = KirinControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 1)
         XCTAssertTrue(translation.notes.contains { $0.contains("keycode 999") })
     }
@@ -251,21 +258,24 @@ final class KirinControlsTranslatorTests: XCTestCase {
         // cap. A full file translates with nothing dropped.
         let slots = (0..<20).map { _ in "29" }.joined(separator: ", ")
         let json = "{\"rightGrid\": {\"slots\": [\(slots)]}}"
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = KirinControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.count, 20)
         XCTAssertFalse(translation.notes.contains { $0.contains("dropped") })
     }
 
     func testAllNullSlotsIgnored() {
         let json = #"{"rightGrid": {"slots": [null, null]}, "leftGrid": {"slots": [null]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = KirinControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("no usable buttons") })
     }
 
     func testMissingVersionStillTranslates() throws {
         let json = #"{"rightGrid": {"slots": [29]}}"#
-        let translation = KirinControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = KirinControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         let buttons = try XCTUnwrap(translation.manifest?.touch?.portrait?.buttons)
         XCTAssertEqual(buttons.count, 1)
     }

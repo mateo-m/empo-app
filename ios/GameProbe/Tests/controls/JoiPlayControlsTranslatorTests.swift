@@ -109,14 +109,16 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
     func testMappedCKeyCodeEmitsEnter() {
         let json = #"{"cKeyCode": 66}"#
-        let translation = JoiPlayControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = JoiPlayControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.first?.key, "Enter")
         XCTAssertTrue(translation.notes.isEmpty)
     }
 
     func testUnmappedCKeyCodeFallsBackWithNote() {
         let json = #"{"cKeyCode": 999}"#
-        let translation = JoiPlayControlsTranslator.translate(data: json.data(using: .utf8)!, metrics: .reference)
+        let translation = JoiPlayControlsTranslator.translate(
+            data: json.data(using: .utf8)!, metrics: .reference)
         XCTAssertEqual(translation.manifest?.touch?.portrait?.buttons?.first?.key, "Enter")
         XCTAssertEqual(translation.notes.filter { $0.contains("cKeyCode") && $0.contains("999") }.count, 1)
     }
@@ -136,17 +138,21 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         XCTAssertNotNil(cSize)
         XCTAssertGreaterThanOrEqual(cSize ?? 0, 40)
         XCTAssertLessThanOrEqual(cSize ?? 0, 100)
-        let lowScaleButtons = JoiPlayControlsTranslator.translate(data: lowScale.data(using: .utf8)!, metrics: .reference)
-            .manifest?
-            .touch?.portrait?.buttons
+        let lowScaleButtons = JoiPlayControlsTranslator.translate(
+            data: lowScale.data(using: .utf8)!, metrics: .reference
+        )
+        .manifest?
+        .touch?.portrait?.buttons
         XCTAssertTrue(lowScaleButtons?.allSatisfy { $0.size == 40 } == true)
         XCTAssertEqual(
-            JoiPlayControlsTranslator.translate(data: lowOpacity.data(using: .utf8)!, metrics: .reference).manifest?
+            JoiPlayControlsTranslator.translate(data: lowOpacity.data(using: .utf8)!, metrics: .reference)
+                .manifest?
                 .touch?.portrait?.buttons?.first?.opacity,
             0.2
         )
         XCTAssertEqual(
-            JoiPlayControlsTranslator.translate(data: highOpacity.data(using: .utf8)!, metrics: .reference).manifest?
+            JoiPlayControlsTranslator.translate(data: highOpacity.data(using: .utf8)!, metrics: .reference)
+                .manifest?
                 .touch?.portrait?.buttons?.first?.opacity,
             1.0
         )
@@ -155,19 +161,22 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
     // MARK: - Claim rule
 
     func testEmptyObjectIgnored() {
-        let translation = JoiPlayControlsTranslator.translate(data: "{}".data(using: .utf8)!, metrics: .reference)
+        let translation = JoiPlayControlsTranslator.translate(
+            data: "{}".data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("no JoiPlay keys") })
     }
 
     func testUnknownKeysIgnored() {
-        let translation = JoiPlayControlsTranslator.translate(data: #"{"foo": 1}"#.data(using: .utf8)!, metrics: .reference)
+        let translation = JoiPlayControlsTranslator.translate(
+            data: #"{"foo": 1}"#.data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("no JoiPlay keys") })
     }
 
     func testNonObjectJSONIgnored() {
-        let translation = JoiPlayControlsTranslator.translate(data: "[1,2]".data(using: .utf8)!, metrics: .reference)
+        let translation = JoiPlayControlsTranslator.translate(
+            data: "[1,2]".data(using: .utf8)!, metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertFalse(translation.notes.isEmpty)
     }

@@ -187,7 +187,8 @@ public enum KirinControlsTranslator {
         let buttonSize = fit.buttonSize
         let dpadSize = fit.dpadSize
 
-        let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
+        let available = metrics.usableHeight(
+            isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
         let leftKeyAvailable = available - TranslatorLayout.cellGap - dpadSize
         let rowPitch = effectivePitch(
             buttonSize: buttonSize, rowCount: maxRowCount, available: available)
@@ -207,7 +208,9 @@ public enum KirinControlsTranslator {
             leftBandSpan)
         let bandTop =
             isLandscape
-            ? max(topInset + TranslatorLayout.edgeMargin, height - bottomInset - TranslatorLayout.edgeMargin - bandSpan)
+            ? max(
+                topInset + TranslatorLayout.edgeMargin,
+                height - bottomInset - TranslatorLayout.edgeMargin - bandSpan)
             : topInset + TranslatorLayout.edgeMargin
         let firstRowCenterY = bandTop + buttonSize * 0.5
         let rowCenters = (0..<maxRowCount).map { firstRowCenterY + Double($0) * pitch }
@@ -363,7 +366,8 @@ public enum KirinControlsTranslator {
     ) -> FitResult {
         var size = buttonSize
         var dpad = nominalDpadSize(buttonSize: size)
-        let available = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
+        let available = metrics.usableHeight(
+            isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
 
         while true {
             if layoutFits(
@@ -384,7 +388,9 @@ public enum KirinControlsTranslator {
             } else if dpad > ControlLimits.dpadSize.lowerBound {
                 dpad -= 1
             } else {
-                return FitResult(buttonSize: ControlLimits.buttonSize.lowerBound, dpadSize: ControlLimits.dpadSize.lowerBound)
+                return FitResult(
+                    buttonSize: ControlLimits.buttonSize.lowerBound,
+                    dpadSize: ControlLimits.dpadSize.lowerBound)
             }
         }
     }

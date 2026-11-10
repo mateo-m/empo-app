@@ -192,16 +192,17 @@ public struct BindingMap: Equatable, Sendable {
 public enum ControllerElement {
     public static let allNames: Set<String> = Set(allElements)
 
-    public static let allElements: [String] = [
-        "a", "b", "x", "y",
-        "back", "guide", "start",
-        "leftstick", "rightstick",
-        "leftshoulder", "rightshoulder",
-        "dpup", "dpdown", "dpleft", "dpright",
-        "paddle1", "paddle2", "paddle3", "paddle4",
-        "touchpad",
-        "lefttrigger", "righttrigger",
-    ]
+    public static let allElements: [String] =
+        [
+            "a", "b", "x", "y",
+            "back", "guide", "start",
+            "leftstick", "rightstick",
+            "leftshoulder", "rightshoulder",
+            "dpup", "dpdown", "dpleft", "dpright",
+            "paddle1", "paddle2", "paddle3", "paddle4",
+            "touchpad",
+            "lefttrigger", "righttrigger",
+        ]
         + ["left", "right"].flatMap { stick in
             [ControlDirection.left, .right, .up, .down].map { halfAxis(stick: stick, direction: $0) }
         }
