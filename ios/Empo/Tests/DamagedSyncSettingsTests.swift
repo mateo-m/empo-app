@@ -96,6 +96,26 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertTrue(BackupTargets.load().contains { $0.id == target.id })
     }
 
+    func testARemovedLocationTakesItsAdoptBannerAway() async throws {
+        let target = TargetDescriptor(
+            id: "adopt-banner-\(UUID().uuidString)", provider: .webdav, label: "Test", root: "Empo")
+        try BackupTargets.add(target)
+        let model = BackupsScreenModel(iCloudAvailability: { .signedOut })
+        await model.refresh()
+        model.showTheAdoptBanners(
+            [
+                BackupNamespaceRow(
+                    namespaceId: "earlier-\(UUID().uuidString)", deviceName: "Test", snapshotCount: 1,
+                    gameCount: 1, totalBytes: nil, isEarlierSpace: true)
+            ], of: target.id)
+        XCTAssertEqual(model.adoptBanners.map(\.targetId), [target.id])
+
+        let line = await model.remove(targetId: target.id, deleteBackups: false)
+
+        XCTAssertNil(line)
+        XCTAssertTrue(model.adoptBanners.isEmpty)
+    }
+
     func testSetUpSyncAgainMovesTheDamagedFileAsideAndStartsTheJoin() async throws {
         let folder = layout.applicationSupport
         let before = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))

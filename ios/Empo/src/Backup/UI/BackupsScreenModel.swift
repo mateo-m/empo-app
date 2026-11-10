@@ -166,6 +166,8 @@ final class BackupsScreenModel {
         }
         self.items = items
         self.history = runs
+        // An adopt moves this device to the banner's space, so a banner of a removed location must go.
+        adoptBanners.removeAll { banner in !descriptors.contains { $0.id == banner.targetId } }
         let conflicts: WriterConflicts
         do {
             conflicts = try BackupRoot.writerConflicts()
@@ -437,8 +439,12 @@ final class BackupsScreenModel {
 
     /// The banner of 13.13, from the namespaces one target holds.
     func readTheAdoptBanners(of targetId: String) async {
-        guard let rows = try? await namespaces(of: targetId),
-            let label = targets.first(where: { $0.id == targetId })?.descriptor.displayName
+        guard let rows = try? await namespaces(of: targetId) else { return }
+        showTheAdoptBanners(rows, of: targetId)
+    }
+
+    func showTheAdoptBanners(_ rows: [BackupNamespaceRow], of targetId: String) {
+        guard let label = targets.first(where: { $0.id == targetId })?.descriptor.displayName
         else { return }
         let banners = rows.filter { $0.isEarlierSpace }.map {
             AdoptBannerItem(targetId: targetId, targetLabel: label, namespaceId: $0.namespaceId)
