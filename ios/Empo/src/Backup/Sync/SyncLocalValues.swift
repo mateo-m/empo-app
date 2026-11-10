@@ -129,11 +129,15 @@ enum SyncLocalValues {
     }
 
     /// The Mac and iPhone disks refuse a folder name over 255 UTF-16
-    /// units, and an emoji counts as one character but many units.
+    /// units in decomposed form, and an emoji counts as one character
+    /// but many units.
     static func copyName(of name: String, number: Int) -> String {
         let mark = DisplacedCopy.treeName(for: "", number: number)
         var stem = Substring(name.prefix(max(0, LayoutProfileStore.maxNameLength - mark.count)))
-        while !stem.isEmpty, stem.last?.isWhitespace == true || (stem + mark).utf16.count > 255 {
+        while !stem.isEmpty,
+            stem.last?.isWhitespace == true
+                || (stem + mark).decomposedStringWithCanonicalMapping.utf16.count > 255
+        {
             stem = stem.dropLast()
         }
         return DisplacedCopy.treeName(for: String(stem), number: number)

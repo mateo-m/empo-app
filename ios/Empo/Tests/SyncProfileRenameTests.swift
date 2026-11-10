@@ -131,12 +131,15 @@ final class SyncProfileRenameTests: XCTestCase {
 
     func testACopyNameStaysInTheNameRulesAndTheDiskLimit() {
         let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
-        let names = [String(repeating: "L", count: 60), String(repeating: family, count: 23), "Short"]
+        let accents = String(repeating: family, count: 20) + String(repeating: "\u{1F87}", count: 6)
+        let names = [
+            String(repeating: "L", count: 60), String(repeating: family, count: 23), accents, "Short",
+        ]
         for name in names {
             for number in [1, 2, 100, 12345] {
                 let copy = SyncLocalValues.copyName(of: name, number: number)
                 XCTAssertEqual(LayoutProfileStore.validatedName(copy), copy, "\(number)")
-                XCTAssertLessThanOrEqual(copy.utf16.count, 255)
+                XCTAssertLessThanOrEqual(copy.decomposedStringWithCanonicalMapping.utf16.count, 255)
                 XCTAssertTrue(copy.hasPrefix(String(name.prefix(1))))
             }
         }
