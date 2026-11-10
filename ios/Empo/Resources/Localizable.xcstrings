@@ -24767,6 +24767,64 @@
         }
       }
     },
+    "Empo couldn't prepare the upload on this device. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte den Upload auf diesem Gerät nicht vorbereiten. Versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo preparar la subida en este dispositivo. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu préparer l'envoi sur cet appareil. Réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a preparare il caricamento su questo dispositivo. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスでアップロードを準備できませんでした。もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 이 기기에서 업로드를 준비하지 못했어요. 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu preparar o upload neste dispositivo. Tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось подготовить отправку на этом устройстве. Попробуйте ещё раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法在此设备上准备上传内容。请重试。"
+          }
+        }
+      }
+    },
     "Empo couldn't reach %@. Check your connection, then try again." : {
       "extractionState" : "manual",
       "localizations" : {
