@@ -1,6 +1,7 @@
 import Foundation
 import GameProbe
 import UIKit
+import os
 
 /// One backup pass: every enabled target, every game the trigger
 /// covers, through the snapshot engine of SPEC 5.
@@ -17,13 +18,23 @@ final class BackupPass: BackupRunning {
 
     static let shared = BackupPass()
 
-    private init() {}
+    private let readThePlus: @MainActor () async -> Void
+
+    init(
+        readThePlus: @escaping @MainActor () async -> Void = {
+            await EmpoPlus.shared.renew()
+            await PlusStore.shared.refresh()
+        }
+    ) {
+        self.readThePlus = readThePlus
+    }
 
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult {
-        await EmpoPlus.shared.renew()
-        await PlusStore.shared.refresh()
+        // The Patreon server can take a minute to answer, and a removal waits for the pause.
+        await Self.waitUnlessCancelled(readThePlus)
+        guard !Task.isCancelled else { return BackupPassResult() }
         let targets = BackupTargets.writable()
         guard !targets.isEmpty else {
             log("the pass found no target")
@@ -31,6 +42,7 @@ final class BackupPass: BackupRunning {
         }
 
         let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
+        guard !Task.isCancelled else { return BackupPassResult() }
         BackupGameNames.remember(names)
         BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
@@ -187,6 +199,24 @@ final class BackupPass: BackupRunning {
         }
     }
 
+    /// Other callers share the Plus reads, so a pause ends the wait and the reads go on.
+    private static func waitUnlessCancelled(_ work: @escaping @MainActor () async -> Void) async {
+        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
+        let resume: @Sendable () -> Void = { waiter.withLock { $0.take() }?.resume() }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                waiter.withLock { $0 = continuation }
+                Task {
+                    await work()
+                    resume()
+                }
+                if Task.isCancelled { resume() }
+            }
+        } onCancel: {
+            resume()
+        }
+    }
+
     // MARK: - The games
 
     /// The games this trigger covers, in the order 7.8 asks for,
@@ -220,7 +250,7 @@ final class BackupPass: BackupRunning {
         let thresholds = BackupTargets.thresholds()
         var games: [BackupRunGame] = []
         var names: [String: String] = [:]
-        for key in keys {
+        for key in keys where !Task.isCancelled {
             guard let container = byKey[key] else { continue }
             // The legacy per-game keys have to leave UserDefaults
             // before the run stages `EmpoState/`, or the layout goes

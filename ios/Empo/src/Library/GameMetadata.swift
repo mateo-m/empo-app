@@ -253,33 +253,31 @@ struct GameMetadata: Codable {
         return Task.isCancelled ? nil : sizes
     }
 
+    /// A cancelled caller gets the size of the part walked so far.
+    @concurrent
     static func diskSize(for directory: URL) async -> Int64 {
-        let directory = directory
-        return await Task.detached(priority: .utility) {
-            let fm = FileManager.default
-            guard
-                let enumerator = fm.enumerator(
-                    at: directory,
-                    includingPropertiesForKeys: [.fileSizeKey],
-                    options: [.skipsHiddenFiles]
-                )
-            else {
-                return Int64(0)
-            }
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: directory,
+                includingPropertiesForKeys: [.fileSizeKey],
+                options: [.skipsHiddenFiles]
+            )
+        else {
+            return 0
+        }
 
-            // NSEnumerator's `for case let x in enumerator` form
-            // calls `makeIterator()`, which Swift 6 treats as
-            // unavailable from async contexts. Manual `nextObject()`
-            // loop sidesteps that and still walks the whole tree.
-            var total: Int64 = 0
-            while let next = enumerator.nextObject() {
-                guard let fileURL = next as? URL else { continue }
-                if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
-                    total += Int64(size)
-                }
+        // NSEnumerator's `for case let x in enumerator` form
+        // calls `makeIterator()`, which Swift 6 treats as
+        // unavailable from async contexts. Manual `nextObject()`
+        // loop sidesteps that and still walks the whole tree.
+        var total: Int64 = 0
+        while !Task.isCancelled, let next = enumerator.nextObject() {
+            guard let fileURL = next as? URL else { continue }
+            if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                total += Int64(size)
             }
-            return total
-        }.value
+        }
+        return total
     }
 
     static func formatPlayTime(_ seconds: TimeInterval?) -> String {
