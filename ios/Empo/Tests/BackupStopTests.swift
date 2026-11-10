@@ -49,6 +49,47 @@ final class BackupStopTests: XCTestCase {
         XCTAssertTrue(result.targets.isEmpty)
     }
 
+    func testAPausedPassStopsWhileALocationDoesNotOpen() async throws {
+        let targetsFile = BackupRoot.layout.targetsFile
+        let saved = try? Data(contentsOf: targetsFile)
+        defer {
+            if let saved {
+                try? saved.write(to: targetsFile, options: .atomic)
+            } else {
+                try? FileManager.default.removeItem(at: targetsFile)
+            }
+        }
+        try BackupTargets.add(
+            TargetDescriptor(
+                id: "held-open-\(UUID().uuidString)", provider: .iCloudDrive, label: "Test",
+                root: "Empo"))
+        let opening = HeldAnswer<(any BackupProvider)?>()
+        let started = expectation(description: "a location starts to open")
+        started.assertForOverFulfill = false
+        let pass = BackupPass(
+            readThePlus: {},
+            openTheProvider: { _ in
+                started.fulfill()
+                return await opening.value()
+            })
+        let stopped = expectation(description: "the pass stops")
+        let run = Task {
+            let result = await pass.runBackup(
+                scope: .dirtyGames, trigger: .sessionEndOrBackground, progress: nil)
+            stopped.fulfill()
+            return result
+        }
+        await fulfillment(of: [started], timeout: 5)
+        run.cancel()
+
+        await fulfillment(of: [stopped], timeout: 5)
+        opening.answer(nil)
+
+        let result = await run.value
+        XCTAssertFalse(result.didFinish)
+        XCTAssertTrue(result.targets.isEmpty)
+    }
+
     func testACancelledSizeCountStops() async throws {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("size-count-\(UUID().uuidString)")

@@ -11,13 +11,16 @@ final class BackupPass {
     static let shared = BackupPass()
 
     private let readThePlus: @MainActor () async -> Void
+    private let openTheProvider: @MainActor (TargetDescriptor) async -> (any BackupProvider)?
 
     init(
-        readThePlus: @escaping @MainActor () async -> Void = {
-            await EmpoPlus.shared.refresh()
+        readThePlus: @escaping @MainActor () async -> Void = { await EmpoPlus.shared.refresh() },
+        openTheProvider: @escaping @MainActor (TargetDescriptor) async -> (any BackupProvider)? = {
+            await BackupTargets.provider(for: $0)
         }
     ) {
         self.readThePlus = readThePlus
+        self.openTheProvider = openTheProvider
     }
 
     /// `progress` belongs to a continued-processing task, which must
@@ -54,7 +57,10 @@ final class BackupPass {
                 didFinish = false
                 break
             }
-            guard let provider = await BackupTargets.provider(for: descriptor) else {
+            // iCloud Drive can take a long time to open.
+            let opened = await Self.waitUnlessCancelled { await self.openTheProvider(descriptor) }
+            guard !Task.isCancelled else { return BackupPassResult(targets: rows) }
+            guard let provider = opened.flatMap({ $0 }) else {
                 // The gate of 9.1 is closed, or the provider is not
                 // built yet. Neither is a failure the user can clear,
                 // so nothing notifies.
@@ -230,21 +236,24 @@ final class BackupPass {
         try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
-    /// Other callers share the Plus reads, so a pause ends the wait and the reads go on.
-    private static func waitUnlessCancelled(_ work: @escaping @MainActor () async -> Void) async {
-        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
-        let resume: @Sendable () -> Void = { waiter.withLock { $0.take() }?.resume() }
-        await withTaskCancellationHandler {
+    /// Other callers share the Plus reads and the providers, so a pause ends the wait and the work
+    /// goes on. A pause answers `nil`.
+    @discardableResult
+    private static func waitUnlessCancelled<Value: Sendable>(
+        _ work: @escaping @MainActor () async -> Value
+    ) async -> Value? {
+        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Value?, Never>?>(initialState: nil)
+        let resume: @Sendable (Value?) -> Void = { value in
+            waiter.withLock { $0.take() }?.resume(returning: value)
+        }
+        return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 waiter.withLock { $0 = continuation }
-                Task {
-                    await work()
-                    resume()
-                }
-                if Task.isCancelled { resume() }
+                Task { resume(await work()) }
+                if Task.isCancelled { resume(nil) }
             }
         } onCancel: {
-            resume()
+            resume(nil)
         }
     }
 
