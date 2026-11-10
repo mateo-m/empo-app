@@ -55,7 +55,8 @@ function parseParameter(text: string, declaration: string): Parameter {
 
 function parseHeader(text: string): CoreFunction[] {
   const code = text
-    .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, " ")
+    .replace(/\\\n/g, " ")
+    .replace(/("(?:\\.|[^"\\\n])*")|\/\*[\s\S]*?\*\/|\/\/.*$/gm, (_, literal) => literal ?? " ")
     .replace(/^\s*#.*$/gm, "")
     .replace(/extern "C"/g, "")
     .replace(/[{}]/g, ";");

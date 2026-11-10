@@ -162,6 +162,8 @@ int gamecore_run_app(int argc, char **argv);
 
 int gamecore_isGameReady(void);
 
+// A parameter named path is a file path, never an empty string. The
+// game process relay sends it in the file system form.
 void gamecore_setGamePath(const char *path);
 
 int gamecore_isEngineTerminated(void);
