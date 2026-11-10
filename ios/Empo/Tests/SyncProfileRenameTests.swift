@@ -111,4 +111,21 @@ final class SyncProfileRenameTests: XCTestCase {
         XCTAssertEqual(aside.map(buttonX), [0.33], "the local profile keeps its controls")
         XCTAssertEqual(aside.compactMap { identities.ids[$0] }, ["local-profile"])
     }
+
+    func testAMoveAsideSkipsACopyNameTakenInAnotherCase() throws {
+        let name = "\(tag) Pre"
+        _ = try makeProfile(name, buttonX: 0.33)
+        _ = try makeProfile(DisplacedCopy.treeName(for: name.lowercased()), buttonX: 0.11)
+        let incoming = try touch(of: name, buttonX: 0.42)
+
+        var identities = SyncProfileIdentities()
+        identities.ids[name] = "local-profile"
+        apply(id: "remote-profile", name: name, touch: incoming, &identities)
+
+        XCTAssertEqual(buttonX(name), 0.42)
+        let aside = store.listProfiles().filter {
+            $0 != name && $0.lowercased().hasPrefix(tag.lowercased())
+        }
+        XCTAssertEqual(Set(aside.compactMap(buttonX)), [0.33, 0.11])
+    }
 }

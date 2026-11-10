@@ -120,8 +120,10 @@ enum SyncLocalValues {
         let local = store.storedName(name) ?? name
         let room = LayoutProfileStore.maxNameLength - DisplacedCopy.treeName(for: "", number: 99).count
         let stem = String(local.prefix(room)).trimmingCharacters(in: .whitespaces)
-        let taken = Set(store.listProfiles())
-        let moved = DisplacedCopy.nextTreeName(for: stem, taken: taken)
+        let taken = Set(store.listProfiles().map(LayoutProfileStore.nameKey))
+        let moved = DisplacedCopy.nextTreeName(for: stem) {
+            taken.contains(LayoutProfileStore.nameKey($0))
+        }
         try store.renameProfile(from: local, to: moved)
         identities.rename(from: local, to: moved)
     }
