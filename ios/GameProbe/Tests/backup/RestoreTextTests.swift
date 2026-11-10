@@ -4,12 +4,13 @@ import XCTest
 
 final class RestoreTextTests: XCTestCase {
 
-    func testAFinishedRestoreSaysSo() {
-        XCTAssertEqual(RestoreNotices.line(of: .finished(RestoreResult())), "Restored.")
+    func testAFinishedRestoreSaysWhatToDoNext() {
+        XCTAssertEqual(
+            RestoreNotices.line(of: .finished(RestoreResult())), "Open the game to play from this backup.")
         XCTAssertEqual(
             RestoreNotices.line(of: .finished(RestoreResult(partialPathCount: 1))),
-            "Restored. 1 file was being written when this backup ran. "
-                + "Empo restored it as it was then.")
+            "1 file was being written when this backup ran. Empo restored it as it was then. "
+                + "Open the game to play from this backup.")
     }
 
     func testEveryStopSaysWhatToDoNext() {
