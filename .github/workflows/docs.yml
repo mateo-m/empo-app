@@ -2,7 +2,8 @@ name: Docs
 
 on:
   pull_request:
-    paths:
+    paths: &site-files
+      - "CHANGELOG.md"
       - "docs/**"
       - "PRIVACY.md"
       - "TERMS.md"
@@ -21,21 +22,7 @@ on:
     # A release tag rebuilds the What's new page with the new release. Path
     # filters do not apply to tag pushes, so every tag builds the whole site.
     tags: ["v*.*.*"]
-    paths:
-      - "CHANGELOG.md"
-      - "docs/**"
-      - "PRIVACY.md"
-      - "TERMS.md"
-      - "SUPPORT.md"
-      - "tools/**"
-      - "landing/**"
-      - "pages/**"
-      - "public/**"
-      - "theme.css"
-      - "blume.config.ts"
-      - "package.json"
-      - "bun.lock"
-      - ".github/workflows/docs.yml"
+    paths: *site-files
   workflow_dispatch:
 
 permissions:
@@ -53,16 +40,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      # The changelog page reads the engine commits between the engine
-      # pins of two release tags, so it needs the tags and the engine history.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Fetch the engine history
-        run: |
-          git clone --filter=blob:none --no-checkout \
-            https://github.com/mateo-m/mkxp-z-apple-mobile.git .engine-history
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 

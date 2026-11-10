@@ -2,11 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-# Verify a Release iphoneos Empo.app or unsigned .ipa before publishing.
+# Checks a Release iphoneos Empo.app or Empo-ios.ipa before it ships.
 #
-# Usage:
-#   scripts/audit-ipa.sh path/to/Empo.app
-#   scripts/audit-ipa.sh [--version X.Y.Z] path/to/Empo-ios.ipa
+# Usage: scripts/audit-ipa.sh [--version X.Y.Z] [--cores "MkxpCore Psdk30Core"] <Empo.app | Empo-ios.ipa>
 #
 # --cores names the game cores the bundle must carry, and nothing else.
 # Without it the script audits the cores it finds.
@@ -14,18 +12,15 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 EXPECTED_VERSION=""
-# Empty means "audit whatever cores the bundle has". A release passes the
-# EMPO_CORES value it built with, so a core that dropped out fails here.
 EXPECTED_CORES=""
-# shellcheck source=cores/cores.sh
-. "$REPO_ROOT/cores/cores.sh"
-KNOWN_CORES="$EMPO_ALL_CORES"
 INPUT=""
 
 fail() {
     echo "error: $*" >&2
     exit 1
 }
+# shellcheck source=scripts/lib/app-bundle.sh
+source "$REPO_ROOT/scripts/lib/app-bundle.sh"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -103,17 +98,9 @@ fi
 # The engines sit in the core frameworks, not in the app binary. Empo
 # opens one with dlopen when the user picks a game, so nothing here names
 # them and nm on the app finds no engine symbol.
-#
-# A build ships one or more cores (EMPO_CORES in cores/cores.sh), so
-# audit the cores the bundle has.
-PRESENT_CORES=""
-for core in $KNOWN_CORES; do
-    if [[ -f "$APP/Frameworks/$core.framework/$core" ]]; then
-        PRESENT_CORES="${PRESENT_CORES:+$PRESENT_CORES }$core"
-    fi
-done
-[[ -n "$PRESENT_CORES" ]] ||
-    fail "no game core in the app bundle (expected one or more of: $KNOWN_CORES)"
+[[ -d "$APP/Frameworks" ]] || fail "no game core in the app bundle"
+PRESENT_CORES=$(find "$APP/Frameworks" -maxdepth 1 -name "*Core.framework" -exec basename {} .framework \; | sort | xargs)
+[[ -n "$PRESENT_CORES" ]] || fail "no game core in the app bundle"
 
 contains_word() {
     case " $1 " in
@@ -124,7 +111,6 @@ contains_word() {
 
 if [[ -n "$EXPECTED_CORES" ]]; then
     for core in $EXPECTED_CORES; do
-        contains_word "$KNOWN_CORES" "$core" || fail "--cores names an unknown core: $core"
         contains_word "$PRESENT_CORES" "$core" ||
             fail "$core.framework missing from the app bundle"
     done
@@ -137,6 +123,7 @@ fi
 audit_core() {
     local core="$1"
     local bin="$APP/Frameworks/$core.framework/$core"
+    [[ -f "$bin" ]] || fail "$core.framework has no $core binary"
     has_platform "$bin" 2 || fail "$core is not device (platform 2)"
     ! has_platform "$bin" 7 || fail "$core contains simulator objects"
 
@@ -182,6 +169,7 @@ SHARED_CLASSES=$(awk '{n[$1]++; owners[$1] = owners[$1] " " $2}
     fail "Objective-C class in more than one binary: $(tr '\n' ';' <<<"$SHARED_CLASSES")"
 
 if contains_word "$PRESENT_CORES" MkxpCore; then
+    # One script binding for each Ruby: 1.8, 1.9, and 3.1. See ios/Empo/docs/multi-ruby.md.
     MKXP="$APP/Frameworks/MkxpCore.framework/MkxpCore"
     for ver in 18 19 31; do
         sym="_mkxp_get_script_binding_${ver}"
@@ -190,14 +178,12 @@ if contains_word "$PRESENT_CORES" MkxpCore; then
     done
 fi
 
-BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+require_release_bundle_id "$APP/Info.plist"
+BUNDLE_ID="$RELEASE_BUNDLE_ID"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
 
-[[ "$BUNDLE_ID" == "sh.mateo.empo" ]] ||
-    fail "unexpected bundle id: $BUNDLE_ID (expected sh.mateo.empo for release IPA)"
-
-APP_GROUP=$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionFileProviderDocumentGroup" "$APP/PlugIns/FilesProvider.appex/Info.plist")
+APP_GROUP=$(app_group "$APP/PlugIns/FilesProvider.appex")
 has_app_group() {
     codesign -d --entitlements - --xml "$1" 2>/dev/null | grep -qF "<string>$APP_GROUP</string>"
 }
@@ -235,9 +221,7 @@ GIT_LINE=$(grep -m1 -E '^commit: ' < <(strings "$BIN") || true)
 [[ "$GIT_LINE" != *"(dirty)"* ]] ||
     fail "binary embeds a dirty GitInfo marker ($GIT_LINE)"
 
-# Only a build with Sideload.xcconfig has the GitHub update check.
-grep -q "api.github.com/repos" < <(strings "$BIN") ||
-    fail "binary has no update check. Build it with -xcconfig ios/Empo/Sideload.xcconfig"
+require_update_check "$BIN"
 
 EMBEDDED_COMMIT=$(awk '{print $2}' <<<"$GIT_LINE")
 [[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||
@@ -256,6 +240,7 @@ for core in $PRESENT_CORES; do
         Psdk*Core) min=15000000 ;;
         # A web view host with no engine inside.
         MvmzCore) min=50000 ;;
+        *) fail "$core has no size floor in this script" ;;
     esac
     [[ "$core_size" -ge "$min" ]] || fail "$core suspiciously small (${core_size} bytes)"
     CORE_SIZES="${CORE_SIZES:+$CORE_SIZES, }$core ${core_size} bytes"

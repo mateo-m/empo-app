@@ -6,7 +6,7 @@ import { parseMembership } from "./membership";
 import { fromBase64, signPass, toBase64Url } from "./pass";
 import { type Env, patreon, token, userAgent } from "./patreon";
 import { newRenewal, renewalKeys } from "./renewal";
-import { callSession, type Held, type SessionRequest } from "./session";
+import { callSession, type Claimed, type SessionRequest, signedOut } from "./session";
 
 export { PatreonMember } from "./member";
 export { PatreonSession } from "./session";
@@ -106,7 +106,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
     const answer = await session(body.code, { ...body, action: "finish" });
     if (answer.status === 401) return status(401, { error: "signed_out" });
     if (!answer.ok) throw new Error(`The sign-in did not finish: ${answer.status}`);
-    const held = (await answer.json()) as Held & { device: string; refreshToken: string; claim: string };
+    const held = (await answer.json()) as Claimed;
     const renewal = newRenewal();
     const sessionId = (await renewalKeys(renewal))!.id;
     let added: Response;
@@ -166,12 +166,12 @@ function readTrip(state: string | undefined): Trip | null {
 
 async function session(renewal: string, request: SessionRequest): Promise<Response> {
   const keys = await renewalKeys(renewal);
-  if (!keys) return Response.json({ error: "signed_out" }, { status: 401 });
+  if (!keys) return signedOut();
   return callSession(env, keys.id, request);
 }
 
 async function addSession(
-  held: Held & { device: string; refreshToken: string; claim: string },
+  held: Claimed,
   code: string,
   renewal: string,
   sessionId: string,

@@ -44,9 +44,6 @@ ios/Dependencies/SDL/macosx/
 ios/Dependencies/SDL/.lock
 ios/Dependencies/SDL/work.*
 
-# The engine history that tools/changelog-page.ts reads.
-.engine-history/
-
 # The PSDK core release, fetched by cores/psdk/fetch.sh.
 # Version-pinned via cores/psdk/.version (tracked).
 ios/Dependencies/psdk-core/

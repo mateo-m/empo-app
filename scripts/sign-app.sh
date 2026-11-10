@@ -2,25 +2,30 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-# Ad-hoc sign an Empo.app that Xcode built with CODE_SIGNING_ALLOWED=NO.
-# scripts/release.sh, step 6, says why a release carries this signature.
+# Ad hoc signs an Empo.app that Xcode built with CODE_SIGNING_ALLOWED=NO.
+# iOS does not trust this signature, and each sideloading tool signs the
+# app again. But the tools copy the entitlements of this signature. With
+# no entitlements, some tools write an incomplete set, and parts of the
+# app stop working.
 #
 # Usage: scripts/sign-app.sh path/to/Empo.app
 set -euo pipefail
 
 APP="$1"
 PROJECT_DIR="$(cd "$(dirname "$0")/../ios/Empo" && pwd)"
+# shellcheck source=scripts/lib/app-bundle.sh
+source "$(dirname "$0")/lib/app-bundle.sh"
 ENTITLEMENTS="$(mktemp)"
 trap 'rm -f "$ENTITLEMENTS"' EXIT
 
-# The app and its extensions share one entitlements file. It names the
-# app group as $(EMPO_APP_GROUP), and only a signed Xcode build fills it
-# in.
-APP_GROUP="$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionFileProviderDocumentGroup" "$APP/PlugIns/FilesProvider.appex/Info.plist")"
+APP_GROUP="$(app_group "$APP/PlugIns/FilesProvider.appex")"
 sed "s/\$(EMPO_APP_GROUP)/$APP_GROUP/" "$PROJECT_DIR/Empo.entitlements" >"$ENTITLEMENTS"
 
 # Inside out. A nested bundle carries its own signature, and signing
 # the app does not reach inside it.
+# iOS 15 and later read some entitlements only from the DER form.
+# Do not add --options=runtime. On iOS, dyld then refuses to load the
+# app, and the app opens to a black screen.
 for FRAMEWORK in "$APP"/Frameworks/*.framework; do
     [[ -d "$FRAMEWORK" ]] || continue
     codesign --force --sign - --timestamp=none "$FRAMEWORK"
