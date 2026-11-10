@@ -2,11 +2,27 @@ Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
 Empo Plus.
 
-Last update: 6 November 2026.
+Last update: 10 November 2026.
 
 ## What Empo collects
 
-Nothing. Empo has no analytics, no crash reporting service, and no advertising.
+Only error reports. Empo has no analytics and no advertising.
+
+When a game shows an error or crashes, Empo sends an error
+report to Sentry, the service that collects these reports for me. A report holds:
+
+- The error message, or the fact that the game crashed.
+- The name of the game, and the end of the game's log for that play session,
+  when **Debug logs** is on. The log holds what the game engine wrote, such as
+  the names of the game's files that it opened and the error details.
+- The version of Empo, and details of the device: its model, its iOS or macOS version,
+  its language and time zone, its screen size, its memory, its battery level,
+  its temperature state, its network type, and whether it is jailbroken.
+
+A report holds no save files, no name, and no account. Sentry sees the IP
+address that a report comes from, and Empo does not ask Sentry to store it.
+
+To stop the reports, turn off **Send error reports** in Settings > Advanced.
 
 Your games, your save files, and your settings stay in the app container on the
 device. On an iPhone or iPad, iOS backs that container up to your own iCloud
@@ -41,7 +57,9 @@ device keeps both in its Keychain. The server keeps the Patreon sign-in, locked
 with that key, so that it can ask Patreon again later. The server does not keep
 the key, so it cannot open the sign-in on its own. Every few days, the device
 sends the key to get a new note. Cloudflare runs the server, and it sees each
-request and the IP address it came from.
+request and the IP address it came from. When the server fails, it sends an
+error report to Sentry. The report holds the error and the address of the
+request without its codes, and no IP address.
 
 Empo Plus works on up to 3 devices for each Patreon account. Each device makes
 its own signing key, in the Secure Enclave when the device has one. The private

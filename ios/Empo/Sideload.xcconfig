@@ -1,4 +1,3 @@
-// The sideload IPA and the Mac disk image. release.yml, scripts/release.sh
-// and scripts/package-mac.sh pass this file with -xcconfig. SIDELOAD
-// turns on the GitHub update check.
+// The release builds of the iPhone app and the Mac app use this file.
+// SIDELOAD turns on the GitHub update check.
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) SIDELOAD

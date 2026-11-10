@@ -163,6 +163,9 @@
 
 - Capital letters in Insurgence and the plugin scan for Tectonic (#193) ([`974d829`](https://github.com/mateo-m/empo-app/commit/974d829862aef8ecc9638f42c8d54313191ad936))
 - Keep centered titles and messages within 2/3 of the screen width (#194) ([`54b9995`](https://github.com/mateo-m/empo-app/commit/54b9995671138b582d8b968371a89a937e764abc))
+- Crashes and silent music in 7 reported games (mateo-m/mkxp-z-apple-mobile#57) ([`08dcb54`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/08dcb540d81c567f012a1f85208e987c5d0dbe15))
+- Convert text in the win32 stand-ins, and boot Almost Heroic (mateo-m/mkxp-z-apple-mobile#56) ([`56da3fa`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/56da3fa070cf84f2775a7e80e8fc43c3d11d2b28))
+- Draw animated autotiles again on maps over 100 tiles (mateo-m/mkxp-z-apple-mobile#53) ([`08da2c0`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/08da2c0e335b21573b3a6e8abc1ecc901950e2ca))
 
 ### Chores
 
@@ -171,6 +174,10 @@
 ### Features
 
 - Show the game's engine and core in game info (#196) ([`cd00d1e`](https://github.com/mateo-m/empo-app/commit/cd00d1ee1bb86543f7931a98597f531ace1e680f))
+
+### Performance
+
+- Sweep in small steps, and stop lowercasing whole folders on a lookup miss (mateo-m/mkxp-z-apple-mobile#55) ([`69c7baf`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/69c7baf102cadff60bff4d0cd71a49988c442169))
 
 ## 0.7.1 - 2026-10-06
 
@@ -191,6 +198,7 @@
 - Fix the layout of the continue card, the sheets, and the loading screen (#176) ([`02c33c1`](https://github.com/mateo-m/empo-app/commit/02c33c1cd5dbf9568291af4715524fe1920ce1cf))
 - Read Vinemon scripts and send 0 for the desktop window size (#175) ([`6c8da5d`](https://github.com/mateo-m/empo-app/commit/6c8da5df5018dbb60c5b4a4f8b16cf76bb40e2e2))
 - Scan the scripts again when a file that the scan reads changes (#178) ([`1996f19`](https://github.com/mateo-m/empo-app/commit/1996f1943cbcbb6195ba2fc2c21bb762cad7e8f9))
+- Take the temp folder from TMPDIR (mateo-m/mkxp-z-apple-mobile#48) ([`d7b38fd`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d7b38fd7acd421eb750d1987f751a825b2359794))
 
 ### Documentation
 
@@ -199,6 +207,7 @@
 ### Features
 
 - Announce MV and MZ games and send the same items to AltStore (#188) ([`4ad959e`](https://github.com/mateo-m/empo-app/commit/4ad959efc4a14cbdd49c6575037c0e58620ae59f))
+- Take per-game settings as text and add the neutral core calls (mateo-m/mkxp-z-apple-mobile#46) ([`fc19ea9`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/fc19ea92b862fb09bf758d43bb1c209f5c0e9467))
 
 ### Other
 
@@ -224,6 +233,8 @@
 
 - Disable fast forward bindings for a game that has fast forward off (#149) ([`ab1f074`](https://github.com/mateo-m/empo-app/commit/ab1f0745b0490f3e818a35c6469ca8226c8d8590))
 - Show a what's new sheet once after an update (#151) ([`4653ff2`](https://github.com/mateo-m/empo-app/commit/4653ff2affd8918edfc74a139dd83ae516a33365))
+- Keep a copy of the last frame put on the screen ([`c27453d`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/c27453df14340ae711349699ca54a149c2aeb0fd))
+- Add a process entry so a launcher can open the engine with dlopen ([`e875a32`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e875a323fe4f03813c7aca6e87b61dcdf5531d7a))
 
 ### Bug Fixes
 
@@ -248,6 +259,7 @@
 ### Bug Fixes
 
 - Compare unpacked bytes with fixtures instead of CryptoKit hashes ([`d03fcce`](https://github.com/mateo-m/empo-app/commit/d03fccef8acc5dc65fcb09ec6a537d9e7043c2cb))
+- Read the async mouse buttons from the event thread state (mateo-m/mkxp-z-apple-mobile#42) ([`eb54625`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/eb546254120ad266d19b3d9766375ffa0eeef352))
 
 ### Chores
 
@@ -256,6 +268,7 @@
 ### Features
 
 - Unpack games packed with Enigma Virtual Box ([`7332eff`](https://github.com/mateo-m/empo-app/commit/7332effd6f384d95719121c70dbd69e8bca250ba))
+- Add mkxp_injectPointerEvent for host driven mouse input (mateo-m/mkxp-z-apple-mobile#43) ([`12ae8b5`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/12ae8b574d588850535f24763f12363744702d19))
 
 ## 0.6.8 - 2026-09-08
 
@@ -264,6 +277,7 @@
 - Declare the OpenSSL encryption in Info.plist ([`a34a694`](https://github.com/mateo-m/empo-app/commit/a34a694a574ff05787aebf14955350a745828599))
 - Link the settings to the site privacy policy and terms ([`561bcd6`](https://github.com/mateo-m/empo-app/commit/561bcd66b2819954b6f875eead698a634844d647))
 - Run RGSS2 games on Ruby 1.8 and skip the def stat in the endless-def sniff ([`d846d5d`](https://github.com/mateo-m/empo-app/commit/d846d5d5bbdcd025859a877195887879d29506c6))
+- Report substituted Windows fonts as present ([`49f58f4`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/49f58f4a2574641e7b4e6e779a20725d3dbfed83))
 
 ### Chores
 
@@ -284,6 +298,7 @@
 
 - Pick up the System.mouse_in_window stand-in ([`b86ce86`](https://github.com/mateo-m/empo-app/commit/b86ce86fc2ae2cd937f31cd344c3ba922824409f))
 - Run the pre-push guard from a linked worktree ([`9bda6ed`](https://github.com/mateo-m/empo-app/commit/9bda6ed910090a736c855b7a1399db001d88d439))
+- Define System.mouse_in_window for Essentials v20 ([`d2bee75`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d2bee75754193df8b41abb9fbc4da61ff4daf3c9))
 
 ### Features
 
@@ -293,6 +308,10 @@
 - Add the share card and the open graph tags to the landing page ([`e1c3c40`](https://github.com/mateo-m/empo-app/commit/e1c3c40b5cd10941a8d62c9307363a038c5417f0))
 
 ## 0.6.6 - 2026-09-01
+
+### Bug Fixes
+
+- Stop defining legacy methods a run can never call (mateo-m/mkxp-z-apple-mobile#41) ([`4dc3c51`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4dc3c5139dcf1376adf7c119af653826614aa71f))
 
 ### Chores
 
@@ -307,6 +326,7 @@
 - Apply touch mouse on resume, mark the keyboard restart-only (#138) ([`3c35ae1`](https://github.com/mateo-m/empo-app/commit/3c35ae1d3be95ffbd93ab0568187ecee2f881d7a))
 - Keep the zoom transition through a play session ([`ea246ed`](https://github.com/mateo-m/empo-app/commit/ea246ed67bf654387f6a67267d5b89e6237340dc))
 - Bump to the Array#nitems fix for legacy scripts ([`5b4e6fd`](https://github.com/mateo-m/empo-app/commit/5b4e6fd45b283ea5604210109748ed8e3d59e969))
+- Reinstate Array#nitems for legacy scripts (mateo-m/mkxp-z-apple-mobile#39) ([`77ec85a`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/77ec85ae69f99e617d9d99083317cb69b001f968))
 
 ### Chores
 
@@ -336,6 +356,7 @@
 ### Bug Fixes
 
 - Run 1.8-era scripts shipped with a Ruby 3 DLL (Realidea) (#135) ([`efcb308`](https://github.com/mateo-m/empo-app/commit/efcb30800c214ab49f90142f53ad914eae6cc88c))
+- Match Ruby 1.8 for method-level next and rescue-modifier op-assign (mateo-m/mkxp-z-apple-mobile#36) ([`0b37538`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0b37538791f336c65fa13b3ef7edbe6502864489))
 
 ## 0.6.3 - 2026-08-18
 
@@ -343,6 +364,9 @@
 
 - Rebuild the keyboard toolbar so every key registers (#132) ([`3d71486`](https://github.com/mateo-m/empo-app/commit/3d7148675926241958bcf845602bec9e34351821))
 - Pick up probe case folding for games without a path cache (#134) ([`d5bfda0`](https://github.com/mateo-m/empo-app/commit/d5bfda0af016c4d13a7c2a4eaf8b94a7ecb6bf55))
+- Fold case in probes when a game turns off the path cache (mateo-m/mkxp-z-apple-mobile#35) ([`7ecf3df`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7ecf3dfe3b58cccfd1081f8374b0a818b87b830d))
+- Keep a game's own Input.update in the chain (mateo-m/mkxp-z-apple-mobile#34) ([`39edf23`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/39edf2350c2546d5b265d5def181245a16173e73))
+- Check the packed tilemap stride before drawing (mateo-m/mkxp-z-apple-mobile#32) ([`331afe4`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/331afe4c3fe3e2ec4347a14366b0a24b5cb0b763))
 
 ### Chores
 
@@ -355,6 +379,10 @@
 
 - Pick up the Essentials mouse release fix (#122) (#127) ([`1b92ecd`](https://github.com/mateo-m/empo-app/commit/1b92ecd2a2f750a3981ef3b97d64e34183d095f0))
 - Pick up the whole-file CRLF read fix (#130) ([`c576390`](https://github.com/mateo-m/empo-app/commit/c5763902496990bf0016683946f5c11e3c7a06e7))
+- Fold CRLF in the whole-file read helpers (mateo-m/mkxp-z-apple-mobile#30) ([`4fca35a`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4fca35a4947604ac076cb9337a1403c0162578aa))
+- Report a real errno when ws2_32 has no socket layer ([`ab657b7`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ab657b755f4a9ad12ab1abd3bbd315b9e23968e8))
+- Cap a ws2_32 connect at five seconds ([`b3877ee`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/b3877ee9d508f32be7899dbf1e7084b1afe0b157))
+- Restore Input.releaseex? for Pokemon Essentials mouse scenes ([`f8aef10`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f8aef10ef003392e20b685e64efc530f3dcf1196))
 
 ### CI
 
@@ -369,12 +397,14 @@
 ### Features
 
 - Pick up the ws2_32 socket bridge (#128) ([`8e4501c`](https://github.com/mateo-m/empo-app/commit/8e4501c6253ddb302f89475c5e5ea7fceb397327))
+- Back the ws2_32 imports with real sockets ([`f002164`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f002164a4627f514641d399db16b9014c486b35c))
 
 ## 0.6.1 - 2026-08-13
 
 ### Bug Fixes
 
 - Recover renamed saves and guard the engine recovery (#123) ([`658e9e9`](https://github.com/mateo-m/empo-app/commit/658e9e9b0828d72ce2245a75c18c4f27fbc25fc8))
+- Guard the alias-era recovery by directory identity and cwd ([`68c61d1`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/68c61d1d5edd0b10b22f1fb6a03eec40ebdcf486))
 
 ## 0.6.0 - 2026-08-11
 
@@ -384,6 +414,16 @@
 - Pick up the recovery for stranded portable saves (#115) ([`d60545c`](https://github.com/mateo-m/empo-app/commit/d60545cacc977a03a4790bdeef66adcf6d550afe))
 - Pick up unlimited tileset sizes (#116) ([`30e552e`](https://github.com/mateo-m/empo-app/commit/30e552e6204bd2c8c85be648ba2ea45f6f385221))
 - Stop the legacy method stubs from faking respond_to? (#118) ([`fcd77be`](https://github.com/mateo-m/empo-app/commit/fcd77be3fba4a399c1ff9b37b1f3a1e2ef95fb4a))
+- Hide the legacy method stubs from respond_to? when they cannot run (mateo-m/mkxp-z-apple-mobile#29) ([`d166d38`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d166d38d567d7dbc7c84dc65cea5c13af4f3659b))
+- Page oversized tilesets instead of wrapping them ([`f08dd5b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f08dd5b6de660b62b6af8519e58705643e9a8f2d))
+- Recover stranded portable saves on Save Data access ([`8efc11b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8efc11b6ae23802948021ce853a496007e9fa72f))
+- Report missing registry keys instead of fake success ([`6eeda21`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6eeda216ea77f952f24727eec55475f1b14a2f98))
+- Keep the include wrap single after an RGSS reset ([`e1f5827`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e1f5827d175c4026cb911e1a24568b50facc9c92))
+- Skip the tilemap wrap patch when the game ships its own ([`ab8ab0c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ab8ab0ce9a26de141918c6e04bc41a42739a1a63))
+- Drop the second srcOps close on movie start failure ([`2940aba`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/2940aba1d3b5ac76419fb3677e63e6605984138f))
+- Close the load_data port when Marshal.load raises ([`7de4961`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7de496115579ee2deaebb820f4407aaccafc24ac))
+- Close the file ops after each GIF bitmap load ([`a643504`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/a64350419bcc760b2d5ebbe3820f086289b5c8c1))
+- Let missing PB* constants raise like stock Ruby ([`b01fe10`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/b01fe1055d2b710e9a93289a36f5c227463ac8d1))
 
 ### Chores
 
@@ -404,6 +444,9 @@
 - Add screen placement in profiles (#110) ([`fe02433`](https://github.com/mateo-m/empo-app/commit/fe02433659d7e1b1d1277cf9eb5dff5df11b0062))
 - Bind controllers that reach iOS as a keyboard (#119) ([`6788371`](https://github.com/mateo-m/empo-app/commit/6788371f9e70db785506f110b40cd6bc7fc9bdf5))
 - Handle multi-touch on the on-screen controls (#121) ([`074f2cf`](https://github.com/mateo-m/empo-app/commit/074f2cfd44594018b578c8ce5497e92f3ea29fd0))
+- Report the true GPU texture limit ([`fd4f673`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/fd4f6730de2a55053ebdb1b6e25120742c411aa2))
+- Add a shared host font pool and route font installs into it ([`3bb1446`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/3bb1446152bc873dab44f394378571873ca93b74))
+- Add a host viewport region API ([`4fb00f8`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4fb00f8297076325ff7ba743016da3dae304e964))
 
 ## 0.5.0 - 2026-08-04
 
@@ -422,6 +465,25 @@
 - Pick up the postload mixin privacy fix for old Ruby games ([`8e435a8`](https://github.com/mateo-m/empo-app/commit/8e435a875010c74882394e3d719983a0bcb093e3))
 - Stop Thread.new from aborting the app in Ruby 1.8 games (#102) ([`3af8b05`](https://github.com/mateo-m/empo-app/commit/3af8b051e8e83f41c9c3671f6116398b3a66ba9a))
 - Pick up the Pokemon Essentials sprite, menu, and input fixes (#103) ([`ec7f8a1`](https://github.com/mateo-m/empo-app/commit/ec7f8a1744884558b1ea1cfc42413e9e9e7c1146))
+- Let a pinned frame rate win over syncToRefreshrate ([`cb14488`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/cb1448803ac47292a3ea14ee06e61077b6a82425))
+- Hold Essentials input triggers until a button is read ([`ef1cd42`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ef1cd42038a0e0badcf40804f84430a2bd370dd4))
+- Fall back to the native capture when snap_to_bitmap yields nothing ([`2846606`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/2846606464680d7ba64612a152c137c37afaec15))
+- Settle the Ruby 1.8 stack direction before the VM caches it ([`d90f470`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d90f4706de3f97b764b46688a9d4774abf6e22ad))
+- Pin the Ruby 1.8 stack base so Thread.new cannot abort the process ([`35f2192`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/35f21929fc7446e5fffdbb41b35baad946d3850b))
+- Send include and prepend so mixin installs work before Ruby 2.1 ([`e4d667b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e4d667b91ab77413fd5fa9b3e4b0e052d9e8dda3))
+- Protect the script-error display and emulate Windows CRLF reads (mateo-m/mkxp-z-apple-mobile#28) ([`668375f`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/668375f0263bfc8cfa2d317fd766e81433ff8f4a))
+- Scope the disposed-safe getter wrappers to RGSS1 games ([`51b1690`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/51b169059a806300ca732520a81844189140d1a3))
+- Retry TLS handshakes with a 1.2 profile when fingerprint filters drop them ([`cbd6845`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/cbd68457e4cd375d5a431ffcf03b0258d5377bf9))
+- Route Graphics compat delegates through native snapshots ([`9def212`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/9def212b4f36f31d9c4a8caaf0de3bedbd6e1fed))
+- Retry FileTest size probes with the on-disk case ([`e70c0e6`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e70c0e68579a4deaba6906a31de0432af024fe88))
+- Bind the Net::HTTP facade lazily ([`ad86bd3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ad86bd3ff563319558e5477b6de213eb59107541))
+- Make Win32 stub constants raisable ([`6469ef3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6469ef38d0aecfd789b0503a3862ddf14ade1309))
+- Make the game folder fully literal; recover stranded saves on access ([`7010127`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/701012720057004df16a95eb88def234a63a9c35))
+- Extend case resolution to new files, directories, and UserData ([`5e2165a`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/5e2165a2af997a0c381ba52dbfa66883964532df))
+- Resolve on-disk case for write-mode file operations ([`1347268`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/134726816ad6bc9d384a4300dfc0cf43df5fc0ae))
+- Load static socket and openssl before game scripts run ([`0195eac`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0195eac7036aa4f20d138dd99355f0bcf94bf425))
+- Resolve every probe, glob, and whole-file API like File.open ([`88e00dc`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/88e00dc635b84fef2ef194a8518befc3bb2f49cf))
+- Make the portable save dir literal; migrate alias-era saves ([`7ca3811`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7ca38118961830ac0b1d48e8ff94f3b4a5488d81))
 
 ### CI
 
@@ -467,6 +529,12 @@
 - Pick up RAISETRACE dumps for silently-swallowed script errors ([`9dfa9ec`](https://github.com/mateo-m/empo-app/commit/9dfa9ececa61e81b04af80bbcb261ce2bb8e9e07))
 - Scale the FPS graph to the game's frame cap and drop the VSync toggle (#104) ([`6d84afa`](https://github.com/mateo-m/empo-app/commit/6d84afa74df9de2b7ec10cfe8a07b4859e5434c9))
 - Support basic and micro profile controllers (#105) ([`11dbd06`](https://github.com/mateo-m/empo-app/commit/11dbd063a7173e9fb2f05b791b257a4699635364))
+- Report the frame rate the game asks for ([`f32ef17`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f32ef177794681e9a3a5080afa01ebce7f87a801))
+- Rebuild Zeus81 Bitmap Export on native pixel access ([`a635062`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/a6350624f0911672033d8563657ac107f6e884cc))
+- Record swallowed exceptions and dump them as RAISETRACE ([`026d722`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/026d722b0fd6e7771037e469099a53e59a195fdc))
+- Native EVP crypto with an OpenSSL facade for era Ruby VMs ([`6eca98c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6eca98cf78956f44cba9fed783fe1d7b890e8f17))
+- Close the network parity gaps across all Ruby VMs ([`852031a`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/852031a19e15498fe4ebbb171c05fedeca19839c))
+- Back the wininet downloader API with HTTPLite ([`e0e0be6`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e0e0be670aba7f6bf9391a7f85e3c5ba1dfc4317))
 
 ### Other
 
@@ -479,6 +547,7 @@
 ### Performance
 
 - Granular card invalidation and off-main artwork decodes (#106) ([`f323d02`](https://github.com/mateo-m/empo-app/commit/f323d0236744bd2466383c91c05564ec4ca8b821))
+- Pin RGSS thread to user-interactive QoS ([`0575d43`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0575d4320eb4fc131ad31979c3e1c81a335138b0))
 
 ### Refactor
 
@@ -522,6 +591,7 @@
 - Grant release workflow pull-requests write for the sync PR ([`62c2d10`](https://github.com/mateo-m/empo-app/commit/62c2d106a4c19d42af553baf6592503754ba0649))
 - Format generated altstore-source.json before the sync commit ([`f99e31f`](https://github.com/mateo-m/empo-app/commit/f99e31fe55e4f4ef1ecbf0c5bb18dd39d977ad2d))
 - Newline-terminate the announce notes heredoc ([`3d88bc5`](https://github.com/mateo-m/empo-app/commit/3d88bc528e95dda1af332b067e889b7d0fe328f6))
+- Coerce truthy values in strict bool property setters ([`1ecec48`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/1ecec48cabbd40dfdfc8162d1a6248fcbe4ca9d7))
 
 ### CI
 
@@ -553,6 +623,11 @@
 - Pin system ruby as host ruby for ruby18/19 trees ([`a740447`](https://github.com/mateo-m/empo-app/commit/a740447e5c7f1717a3d14ecab15e9f0462c5a4e9))
 - Point-space translation geometry with no-overlap guarantee ([`436125f`](https://github.com/mateo-m/empo-app/commit/436125f5f626e4673aa518be9fd866646e12c15f))
 - Re-translate on game rect change, d-pad obstacle, portrait band ([`4336a4b`](https://github.com/mateo-m/empo-app/commit/4336a4bdaea9b443d966a2959fb8f8db32e07d4d))
+- Return seconds from Graphics.delta for Essentials v21 games ([`874635d`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/874635ddd56c8e813f536fab1d2dd7b50656e746))
+- Tag Ruby 1.9 script strings UTF-8 instead of ASCII-8BIT ([`36db844`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/36db844b68c414ff6c96099640855196e6d188aa))
+- Surface audio open/decode failures in the debug log ([`125fda4`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/125fda4648f50d6453087ba776e6e9691a10d697))
+- Casefold FileTest checks and File.open retry on case-sensitive FS ([`568b6c8`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/568b6c8f422b41affd9d3982a0363d7ea3d791d9))
+- Publish mouse screenOffset in top-left window points ([`562715f`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/562715ffbd5823219338d252f7ebe7ceda4a256f))
 
 ### CI
 
@@ -596,6 +671,10 @@
 - Kirin dpad in left grid with orientation-invariant arrangement ([`91a726c`](https://github.com/mateo-m/empo-app/commit/91a726c1843a3f7511f622d50197a21c50180cb0))
 - Derive missing orientation from single-orientation layouts ([`10ca9ad`](https://github.com/mateo-m/empo-app/commit/10ca9ad1bb750a8d3b203fe59a8049dcc60f7783))
 - Derive missing orientation from single-orientation layouts ([`106efc0`](https://github.com/mateo-m/empo-app/commit/106efc02fe85f38a1e24b68da3bd83bfc2e4bfd3))
+- Opt-in touch-synthesized mouse input via bridge flag ([`8674ba5`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8674ba5d42355d9448f0f5d6260fbbf9250b3b36))
+- In-memory config overlay JSON API ([`2328000`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/2328000b19bb2c06bb30380cf5712ab1aefa5a43))
+- Degrade app_bridge API to inline no-op stubs off mobile ([`07b8122`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/07b812277d5e6f04bf62aa736f70e4bc6f3821d1))
+- Move iOS system and filesystem impls into the engine tree ([`33b4cc3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/33b4cc31c7dcc97831d337db5b3c1edabc9057ec))
 
 ### Performance
 
@@ -621,6 +700,7 @@
 - Make JSON boolean detection portable to Linux ([`9253120`](https://github.com/mateo-m/empo-app/commit/9253120504cc63e369eac065de854392dee910c6))
 - Detect JSON booleans via objCType for cross-platform correctness ([`0ae909b`](https://github.com/mateo-m/empo-app/commit/0ae909b991e1576033d82d0eea98a9aeb82c61b3))
 - Match engine JSON5 tolerance when projecting mkxp.json ([`79dd0bb`](https://github.com/mateo-m/empo-app/commit/79dd0bbece67fba9d6b674d8e2a1782ffb75a22c))
+- Restore upstream patches key, move script patcher to scriptPatches ([`f789a3f`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f789a3ff9a1c8d45e996d3e8155a0a20bc432d62))
 
 ### Chores
 
@@ -645,6 +725,7 @@
 - Controller remap UI with per-game and global scopes ([`ac775cb`](https://github.com/mateo-m/empo-app/commit/ac775cb0ba74c7d43cdddad9e1f88fb8945b582e))
 - Undo layout edits in controls edit mode ([`d1d3973`](https://github.com/mateo-m/empo-app/commit/d1d39733c59580597a910223c3d8f141a29a0dbf))
 - Accept root-level controls.json as second manifest location ([`01f9bfe`](https://github.com/mateo-m/empo-app/commit/01f9bfe4c046e3b98a637e5c1c2579b12384fbab))
+- Add game-controller capture toggle for host input layers ([`92cee3e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/92cee3ed21804e89c960fd43636524349af19c3f))
 
 ### Refactor
 
@@ -656,6 +737,8 @@
 
 - Keyboard no longer resizes the embedded game view ([`8fe929f`](https://github.com/mateo-m/empo-app/commit/8fe929f33e2996c897d018b9a60426b3d1decf3f))
 - Inset and center keyboard accessory rows within the horizontal safe area ([`075367c`](https://github.com/mateo-m/empo-app/commit/075367c83d52de72378da963df3e87b88105ab47))
+- Apply_overrides preserves input string encoding instead of returning ASCII-8BIT ([`f0b4f84`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f0b4f84cb5ed6b1e138b2b7e4cf2149fc0b803a2))
+- OpenRead falls back to live single-dir enumeration on stale path-cache miss ([`2863b92`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/2863b925ceb54c72badd56512f514714b3dde121))
 
 ### Chores
 
@@ -673,6 +756,8 @@
 - Upgrade OpenSSL 1.1.1w -> 3.5.7 LTS ([`8325d49`](https://github.com/mateo-m/empo-app/commit/8325d4977e354ff362797dc8a4193dfe1758695f))
 - Silent weekly CA bundle auto-refresh + airplane-mode toggle copy ([`f5f18d3`](https://github.com/mateo-m/empo-app/commit/f5f18d32deedaf02e45ccef15e20ecf7097ca6f7))
 - Quick first-pass scan so the splash lifts on a settled library ([`34acf7b`](https://github.com/mateo-m/empo-app/commit/34acf7b773a03d5e703077670e1be6921fad298b))
+- Network-off now simulates airplane mode instead of missing libraries ([`35bc11b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/35bc11ba39173a5de9059946a184a376fe0d918e))
+- Real TLS networking, streaming HTTPLite.download, Net::HTTP facade, host network toggle ([`19e2d47`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/19e2d471e6651e2e8a65d2c81eb496dcbd13bc71))
 
 ### Release
 
@@ -683,12 +768,17 @@
 ### Bug Fixes
 
 - Migrate misjoined UserData saves and pin slash fix ([`4604767`](https://github.com/mateo-m/empo-app/commit/4604767f507275eb3c4aefe584bb331461152374))
+- Keep trailing slash on System.data_directory for PE saves ([`8d38dfd`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8d38dfd5e48dfc3cee43b84aa12649f758f7d591))
 
 ### Chores
 
 - Pin native-2026-07-17 with data_directory slash fix ([`c8af7a8`](https://github.com/mateo-m/empo-app/commit/c8af7a88d42842ea92c5b0358aa1706738706372))
 
 ## 0.2.11 - 2026-07-16
+
+### Bug Fixes
+
+- Rbconfig fallback, Audio.se_play_position shim, kwargs-safe Dir/File wrappers for the desktop script path ([`37b4a50`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/37b4a50563db0a663dae4bc384ecf48053a54631))
 
 ### Chores
 
@@ -697,6 +787,7 @@
 ### Features
 
 - Per-game JoiPlay compatibility toggle in Game Settings, default off ([`7691ebf`](https://github.com/mateo-m/empo-app/commit/7691ebf9bcf3faca0de2898f58394df1dc2374de))
+- Let the host toggle the JoiPlay-compat $joiplay signal per boot, default off ([`dd4b2b1`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/dd4b2b1c0813c41b716b5f60d5c9852c33e33228))
 
 ## 0.2.10 - 2026-07-16
 
@@ -704,6 +795,9 @@
 
 - Cover Dir.each_child in save-path remap ([`c45ad1a`](https://github.com/mateo-m/empo-app/commit/c45ad1a54cc7df52ebe6c75a6ca38f62f40ecd80))
 - Survive game-requested exit instead of aborting on shutdown ([`a637bc4`](https://github.com/mateo-m/empo-app/commit/a637bc446cc919dd8afb29e195d42b65a3cbc194))
+- Treat SystemExit as clean exit and surface the game's parting print ([`d4b1819`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d4b181926950b9d0cf0800974d259074d68c58f0))
+- Tear down ANGLE on host shutdown, not SDL_GL_DeleteContext ([`6ae39de`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6ae39de338ba18a4f930d60725fc33fca10893d7))
+- Remap Dir.each_child and children into the save dir ([`e68567c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e68567c002f66ed0a0f04a86c7ff3e850f618c6c))
 
 ### Chores
 
@@ -715,6 +809,7 @@
 - Identify as "empo" to game scripts via launcher identity ([`534d83e`](https://github.com/mateo-m/empo-app/commit/534d83e5102c31ba109d90a1e6d6b0d80853eb6c))
 - Stamp engine binding fingerprint in debug log header ([`e7bb580`](https://github.com/mateo-m/empo-app/commit/e7bb580d06c994b2c3995d3130ac3877a2f12f63))
 - Import self-extracting .exe installers via vendored libmspack ([`ba6d766`](https://github.com/mateo-m/empo-app/commit/ba6d766ab98f2c8e1dbcff2da59f0aa721918b74))
+- Let the host declare a launcher identity for game scripts ([`b24a641`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/b24a64161359db5a1c256bb261dc39bb62f6d8d0))
 
 ## 0.2.9 - 2026-07-08
 
@@ -728,6 +823,10 @@
 
 - Embed SDL view and restore play controls ([`7303900`](https://github.com/mateo-m/empo-app/commit/7303900642903f01b5793575e599c9a47ab5df89))
 
+### Features
+
+- Expose SDL UIKit window for host embedding ([`7be137e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7be137e83301c701bc60b3eb39c7fcec70fbf8d4))
+
 ## 0.2.7 - 2026-07-08
 
 ### Bug Fixes
@@ -739,6 +838,11 @@
 - Info-alert UX for game msgbox and guard stale mkxp merges ([`5aeacc9`](https://github.com/mateo-m/empo-app/commit/5aeacc96c6cb91e1c7085bbe60ad86c0cef73649))
 - Block RTP-dependent games and fix spaced Game.ini keys ([`da4b493`](https://github.com/mateo-m/empo-app/commit/da4b493a698d7f618efe5dd289b800bc9f3e86f5))
 - Block RTP-dependent games and fix spaced Game.ini keys ([`d877c75`](https://github.com/mateo-m/empo-app/commit/d877c7517cc3eb369d3493a0b0c560c594694e16))
+- Gate graphics compat prepend for Ruby 1.9 ([`ebada7c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ebada7cc377d23d9664c01ba10d2683be209b252))
+- Harden save-path remap for Save-dir games ([`6e9198e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6e9198ecf15507e45488e0a019668eb4c225d22d))
+- Surface PE print exceptions and guard TrainerType id_number on v21 ([`8eb73db`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8eb73db61d84627f9bf461665ebe6237216b55b5))
+- Bind msgbox on RGSS1 and route game dialogs via info channel ([`2afaa63`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/2afaa631ee2e5490b270f1a8a82e4dbb7adbc584))
+- Guard PE in_menu setter for older forks ([`fb4e90f`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/fb4e90fa7e59ba4ac857cff55c238006027eef06))
 
 ### Chores
 
@@ -776,6 +880,12 @@
 - Ignore desktop.ini in RPG Maker import preflight ([`f2e6cde`](https://github.com/mateo-m/empo-app/commit/f2e6cde87d7c8346c6d004463059b919aa853493))
 - Unblock engine error dialog and guard Foundation paths ([`52982ff`](https://github.com/mateo-m/empo-app/commit/52982ff669e74563690a13fdf96207f85b1ec2d3))
 - Restore Ruby 1.8 prelude in native dep builds ([`7486578`](https://github.com/mateo-m/empo-app/commit/74865780b752e00dff851df87c3181480c16a7b9))
+- Wire script-bootstrap eval receiver for multiruby builds ([`0cbdb24`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0cbdb246a7397e7234b3a01961573a573dc0e5ca))
+- Wait for error dismiss before RGSS teardown on ios ([`7a8a3f9`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7a8a3f96fb66aae8c94ffbd1de805431a254ec74))
+- Collapse relative paths to "." in normalize ([`75f48b4`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/75f48b467969f360a4044bc1ac02c599ba0244dd))
+- Order session config types after Ruby enums ([`570ba03`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/570ba03ff2fb48e349f4bed05b9a40ad3b8b14c1))
+- Define MKXPVerticalAlignment before MKXPSessionConfig ([`7732108`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7732108b69521597f1f246d32583f4e66bdbdacc))
+- Define MKXPVerticalAlignment before MKXPSessionConfig ([`523cb72`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/523cb72595b5ebb0feb4978f5fd878e3c4ff9865))
 
 ### Chores
 
@@ -793,6 +903,7 @@
 ### Bug Fixes
 
 - Register GitInfo in xcodegen and update mkxp for Ruby 1.8 boot ([`cac317b`](https://github.com/mateo-m/empo-app/commit/cac317b609083774b527988ead1c83a6f1dec52e))
+- Skip Dir.exist? alias on Ruby 1.8 ([`545a45a`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/545a45a3ddf10cfab2f01e8302c450be4f14d0a3))
 
 ## 0.2.4 - 2026-06-09
 
@@ -802,6 +913,7 @@
 - Patch Ruby 1.8 cross-compile fake template ([`ab208a3`](https://github.com/mateo-m/empo-app/commit/ab208a38f24cdfb33917696e75675282a3ba8814))
 - Fix Ruby 1.8 cross-compile on modern macOS hosts ([`c6f7bbc`](https://github.com/mateo-m/empo-app/commit/c6f7bbc8e24a1d04e741c7ebda3f70820e6cb3ab))
 - Point Ruby 3.1 openssl ext at device OpenSSL ([`54b0fca`](https://github.com/mateo-m/empo-app/commit/54b0fcae3dab078e9b420abf11f1d1d6d8374c9b))
+- Surface EventScriptError text and keep alerts tappable ([`596c507`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/596c507f92a0c98c3d5f6d1679a389e49e5f3c86))
 
 ## 0.2.3 - 2026-06-08
 
@@ -816,6 +928,7 @@
 ### Bug Fixes
 
 - Update mkxp for exact-path bitmap resolution ([`f987a76`](https://github.com/mateo-m/empo-app/commit/f987a7678802c189d6e90caa70a3a1c922329043))
+- Accept exact-path hits in Ruby casefold resolver ([`824be71`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/824be71abe4f81709fb84223395176bdd05a16c5))
 
 ### Features
 
@@ -831,6 +944,8 @@
 
 - Update mkxp for Flux battle start ([`bc83a42`](https://github.com/mateo-m/empo-app/commit/bc83a425563b1f5005e7349e1c1cbb9670bfd1dc))
 - Migrate user data and refresh ruby auto-detect ([`abcc86e`](https://github.com/mateo-m/empo-app/commit/abcc86e7301a2e7d3085acafc1a71d9c9ab6dbda))
+- Route user data into per-game containers ([`42244ea`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/42244eac341c9f87b74be634c9d6a78d7b50df28))
+- Preserve Flux bitmap keywords ([`53bd502`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/53bd5022e36f8d28e7d45970d8ccf05b6f25f602))
 
 ### Release
 
@@ -852,6 +967,12 @@
 - Update mkxp for pokemon runtime compatibility ([`8f17270`](https://github.com/mateo-m/empo-app/commit/8f17270dee7b80d0a37658195be1cc167aec16e5))
 - Update mkxp after default-branch integration ([`4152d36`](https://github.com/mateo-m/empo-app/commit/4152d368567844e07fc70f97863a76e8da38f952))
 - Repoint mkxp after branch split ([`9a8df9b`](https://github.com/mateo-m/empo-app/commit/9a8df9bd78d25e3fbb9932c8f24eb4d43494ff30))
+- Remove C++17 if-initializer from app bridge ([`fe47cd3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/fe47cd3b0c9cf7c4e6b0b4774bcc61be28b3797d))
+- Move casefold filesystem fallback into native bindings ([`572ceae`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/572ceaed404cb02e09414e4f2f2be9b934d6c821))
+- Make exists() use case-insensitive path fallback ([`ed2d927`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ed2d92734d32a8c9ce3a9d801951e056b8da5cc4))
+- Preserve utf-8 scripts and gate legacy binary parsing ([`c300b5e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/c300b5e79b465a93273f35687c982c6ee2462fc2))
+- Handle pokemon unicode assets and optional web probes ([`abe3ae0`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/abe3ae03d63ce1df106a060479b40a39339287d1))
+- Restore pokemon compatibility on legacy runtimes (mateo-m/mkxp-z-apple-mobile#24) ([`a4ee92e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/a4ee92eb75a70e55ddf6de0004e1be1b84e800a8))
 
 ### CI
 

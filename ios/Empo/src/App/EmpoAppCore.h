@@ -56,15 +56,6 @@ void EmpoGameProcessSetRespectsSilentMode(bool respects);
 // EmpoCoreOpen open a different one.
 void EmpoCoreKillSession(void);
 
-// Runs the engine in the app and returns when the game ends. main.m
-// implements this, because it holds argc and argv.
-//
-// Call it from a run loop callout on the main thread, and never from a
-// block on the main dispatch queue. The engine holds the thread for the
-// whole session, so a main queue block would stop that queue from
-// draining, and a core that dispatch_syncs to it deadlocks.
-int EmpoCoreRunEngine(void);
-
 #ifdef __cplusplus
 }
 #endif

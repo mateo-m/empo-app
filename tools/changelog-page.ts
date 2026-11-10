@@ -1,49 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-// Writes docs/changelog.mdx from CHANGELOG.md and from the engine commits
-// between the engine pins of two releases. The docs scripts run it before
-// Blume, and the output is git-ignored, so the site page can never drift
-// from the changelog.
+// Writes docs/changelog.mdx from CHANGELOG.md. The docs scripts run it before
+// Blume, and the output is git-ignored.
 
 const source = await Bun.file("CHANGELOG.md").text();
 const keptGroups = ["Features", "Bug Fixes", "Performance", "UI"];
-const engineGroups: Record<string, string> = { feat: "Features", fix: "Bug Fixes", perf: "Performance" };
-const engineSkippedScopes = ["build", "ci", "deps", "docs", "test"];
 const releaseTag = (version: string) =>
   `https://github.com/mateo-m/empo-app/releases/tag/v${version}`;
 
-const git = (...args: string[]) => {
-  const run = Bun.spawnSync(["git", ...args]);
-  return run.exitCode === 0 ? run.stdout.toString().trim() : undefined;
-};
-
-// A clone of mkxp-z-apple-mobile with its history. The engine entries are
-// left out when it is missing.
-const engineHistory = process.env.ENGINE_HISTORY ?? ".engine-history";
-
-// The engine a release shipped: the submodule commit up to 0.7, then the
-// release tag that cores/mkxp/.version pins. Missing when the
-// app tag is not fetched.
-const enginePin = (version: string) =>
-  git("rev-parse", `v${version}:mkxp-z-apple-mobile`) ??
-  git("show", `v${version}:cores/mkxp/.version`)?.match(/^MKXP_CORE_VERSION=(\S+)$/m)?.[1];
-
-const engineEntries = (from: string, to: string) => {
-  const log = git("-C", engineHistory, "log", "--format=%s", `${from}..${to}`) ?? "";
-  const entries = new Map<string, string[]>();
-  for (const subject of log.split("\n")) {
-    const commit = subject.match(/^(feat|fix|perf)(?:\(([^)]*)\))?!?: (.+?)(?: \(#\d+\))?$/);
-    if (!commit || engineSkippedScopes.includes(commit[2] ?? "")) continue;
-    const group = engineGroups[commit[1]];
-    const text = commit[3].charAt(0).toUpperCase() + commit[3].slice(1);
-    entries.set(group, [...(entries.get(group) ?? []), `- ${text}`]);
-  }
-  return entries;
-};
-
-// scripts/changelog.sh writes the engine entries into CHANGELOG.md from 0.7.3 on.
-type Release = { version: string; date: string; groups: Map<string, string[]>; hasEngineEntries: boolean };
+type Release = { version: string; date: string; groups: Map<string, string[]> };
 
 const releases: Release[] = [];
 let current: Release | undefined;
@@ -52,7 +18,7 @@ let group: string | undefined;
 for (const line of source.split("\n")) {
   const release = line.match(/^## (\S+) - (\d{4}-\d{2}-\d{2})$/);
   if (release) {
-    current = { version: release[1], date: release[2], groups: new Map(), hasEngineEntries: false };
+    current = { version: release[1], date: release[2], groups: new Map() };
     releases.push(current);
     group = undefined;
     continue;
@@ -68,7 +34,6 @@ for (const line of source.split("\n")) {
   }
   if (!current || !group || !line.startsWith("- ")) continue;
   if (!keptGroups.includes(group)) continue;
-  if (line.includes("https://github.com/mateo-m/mkxp-z-apple-mobile/commit/")) current.hasEngineEntries = true;
   const entry = line
     .replace(/ \(\[`[0-9a-f]+`\]\(https:\/\/github\.com\/[^)]+\)\)$/, "")
     .replace(/ \((?:[\w.-]+\/[\w.-]+)?#\d+\)$/, "");
@@ -76,16 +41,6 @@ for (const line of source.split("\n")) {
   entries.push(entry);
   current.groups.set(group, entries);
 }
-
-releases.forEach((release, index) => {
-  const previous = releases[index + 1];
-  const to = enginePin(release.version);
-  const from = previous && enginePin(previous.version);
-  if (!to || !from || release.hasEngineEntries) return;
-  for (const [group, entries] of engineEntries(from, to)) {
-    release.groups.set(group, [...(release.groups.get(group) ?? []), ...entries]);
-  }
-});
 
 const sections = releases.map((release) => {
   const parts = [`## ${release.version}`, "", `Released ${release.date}. [Download](${releaseTag(release.version)}).`];

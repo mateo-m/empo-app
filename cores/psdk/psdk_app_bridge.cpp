@@ -7,11 +7,6 @@
 // GameCore.h declares. This file answers them with the calls of
 // psdk_core.h, the interface of one libpsdk<NN>.a from
 // mateo-m/psdk-apple-mobile.
-//
-// Four things here do real work: the game thread, the frame callback,
-// the picture placement and the pause. The rest stores what the
-// launcher pushes or gives a fixed answer. Every function that gives
-// less than a full answer says so where it is.
 
 #include "GameCore.h"
 #include "psdk_core.h"
@@ -125,8 +120,6 @@ std::vector<unsigned char> gSnapshotRGBA;
 int gSnapshotW = 0;
 int gSnapshotH = 0;
 std::atomic<bool> gCheatsEnabled{false};
-std::atomic<bool> gShowViewportBounds{false};
-std::atomic<bool> gControllerCaptureEnabled{false};
 std::atomic<int> gFastForwardMultiplier{1};
 // The frame path measures the rate over windows of kFpsWindowSeconds.
 // A read changes nothing, because with a game process the app reads it
@@ -151,8 +144,7 @@ constexpr size_t kGameStackBytes = 16 * 1024 * 1024;
 
 // The core reads its own files from its own bundle, so a launcher embeds
 // the framework and ships no PSDK file of its own. dladdr on a function in
-// this image names the framework binary. mkxp-z finds its assets the same
-// way (filesystemImplIOS.mm mkxpOwnBundle). CFBundle knows where the
+// this image names the framework binary. CFBundle knows where the
 // resources are: at the top on iOS, in Versions/A/Resources on macOS.
 std::string supportPath() {
     Dl_info info;
@@ -305,8 +297,7 @@ void placeOutputRegion() {
         // Rotation safety: the launcher sets one region for each
         // orientation. A region tagged for the other one belongs to the
         // rotation that has not landed yet, so the whole window holds the
-        // picture until the matching call arrives. mkxp-z reads the same
-        // tag for the same reason.
+        // picture until the matching call arrives.
         if (gHostRegionPortrait.load() == windowIsPortrait) {
             hostRegionApplies = true;
             x = gHostRegionX.load();
@@ -319,9 +310,8 @@ void placeOutputRegion() {
     if (!hostRegionApplies) {
         // Automatic placement. The launcher clamps its own region to the
         // safe area before it sends one, so the insets apply on this path
-        // only. mkxp-z states the same rule in app_bridge.h, and the
-        // launcher's reset animation aims at this rect, so the two must
-        // give the same answer (ScreenPresetPlacement.swift).
+        // only. The reset animation of ScreenPresetPlacement.swift aims at
+        // this rect.
         //
         // The launcher sends the insets in points and the window
         // measures in pixels, so the insets take the backing scale.
@@ -332,7 +322,7 @@ void placeOutputRegion() {
         w = 1.0f - (left + right) / static_cast<float>(windowW);
         if (windowIsPortrait) {
             // Landscape keeps the full height, so the picture stays as
-            // large as the screen permits. mkxp-z makes the same choice.
+            // large as the screen permits.
             const float top = gSafeTop.load() * scale;
             const float bottom = gSafeBottom.load() * scale;
             y = top / static_cast<float>(windowH);
@@ -530,8 +520,6 @@ void onFrame(void *) {
 
 }  // namespace
 
-// MARK: - Starting the game
-
 // On iOS, starts the game on its own thread and returns at once. SFML
 // marshals every UIKit call to the main thread with dispatch_sync, so
 // the main thread has to stay in its run loop and answer them.
@@ -587,20 +575,14 @@ static const char *waitForGamePath(void) {
     return path;
 }
 
-// MARK: - Input
-
 // The launcher's scancodes are USB HID usages, which the core takes.
 void gamecore_injectKeyEvent(int scancode, int pressed) {
     psdk_inject_key(scancode, pressed);
 }
 
-// MARK: - The window
-
 void *gamecore_getGameWindow(void) {
     return psdk_game_window();
 }
-
-// MARK: - Callbacks
 
 void gamecore_setFrameRenderedCallback(gamecore_FrameRenderedCallback cb, void *userdata) {
     gFrameRendered = {reinterpret_cast<void *>(cb), userdata};
@@ -634,8 +616,6 @@ void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *
     gTextInputMode = {reinterpret_cast<void *>(cb), userdata};
     psdk_set_keyboard_callback(cb ? forwardTextInputMode : nullptr, nullptr);
 }
-
-// MARK: - Session state
 
 int gamecore_isGameReady(void) {
     return gGameReady.load() ? 1 : 0;
@@ -684,8 +664,6 @@ void gamecore_resetSessionState(void) {
     gSnapshotH = 0;
 }
 
-// MARK: - Pause
-
 // onFrame stops the game thread and the audio.
 void gamecore_requestPause(void) {
     gPausedFlag.store(true);
@@ -721,12 +699,6 @@ void gamecore_requestResume(void) {
     }
 }
 
-bool gamecore_isPaused(void) {
-    return gPausedFlag.load();
-}
-
-// MARK: - Snapshots
-
 bool gamecore_getSnapshotSize(int *width, int *height) {
     std::lock_guard<std::mutex> lock(gSnapshotLock);
     if (gSnapshotRGBA.empty()) {
@@ -755,8 +727,6 @@ bool gamecore_copySnapshotRGBA(unsigned char *dest, int destSize, int *width, in
     return true;
 }
 
-// MARK: - Text input
-
 // PSDK keeps one typed string, and `Input.swap_states` clears it on
 // every frame, so text that no screen reads is dropped by the next
 // frame. There is no buffer to fill, so the answer is always yes. The
@@ -777,16 +747,12 @@ void gamecore_pushTextInput(const char *utf8) {
     }
 }
 
-// MARK: - Alerts
-
 // The launcher shows the alert and calls the signal when the person
 // closes it. Nothing on this side waits, so the signals do nothing.
 void gamecore_signalErrorDismissed(void) {
 }
 void gamecore_signalInfoDismissed(void) {
 }
-
-// MARK: - What the launcher pushes
 
 void gamecore_setLauncherIdentity(const char *name, const char *version) {
     std::lock_guard<std::mutex> guard(gLock);
@@ -844,12 +810,10 @@ void gamecore_setTouchMouseEnabled(bool enabled) {
     psdk_set_touch_enabled(enabled ? 1 : 0);
 }
 
-void gamecore_setGameControllerCaptureEnabled(bool enabled) {
-    gControllerCaptureEnabled.store(enabled);
+// psdk_core.h has no call for game controllers or viewport bounds.
+void gamecore_setGameControllerCaptureEnabled(bool) {
 }
-
-void gamecore_setShowViewportBounds(bool enabled) {
-    gShowViewportBounds.store(enabled);
+void gamecore_setShowViewportBounds(bool) {
 }
 void gamecore_setViewportBoundsColor(float, float, float, float) {
 }
@@ -900,14 +864,11 @@ void gamecore_applySessionConfig(const GameCoreSessionConfig *config) {
     placeOutputRegion();
 }
 
-// MARK: - What the launcher reads
-
-// The keys are "smoothScaling" and "fixedAspectRatio", each "1" or "0".
 void gamecore_setSetting(const char *key, const char *value) {
     const bool on = value && std::strcmp(value, "1") == 0;
-    if (key && std::strcmp(key, "smoothScaling") == 0) {
+    if (key && std::strcmp(key, GAMECORE_SETTING_SMOOTH_SCALING) == 0) {
         psdk_set_smooth(on ? 1 : 0);
-    } else if (key && std::strcmp(key, "fixedAspectRatio") == 0) {
+    } else if (key && std::strcmp(key, GAMECORE_SETTING_FIXED_ASPECT_RATIO) == 0) {
         gFixedAspectRatio.store(on);
         placeOutputRegion();
     } else {

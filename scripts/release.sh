@@ -2,401 +2,348 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+# Each step of an Empo release. The Release workflow runs the same steps.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROJECT_DIR="$REPO_ROOT/ios/Empo"
 PROJECT_YML="$PROJECT_DIR/project.yml"
-IPA_DIR="$REPO_ROOT/build/ipa"
-ALTSTORE_SOURCE="$REPO_ROOT/altstore-source.json"
 CHANGELOG_PATH="$REPO_ROOT/CHANGELOG.md"
+ALTSTORE_SOURCE="$REPO_ROOT/altstore-source.json"
+BUILD_ROOT="$REPO_ROOT/build"
+# A fixed name, so releases/latest/download/Empo-ios.ipa always gives
+# the newest one.
+IPA_NAME="Empo-ios.ipa"
 
-usage() {
-    echo "usage: $0 <bump>"
-    echo "       $0 --sync-only <version>"
-    echo "  bump   major | minor | patch     bump latest tag's segment"
-    echo "         <semver>                  explicit version (e.g. 0.1.0)"
-    echo ""
-    echo "Default flow (cut locally, CI finishes everything):"
-    echo "  1. verifies empo-deps pins"
-    echo "  2. bumps version, generates the changelog, commits, tags"
-    echo "  3. pushes and exits. The Release workflow builds, audits,"
-    echo "     and publishes the IPA and the Mac disk image. It syncs the"
-    echo "     AltStore manifest straight to main and announces on Discord."
-    echo ""
-    echo "You can cut the same release without this script at all:"
-    echo "GitHub > Actions > Release > Run workflow (mode=cut)."
-    echo ""
-    echo "--sync-only <version>   run the AltStore sync"
-    echo "                        locally for an already-cut tag"
-    echo "                        (fallback if CI's sync job failed)"
-    echo ""
-    echo "RELEASE_LOCAL_BUILD=1   build/audit/sign/publish locally instead"
-    echo "                        (fallback when CI is unavailable)"
-    exit 1
-}
-
-SYNC_ONLY=0
-if [[ "${1:-}" == "--sync-only" ]]; then
-    SYNC_ONLY=1
-    shift
-fi
-[[ $# -ne 1 ]] && usage
-BUMP_OR_VERSION="$1"
-
-# Resolve the GitHub "owner/repo" slug from the origin remote so the
-# script can address release assets by URL.
-repo_slug() {
-    local origin_url slug
-    origin_url=$(git -C "$REPO_ROOT" remote get-url origin)
-    case "$origin_url" in
-        git@github.com:*)
-            slug="${origin_url#git@github.com:}"
-            ;;
-        https://github.com/*)
-            slug="${origin_url#https://github.com/}"
-            ;;
-        *)
-            echo "error: unsupported origin URL for GitHub release assets: $origin_url" >&2
-            exit 1
-            ;;
-    esac
-    printf '%s' "${slug%.git}"
-}
-
-# --sync-only fallback: the Release workflow's post-release job
-# normally does this sync (direct commit to main via
-# EMPO_RELEASE_TOKEN). When that job fails, or when the token is not
-# configured, this function reproduces the sync locally. It waits for
-# the published IPA. It then updates the AltStore manifest and pushes
-# it straight to main
-# under the operator's credentials (signed commit + admin ruleset
-# bypass).
-run_ci_sync() {
-    local version="$1"
-    # Releases before 0.10.1 named the file Empo-<version>-unsigned.ipa.
-    local ipa_name="Empo-ios.ipa"
-    local legacy_ipa_name="Empo-${version}-unsigned.ipa"
-    local i
-
-    echo "==> waiting for the Release workflow to publish $ipa_name"
-    local ipa_size="" asset=""
-    for i in $(seq 1 120); do
-        asset=$(gh release view "v$version" --json assets \
-            --jq "[.assets[] | select(.name == \"$ipa_name\" or .name == \"$legacy_ipa_name\")][0] | select(.) | .name + \" \" + (.size | tostring)" \
-            2>/dev/null || true)
-        if [[ -n "$asset" ]]; then
-            ipa_name="${asset% *}"
-            ipa_size="${asset##* }"
-            break
-        fi
-        local run_status
-        run_status=$(gh run list --workflow=release.yml --branch "v$version" --limit 1 \
-            --json status,conclusion --jq '.[0] | .status + ":" + (.conclusion // "")' 2>/dev/null || true)
-        if [[ "$run_status" == completed:* && "$run_status" != "completed:success" ]]; then
-            echo "error: Release workflow finished without publishing ($run_status)"
-            echo "       fix and re-run it, then resume with: $0 --sync-only $version"
-            exit 1
-        fi
-        if [[ "$i" -eq 120 ]]; then
-            echo "error: timed out waiting for $ipa_name on release v$version"
-            echo "       resume with: $0 --sync-only $version"
-            exit 1
-        fi
-        sleep 30
-    done
-    echo "    ipa published ($ipa_size bytes)"
-
-    echo "==> syncing altstore source"
-    local slug notes build release_date
-    slug=$(repo_slug)
-    notes=$("$REPO_ROOT/scripts/altstore-notes.sh" "$version" "$CHANGELOG_PATH")
-    build=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' "$PROJECT_YML" | head -n 1)
-    release_date=$(date -u +%Y-%m-%d)
-    bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
-        --version "$version" \
-        --build "$build" \
-        --size "$ipa_size" \
-        --date "$release_date" \
-        --download-url "https://github.com/$slug/releases/download/v$version/$ipa_name" \
-        --description "$notes"
-    # The Format gate (oxfmt) checks this file on main. Keep the
-    # generated manifest formatted so the gate stays green.
-    bunx oxfmt "$ALTSTORE_SOURCE"
-
-    git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
-    if git -C "$REPO_ROOT" diff --cached --quiet; then
-        echo "    manifest already in sync"
-        return 0
-    fi
-    git -C "$REPO_ROOT" commit -S -m "chore(release): sync AltStore source for v$version"
-    git -C "$REPO_ROOT" push origin main
-    echo "==> done - v$version fully released"
-}
-
-LOCAL_BUILD="${RELEASE_LOCAL_BUILD:-0}"
-
-# Resolve the new version. An explicit semver (`0.1.0`) covers rare
-# jumps that do not follow the bump-the-last-tag pattern. One of
-# `major` / `minor` / `patch` derives the version from the latest
-# git tag that matches `v*.*.*`. When no prior tag exists, the
-# version falls back to `0.1.0`, so the first release cut needs no
-# manual seed.
-case "$BUMP_OR_VERSION" in
-    major | minor | patch)
-        LATEST_TAG=$(git -C "$REPO_ROOT" tag --list "v*.*.*" --sort=-v:refname | head -n 1)
-        if [[ -z "$LATEST_TAG" ]]; then
-            echo "    no prior v*.*.* tag found, seeding at 0.1.0"
-            VERSION="0.1.0"
-        else
-            CURRENT="${LATEST_TAG#v}"
-            IFS='.' read -r MAJOR MINOR PATCH <<<"$CURRENT"
-            case "$BUMP_OR_VERSION" in
-                major) VERSION="$((MAJOR + 1)).0.0" ;;
-                minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
-                patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
-            esac
-            echo "    bumping $BUMP_OR_VERSION: $LATEST_TAG -> v$VERSION"
-        fi
-        ;;
-    *)
-        if ! [[ "$BUMP_OR_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "error: argument must be major|minor|patch or a semver"
-            echo "       (e.g. 0.1.0), got: $BUMP_OR_VERSION"
-            exit 1
-        fi
-        VERSION="$BUMP_OR_VERSION"
-        ;;
-esac
-
-if [[ "$SYNC_ONLY" == "1" ]]; then
-    if ! git -C "$REPO_ROOT" rev-parse "v$VERSION" >/dev/null 2>&1; then
-        echo "error: tag v$VERSION not found. --sync-only resumes an already-cut release"
-        exit 1
-    fi
-    if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
-        echo "error: working tree is dirty - commit or stash changes first"
-        exit 1
-    fi
-    run_ci_sync "$VERSION"
-    exit 0
-fi
-
-echo "==> releasing v$VERSION"
-
-if ! command -v git-cliff >/dev/null 2>&1; then
-    echo "error: git-cliff is required to generate release notes"
-    exit 1
-fi
-
-# Refuse to bump onto an existing tag. A re-cut of a shipped version
-# overwrites the tag + GitHub release in place, and `release.sh`
-# should almost never do that automatically. For that flow, use
-# manual `git tag -fs` + `gh release upload --clobber`.
-if git -C "$REPO_ROOT" rev-parse "v$VERSION" >/dev/null 2>&1; then
-    echo "error: tag v$VERSION already exists. Pick a different bump"
-    exit 1
-fi
-
-# 1. Check clean tree
-if ! git -C "$REPO_ROOT" diff --quiet HEAD; then
-    echo "error: working tree is dirty - commit or stash changes first"
-    exit 1
-fi
-
-# 2. Verify dependency pins resolve to published releases,
-# even for CI builds, so an unpublished pin aborts before the script
-# tags anything.
-echo "==> verifying dependency pins"
-REQUIRE_PUBLISHED=1 "$REPO_ROOT/scripts/verify-empo-deps-pins.sh"
-
-# 3. Bump MARKETING_VERSION in project.yml
-sed -i '' "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/" "$PROJECT_YML"
-
-# 4. Inject CURRENT_PROJECT_VERSION from commit count
-BUILD=$(git -C "$REPO_ROOT" rev-list --count HEAD)
-sed -i '' "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD/" "$PROJECT_YML"
-
-echo "    version: $VERSION, build: $BUILD"
-
-# 5. Regenerate Xcode project
-cd "$PROJECT_DIR"
-/opt/homebrew/bin/xcodegen generate --spec project.yml --project . --quiet
 cd "$REPO_ROOT"
 
-# 6. Ad-hoc sign with our entitlements file so the Mach-O carries
-# an embedded entitlements blob. Sideloaders that resign the IPA
-# (AltStore, Sideloadly, ESign, Feather) read this blob as their
-# template. Without the blob, some resigners synthesize an
-# incomplete one and break runtime behaviors. iOS does not trust
-# the ad-hoc signature directly, but every sideloader re-signs
-# over it with the user's cert before install.
-#
-# `--generate-entitlement-der` writes the modern DER-encoded
-# entitlements format alongside the plist form. iOS 15+ requires
-# it before it honors some entitlement keys, and it lets naive
-# resigners round-trip the signature without data loss.
-#
-# Do not pass `--options=runtime`: hardened runtime is a macOS
-# concept (restricts JIT/dyld/debugger). If you set it on an iOS
-# binary, dyld refuses to load the Mach-O at app launch, and the
-# app shows a black screen on startup.
-# 7. Generate release notes before the version-bump commit so
-# `--unreleased --tag` covers everything since the previous tag
-# under the version we're about to ship. After prepending the entry to
-# CHANGELOG.md, re-read that section back out so the GitHub release
-# uses the exact committed text. AltStore gets the same section as
-# plain text from scripts/altstore-notes.sh.
-echo "==> generating release notes"
-# git-cliff reads the PR labels from the GitHub API. Without a token,
-# GitHub allows 60 requests an hour.
-if [[ -z "${GITHUB_TOKEN:-}" ]] && GH_AUTH_TOKEN=$(gh auth token 2>/dev/null); then
-    export GITHUB_TOKEN="$GH_AUTH_TOKEN"
-fi
-"$REPO_ROOT/scripts/changelog.sh" "$VERSION"
+usage() {
+    cat >&2 <<'USAGE'
+usage: scripts/release.sh <command>
 
-CHANGELOG=$("$REPO_ROOT/scripts/extract-changelog.sh" "$VERSION" "$CHANGELOG_PATH")
+Commands for a person:
+  cut [--local] <bump>    Bump the version, write the changelog, commit,
+                          tag, and push. The tag push starts the Release
+                          workflow, which builds and publishes the release.
+                          --local builds and publishes from this computer.
+  sync <version>          Write a published release into the AltStore
+                          source and push it to main. Use it when the sync
+                          job of the Release workflow failed.
 
-RELEASE_NOTES=$(printf "## What's changed\n\n%s\n\n---\n> iPhone and iPad: unsigned build - sign the app with [SideStore](https://sidestore.io), [AltStore (Classic)](https://altstore.io), or [Sideloadly](https://sideloadly.io) before installing.\n>\n> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it." "$CHANGELOG")
+Steps of the Release workflow. prepare, build, and altstore print key=value lines:
+  prepare <bump>          Bump the version and write the changelog. No commit.
+  build [version]         Build, sign, audit, and package the iPhone app and
+                          the Mac app. The version defaults to project.yml.
+  notes <version>         Print the notes of the GitHub release.
+  altstore <version> <ipa-size>
+                          Write the release into altstore-source.json.
 
-# 8. Commit + tag (signed). Tag the release metadata first so the IPA
-# build below runs from a clean tree and bakes the release commit hash
-# into GitInfo instead of the pre-release parent plus a dirty marker.
-# The script syncs AltStore metadata locally after the IPA build, then
-# commits it as a follow-up on main, so a successful release can never
-# skip the published manifest.
-git -C "$REPO_ROOT" add "$PROJECT_YML" \
-    "$CHANGELOG_PATH"
-git -C "$REPO_ROOT" commit -S -m "chore: bump version to $VERSION (build $BUILD)"
-git -C "$REPO_ROOT" tag -s "v$VERSION" -m "v$VERSION"
+<bump> is major, minor, patch, or a version such as 0.1.0.
+GitHub can also cut a release: Actions > Release > Run workflow (mode=cut).
+USAGE
+    exit 1
+}
 
-# 9-10. Local build + AltStore sync, fallback path only. On the
-# default flow the Release workflow builds, audits, and publishes the
-# IPA, and run_ci_sync (called after the push below) finishes the
-# release when it syncs the manifest from here.
-if [[ "$LOCAL_BUILD" == "1" ]]; then
+log() {
+    echo "$@" >&2
+}
 
-    # 9. Build unsigned .ipa from the clean release commit.
-    #
-    # EMPO_CORES in the environment ships only the cores it names:
-    #   EMPO_CORES=Psdk30Core scripts/release.sh --local-build patch
-    # Empty means the project default, which is every core.
-    # macOS ships bash 3.2, where `set -u` plus "${EMPTY[@]}" aborts the
-    # script. `${A[@]+"${A[@]}"}` expands to nothing when the array is
-    # empty, and keeps the quoting when it is not.
-    CORE_SETTING=()
-    AUDIT_CORES=()
-    if [[ -n "${EMPO_CORES:-}" ]]; then
-        CORE_SETTING=("EMPO_CORES=$EMPO_CORES")
-        AUDIT_CORES=(--cores "$EMPO_CORES")
-        echo "==> cores for this build: $EMPO_CORES"
+fail() {
+    log "error: $*"
+    exit 1
+}
+
+output() {
+    printf '%s=%s\n' "$1" "$2"
+}
+
+# Reads one setting of a project.yml from stdin.
+setting_in() {
+    KEY="$1" perl -ne 'if (/^\s*\Q$ENV{KEY}\E: "?([^"\n]*)"?$/) { print $1; exit }'
+}
+
+project_setting() {
+    setting_in "$1" <"$PROJECT_YML"
+}
+
+set_project_setting() {
+    KEY="$1" VALUE="$2" perl -pi -e 's/^(\s*\Q$ENV{KEY}\E: ).*/$1$ENV{VALUE}/' "$PROJECT_YML"
+}
+
+tag_exists() {
+    git rev-parse -q --verify "refs/tags/v$1" >/dev/null
+}
+
+require_clean_tree() {
+    git diff --quiet HEAD || fail "the working tree has changes. Commit or stash them first"
+}
+
+# cut and sync push the local main, and next_version reads the tags.
+require_current_main() {
+    [[ "$(git branch --show-current)" == main ]] || fail "check out main first"
+    git fetch --quiet --tags origin main
+    [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] ||
+        fail "main is not the same as origin/main. Pull or push first"
+}
+
+repo_slug() {
+    local slug
+    slug=$(git remote get-url origin | sed -E 's#^(git@github\.com:|ssh://git@github\.com/|https://github\.com/)##; s#\.git$##')
+    [[ "$slug" =~ ^[^/:]+/[^/:]+$ ]] || fail "origin is not a GitHub repository: $(git remote get-url origin)"
+    echo "$slug"
+}
+
+release_cores() {
+    # shellcheck source=cores/cores.sh
+    . "$REPO_ROOT/cores/cores.sh"
+    echo "$EMPO_CORES"
+}
+
+next_version() {
+    local bump="$1" latest main_version newer major minor patch
+    case "$bump" in
+        major | minor | patch) ;;
+        *)
+            [[ "$bump" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+                fail "the bump must be major, minor, patch, or a version such as 0.1.0, not: $bump"
+            echo "$bump"
+            return
+            ;;
+    esac
+    latest=$(git tag --list "v*.*.*" --sort=-v:refname | head -n 1)
+    if [[ -z "$latest" ]]; then
+        echo "0.1.0"
+        return
     fi
+    latest="${latest#v}"
+    # A cut whose build failed leaves its version on main with no tag.
+    # The next cut releases that version, whatever the bump says.
+    main_version=$(project_setting MARKETING_VERSION)
+    newer=$(printf '%s\n' "$main_version" "$latest" | sort -V | tail -n 1)
+    if [[ "$main_version" != "$latest" && "$newer" == "$main_version" ]]; then
+        log "    main has the untagged version $main_version: releasing it again"
+        echo "$main_version"
+        return
+    fi
+    IFS=. read -r major minor patch <<<"$latest"
+    case "$bump" in
+        major) echo "$((major + 1)).0.0" ;;
+        minor) echo "$major.$((minor + 1)).0" ;;
+        patch) echo "$major.$minor.$((patch + 1))" ;;
+    esac
+}
 
-    echo "==> building unsigned ipa"
-    BUILD_DIR="$PROJECT_DIR/build/Release-iphoneos"
-    DERIVED_DATA="$PROJECT_DIR/build/DerivedData"
+# Sets VERSION, BUILD, and BUMP_MESSAGE.
+prepare_release() {
+    require_clean_tree
+    command -v git-cliff >/dev/null || fail "git-cliff is required to write the changelog"
+    VERSION=$(next_version "$1")
+    ! tag_exists "$VERSION" || fail "tag v$VERSION already exists"
+    log "==> preparing v$VERSION"
+
+    log "==> verifying dependency pins"
+    REQUIRE_PUBLISHED=1 scripts/verify-empo-deps-pins.sh >&2
+
+    BUILD=$(git rev-list --count HEAD)
+    set_project_setting MARKETING_VERSION "$VERSION"
+    set_project_setting CURRENT_PROJECT_VERSION "$BUILD"
+    log "    version: $VERSION, build: $BUILD"
+
+    log "==> writing the changelog"
+    # git-cliff reads the PR labels from the GitHub API. Without a token,
+    # GitHub allows 60 requests an hour.
+    local token
+    if [[ -z "${GITHUB_TOKEN:-}" ]] && token=$(gh auth token 2>/dev/null); then
+        export GITHUB_TOKEN="$token"
+    fi
+    scripts/changelog.sh "$VERSION" >&2
+    BUMP_MESSAGE="chore: bump version to $VERSION (build $BUILD)"
+}
+
+# Sets IPA_PATH, IPA_SIZE, and DMG_PATH.
+build_release() {
+    local version="$1" cores products derived app ipa_dir project_version
+    cores=$(release_cores)
+    products="$BUILD_ROOT/Release-iphoneos"
+    derived="$BUILD_ROOT/DerivedData"
+    ipa_dir="$BUILD_ROOT/ipa"
+    project_version=$(project_setting MARKETING_VERSION)
+    [[ "$version" == "$project_version" ]] || fail "project.yml has the version $project_version, not $version"
+    log "==> building v$version with the cores: $cores"
+
+    xcodegen generate --spec "$PROJECT_YML" --project "$PROJECT_DIR" --quiet >&2
     # Xcode does not write Extensions/Empo.appexpt again when the old
     # build data says the step is done, also when the file is gone.
-    rm -rf "$BUILD_DIR" "$DERIVED_DATA"
-    # A -target build cannot find the module map of the json5cpp package
-    # target on Xcode 27, so build the scheme, as release.yml does.
+    rm -rf "$products" "$derived"
+    # A -target build cannot find the module map of the json5cpp package,
+    # so build the scheme.
     xcodebuild \
         -project "$PROJECT_DIR/Empo.xcodeproj" \
         -scheme Empo \
         -destination 'generic/platform=iOS' \
         -configuration Release \
-        -derivedDataPath "$DERIVED_DATA" \
+        -derivedDataPath "$derived" \
         CODE_SIGNING_ALLOWED=NO \
-        CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+        CONFIGURATION_BUILD_DIR="$products" \
+        ${SENTRY_DSN:+SENTRY_DSN="$SENTRY_DSN"} \
         -xcconfig "$PROJECT_DIR/Sideload.xcconfig" \
-        ${CORE_SETTING[@]+"${CORE_SETTING[@]}"} \
-        build 2>&1 | grep -E "^(Build|error:|warning: |CompileSwift|Ld )" || true
-
-    APP_PATH="$BUILD_DIR/Empo.app"
-    if [[ ! -d "$APP_PATH" ]]; then
-        echo "error: build failed - Empo.app not found at $BUILD_DIR"
-        exit 1
-    fi
+        EMPO_CORES="$cores" \
+        build 2>&1 | tail -n 40 >&2
+    app="$products/Empo.app"
+    [[ -d "$app" ]] || fail "the build has no Empo.app in $products"
+    # The DSN comes from $SENTRY_DSN or from Signing.xcconfig.
+    [[ -n "$(plutil -extract EmpoSentryDSN raw "$app/Info.plist" 2>/dev/null)" ]] ||
+        fail "the app has no Sentry DSN, so it would send no error reports. Set SENTRY_DSN."
 
     # SideStore and AltStore give an extension in Extensions/ no new
     # bundle ID, and iOS then refuses to install the whole app.
-    rm -rf "$APP_PATH/Extensions"
+    rm -rf "$app/Extensions"
+    scripts/sign-app.sh "$app" >&2
+    scripts/audit-ipa.sh --version "$version" --cores "$cores" "$app" >&2
 
-    echo "==> ad-hoc signing with entitlements"
-    "$REPO_ROOT/scripts/sign-app.sh" "$APP_PATH"
-
-    "$REPO_ROOT/scripts/audit-ipa.sh" --version "$VERSION" \
-        ${AUDIT_CORES[@]+"${AUDIT_CORES[@]}"} "$APP_PATH"
-
-    mkdir -p "$IPA_DIR/Payload"
-    cp -R "$APP_PATH" "$IPA_DIR/Payload/Empo.app"
-    IPA_NAME="Empo-ios.ipa"
-    # zip adds to an existing archive, so start from an empty one.
-    rm -f "$IPA_DIR/$IPA_NAME"
-    (cd "$IPA_DIR" && zip -qr "$IPA_NAME" Payload)
-    rm -rf "$IPA_DIR/Payload"
-    IPA_PATH="$IPA_DIR/$IPA_NAME"
+    rm -rf "$ipa_dir"
+    mkdir -p "$ipa_dir/Payload"
+    cp -R "$app" "$ipa_dir/Payload/Empo.app"
+    (cd "$ipa_dir" && zip -qr "$IPA_NAME" Payload)
+    rm -rf "$ipa_dir/Payload"
+    IPA_PATH="$ipa_dir/$IPA_NAME"
     IPA_SIZE=$(stat -f%z "$IPA_PATH")
-    echo "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
+    log "    ipa: $IPA_PATH ($IPA_SIZE bytes)"
 
-    DMG_PATH=$("$REPO_ROOT/scripts/package-mac.sh" "$VERSION" | tail -n 1)
-    echo "    mac: $DMG_PATH"
+    # The Mac app does not read Signing.xcconfig.
+    [[ -n "${SENTRY_DSN:-}" ]] ||
+        fail "the Mac app has no Sentry DSN, so it would send no error reports. Set SENTRY_DSN."
+    DMG_PATH=$(EMPO_CORES="$cores" scripts/package-mac.sh "$version" | tail -n 1)
+    log "    mac: $DMG_PATH"
+}
 
-    # 10. Update AltStore source from the locally-built artifact so the
-    # manifest lands through the same signed release flow as every other
-    # release metadata change.
-    echo "==> updating altstore source"
-    ORIGIN_URL=$(git -C "$REPO_ROOT" remote get-url origin)
-    case "$ORIGIN_URL" in
-        git@github.com:*)
-            REPO_SLUG="${ORIGIN_URL#git@github.com:}"
-            ;;
-        https://github.com/*)
-            REPO_SLUG="${ORIGIN_URL#https://github.com/}"
-            ;;
-        *)
-            echo "error: unsupported origin URL for GitHub release assets: $ORIGIN_URL"
-            exit 1
-            ;;
-    esac
-    REPO_SLUG="${REPO_SLUG%.git}"
-    IPA_DOWNLOAD_URL="https://github.com/$REPO_SLUG/releases/download/v$VERSION/$IPA_NAME"
-    RELEASE_DATE=$(date -u +%Y-%m-%d)
+release_notes() {
+    local section
+    section=$(scripts/extract-changelog.sh "$1" "$CHANGELOG_PATH")
+    printf "## What's changed\n\n%s\n\n---\n%s\n>\n%s\n" "$section" \
+        "> iPhone and iPad: install the app with a sideloading tool. [Install Empo on an iPhone or iPad](https://empo.mateo.sh/install#iphone-and-ipad) shows how." \
+        "> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it."
+}
 
-    NOTES=$("$REPO_ROOT/scripts/altstore-notes.sh" "$VERSION" "$CHANGELOG_PATH")
-    bun "$REPO_ROOT/scripts/update-altstore-source.ts" \
-        --version "$VERSION" \
-        --build "$BUILD" \
-        --size "$IPA_SIZE" \
-        --date "$RELEASE_DATE" \
-        --download-url "$IPA_DOWNLOAD_URL" \
-        --description "$NOTES"
+# Sets SYNC_MESSAGE. The build number and the minimum iOS version come
+# from the tag, because main can move on after the cut.
+write_altstore() {
+    local version="$1" ipa_size="$2" project slug build min_os notes
+    project=$(git show "v$version:ios/Empo/project.yml") || fail "tag v$version not found"
+    slug=$(repo_slug)
+    build=$(setting_in CURRENT_PROJECT_VERSION <<<"$project")
+    min_os=$(setting_in iOS <<<"$project")
+    notes=$(scripts/altstore-notes.sh "$version" "$CHANGELOG_PATH")
+    log "==> writing v$version into $(basename "$ALTSTORE_SOURCE")"
+    bun scripts/update-altstore-source.ts \
+        --version "$version" \
+        --build "$build" \
+        --min-os-version "$min_os" \
+        --size "$ipa_size" \
+        --date "$(date -u +%Y-%m-%d)" \
+        --download-url "https://github.com/$slug/releases/download/v$version/$IPA_NAME" \
+        --description "$notes" >&2
+    # The Lint job checks the format of this file on main.
+    bun x oxfmt "$ALTSTORE_SOURCE" >&2
+    SYNC_MESSAGE="chore(release): sync AltStore source for v$version"
+}
 
-    git -C "$REPO_ROOT" add "$ALTSTORE_SOURCE"
-    if ! git -C "$REPO_ROOT" diff --cached --quiet; then
-        # Keep this follow-up commit out of future git-cliff release notes.
-        git -C "$REPO_ROOT" commit -S -m "sync AltStore source for v$VERSION"
+commit_altstore() {
+    git add "$ALTSTORE_SOURCE"
+    if git diff --cached --quiet; then
+        log "    the AltStore source already has this release"
+        return
+    fi
+    git commit -S -m "$SYNC_MESSAGE" >&2
+}
+
+cut_release() {
+    local local_build=0
+    if [[ "${1:-}" == "--local" ]]; then
+        local_build=1
+        shift
+    fi
+    [[ $# -eq 1 ]] || usage
+
+    require_current_main
+    prepare_release "$1"
+    git add "$PROJECT_YML" "$CHANGELOG_PATH"
+    git commit -S -m "$BUMP_MESSAGE" >&2
+    git tag -s "v$VERSION" -m "v$VERSION"
+
+    if [[ "$local_build" == 1 ]]; then
+        build_release "$VERSION"
+        write_altstore "$VERSION" "$IPA_SIZE"
+        commit_altstore
     fi
 
-fi # LOCAL_BUILD
+    log "==> pushing to origin"
+    git push origin main
+    git push origin "v$VERSION"
 
-# 11. Push. On the default flow this is the handoff: the v tag
-# triggers the Release workflow.
-echo "==> pushing to origin"
-git -C "$REPO_ROOT" push origin main
-git -C "$REPO_ROOT" push origin "v$VERSION"
+    if [[ "$local_build" == 1 ]]; then
+        log "==> creating the GitHub release"
+        local notes
+        notes=$(release_notes "$VERSION")
+        gh release create "v$VERSION" --title "v$VERSION" \
+            --notes "$notes" "$IPA_PATH" "$DMG_PATH"
+        log "==> done: v$VERSION is released"
+    else
+        log "==> done: the Release workflow builds and publishes v$VERSION"
+        log "    watch: gh run watch \$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+        log "    if its AltStore sync fails: $0 sync $VERSION"
+    fi
+}
 
-if [[ "$LOCAL_BUILD" == "1" ]]; then
-    # 12. Create GitHub release from the locally-built artifact.
-    echo "==> creating github release"
-    gh release create "v$VERSION" \
-        --title "v$VERSION" \
-        --notes "$RELEASE_NOTES" \
-        "$IPA_PATH" "$DMG_PATH"
-    echo "==> done - v$VERSION released (local build)"
-else
-    echo "==> done - v$VERSION handed off to CI, which finishes the release"
-    echo "    (build + audit + publish + AltStore sync + Discord)"
-    echo "    watch:    gh run watch \$(gh run list --workflow=release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
-    echo "    fallback: $0 --sync-only $VERSION  # if CI's sync job fails"
-fi
+sync_release() {
+    local version="$1" size
+    require_clean_tree
+    require_current_main
+    size=$(gh release view "v$version" --json assets \
+        --jq ".assets[] | select(.name == \"$IPA_NAME\") | .size") ||
+        fail "could not read the GitHub release v$version"
+    [[ -n "$size" ]] || fail "the GitHub release v$version has no $IPA_NAME"
+    write_altstore "$version" "$size"
+    commit_altstore
+    git push origin main
+    log "==> done: the AltStore source has v$version"
+}
+
+COMMAND="${1:-}"
+[[ $# -gt 0 ]] && shift
+case "$COMMAND" in
+    cut)
+        cut_release "$@"
+        ;;
+    sync)
+        [[ $# -eq 1 ]] || usage
+        sync_release "$1"
+        ;;
+    prepare)
+        [[ $# -eq 1 ]] || usage
+        prepare_release "$1"
+        output version "$VERSION"
+        output message "$BUMP_MESSAGE"
+        ;;
+    build)
+        [[ $# -le 1 ]] || usage
+        VERSION="${1:-$(project_setting MARKETING_VERSION)}"
+        build_release "$VERSION"
+        output version "$VERSION"
+        output ipa_path "$IPA_PATH"
+        output ipa_size "$IPA_SIZE"
+        output dmg_path "$DMG_PATH"
+        ;;
+    notes)
+        [[ $# -eq 1 ]] || usage
+        release_notes "$1"
+        ;;
+    altstore)
+        [[ $# -eq 2 ]] || usage
+        write_altstore "$1" "$2"
+        output message "$SYNC_MESSAGE"
+        ;;
+    *)
+        usage
+        ;;
+esac

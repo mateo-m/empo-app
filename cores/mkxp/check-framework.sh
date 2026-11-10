@@ -48,7 +48,7 @@ BIN="$FW/MkxpCore"
 
 # GameCore.h is the contract. Anything it declares must be out, and
 # nothing else may be.
-WANT=$("$(dirname "$0")/../gamecore-exports.sh" /dev/stdout)
+WANT=$(sort -u "$(dirname "$0")/../gamecore.exports")
 GOT=$(dyld_info -exports "$BIN" | awk '/^ *0x/ {print $2}' | sort -u)
 if [ "$WANT" != "$GOT" ]; then
     echo "error: MkxpCore exports do not match GameCore.h" >&2

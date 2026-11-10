@@ -1,33 +1,20 @@
 ---
-# The release pipeline, end to end. Two ways in, same result:
+# Releases Empo. scripts/release.sh has each step, and this workflow runs
+# the same steps:
 #
-#   * From a computer: scripts/release.sh <bump> cuts the release
-#     locally (bump + changelog + signed commit + tags) and pushes.
-#     The v*.*.* tag push lands here and CI does the rest.
-#   * From anywhere (e.g. a phone): workflow_dispatch with mode=cut
-#     commits the bump to main through the API, builds that commit,
-#     and creates the tag only when the build and the audit pass. The
-#     same run then publishes. The tag job uses GITHUB_TOKEN, so its
-#     tag push starts no second run.
-#
-# Either way the run builds, audits, ad-hoc signs, and
-# publishes the unsigned .ipa and the Mac disk image, then the post-release job syncs the
-# AltStore manifest STRAIGHT TO MAIN (no PR): commits
-# created with EMPO_RELEASE_TOKEN are GitHub-signed and authored by
-# the token's owner, whose repo-admin role bypasses the ruleset.
-# Finally the notify job posts the release to Discord (chained as a
-# job because GITHUB_TOKEN-created releases never emit workflow
-# events, so an `on: release` workflow would never fire).
-#
-# workflow_dispatch with mode=dry-run builds + audits any ref and
-# uploads the .ipa and the Mac disk image as workflow artifacts without
-# publishing anything. Only the tag and publish jobs have a token that can write.
+#   * scripts/release.sh cut <bump> on a computer pushes a v*.*.* tag,
+#     and the tag push starts this workflow.
+#   * mode=cut commits the bump to main through the API, builds that
+#     commit, and makes the tag only when the build passes.
+#   * mode=dry-run builds and audits a ref, and publishes nothing.
+#   * mode=announce posts a published release to Discord again.
 #
 # Secrets:
-#   EMPO_RELEASE_TOKEN           fine-grained PAT, Contents: RW on
-#                                THIS repo.
-#                                Powers the cut and sync commits
-#   DISCORD_RELEASE_WEBHOOK_URL  release announcements
+#   EMPO_RELEASE_TOKEN           A fine-grained token, Contents: read and
+#                                write on this repo. GitHub signs the
+#                                commits it makes, and the role of its
+#                                owner lets them go to main.
+#   DISCORD_RELEASE_WEBHOOK_URL  The channel for release posts.
 
 name: Release
 
@@ -51,7 +38,7 @@ on:
         required: false
         default: ""
       ref:
-        description: "dry-run only: ref to build (tag, branch, or sha)"
+        description: "dry-run only: ref to build (tag, branch, or sha). Tags up to v0.11.0 fail, because their scripts/release.sh has no build command"
         required: false
         default: "main"
 
@@ -67,19 +54,13 @@ concurrency:
   group: release
 
 jobs:
-  # ── Decision half (phone path) ────────────────────────────────────
-  # Mirrors scripts/release.sh: resolve the version, bump project.yml,
-  # regenerate the changelog, commit to main, tag v<version>. The
-  # commit + tag are created
-  # via the API with EMPO_RELEASE_TOKEN, so the commit is
-  # GitHub-signed and the tag push triggers the build below.
   cut:
     name: Cut release
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'cut'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.prepare.outputs.version }}
       sha: ${{ steps.commit.outputs.sha }}
     steps:
       - name: Require EMPO_RELEASE_TOKEN
@@ -97,12 +78,6 @@ jobs:
           fetch-depth: 0
           submodules: false
 
-      - name: Verify empo-deps pins
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REQUIRE_PUBLISHED: "1"
-        run: scripts/verify-empo-deps-pins.sh
-
       - name: Install git-cliff
         env:
           GIT_CLIFF_SHA256: 9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546
@@ -116,82 +91,28 @@ jobs:
           sudo mv "$BIN" /usr/local/bin/git-cliff
           git-cliff --version
 
-      - name: Resolve version
-        id: version
+      - name: Bump the version and write the changelog
+        id: prepare
         env:
-          INPUT_BUMP: ${{ inputs.bump }}
-        run: |
-          set -e
-          BUMP="$INPUT_BUMP"
-          case "$BUMP" in
-            major | minor | patch)
-              LATEST_TAG=$(git tag --list "v*.*.*" --sort=-v:refname | head -n 1)
-              # A cut whose build failed leaves its version on main with
-              # no tag. The next cut releases that version, whatever the
-              # bump says.
-              MAIN_VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
-              NEWER="$(printf '%s\n' "$MAIN_VERSION" "${LATEST_TAG#v}" | sort -V | tail -n 1)"
-              if [ -z "$LATEST_TAG" ]; then
-                VERSION="0.1.0"
-              elif [ "$MAIN_VERSION" != "${LATEST_TAG#v}" ] && [ "$NEWER" = "$MAIN_VERSION" ]
-              then
-                VERSION="$MAIN_VERSION"
-                echo "main carries the untagged $VERSION: releasing it again"
-              else
-                CURRENT="${LATEST_TAG#v}"
-                MAJOR="${CURRENT%%.*}"
-                REST="${CURRENT#*.}"
-                MINOR="${REST%%.*}"
-                PATCH="${REST#*.}"
-                case "$BUMP" in
-                  major) VERSION="$((MAJOR + 1)).0.0" ;;
-                  minor) VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
-                  patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
-                esac
-              fi
-              ;;
-            *)
-              if ! printf '%s' "$BUMP" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-                echo "::error::bump must be major|minor|patch or a semver, got: $BUMP"
-                exit 1
-              fi
-              VERSION="$BUMP"
-              ;;
-          esac
-          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
-            echo "::error::tag v$VERSION already exists"
-            exit 1
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Cutting v$VERSION"
-
-      - name: Bump version + changelog
-        env:
+          GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          VERSION="${{ steps.version.outputs.version }}"
-          BUILD=$(git rev-list --count HEAD)
-          sed -i "s/MARKETING_VERSION: .*/MARKETING_VERSION: $VERSION/" ios/Empo/project.yml
-          sed -i "s/CURRENT_PROJECT_VERSION: .*/CURRENT_PROJECT_VERSION: $BUILD/" ios/Empo/project.yml
-          scripts/changelog.sh "$VERSION"
-          echo "version: $VERSION, build: $BUILD"
+          INPUT_BUMP: ${{ inputs.bump }}
+        run: scripts/release.sh prepare "$INPUT_BUMP" >> "$GITHUB_OUTPUT"
 
       - name: Commit to main
         id: commit
         env:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
+          MESSAGE: ${{ steps.prepare.outputs.message }}
         run: |
           set -e
-          VERSION="${{ steps.version.outputs.version }}"
-          BUILD=$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' ios/Empo/project.yml | head -n 1)
           HEAD="$(git rev-parse HEAD)"
           base64 < ios/Empo/project.yml | tr -d '\n' > /tmp/project.b64
           base64 < CHANGELOG.md | tr -d '\n' > /tmp/changelog.b64
           # shellcheck disable=SC2016 # the GraphQL query names its own $variables
           OID=$(gh api graphql \
             -F repo="$GITHUB_REPOSITORY" -F head="$HEAD" \
-            -F message="chore: bump version to $VERSION (build $BUILD)" \
+            -F message="$MESSAGE" \
             -F path1="ios/Empo/project.yml" -F contents1=@/tmp/project.b64 \
             -F path2="CHANGELOG.md" -F contents2=@/tmp/changelog.b64 \
             -f query='mutation($repo: String!, $head: GitObjectID!, $message: String!, $path1: String!, $contents1: Base64String!, $path2: String!, $contents2: Base64String!) {
@@ -205,7 +126,6 @@ jobs:
           echo "bump commit: $OID"
           echo "sha=$OID" >> "$GITHUB_OUTPUT"
 
-  # ── Mechanical half: build, audit, publish ───────────────────────
   build:
     name: Build + audit .ipa
     needs: cut
@@ -219,10 +139,8 @@ jobs:
     runs-on: ${{ fromJSON(vars.MACOS_RUNNER) }}
     timeout-minutes: 90
     outputs:
-      version: ${{ steps.meta.outputs.version }}
-      build: ${{ steps.meta.outputs.build }}
-      ipa_name: ${{ steps.package.outputs.ipa_name }}
-      ipa_size: ${{ steps.package.outputs.ipa_size }}
+      version: ${{ steps.build.outputs.version }}
+      ipa_size: ${{ steps.build.outputs.ipa_size }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -231,120 +149,37 @@ jobs:
           submodules: false
           persist-credentials: false
 
+      # The cut job checks the pins before it commits. A tag can come
+      # from a computer, so check them again here.
       - name: Verify empo-deps pins
-        # Tag releases must build from published pins (this replaces
-        # the old deps-pins tag trigger).
-        if: github.event_name == 'push' || needs.cut.result == 'success'
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           REQUIRE_PUBLISHED: "1"
         run: scripts/verify-empo-deps-pins.sh
 
-      - name: Resolve version + build number
-        id: meta
+      - uses: ./.github/actions/prepare-xcode-project
+
+      # The audit fails when the app version is not this version. A dry
+      # run builds whatever version its ref has.
+      - name: Build, sign, audit, and package
+        id: build
         env:
-          CUT_VERSION: ${{ needs.cut.outputs.version }}
-        run: |
-          set -e
-          VERSION="$(sed -n 's/.*MARKETING_VERSION: //p' ios/Empo/project.yml | head -n 1 | tr -d '\"')"
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            EXPECTED="${GITHUB_REF_NAME#v}"
-          else
-            EXPECTED="$CUT_VERSION"
-          fi
-          if [ -n "$EXPECTED" ] && [ "$VERSION" != "$EXPECTED" ]; then
-            echo "error: release v$EXPECTED does not match project.yml MARKETING_VERSION $VERSION" >&2
-            exit 1
-          fi
-          # The number baked into the binary is project.yml's
-          # CURRENT_PROJECT_VERSION (set at cut time), NOT the commit
-          # count at the tag. The tag sits one commit later.
-          BUILD="$(sed -n 's/.*CURRENT_PROJECT_VERSION: //p' ios/Empo/project.yml | head -n 1)"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
-          echo "Releasing v$VERSION (build $BUILD)"
-
-      # A dry run can build a ref from before the shared setup step
-      # existed, so the step comes from this workflow's own commit.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .release-actions
-          sparse-checkout: .github/actions
-          persist-credentials: false
-
-      - uses: ./.release-actions/.github/actions/prepare-xcode-project
-        env:
-          # Older refs have a tools/fetch-angle.sh that downloads ANGLE
-          # with gh, which needs a login.
-          GH_TOKEN: ${{ github.token }}
-
-      - name: Build Release (iphoneos)
-        # Build the SCHEME, not the target. A -target build resolves
-        # SwiftPM packages through the legacy build system, which
-        # cannot find the generated module map for a C-family package
-        # target (json5cpp): "module map file ...
-        # GeneratedModuleMaps-iphoneos/json5cpp.modulemap not found",
-        # reported on hosted runners as unresolvable _DarwinFoundation
-        # module dependencies.
-        # The build data lives in build/, which the checkout empties. With
-        # the build data of an earlier run, Xcode does not write
-        # Extensions/Empo.appexpt again, and the game process cannot start.
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project ios/Empo/Empo.xcodeproj \
-            -scheme Empo \
-            -destination 'generic/platform=iOS' \
-            -configuration Release \
-            -derivedDataPath "$PWD/build/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            CONFIGURATION_BUILD_DIR="$PWD/build/Release-iphoneos" \
-            -xcconfig ios/Empo/Sideload.xcconfig \
-            build 2>&1 | tail -n 40
-          test -d build/Release-iphoneos/Empo.app
-
-      # Ad-hoc signature with our entitlements blob embedded. The
-      # template sideloaders (AltStore/Sideloadly/ESign) re-sign over.
-      # See the detailed rationale in scripts/release.sh.
-      - name: Sign + package .ipa
-        id: package
-        run: |
-          set -e
-          # SideStore and AltStore give an extension in Extensions/ no new
-          # bundle ID, and iOS then refuses to install the whole app.
-          rm -rf build/Release-iphoneos/Empo.app/Extensions
-          scripts/sign-app.sh build/Release-iphoneos/Empo.app
-          scripts/audit-ipa.sh --version "${{ steps.meta.outputs.version }}" build/Release-iphoneos/Empo.app
-          mkdir -p build/ipa/Payload
-          cp -R build/Release-iphoneos/Empo.app build/ipa/Payload/Empo.app
-          # A fixed name, so releases/latest/download/Empo-ios.ipa always
-          # points to the newest one.
-          IPA_NAME="Empo-ios.ipa"
-          (cd build/ipa && zip -qr "$IPA_NAME" Payload)
-          IPA_SIZE="$(stat -f%z "build/ipa/$IPA_NAME")"
-          echo "ipa_name=$IPA_NAME" >> "$GITHUB_OUTPUT"
-          echo "ipa_size=$IPA_SIZE" >> "$GITHUB_OUTPUT"
-          echo "Packaged $IPA_NAME ($IPA_SIZE bytes)"
-
-      - name: Build + package the Mac app
-        id: mac
-        run: |
-          set -eo pipefail
-          DMG="$(scripts/package-mac.sh "${{ steps.meta.outputs.version }}" | tail -n 1)"
-          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+          VERSION: ${{ needs.cut.outputs.version || (github.event_name == 'push' && github.ref_name) || '' }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+        run: scripts/release.sh build ${VERSION:+"${VERSION#v}"} >> "$GITHUB_OUTPUT"
 
       - name: Upload .ipa artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ steps.package.outputs.ipa_name }}
-          path: build/ipa/${{ steps.package.outputs.ipa_name }}
+          name: Empo-ios
+          path: ${{ steps.build.outputs.ipa_path }}
 
       - name: Upload Mac disk image artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Empo-mac.dmg
-          path: ${{ steps.mac.outputs.dmg }}
+          name: Empo-mac
+          path: ${{ steps.build.outputs.dmg_path }}
 
   tag:
     name: Create the tag
@@ -393,26 +228,15 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           set -e
-          VERSION="${{ needs.build.outputs.version }}"
-          scripts/extract-changelog.sh "$VERSION" > changelog-section.md
-          {
-            echo "## What's changed"
-            echo ""
-            cat changelog-section.md
-            echo ""
-            echo "---"
-            echo "> iPhone and iPad: install the app with a sideloading tool. [Install Empo on an iPhone or iPad](https://empo.mateo.sh/install#iphone-and-ipad) shows how."
-            echo ">"
-            echo "> Mac: macOS blocks the app the first time you open it. [Install Empo on a Mac](https://empo.mateo.sh/install#mac) shows how to allow it."
-          } > release-notes.md
+          scripts/release.sh notes "$VERSION" > release-notes.md
           gh release create "v$VERSION" \
             --title "v$VERSION" \
             --notes-file release-notes.md \
             dist/*
 
-  # ── Finish: sync AltStore manifest to main ───────────────────────
   post-release:
     name: Sync AltStore manifest
     needs: [build, publish]
@@ -423,40 +247,33 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
+          # The AltStore entry reads the build number from the tag.
+          fetch-depth: 0
           submodules: false
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: Update AltStore source
+        id: altstore
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          IPA_SIZE: ${{ needs.build.outputs.ipa_size }}
         run: |
           set -e
-          VERSION="${{ needs.build.outputs.version }}"
           bun install --frozen-lockfile
-          NOTES=$(scripts/altstore-notes.sh "$VERSION")
-          bun scripts/update-altstore-source.ts \
-            --version "$VERSION" \
-            --build "${{ needs.build.outputs.build }}" \
-            --size "${{ needs.build.outputs.ipa_size }}" \
-            --date "$(date -u +%Y-%m-%d)" \
-            --download-url "https://github.com/${{ github.repository }}/releases/download/v$VERSION/${{ needs.build.outputs.ipa_name }}" \
-            --description "$NOTES"
-          # The Format gate (oxfmt) checks this file on main. Keep the
-          # generated manifest formatted so the gate stays green.
-          bunx oxfmt altstore-source.json
+          scripts/release.sh altstore "$VERSION" "$IPA_SIZE" >> "$GITHUB_OUTPUT"
 
       - name: Push sync commit to main
-        # No PR: commits created with EMPO_RELEASE_TOKEN are
-        # GitHub-signed and authored by the token's owner, whose
-        # repo-admin role bypasses the ruleset. The expected head is
-        # re-read live so a concurrent push fails loudly instead of
-        # being clobbered.
+        # The job reads the head of main just before the commit. When
+        # main moves in between, the commit fails and changes nothing.
         env:
           GH_TOKEN: ${{ secrets.EMPO_RELEASE_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          MESSAGE: ${{ steps.altstore.outputs.message }}
         run: |
           set -e
-          VERSION="${{ needs.build.outputs.version }}"
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::EMPO_RELEASE_TOKEN is not set; finish manually with: scripts/release.sh --sync-only $VERSION"
+            echo "::error::EMPO_RELEASE_TOKEN is not set; finish manually with: scripts/release.sh sync $VERSION"
             exit 1
           fi
           HEAD="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
@@ -464,7 +281,7 @@ jobs:
           # shellcheck disable=SC2016 # the GraphQL query names its own $variables
           gh api graphql \
             -F repo="$GITHUB_REPOSITORY" -F head="$HEAD" \
-            -F message="chore(release): sync AltStore source for v$VERSION" \
+            -F message="$MESSAGE" \
             -F path1="altstore-source.json" -F contents1=@/tmp/altstore.b64 \
             -f query='mutation($repo: String!, $head: GitObjectID!, $message: String!, $path1: String!, $contents1: Base64String!) {
               createCommitOnBranch(input: {
@@ -476,11 +293,8 @@ jobs:
             }' --jq '.data.createCommitOnBranch.commit.oid'
           echo "v$VERSION fully released"
 
-  # ── Announce ─────────────────────────────────────────────────────
-  # Chained as a job (not an `on: release` workflow) because releases
-  # created with GITHUB_TOKEN never emit chained workflow events.
-  # Dispatch mode=announce re-posts an already-published release
-  # (build is skipped then, so the version comes from the input).
+  # A release that GITHUB_TOKEN makes starts no workflow, so an
+  # `on: release` workflow never runs. This job posts the release.
   notify:
     name: Post release changelog to Discord
     needs: [cut, build, publish]

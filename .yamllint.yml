@@ -23,7 +23,6 @@ rules:
     max: 2
 
 ignore: |
-  .engine-history/
   ios/Empo/build/
   ios/Empo/Empo.xcodeproj/
   ios/Dependencies/build-*/

@@ -20,7 +20,7 @@ struct GameReport: Codable, Identifiable, Transferable {
 
     var isShareable: Bool { FileManager.default.fileExists(atPath: logURL.path) }
 
-    private var logURL: URL {
+    var logURL: URL {
         DataDirectory.documentsRootURL.appendingPathComponent(logPath)
     }
 
