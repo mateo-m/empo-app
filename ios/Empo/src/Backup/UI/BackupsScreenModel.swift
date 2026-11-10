@@ -82,15 +82,44 @@ final class BackupsScreenModel {
     /// The line of 7.11, after a split, until the user closes it.
     private(set) var showsTheSplitLine = false
     private(set) var targetsFileIsDamaged = false
+    private var notificationStatus: UNAuthorizationStatus?
     /// Whether the row above Backup history shows, per 13.19.
-    private(set) var asksForNotifications = false
+    var asksForNotifications: Bool {
+        !targets.isEmpty && notificationStatus.map { $0 != .authorized } ?? false
+    }
 
     var iCloudReach: TargetReach = .open
+    private let iCloudAvailability: @MainActor () async -> ICloudAvailability
+
+    init(
+        iCloudAvailability: @escaping @MainActor () async -> ICloudAvailability = {
+            await ICloudDriveGate.shared.availability()
+        }
+    ) {
+        self.iCloudAvailability = iCloudAvailability
+    }
 
     // MARK: - Reading
 
     func refresh() async {
-        iCloudReach = await ICloudDriveGate.shared.availability().reach
+        iCloudReach = await iCloudAvailability().reach
+        var backgroundTransfer: [String: Bool] = [:]
+        for descriptor in BackupTargets.load() {
+            backgroundTransfer[descriptor.id] =
+                await BackupTargets.provider(for: descriptor)?.capabilities.supportsBackgroundTransfer
+        }
+        readTheRows(backgroundTransfer: backgroundTransfer)
+        await readTheNotificationPermission()
+    }
+
+    /// The answers of the last refresh, for a read that must not wait for a provider.
+    private var lastBackgroundTransfer: [String: Bool] {
+        Dictionary(facts.map { ($0.descriptor.id, $0.supportsBackgroundTransfer) }) { $1 }
+    }
+
+    /// Reads only the files of this device, so a removal shows its result while iCloud or the
+    /// notification settings do not answer.
+    private func readTheRows(backgroundTransfer: [String: Bool]) {
         let descriptors: [TargetDescriptor]
         do {
             descriptors = try BackupTargets.read()
@@ -111,7 +140,6 @@ final class BackupsScreenModel {
         let runs = (try? store?.runHistory()) ?? []
 
         for descriptor in descriptors {
-            let capabilities = await BackupTargets.provider(for: descriptor)?.capabilities
             let status = try? store?.targetStatus(targetId: descriptor.id)
             let usage = (try? store?.usage(targetId: descriptor.id)) ?? []
             let written = usage.reduce(0) { $0 + $1.bytes }
@@ -121,7 +149,7 @@ final class BackupsScreenModel {
                 reach: descriptor.provider == .iCloudDrive ? iCloudReach : .open,
                 failure: status?.lastFailure?.failure,
                 failedAtText: (status?.lastFailure?.at).map(BackupText.when) ?? "",
-                supportsBackgroundTransfer: capabilities?.supportsBackgroundTransfer ?? true,
+                supportsBackgroundTransfer: backgroundTransfer[descriptor.id] ?? true,
                 lastSuccessText: Self.lastSuccess(of: descriptor.id, in: runs),
                 hasPlus: EmpoPlus.shared.hasPlus)
             facts.append(row)
@@ -160,7 +188,6 @@ final class BackupsScreenModel {
         lastSuccessText = runs.first { run in
             run.end?.outcome == .success && active.contains(run.targetId)
         }?.end.map { BackupText.day($0.finishedAt) }
-        await readTheNotificationPermission()
     }
 
     private static func lastSuccess(of targetId: String, in runs: [BackupRunRecord]) -> String? {
@@ -296,7 +323,7 @@ final class BackupsScreenModel {
                 try await deleteThisDeviceNamespace(targetId: targetId)
             } catch {
                 BackupLog.line("BackupsScreenModel", "deleting the backups of \(targetId) failed: \(error)")
-                await refresh()
+                readTheRows(backgroundTransfer: lastBackgroundTransfer)
                 return String(localized: "Empo couldn't delete all of these backups. Try again.")
             }
         }
@@ -319,10 +346,10 @@ final class BackupsScreenModel {
             try BackupTargets.update { $0.removeAll { $0.id == targetId } }
         } catch {
             BackupLog.line("BackupsScreenModel", "removing \(targetId) failed: \(error)")
-            await refresh()
+            readTheRows(backgroundTransfer: lastBackgroundTransfer)
             return String(localized: "Empo couldn't remove this location. Try again.")
         }
-        await refresh()
+        readTheRows(backgroundTransfer: lastBackgroundTransfer)
         return nil
     }
 
@@ -459,12 +486,13 @@ final class BackupsScreenModel {
     // MARK: - Notifications, per 13.19
 
     private func readTheNotificationPermission() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        asksForNotifications = !targets.isEmpty && settings.authorizationStatus != .authorized
-        systemMayStillPrompt = settings.authorizationStatus == .notDetermined
+        notificationStatus = await UNUserNotificationCenter.current().notificationSettings()
+            .authorizationStatus
     }
 
-    private(set) var systemMayStillPrompt = true
+    private var systemMayStillPrompt: Bool {
+        notificationStatus.map { $0 == .notDetermined } ?? true
+    }
 
     /// The sheet comes up after the first target, and never by
     /// itself after that.

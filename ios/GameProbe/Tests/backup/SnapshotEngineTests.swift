@@ -1882,6 +1882,33 @@ final class SnapshotEngineTests: XCTestCase {
         XCTAssertNil(try RestoreResumeQuestion.unfinishedRecord(in: store, layout: layout))
     }
 
+    func testARestoreThatCanNeitherMarkItsEndNorClearItsRecordFails() async throws {
+        try makeGameTree(gameName)
+        let target = makeTarget()
+        let backup = try await makeEngine(target).run(
+            request(games: [game(gameName, isOneOff: true)]))
+        let snapshotId = try snapshotId(of: backup, stream: key(gameName))
+        let stateURL = tempRoot.appendingPathComponent("state.sqlite")
+        let restore = RestoreEngine(
+            provider: target, store: try BackupStateStore(url: stateURL), localRoot: localRoot)
+        let store = try BackupStateStore(url: stateURL)
+        defer { store.close() }
+        try store.database.run(
+            "CREATE TRIGGER keep BEFORE DELETE ON intent_record BEGIN SELECT RAISE(ABORT, 'held'); END")
+        // A link into a missing folder reads as no mark at the start, and the mark write fails.
+        let layout = BackupRootLayout(root: localRoot)
+        try fm.createDirectory(at: layout.restore, withIntermediateDirectories: true)
+        try fm.createSymbolicLink(
+            at: layout.finishedRestoreMark,
+            withDestinationURL: tempRoot.appendingPathComponent("missing/finished"))
+
+        let outcome = await restore.run(try replaceRequest(snapshotId))
+
+        guard case .failed = outcome else {
+            return XCTFail("the replace reported an end it could not record: \(outcome)")
+        }
+    }
+
     func testAReplaceThatCannotMoveTheTreeLeavesNoRestoreRecord() async throws {
         try makeGameTree(gameName)
         let target = makeTarget()

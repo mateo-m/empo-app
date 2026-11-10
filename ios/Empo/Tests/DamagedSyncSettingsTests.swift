@@ -58,6 +58,29 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: syncFile), damaged)
     }
 
+    func testALocationRemovalAnswersWhileTheICloudCheckDoesNotAnswer() async throws {
+        let target = TargetDescriptor(
+            id: "unanswered-icloud-\(UUID().uuidString)", provider: .webdav, label: "Test",
+            root: "Empo")
+        try BackupTargets.add(target)
+        let check = HeldAnswer<ICloudAvailability>()
+        let model = BackupsScreenModel(iCloudAvailability: { await check.value() })
+        let removed = expectation(description: "the removal answers")
+        let removal = Task {
+            let line = await model.remove(targetId: target.id, deleteBackups: false)
+            removed.fulfill()
+            return line
+        }
+
+        await fulfillment(of: [removed], timeout: 5)
+        check.answer(.signedOut)
+
+        let line = await removal.value
+        XCTAssertNil(line)
+        XCTAssertFalse(BackupTargets.load().contains { $0.id == target.id })
+        XCTAssertEqual(model.items?.contains { $0.id == target.id }, false)
+    }
+
     func testALocationRemovalStopsWhenTheSyncSettingsDoNotOpen() async throws {
         let target = TargetDescriptor(
             id: "unopened-sync-\(UUID().uuidString)", provider: .webdav, label: "Test",
@@ -98,6 +121,25 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertFalse(SyncPass.shared.settingsAreDamaged)
         XCTAssertNotNil(try SyncStore.state().groupId)
         XCTAssertEqual(ask, SyncJoinAsk.none)
+    }
+
+    func testTheRunSettingsKeepTheGroupWhenTheSyncSettingsDoNotRead() throws {
+        let folder = layout.applicationSupport
+        let before = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+        try damaged.write(to: folder.appendingPathComponent(WriterConflicts.fileName))
+
+        let settings = try BackupPass.shared.runSettings(targetId: "test", label: "Test")
+
+        let asides = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+            .subtracting(before).filter { $0.hasPrefix("writer-conflicts.damaged-") }
+        defer {
+            for name in asides {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
+        }
+        XCTAssertNil(settings.writerAnswer)
+        XCTAssertEqual(settings.syncGroup, .keepRecorded)
+        XCTAssertEqual(asides.count, 1)
     }
 
     func testARestoreThatDeletesNothingApplies() throws {

@@ -1,6 +1,7 @@
 import Foundation
 import GameProbe
 import UIKit
+import os
 
 /// A game whose mode is still unanswered is skipped, per 3.5. The
 /// Backups screen asks about every such game before it starts a run.
@@ -9,14 +10,24 @@ final class BackupPass {
 
     static let shared = BackupPass()
 
-    private init() {}
+    private let readThePlus: @MainActor () async -> Void
+
+    init(
+        readThePlus: @escaping @MainActor () async -> Void = {
+            await EmpoPlus.shared.refresh()
+        }
+    ) {
+        self.readThePlus = readThePlus
+    }
 
     /// `progress` belongs to a continued-processing task, which must
     /// report progress or the system expires it.
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult {
-        await EmpoPlus.shared.refresh()
+        // The Patreon server can take a minute to answer, and a removal waits for the pause.
+        await Self.waitUnlessCancelled(readThePlus)
+        guard !Task.isCancelled else { return BackupPassResult() }
         let targets = BackupTargets.writable()
         guard !targets.isEmpty else {
             BackupLog.debug("BackupPass", "the pass found no target")
@@ -25,6 +36,7 @@ final class BackupPass {
 
         guard let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
         else { return BackupPassResult(didFinish: false) }
+        guard !Task.isCancelled else { return BackupPassResult() }
         BackupGameNames.remember(names)
         BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
@@ -129,21 +141,12 @@ final class BackupPass {
             BackupLog.line("BackupPass", "\(descriptor.label) ledger rebuild failed: \(error)")
         }
 
-        let writerAnswer: WriterConflicts.Answer?
+        let settings: (writerAnswer: WriterConflicts.Answer?, syncGroup: BackupRunRequest.SyncGroupChoice)
         do {
-            writerAnswer = try BackupRoot.writerConflicts().answer(for: descriptor.id)
+            settings = try runSettings(targetId: descriptor.id, label: descriptor.label)
         } catch {
             BackupLog.line("BackupPass", "\(descriptor.label) could not read the writer answers: \(error)")
             return nil
-        }
-        let syncGroup: BackupRunRequest.SyncGroupChoice
-        do {
-            syncGroup = .known(try SyncStore.state().groupId)
-        } catch {
-            BackupLog.line(
-                "BackupPass",
-                "\(descriptor.label) could not read the sync settings, so it keeps the recorded group")
-            syncGroup = .keepRecorded
         }
         let request = BackupRunRequest(
             runId: UUID().uuidString,
@@ -158,8 +161,8 @@ final class BackupPass {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerAnswer: writerAnswer,
-            syncGroup: syncGroup)
+            writerAnswer: settings.writerAnswer,
+            syncGroup: settings.syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
         // its handle when the last reference goes, so nothing here
@@ -178,7 +181,7 @@ final class BackupPass {
                 + (result.stop.map { ", stop \($0)" } ?? ""))
         do {
             try Self.recordTheWriterAnswers(
-                targetId: descriptor.id, answerAtStart: writerAnswer, result: result)
+                targetId: descriptor.id, answerAtStart: settings.writerAnswer, result: result)
         } catch {
             BackupLog.line("BackupPass", "\(descriptor.label) writer answers were not saved: \(error)")
         }
@@ -197,6 +200,20 @@ final class BackupPass {
         return result
     }
 
+    /// A damaged answers file moves aside and reads as no answer. A file that does not open throws.
+    func runSettings(
+        targetId: String, label: String
+    ) throws -> (writerAnswer: WriterConflicts.Answer?, syncGroup: BackupRunRequest.SyncGroupChoice) {
+        let writerAnswer = try BackupRoot.writerConflicts().answer(for: targetId)
+        do {
+            return (writerAnswer, .known(try SyncStore.state().groupId))
+        } catch {
+            BackupLog.line(
+                "BackupPass", "\(label) could not read the sync settings, so it keeps the recorded group")
+            return (writerAnswer, .keepRecorded)
+        }
+    }
+
     /// The user can answer on the Backups screen while the run uploads,
     /// and that answer wins over the end of the run.
     static func recordTheWriterAnswers(
@@ -211,6 +228,24 @@ final class BackupPass {
             conflicts.showsTheSplitLine = true
         }
         try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+    }
+
+    /// Other callers share the Plus reads, so a pause ends the wait and the reads go on.
+    private static func waitUnlessCancelled(_ work: @escaping @MainActor () async -> Void) async {
+        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
+        let resume: @Sendable () -> Void = { waiter.withLock { $0.take() }?.resume() }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                waiter.withLock { $0 = continuation }
+                Task {
+                    await work()
+                    resume()
+                }
+                if Task.isCancelled { resume() }
+            }
+        } onCancel: {
+            resume()
+        }
     }
 
     // MARK: - The games
@@ -249,7 +284,7 @@ final class BackupPass {
         let thresholds = BackupTargets.thresholds()
         var games: [BackupRunGame] = []
         var names: [String: String] = [:]
-        for key in keys {
+        for key in keys where !Task.isCancelled {
             guard let container = byKey[key] else { continue }
             // The legacy per-game keys have to leave UserDefaults
             // before the run stages `EmpoState/`, or the layout goes
