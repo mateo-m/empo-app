@@ -45,6 +45,7 @@ public enum PreferenceKeys {
     public static let controllerHaptics = PreferenceEntry("controllerHaptics", .portable)
     public static let respectsSilentMode = PreferenceEntry("respectsSilentMode", .portable)
     public static let controlsEditSnapToGrid = PreferenceEntry("controlsEditSnapToGrid", .portable)
+    public static let errorReports = PreferenceEntry("errorReports", .portable)
     public static let debugMode = PreferenceEntry("debugMode", .deviceLocal)
     public static let debugLogs = PreferenceEntry("debugLogs", .deviceLocal)
     public static let maxLogFiles = PreferenceEntry("maxLogFiles", .deviceLocal)
@@ -119,8 +120,8 @@ public enum PreferenceKeys {
     // MARK: - The table
 
     public static let all: [PreferenceEntry] = [
-        theme, interfaceHaptics, controllerHaptics, respectsSilentMode, controlsEditSnapToGrid, debugMode, debugLogs,
-        maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
+        theme, interfaceHaptics, controllerHaptics, respectsSilentMode, controlsEditSnapToGrid, errorReports,
+        debugMode, debugLogs, maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
         rubyGameRunner, lastGameReport, dataAppGroup, quitClosesGamesWithoutAsking,
         libraryDisplayMode, librarySortOption, showContinuePlaying, titlePosition,
         cleanupInvalidGames, pendingDuplicateGameNames, pendingSaveRecoveries, controllerMapGlobal,

@@ -11,4 +11,4 @@ Permissions:
 - Bluetooth: the game controller library links it. Empo reads no Bluetooth data.
 - Local network: only when a game has local multiplayer.
 
-Empo has no account, no sign-in, no purchases, no ads, and no analytics.
+Empo has no account, no sign-in, no purchases, no ads, and no analytics. When a game shows an error or crashes, Empo sends an error report to Sentry. Settings > Advanced > Send error reports turns this off.

@@ -237,6 +237,7 @@ class AppState {
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
+            ErrorReports.gameCrash(report: GameReport.last)
             shownError = ShownError(message: message)
         }
     }
@@ -442,10 +443,13 @@ extension AppState: EngineSessionCoordinatorDelegate {
 
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
+        ErrorReports.gameError(message, report: GameReport.last)
         shownError = ShownError(message: message)
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
+        session.note("Message shown: \(message)")
+        ErrorReports.gameMessage(message, report: GameReport.last)
         infoMessage = message
     }
 

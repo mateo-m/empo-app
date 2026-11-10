@@ -2,11 +2,28 @@ Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
 Empo Plus.
 
-Last update: 6 November 2026.
+Last update: 10 November 2026.
 
 ## What Empo collects
 
-Nothing. Empo has no analytics, no crash reporting service, and no advertising.
+Only error reports. Empo has no analytics and no advertising.
+
+When a game on an iPhone or iPad shows an error or crashes, Empo sends an error
+report to Sentry, the service that collects these reports for me. A report holds:
+
+- The error message, or the fact that the game crashed.
+- The name of the game.
+- The end of the game's log for that play session, when **Debug logs** is on.
+  The log holds what the game engine wrote, such as the names of the game's
+  files that it opened and the error details.
+- The version of Empo, and details of the device: its model, its iOS version,
+  its language and time zone, its screen size, and its memory.
+
+A report holds no save files, no name, and no account. Sentry sees the IP
+address that a report comes from, and Empo does not ask Sentry to store it.
+
+To stop the reports, turn off **Send error reports** in Settings > Advanced.
+The Mac app sends no reports.
 
 Your games, your save files, and your settings stay in the app container on the
 device. On an iPhone or iPad, iOS backs that container up to your own iCloud

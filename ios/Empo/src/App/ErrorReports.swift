@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
+
+import Foundation
+import Sentry
+
+/// Sends the errors that a game shows, and the game crashes that
+/// `CrashTracker` finds, to Sentry. Nothing else goes: the SDK's own
+/// crash handler, hang reports, session counts, and breadcrumbs stay off.
+@MainActor
+enum ErrorReports {
+    /// The end of the session log that goes with a report. The engine
+    /// writes the backtrace of a script error just before the message.
+    private static let logTailBytes = 256 * 1024
+
+    private static var dsn: String {
+        (Bundle.main.object(forInfoDictionaryKey: "EmpoSentryDSN") as? String) ?? ""
+    }
+
+    static func apply(enabled: Bool) {
+        if enabled, !dsn.isEmpty {
+            guard !SentrySDK.isEnabled else { return }
+            SentrySDK.start { options in
+                options.dsn = dsn
+                options.releaseName = "\(AppInfo.version) (\(AppInfo.build))"
+                #if DEBUG
+                options.environment = "development"
+                #endif
+                options.sendDefaultPii = false
+                options.attachStacktrace = false
+                // Ruby and the engine install their own signal and
+                // exception handlers each time a game starts, and Ruby
+                // turns a SIGSEGV from a deep recursion into a
+                // SystemStackError that the game can rescue (signal.c,
+                // sigsegv). A second crash handler would report those
+                // as crashes.
+                options.enableCrashHandler = false
+                options.enableAppHangTracking = false
+                options.enableWatchdogTerminationTracking = false
+                options.enableAutoSessionTracking = false
+                options.enableAutoBreadcrumbTracking = false
+                options.enableSwizzling = false
+                options.enableNetworkTracking = false
+                options.enableCaptureFailedRequests = false
+                options.enableAutoPerformanceTracing = false
+                // A hash that stays the same for each device.
+                options.beforeSend = { event in
+                    event.context?["app"]?["device_app_hash"] = nil
+                    return event
+                }
+            }
+        } else if SentrySDK.isEnabled {
+            SentrySDK.close()
+        }
+    }
+
+    static func gameError(_ message: String, report: GameReport?) {
+        let firstLine = String(message.prefix { $0 != "\n" })
+        // Group by the first line, so that "File Data/Map150.rxdata not
+        // found" and "Map151" land in one issue.
+        send(message, level: .error, fingerprint: ["error", firstLine], report: report)
+    }
+
+    /// Many games rescue a script error and show it with `p`, for
+    /// example `p [$!.class, $!.message, $!.backtrace]` in Insurgence's
+    /// `Marshal.load`. The engine shows that as a game message, not an
+    /// error.
+    static func gameMessage(_ message: String, report: GameReport?) {
+        guard let error = RescuedRubyError(message) else { return }
+        send(
+            message, level: .error, fingerprint: ["rescued", error.className, error.message],
+            report: report)
+    }
+
+    static func gameCrash(report: GameReport?) {
+        send(
+            "The game crashed.", level: .fatal, fingerprint: ["crash", report?.gameTitle ?? ""],
+            report: report)
+    }
+
+    private static func send(
+        _ message: String, level: SentryLevel, fingerprint: [String], report: GameReport?
+    ) {
+        guard SentrySDK.isEnabled else { return }
+        let event = Event(level: level)
+        event.message = SentryMessage(formatted: message)
+        event.fingerprint = fingerprint
+        let log = report.flatMap { logTail(of: $0) }
+        SentrySDK.capture(event: event) { scope in
+            if let report {
+                scope.setTag(value: report.gameTitle, key: "game")
+            }
+            if let log {
+                scope.addAttachment(Attachment(data: log, filename: "session.log", contentType: "text/plain"))
+            }
+        }
+    }
+
+    private static func logTail(of report: GameReport) -> Data? {
+        guard let file = try? FileHandle(forReadingFrom: report.logURL) else { return nil }
+        defer { try? file.close() }
+        guard let size = try? file.seekToEnd() else { return nil }
+        try? file.seek(toOffset: size > UInt64(logTailBytes) ? size - UInt64(logTailBytes) : 0)
+        return try? file.readToEnd()
+    }
+}
+
+/// A Ruby error in the text that `p $!` or
+/// `p [$!.class, $!.message, ...]` prints.
+struct RescuedRubyError: Equatable {
+    let className: String
+    let message: String
+
+    private static let className = #"((?:[A-Z]\w*::)*[A-Z]\w*)"#
+    private static let inspected = try! NSRegularExpression(
+        pattern: #"\A#<"# + className + #": (.*?)>"#, options: .dotMatchesLineSeparators)
+    private static let array = try! NSRegularExpression(
+        pattern: #"\A\["# + className + #", "((?:[^"\\]|\\.)*)""#)
+
+    init(className: String, message: String) {
+        self.className = className
+        self.message = message
+    }
+
+    init?(_ text: String) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let range = NSRange(text.startIndex..., in: text)
+        guard
+            let match = Self.inspected.firstMatch(in: text, range: range)
+                ?? Self.array.firstMatch(in: text, range: range),
+            let classRange = Range(match.range(at: 1), in: text),
+            let messageRange = Range(match.range(at: 2), in: text)
+        else { return nil }
+        let className = String(text[classRange])
+        guard
+            className.hasSuffix("Error") || className.hasSuffix("Exception")
+                || className.hasPrefix("Errno::")
+        else { return nil }
+        self.className = className
+        message = String(text[messageRange])
+    }
+}

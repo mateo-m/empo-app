@@ -17,6 +17,10 @@ packages:
   # took 23.89 ms, and the signed app-thinned payload grew by 1.35
   # MiB compressed. Empo supplies the replication over its own
   # targets, so `automerge-repo-swift` stays out.
+  # The error reports of Settings > Advanced (ErrorReports.swift).
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa.git
+    revision: 2f64c77f77514acd01780d1aac86ae75b7fccd04 # 9.31.0
   Automerge:
     url: https://github.com/automerge/automerge-swift.git
     revision: aa45d17ac92cef2b8ded63b47e65a28dc85e3418 # 0.7.2
@@ -48,6 +52,9 @@ settings:
     # plus the id without its `.apps.googleusercontent.com` tail.
     # Info.plist cannot compute it, so it is set beside the id.
     GOOGLE_DRIVE_REDIRECT_SCHEME: com.googleusercontent.apps.658190564191-849rvfnvehedkh4u9mk3n8tsibeq1ers
+    # The release job sets it from the SENTRY_DSN secret, and a local
+    # build from Signing.xcconfig. An empty DSN turns the reports off.
+    SENTRY_DSN: ""
     CLANG_CXX_LANGUAGE_STANDARD: c++14
     # `YES` / `NO` are Xcode's canonical boolean tokens for build
     # settings. xcodebuild's parser treats them specially. yamllint
@@ -372,6 +379,8 @@ targets:
         product: AppAuth
       - package: Automerge
         product: Automerge
+      - package: Sentry
+        product: Sentry
       - target: GameProcess
       - target: FilesProvider
       # Built first, then copied by "Embed the cores".
@@ -521,6 +530,7 @@ targets:
           - App/AppState.swift
           - App/CrashTracker.swift
           - App/GameReport.swift
+          - App/ErrorReports.swift
           - App/DisclaimerView.swift
           - Library/GameLibraryView.swift
           - Library/GameLoadingView.swift

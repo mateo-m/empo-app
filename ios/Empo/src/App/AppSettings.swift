@@ -194,6 +194,15 @@ class AppSettings {
         didSet { UserDefaults.standard.set(debugLogs, forKey: DefaultsKey.debugLogs) }
     }
 
+    var errorReports: Bool {
+        didSet {
+            UserDefaults.standard.set(errorReports, forKey: DefaultsKey.errorReports)
+            #if os(iOS)
+            ErrorReports.apply(enabled: errorReports)
+            #endif
+        }
+    }
+
     var maxLogFiles: Int {
         didSet { UserDefaults.standard.set(maxLogFiles, forKey: DefaultsKey.maxLogFiles) }
     }
@@ -323,6 +332,7 @@ class AppSettings {
         self.showTouchZone = stored.showTouchZone
         self.viewportBoundsColor = stored.viewportBoundsColor
         self.debugLogs = stored.debugLogs
+        self.errorReports = stored.errorReports
         self.maxLogFiles = stored.maxLogFiles
         self.cleanupInvalidGames = stored.cleanupInvalidGames
         self.interfaceHaptics = stored.interfaceHaptics
@@ -360,6 +370,7 @@ class AppSettings {
         update(\.showTouchZone, stored.showTouchZone)
         update(\.viewportBoundsColor, stored.viewportBoundsColor)
         update(\.debugLogs, stored.debugLogs)
+        update(\.errorReports, stored.errorReports)
         update(\.maxLogFiles, stored.maxLogFiles)
         update(\.cleanupInvalidGames, stored.cleanupInvalidGames)
         update(\.interfaceHaptics, stored.interfaceHaptics)
@@ -385,6 +396,7 @@ class AppSettings {
         let showTouchZone: Bool
         let viewportBoundsColor: Color
         let debugLogs: Bool
+        let errorReports: Bool
         let maxLogFiles: Int
         let cleanupInvalidGames: Bool
         let interfaceHaptics: Bool
@@ -409,6 +421,7 @@ class AppSettings {
             showTouchZone = ud.bool(forKey: DefaultsKey.showTouchZone)
             viewportBoundsColor = AppSettings.loadViewportBoundsColor()
             debugLogs = (ud.object(forKey: DefaultsKey.debugLogs) as? Bool) ?? true
+            errorReports = (ud.object(forKey: DefaultsKey.errorReports) as? Bool) ?? true
             let storedMax = ud.integer(forKey: DefaultsKey.maxLogFiles)
             maxLogFiles = storedMax > 0 ? storedMax : 20
             cleanupInvalidGames = ud.bool(forKey: DefaultsKey.cleanupInvalidGames)
