@@ -128,4 +128,33 @@ final class SyncProfileRenameTests: XCTestCase {
         }
         XCTAssertEqual(Set(aside.compactMap(buttonX)), [0.33, 0.11])
     }
+
+    func testACopyNameStaysInTheNameRulesAndTheDiskLimit() {
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        let names = [String(repeating: "L", count: 60), String(repeating: family, count: 23), "Short"]
+        for name in names {
+            for number in [1, 2, 100, 12345] {
+                let copy = SyncLocalValues.copyName(of: name, number: number)
+                XCTAssertEqual(LayoutProfileStore.validatedName(copy), copy, "\(number)")
+                XCTAssertLessThanOrEqual(copy.utf16.count, 255)
+                XCTAssertTrue(copy.hasPrefix(String(name.prefix(1))))
+            }
+        }
+        XCTAssertEqual(SyncLocalValues.copyName(of: "Short", number: 2), "Short.empo-displaced-2")
+    }
+
+    func testAProfileWithAnEmojiNameFromAnotherDeviceMovesTheLocalOneAside() throws {
+        let family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}"
+        let name = "\(tag) " + String(repeating: family, count: 22)
+        _ = try makeProfile(name, buttonX: 0.33)
+        let incoming = try touch(of: name, buttonX: 0.42)
+
+        var identities = SyncProfileIdentities()
+        identities.ids[name] = "local-profile"
+        apply(id: "remote-profile", name: name, touch: incoming, &identities)
+
+        XCTAssertEqual(buttonX(name), 0.42)
+        let aside = store.listProfiles().filter { $0 != name && $0.hasPrefix(tag) }
+        XCTAssertEqual(aside.map(buttonX), [0.33], "the local profile keeps its controls")
+    }
 }

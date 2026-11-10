@@ -178,12 +178,6 @@ public struct LayoutProfileStore {
         }
     }
 
-    /// Copy, then move the pins and the record, then delete: a crash
-    /// at any step leaves each pin on a profile that exists. A failed
-    /// copy, pin, or record step undoes the steps before it. A failed
-    /// undo of a pin keeps the new folder, because that pin still
-    /// points to it. A failed delete keeps both folders, because a
-    /// partial delete can leave the new folder as the only full copy.
     /// On the iPhone disk, an empty folder in another case can sort
     /// before the profile, so each folder of the name needs the check.
     private func hasControlsInAnyCase(_ name: String) -> Bool {
@@ -197,6 +191,12 @@ public struct LayoutProfileStore {
         }
     }
 
+    /// Copy, then move the pins and the record, then delete: a crash
+    /// at any step leaves each pin on a profile that exists. A failed
+    /// copy, pin, or record step undoes the steps before it. A failed
+    /// undo of a pin keeps the new folder, because that pin still
+    /// points to it. A failed delete keeps both folders, because a
+    /// partial delete can leave the new folder as the only full copy.
     public func renameProfile(from oldName: String, to newName: String) throws {
         guard Self.validatedName(newName) == newName else { throw StoreError.invalidName(newName) }
         guard profileExists(oldName), let stored = storedName(oldName) else {

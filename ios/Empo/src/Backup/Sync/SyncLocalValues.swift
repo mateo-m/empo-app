@@ -118,14 +118,25 @@ enum SyncLocalValues {
         _ name: String, store: LayoutProfileStore, identities: inout SyncProfileIdentities
     ) throws {
         let local = store.storedName(name) ?? name
-        let room = LayoutProfileStore.maxNameLength - DisplacedCopy.treeName(for: "", number: 99).count
-        let stem = String(local.prefix(room)).trimmingCharacters(in: .whitespaces)
         let taken = Set(store.listProfiles().map(LayoutProfileStore.nameKey))
-        let moved = DisplacedCopy.nextTreeName(for: stem) {
-            taken.contains(LayoutProfileStore.nameKey($0))
+        var number = 1
+        while taken.contains(LayoutProfileStore.nameKey(copyName(of: local, number: number))) {
+            number += 1
         }
+        let moved = copyName(of: local, number: number)
         try store.renameProfile(from: local, to: moved)
         identities.rename(from: local, to: moved)
+    }
+
+    /// The Mac and iPhone disks refuse a folder name over 255 UTF-16
+    /// units, and an emoji counts as one character but many units.
+    static func copyName(of name: String, number: Int) -> String {
+        let mark = DisplacedCopy.treeName(for: "", number: number)
+        var stem = Substring(name.prefix(max(0, LayoutProfileStore.maxNameLength - mark.count)))
+        while !stem.isEmpty, stem.last?.isWhitespace == true || (stem + mark).utf16.count > 255 {
+            stem = stem.dropLast()
+        }
+        return DisplacedCopy.treeName(for: String(stem), number: number)
     }
 
     private static func applyScreen(

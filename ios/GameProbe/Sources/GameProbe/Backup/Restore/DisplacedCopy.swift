@@ -42,23 +42,19 @@ public enum DisplacedCopy {
     /// The first free displaced name for a file, given the names the
     /// directory already holds.
     public static func nextFileName(for name: String, taken: Set<String>) -> String {
-        next(name, isTaken: taken.contains, build: fileName(for:number:))
+        next(name, taken: taken, build: fileName(for:number:))
     }
 
     /// The first free displaced name for a replaced tree.
     public static func nextTreeName(for name: String, taken: Set<String>) -> String {
-        nextTreeName(for: name, isTaken: taken.contains)
-    }
-
-    public static func nextTreeName(for name: String, isTaken: (String) -> Bool) -> String {
-        next(name, isTaken: isTaken, build: treeName(for:number:))
+        next(name, taken: taken, build: treeName(for:number:))
     }
 
     private static func next(
-        _ name: String, isTaken: (String) -> Bool, build: (String, Int) -> String
+        _ name: String, taken: Set<String>, build: (String, Int) -> String
     ) -> String {
         var number = 1
-        while isTaken(build(name, number)) {
+        while taken.contains(build(name, number)) {
             number += 1
         }
         return build(name, number)
