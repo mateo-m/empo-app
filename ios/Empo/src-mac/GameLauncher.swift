@@ -98,7 +98,8 @@ final class GameLauncher {
 
         let logger = SessionLogger()
         logger.onPlayTimeFlushed = { GameLibrary.shared.refreshGameEntry(id: $0) }
-        logger.openDebugLog(for: game, container: start.container, enabled: AppSettings.shared.debugLogs)
+        logger.openDebugLog(
+            for: game, container: start.container, core: start.core, enabled: AppSettings.shared.debugLogs)
         CoreSettingsRecorder.settings = []
         start.core.launch(start.container)
 
