@@ -95,10 +95,14 @@ final class BackupsScreenModel {
         do {
             descriptors = try BackupTargets.read()
             targetsFileIsDamaged = false
+        } catch is DecodingError {
+            BackupLog.line("BackupsScreenModel", "targets.json is damaged")
+            descriptors = []
+            targetsFileIsDamaged = true
         } catch {
             BackupLog.line("BackupsScreenModel", "targets.json was not read: \(error)")
             descriptors = []
-            targetsFileIsDamaged = true
+            targetsFileIsDamaged = false
         }
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []
