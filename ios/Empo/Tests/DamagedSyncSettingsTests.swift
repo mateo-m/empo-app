@@ -96,7 +96,7 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertTrue(BackupTargets.load().contains { $0.id == target.id })
     }
 
-    func testABackupRunGoesOnAndKeepsItsGroupWhenItsSettingsDoNotRead() throws {
+    func testTheRunSettingsKeepTheGroupWhenTheSyncSettingsDoNotRead() throws {
         try damaged.write(
             to: layout.applicationSupport.appendingPathComponent(WriterConflicts.fileName))
 

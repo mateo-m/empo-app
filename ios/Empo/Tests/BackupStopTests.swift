@@ -26,7 +26,11 @@ final class BackupStopTests: XCTestCase {
 
     func testAPausedPassStopsWhileThePlusReadsDoNotAnswer() async {
         let reads = HeldAnswer<Void>()
-        let pass = BackupPass(readThePlus: { await reads.value() })
+        let started = expectation(description: "the Plus reads start")
+        let pass = BackupPass(readThePlus: {
+            started.fulfill()
+            await reads.value()
+        })
         let stopped = expectation(description: "the pass stops")
         let run = Task {
             let result = await pass.runBackup(
@@ -34,6 +38,7 @@ final class BackupStopTests: XCTestCase {
             stopped.fulfill()
             return result
         }
+        await fulfillment(of: [started], timeout: 5)
         run.cancel()
 
         await fulfillment(of: [stopped], timeout: 5)
