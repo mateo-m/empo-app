@@ -87,6 +87,8 @@ enum UploadStaging {
     private static func stagingFailure(_ error: Error) -> BackupProviderError {
         BackupLog.line("UploadStaging", "The upload was not staged: \(error)")
         return .rejected(
-            message: String(localized: "Empo couldn't prepare the upload on this device. Try again."))
+            message: error.isOutOfSpace
+                ? String(localized: "This device is full. Free up space, then try again.")
+                : String(localized: "Empo couldn't prepare the upload on this device. Try again."))
     }
 }
