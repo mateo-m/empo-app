@@ -146,10 +146,7 @@ struct BackupSheet: View {
                     if let editor = model.editor {
                         Text("\(editor.entries.count)")
                             .foregroundStyle(.secondary)
-                    } else if model.settingsUnread {
-                        Text(BackupModePicker.notChosenYet)
-                            .foregroundStyle(.secondary)
-                    } else {
+                    } else if !model.settingsUnread {
                         ProgressView()
                     }
                 }
