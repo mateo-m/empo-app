@@ -252,6 +252,19 @@ final class LayoutProfilesTests: XCTestCase {
         XCTAssertNotNil(store.readProfile("foo")?.touch)
     }
 
+    func testAnEmptyFolderInAnotherCaseDoesNotHideAProfile() throws {
+        let fm = FileManager.default
+        try store.createProfile("Foo", touch: sampleTouch())
+        let empty = profilesRoot.appendingPathComponent("FOO", isDirectory: true)
+        guard !fm.fileExists(atPath: empty.path) else {
+            throw XCTSkip("This disk ignores case, so it cannot hold both folders.")
+        }
+        try fm.createDirectory(at: empty, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try store.createProfile("foo", touch: sampleTouch()))
+        XCTAssertEqual(store.listProfiles(), ["FOO", "Foo"])
+    }
+
     func testARenameOfOnlyTheCaseMovesTheFolderAndThePins() throws {
         try store.createProfile("Foo", touch: sampleTouch())
         let game = try makeGame("A", pin: .profile("Foo"))

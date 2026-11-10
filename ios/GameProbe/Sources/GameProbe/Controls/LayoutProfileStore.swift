@@ -162,7 +162,7 @@ public struct LayoutProfileStore {
 
     public func createProfile(_ name: String, touch: TouchSection) throws {
         guard Self.validatedName(name) == name else { throw StoreError.invalidName(name) }
-        guard !profileExists(name) else { throw StoreError.nameTaken(name) }
+        guard !hasControlsInAnyCase(name) else { throw StoreError.nameTaken(name) }
         if let stored = storedName(name), stored != name {
             // A folder with no controls file, in another case.
             try FileManager.default.moveItem(
@@ -184,6 +184,19 @@ public struct LayoutProfileStore {
     /// undo of a pin keeps the new folder, because that pin still
     /// points to it. A failed delete keeps both folders, because a
     /// partial delete can leave the new folder as the only full copy.
+    /// On the iPhone disk, an empty folder in another case can sort
+    /// before the profile, so each folder of the name needs the check.
+    private func hasControlsInAnyCase(_ name: String) -> Bool {
+        let key = Self.nameKey(name)
+        let file = ControlsManifestLoader.ManifestLocation.root.rawValue
+        return listProfiles().contains { folder in
+            Self.nameKey(folder) == key
+                && FileManager.default.fileExists(
+                    atPath: profilesRoot.appendingPathComponent(folder, isDirectory: true)
+                        .appendingPathComponent(file).path)
+        }
+    }
+
     public func renameProfile(from oldName: String, to newName: String) throws {
         guard Self.validatedName(newName) == newName else { throw StoreError.invalidName(newName) }
         guard profileExists(oldName), let stored = storedName(oldName) else {
