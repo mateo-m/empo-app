@@ -44,13 +44,18 @@ final class PlusStoreTests: XCTestCase {
         await store.loadProduct()
         try await store.purchase()
         XCTAssertTrue(store.isSubscribed)
+        let transaction = try XCTUnwrap(session.allTransactions().first)
+        try session.disableAutoRenewForTransaction(identifier: UInt(transaction.identifier))
 
         // StoreKit sends no update when a subscription runs out. The app
         // sees the end at its next refresh.
         try session.expireSubscription(productIdentifier: PlusStore.productID)
         await store.refresh()
 
-        XCTAssertFalse(store.isSubscribed)
+        let latest = await Transaction.latest(for: PlusStore.productID)
+        XCTAssertFalse(
+            store.isSubscribed,
+            "transactions: \(session.allTransactions().count), latest: \(String(describing: latest))")
     }
 
     func testARefundTakesPlusAway() async throws {
