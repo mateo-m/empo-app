@@ -1,14 +1,14 @@
-import { captureConsoleIntegration } from "@sentry/cloudflare";
-import type { Env } from "./patreon";
+import { type CloudflareOptions, captureConsoleIntegration } from "@sentry/cloudflare";
 
-export function sentryOptions(env: Env) {
+export function sentryOptions(): CloudflareOptions {
   return {
-    dsn: env.SENTRY_DSN,
     integrations: [captureConsoleIntegration({ levels: ["error"] })],
     // The query and the body carry Patreon codes, renewal codes, and
-    // device signatures. The SDK also sets the caller's IP address.
-    beforeSend<T extends { request?: { method?: string; url?: string }; user?: unknown }>(event: T): T {
+    // device signatures. The SDK also sets the caller's IP address, and
+    // the time zone from Cloudflare's location data.
+    beforeSend(event) {
       delete event.user;
+      delete event.contexts?.culture;
       if (event.request) {
         event.request = { method: event.request.method, url: event.request.url?.split("?")[0] };
       }

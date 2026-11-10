@@ -4,7 +4,6 @@ export interface Env {
   PATREON_CAMPAIGN_ID: string;
   PATREON_OWNER_USER_ID: string;
   PASS_SIGNING_KEY: string;
-  SENTRY_DSN?: string;
   SESSIONS: Namespace;
   MEMBERS: Namespace;
 }

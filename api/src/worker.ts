@@ -128,7 +128,7 @@ export const app = new Elysia({ adapter: WebStandardAdapter })
       throw error;
     }
     // The code is used, and its alarm also deletes it, so a lost call here is no fault.
-    await session(body.code, { action: "evict" }).catch((error) => console.error(error));
+    await session(body.code, { action: "evict" }).catch((error) => console.warn(error));
     if (added.status === 409) return status(409, { error: "too_many_devices" });
     return { pass: held.pass, renewal };
   })
