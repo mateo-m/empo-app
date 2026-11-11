@@ -165,16 +165,10 @@ struct MkxpCore: GameCore {
         let profile = MkxpProfile.load(for: container)
         let ruby = settings.rubyVersionOverride ?? profile.ruby.code
         let modern = settings.useModernRuby ?? profile.ruby.modernScripts
-        #if os(macOS)
-        // The Mac has no "In-game keyboard" toggle. Some games, such as Pokemon Xenoverse,
-        // replace the name screen with one that has no letter grid, and crash when it is on.
-        let inGameKeyboard = false
-        #else
         let inGameKeyboard =
             settings.useInGameKeyboard
             ?? PokemonEssentialsDetection.detect(
                 in: container.gameURL, stateDirectory: container.empoStateURL)
-        #endif
 
         let shared = GameSettings.load(from: container.empoStateURL)
         let overlay = ManagedMkxpConfig.overlayJSONString(

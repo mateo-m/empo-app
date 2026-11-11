@@ -146,9 +146,7 @@ final class MkxpSettingsState: CoreSettings {
     private(set) var gameDefaults: MkxpEngineSettings
     /// What the script scan found. It labels the Auto-detect rows.
     private(set) var profile: MkxpProfile
-    #if os(iOS)
     let isPokemonEssentials: Bool
-    #endif
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
     let gameSoundFont: URL?
@@ -162,10 +160,8 @@ final class MkxpSettingsState: CoreSettings {
         self.engine = MkxpEngineSettings.load(from: container.empoStateURL)
         self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
         self.profile = MkxpProfile.load(for: container)
-        #if os(iOS)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
-        #endif
         self.gameMidiSoundSet = MidiSoundSet.game(container).current
         self.gameSoundFont = MkxpGameSoundFont.url(in: container)
     }
@@ -326,7 +322,6 @@ struct MkxpEngineSection: View {
                 )
             }
 
-            #if os(iOS)
             SettingsToggle(
                 title: "In-game keyboard",
                 isOn: Binding(
@@ -334,9 +329,10 @@ struct MkxpEngineSection: View {
                     set: { state.settings.useInGameKeyboard = $0 }
                 ),
                 description:
-                    "Use the game's own keyboard for names instead of the iOS one. Turn it on for Pokemon Essentials games with custom keys."
+                    "Pick the letters of a name on the game's own keyboard instead of typing them. Turn it on for Pokemon Essentials games with custom keys."
             )
 
+            #if os(iOS)
             TouchMouseToggle(model: model)
             #endif
 
