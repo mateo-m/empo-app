@@ -317,6 +317,17 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
     }
 
+    func testALocationThatSyncAddsRebuildsItsSnapshotList() throws {
+        let target = TargetDescriptor(
+            id: "damaged-settings-\(UUID().uuidString)", provider: .webdav, label: "Test",
+            root: "Empo")
+
+        SyncLocalValues.applyDescriptors([target.id: target])
+
+        XCTAssertTrue(try BackupTargets.read().contains { $0.id == target.id })
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
+    }
+
     func testAnAdoptRebuildsTheSnapshotListOfEachLocation() throws {
         let target = try addATarget()
 
