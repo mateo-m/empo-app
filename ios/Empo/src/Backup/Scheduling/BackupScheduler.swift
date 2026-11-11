@@ -65,6 +65,7 @@ final class BackupScheduler {
     private var pauses = 0
     private var holds = 0
     private var runAskedDuringHold = false
+    private(set) var runAfterHold: Task<Void, Never>?
     private var openedStore: BackupStateStore?
     /// A failed open tries again at the next use.
     private var store: BackupStateStore? {
@@ -255,7 +256,7 @@ final class BackupScheduler {
         holds -= 1
         if holds == 0, runAskedDuringHold {
             runAskedDuringHold = false
-            Task { await run(trigger: .foreground) }
+            runAfterHold = Task { await run(trigger: .foreground) }
         }
         return result
     }

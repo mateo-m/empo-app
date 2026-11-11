@@ -285,8 +285,8 @@ final class DamagedBackupSettingsTests: XCTestCase {
         let adopted = "adopt-test-\(UUID().uuidString)"
 
         try await BackupNamespaceMove.adopt(adopted)
-        scheduler.pauseTheRun()
         _ = await run.value
+        await scheduler.runAfterHold?.value
 
         XCTAssertEqual(pass.namespaceAtEnd, namespaceBefore)
         XCTAssertEqual(try BackupKeychain.namespaceId(), adopted)
@@ -362,9 +362,12 @@ final class DamagedBackupSettingsTests: XCTestCase {
         private var startWaiter: CheckedContinuation<Void, Never>?
         private(set) var namespaceAtEnd: String?
 
+        /// Only the first pass holds. The scheduler runs again after the
+        /// adopt, and that pass must end before the test does.
         func runBackup(
             scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
         ) async -> BackupPassResult {
+            guard !didStart else { return BackupPassResult(didFinish: true) }
             didStart = true
             startWaiter?.resume()
             startWaiter = nil
