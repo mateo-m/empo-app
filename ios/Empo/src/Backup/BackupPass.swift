@@ -298,7 +298,8 @@ final class BackupPass {
             // The legacy per-game keys have to leave UserDefaults
             // before the run stages `EmpoState/`, or the layout goes
             // up in neither place.
-            ControlsLayout.migrateLegacyPersistence(container: container)
+            LegacyControlsMigration.run(
+                container: container, keys: GameKey.keys(forGameAt: container.gameURL))
             let set: GameBackupSetRequest
             do {
                 guard

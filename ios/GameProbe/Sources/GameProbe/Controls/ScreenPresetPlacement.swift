@@ -3,15 +3,10 @@
 
 import Foundation
 
-/// Computes a preset's rect for the CURRENT device: the aspect-fit
-/// rect inside the safe container, aligned per the preset. The
-/// same math as the engine's automatic placement. A preset never
-/// bakes device numbers into a profile. This runs at apply time,
-/// so one profile places the game right on an iPhone and an iPad
-/// alike.
+/// A profile stores the preset, not this rect. The rect uses device
+/// numbers, so it is made again on each device at apply time.
 public enum ScreenPresetPlacement {
-    /// nil when the inputs cannot produce a rect (degenerate canvas
-    /// or aspect). Fractions of the canvas, top-left origin.
+    /// The result is in fractions of the canvas, with a top-left origin.
     public static func region(
         preset: ScreenPreset,
         canvasWidth: Double,
@@ -28,12 +23,7 @@ public enum ScreenPresetPlacement {
         let availH = isPortrait ? canvasHeight - safeTop - safeBottom : canvasHeight
         guard availW > 1, availH > 1 else { return nil }
 
-        var width = availW
-        var height = width / aspect
-        if height > availH {
-            height = availH
-            width = height * aspect
-        }
+        let (width, height) = GameAspect.fit(width: availW, height: availH, aspect: aspect)
         let x = safeLeading + (availW - width) / 2
 
         let y: Double

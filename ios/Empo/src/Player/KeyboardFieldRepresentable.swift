@@ -1,20 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import GameProbe
 import SwiftUI
 
-/// Invisible UIKit text field with one job: bring up the system
-/// keyboard and route its text and return-key events into the
-/// engine via `EngineSessionCoordinator`. The visible on-screen
-/// controls (D-pad, action buttons) are plain SwiftUI now - see
-/// `GameControls.swift` - so this is the only UIViewRepresentable
-/// the player still needs.
 struct KeyboardFieldRepresentable: UIViewRepresentable {
     var isActive: Bool
-    /// Scancodes the accessory bar must hide, asked fresh on every
-    /// keyboard presentation.
     var excludedScancodes: () -> Set<Int32> = { [] }
-    var onActivate: (() -> Void)?
 
     func makeUIView(context: Context) -> TCKeyboardField {
         let field = TCKeyboardField(frame: .zero)
@@ -25,23 +17,17 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         field.smartDashesType = UITextSmartDashesType.no
         field.smartInsertDeleteType = UITextSmartInsertDeleteType.no
         field.returnKeyType = UIReturnKeyType.default
-        // Opt out of every system input service. iOS runs autofill
-        // heuristics on plain text fields and can flash its own
-        // chrome (an autofill "Continue" pill) around keyboard
-        // transitions. An empty content type turns the heuristics
-        // off. The rest disables predictions, Writing Tools, and the
-        // iPad shortcut bar, which have no meaning for game input.
+        // iOS runs autofill on a plain text field and can show an
+        // autofill "Continue" pill when the keyboard opens or closes.
+        // An empty content type stops it.
         field.textContentType = UITextContentType(rawValue: "")
         field.inlinePredictionType = UITextInlinePredictionType.no
         field.writingToolsBehavior = UIWritingToolsBehavior.none
         field.inputAssistantItem.leadingBarButtonGroups = []
         field.inputAssistantItem.trailingBarButtonGroups = []
-        // The field is invisible, but it is a real first responder
-        // in the middle of the player view. Arrow keys move its text
-        // selection, and the system caret and selection chrome would
-        // draw mid-screen. A clear tint hides that chrome even when
-        // the selection geometry overrides on TCKeyboardField are
-        // bypassed by the system's own selection interaction.
+        // Arrow keys move the text selection of the field. The system
+        // selection interaction can skip the selection overrides of
+        // TCKeyboardField, so a clear tint hides the caret.
         field.tintColor = UIColor.clear
         field.inputAccessoryView = KeyboardAccessoryHostView(excludedScancodes: excludedScancodes)
         field.text = " "  // keep a space so backspace works
@@ -53,28 +39,27 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ field: TCKeyboardField, context: Context) {
-        // Refresh the closure before any responder change, so a new
-        // presentation reads current coverage. On-screen controls
-        // can hide or a controller can connect between two updates.
         (field.inputAccessoryView as? KeyboardAccessoryHostView)?
             .excludedScancodes = excludedScancodes
         if isActive && !field.isFirstResponder {
-            onActivate?()
+            AppWindow.claimKey(.keyboard)
             field.becomeFirstResponder()
-        } else if !isActive && field.isFirstResponder {
-            // Resign first, then hand the key window back to SDL.
-            // The reverse order leaves the input session open with
-            // no key window, and the keyboard window can flash its
-            // own UI during the dismissal. This is also the one
-            // choke point every keyboard-off path goes through,
-            // including the game-driven `Input.text_input` end.
-            field.resignFirstResponder()
-            AppWindow.setAllowKeyWindow(false)
-            context.coordinator.stopTyping()
+        } else if !isActive {
+            // Resign first. With the key window released first, the
+            // input session stays open with no key window, and the
+            // keyboard window can show its own UI while it closes.
+            // UIKit can resign the field on its own, for example for
+            // a sheet, so the claim is released also then.
+            if field.isFirstResponder {
+                field.resignFirstResponder()
+                context.coordinator.stopTyping()
+            }
+            AppWindow.releaseKey(.keyboard)
         }
     }
 
     static func dismantleUIView(_ field: TCKeyboardField, coordinator: Coordinator) {
+        AppWindow.releaseKey(.keyboard)
         coordinator.stopTyping()
     }
 
@@ -88,12 +73,9 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             _ textField: UITextField, shouldChangeCharactersIn range: NSRange,
             replacementString string: String
         ) -> Bool {
-            // Backspace arrives here as an empty replacement string
-            // over a non-zero range. UIKit's `deleteBackward` override
-            // on TCKeyboardField doesn't fire when `text` is non-empty
-            // (we prime it with a space so the on-screen Bksp key
-            // stays enabled), so we must translate the empty-replacement
-            // case into a scancode injection explicitly.
+            // UIKit calls the `deleteBackward` override only when
+            // `text` is empty. The field keeps a space, so backspace
+            // comes here as an empty string over a range.
             let field = textField as? TCKeyboardField
             if string.isEmpty && range.length > 0 {
                 typeBackspace(from: field)
@@ -101,30 +83,12 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
                 return false
             }
 
-            // SDL text-input bridge for soft-keyboard input.
-            //
-            // When the engine has SDL_StartTextInput active (game
-            // requested text via `Input.text_input = true`) we route
-            // the typed UTF-8 string through `gamecore_pushTextInput`
-            // which fabricates an `SDL_TEXTINPUT` event. EventThread
-            // appends it to `textInputBuffer`, which Ruby reads via
-            // `Input.gets`. This is the path Pokemon Reborn /
-            // Essentials / Infinite Fusion's name-entry scenes need.
-            //
-            // We deliberately do NOT short-circuit the per-character
-            // scancode injection below: games can do BOTH
-            // `Input.gets` (text path) AND
-            // `Input.triggerex?(:KEY_A)` (scancode path) in the same
-            // scene. Reborn's pbFreeText listens for KEY_RETURN /
-            // KEY_BACKSPACE / KEY_ESCAPE via triggerex while it
-            // consumes typed characters via gets. Both paths must
-            // see the input.
-            //
-            // When text mode is OFF (user-toggled hardware-keyboard
-            // mode for a non-text scene), `gamecore_isTextInputActive`
-            // returns 0 and we skip pushing text events to avoid
-            // silently filling the engine's text buffer with bytes
-            // nobody reads.
+            // One scene can read the same input as text through
+            // `Input.gets` and as keys through `Input.triggerex?`, for
+            // example the pbFreeText name entry of Pokemon Reborn. So
+            // each character goes on both paths. Text goes only while
+            // the game reads text, or it fills a buffer that nothing
+            // reads.
             let textActive = gamecore_isTextInputActive() != 0
             type(
                 string.flatMap { char -> [TypedInput] in
@@ -141,7 +105,12 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
 
         func typeBackspace(from field: TCKeyboardField?) {
             let backspace = Int32(GAMECORE_SCANCODE_BACKSPACE)
-            type([.key(backspace, shifted: false, hold: KeyboardAccessoryKeyState.tapHold)], from: field)
+            type(
+                [
+                    .key(
+                        backspace, shifted: false,
+                        hold: .milliseconds(HeldKeys<KeyHolder>.tapHoldMilliseconds))
+                ], from: field)
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
@@ -153,8 +122,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         private var typing = false
         private var stops = 0
 
-        /// Drops the keys not typed yet, so a long paste can't reach the
-        /// game after the keyboard closes. The key that is down goes up.
+        /// A long paste must not reach the game after the keyboard
+        /// closes. The key that is down goes up.
         func stopTyping() {
             pending = []
             stops += 1
@@ -166,10 +135,9 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         /// next letter into a capital too, and two letters in the
         /// same frame type only one.
         private func type(_ inputs: [TypedInput], from field: TCKeyboardField?) {
-            // A hardware key types into this field too, and
-            // KeyboardInputManager already sends its real key edges.
-            // A second copy from here would release Shift while the
-            // player still holds it.
+            // A hardware key also types into this field, and
+            // KeyboardInputManager already sends its key edges. A second
+            // copy releases Shift while the player still holds it.
             let hardware = field?.hardwareKeyTyping ?? false
             pending += inputs.filter { input in
                 if case .key = input { return !hardware }
@@ -205,11 +173,8 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         }
 
         private func scancodeForSwiftCharacter(_ c: UInt16) -> Int32 {
-            // UnicodeScalar(UInt16) returns nil for surrogate values
-            // (0xD800-0xDFFF) that can be produced by emoji and other
-            // astral-plane input from international keyboards. Bailing
-            // out with an "unknown" scancode is fine: the engine ignores
-            // unrecognized scancodes rather than crashing the app.
+            // UnicodeScalar(UInt16) returns nil for a surrogate value
+            // (0xD800-0xDFFF), which an emoji gives.
             guard let scalar = UnicodeScalar(c) else {
                 return Int32(GAMECORE_SCANCODE_UNKNOWN)
             }

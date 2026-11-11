@@ -15,51 +15,31 @@ public enum FNV1a {
     }
 }
 
-/// Builds the fully materialized form of a game's touch layout:
-/// both orientations, and inside each `dpad`, `buttons`, and
-/// `actionButtons` all present. Profiles never store sparse
-/// sections. A sparse section resolves against whatever game it is
-/// pinned to, which breaks portability.
+/// Profiles never store sparse sections. A sparse section resolves
+/// against whatever game it is pinned to, which breaks portability.
 public enum ProfileMaterializer {
-    /// Concrete builtin defaults, injected by the app (GameProbe has
-    /// no scancode table for the default buttons).
     public struct Builtins: Sendable {
         public var portrait: TouchLayout
         public var landscape: TouchLayout
 
-        public init(portrait: TouchLayout, landscape: TouchLayout) {
-            self.portrait = portrait
-            self.landscape = landscape
-        }
-
-        var defaultDpad: TouchSectionCompletion.DefaultDpadSpec {
-            TouchSectionCompletion.DefaultDpadSpec(
-                portraitX: portrait.dpad?.x ?? 0.13,
-                portraitY: portrait.dpad?.y ?? 0.72,
-                landscapeX: landscape.dpad?.x ?? 0.10,
-                landscapeY: landscape.dpad?.y ?? 0.65,
-                size: portrait.dpad?.size ?? 140
-            )
+        /// `keys` are the keys of the game core, in grid order.
+        public init(keys: [BuiltinLayout.Key]) {
+            portrait = BuiltinLayout.layout(keys: keys, isLandscape: false)
+            landscape = BuiltinLayout.layout(keys: keys, isLandscape: true)
         }
     }
 
-    /// Materialization is total: both orientations are ALWAYS
-    /// present, and the type says so. No caller carries a dead
-    /// empty-layout fallback for a nil that cannot happen.
     public struct MaterializedTouch: Equatable, Sendable {
         public var portrait: TouchLayout
         public var landscape: TouchLayout
 
-        /// The sparse-capable spec shape, for serialization.
         public var section: TouchSection {
             TouchSection(portrait: portrait, landscape: landscape)
         }
     }
 
-    /// `user` layers over `manifest` layers over `builtins`, per
-    /// orientation and per field. Pass `manifest: nil` to complete a
-    /// PROFILE section: profile gaps fill from the builtin only,
-    /// never from a game manifest.
+    /// To complete a profile section, pass `manifest: nil`. Profile gaps
+    /// fill from the builtin only, never from a game manifest.
     public static func materialize(
         user: TouchSection?,
         manifest: TouchSection?,
@@ -67,14 +47,10 @@ public enum ProfileMaterializer {
         metrics: TouchZoneMetrics
     ) -> MaterializedTouch {
         let completedManifest = manifest.map {
-            TouchSectionCompletion.complete(
-                $0, metrics: metrics, defaultDpad: builtins.defaultDpad
-            ).section
+            TouchSectionCompletion.complete($0, metrics: metrics).section
         }
         let completedUser = user.map {
-            TouchSectionCompletion.complete(
-                $0, metrics: metrics, defaultDpad: builtins.defaultDpad
-            ).section
+            TouchSectionCompletion.complete($0, metrics: metrics).section
         }
 
         return MaterializedTouch(
@@ -91,14 +67,8 @@ public enum ProfileMaterializer {
         )
     }
 
-    /// The serializer has no touch-only entry point. Canonical bytes
-    /// are always `serialize(touch:bindings: nil)`.
-    public static func canonicalBytes(_ section: TouchSection) -> Data {
-        ControlsManifestSerializer.serialize(touch: section, bindings: nil) ?? Data()
-    }
-
     public static func canonicalBytes(_ materialized: MaterializedTouch) -> Data {
-        canonicalBytes(materialized.section)
+        ControlsManifestSerializer.serialize(materialized.section)
     }
 
     private static func materializeOrientation(
@@ -141,22 +111,24 @@ public struct MigrationRecord: Equatable, Sendable {
 
     public static let fileName = ".migration.json"
 
-    /// Missing or unreadable file reads as an empty record, the
-    /// same rule both app call sites hand-rolled before.
-    public static func load(at url: URL) -> MigrationRecord {
-        (try? Data(contentsOf: url)).map(parse) ?? MigrationRecord()
+    /// A missing file reads as an empty record. nil when the file is
+    /// there but cannot be read, so that the caller does not migrate
+    /// every game again.
+    public static func load(at url: URL) -> MigrationRecord? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return MigrationRecord() }
+        return (try? Data(contentsOf: url)).flatMap(parse(data:))
     }
 
-    public func save(to url: URL) {
-        try? serialize().write(to: url, options: .atomic)
+    public func save(to url: URL) throws {
+        try serialize().write(to: url, options: .atomic)
     }
 
-    public static func parse(data: Data) -> MigrationRecord {
+    public static func parse(data: Data) -> MigrationRecord? {
         guard
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
             object["version"] as? Int == 1,
             let rawGames = object["games"] as? [String: [String: Any]]
-        else { return MigrationRecord() }
+        else { return nil }
         var games: [String: Entry] = [:]
         for (id, raw) in rawGames {
             guard let hash = raw["hash"] as? String else { continue }
@@ -179,7 +151,7 @@ public struct MigrationRecord: Equatable, Sendable {
         }
     }
 
-    public func serialize() -> Data {
+    public func serialize() throws -> Data {
         var rawGames: [String: [String: Any]] = [:]
         for (id, entry) in games {
             var raw: [String: Any] = ["hash": entry.hash]
@@ -191,29 +163,18 @@ public struct MigrationRecord: Equatable, Sendable {
         let object: [String: Any] = [
             "version": 1, "games": rawGames, "shared": sharedProfiles.sorted(),
         ]
-        return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
-            ?? Data()
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     }
 }
 
-/// Pure migration decision for one game. The app orchestrates the
-/// store writes the action describes.
 public enum ProfileMigration {
     public enum Action: Equatable, Sendable {
-        /// Nothing to do (no section, or already migrated unchanged).
         case none
-        /// Record the hash but create nothing: the layout equals the
-        /// ambient default, or the user already has a pin file.
         case recordOnly(hash: String)
         /// The section changed after migration: offer the import,
         /// never auto-migrate again.
         case importOffer
-        /// Create a profile from the materialized section, pin the
-        /// game to it, record.
         case createAndPin(baseName: String, hash: String)
-        /// The content matches an existing profile: pin to it. When
-        /// the match is another game's migration profile, rename it
-        /// to the shared name (through the store's pin-walk rename).
         case pinToExisting(profile: String, renameToShared: Bool, hash: String)
     }
 
@@ -258,7 +219,7 @@ public enum ProfileMigration {
     public static func decide(
         context: Context,
         builtins: ProfileMaterializer.Builtins,
-        metrics: TouchZoneMetrics = .reference
+        metrics: TouchZoneMetrics
     ) -> Action {
         guard let userTouch = context.userTouch else {
             // Section absent. A stale record entry stays: it only

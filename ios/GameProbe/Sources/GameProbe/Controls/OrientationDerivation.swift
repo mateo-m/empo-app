@@ -4,233 +4,131 @@
 import Foundation
 
 public enum OrientationDerivation {
-    static let coordMin: Double = 0.02
-    static let coordMax: Double = 0.98
-
-    /// Derives the layout of the missing orientation from `source`.
-    /// It keeps the arrangement in point space.
+    /// When `source` has no d-pad, the buttons move clear of
+    /// `defaultDpad`, the d-pad that the target orientation shows.
     public static func derive(
         from source: TouchLayout,
         sourceIsLandscape: Bool,
         metrics: TouchZoneMetrics,
-        defaultDpad: (x: Double, y: Double, size: Double)? = nil
+        defaultDpad: DPadSpec?
     ) -> TouchLayout {
         let targetIsLandscape = !sourceIsLandscape
-
-        let sourceWidth = metrics.width(isLandscape: sourceIsLandscape)
-        let sourceHeight = metrics.height(isLandscape: sourceIsLandscape)
         let targetWidth = metrics.width(isLandscape: targetIsLandscape)
         let targetHeight = metrics.height(isLandscape: targetIsLandscape)
 
-        let sourceLeading = metrics.leadingInset(isLandscape: sourceIsLandscape)
-        let sourceTrailing = metrics.trailingInset(isLandscape: sourceIsLandscape)
-        let sourceTop = metrics.topInset(isLandscape: sourceIsLandscape)
-        let sourceBottom = metrics.bottomInset(isLandscape: sourceIsLandscape)
-
-        let targetLeading = metrics.leadingInset(isLandscape: targetIsLandscape)
-        let targetTrailing = metrics.trailingInset(isLandscape: targetIsLandscape)
-        let targetTop = metrics.topInset(isLandscape: targetIsLandscape)
-        let targetBottom = metrics.bottomInset(isLandscape: targetIsLandscape)
+        func mappedCenter(x: Double, y: Double, size: Double) -> (x: Double, y: Double) {
+            mapCenter(
+                x: x, y: y, size: size, metrics: metrics, sourceIsLandscape: sourceIsLandscape)
+        }
+        func fraction(_ point: (x: Double, y: Double)) -> (x: Double, y: Double) {
+            (
+                ControlLimits.placedCoordinate.clamp(point.x / targetWidth),
+                ControlLimits.placedCoordinate.clamp(point.y / targetHeight)
+            )
+        }
 
         var derivedDpad: DPadSpec?
         var dpadObstacle: (x: Double, y: Double, size: Double)?
-
         if let spec = source.dpad {
-            let size = spec.size ?? 140
-            let center = mapCenter(
-                fractionX: spec.x,
-                fractionY: spec.y,
-                sourceWidth: sourceWidth,
-                sourceHeight: sourceHeight,
-                sourceLeading: sourceLeading,
-                sourceTrailing: sourceTrailing,
-                sourceTop: sourceTop,
-                sourceBottom: sourceBottom,
-                targetWidth: targetWidth,
-                targetHeight: targetHeight,
-                targetLeading: targetLeading,
-                targetTrailing: targetTrailing,
-                targetTop: targetTop,
-                targetBottom: targetBottom,
-                elementSize: size
-            )
+            let size = spec.size ?? ControlLimits.defaultDPadSize
+            let center = mappedCenter(x: spec.x, y: spec.y, size: size)
+            let placed = fraction(center)
             derivedDpad = DPadSpec(
-                x: 0, y: 0, size: size, opacity: spec.opacity, style: spec.style
-            )
+                x: placed.x, y: placed.y, size: size, opacity: spec.opacity, style: spec.style)
             dpadObstacle = (center.x, center.y, size)
         } else if let defaultDpad {
-            dpadObstacle = defaultDpad
+            dpadObstacle = (
+                defaultDpad.x * targetWidth, defaultDpad.y * targetHeight,
+                defaultDpad.size ?? ControlLimits.defaultDPadSize
+            )
         }
 
-        var derivedButtons: [ButtonSpec]?
-        var derivedActionButtons: [ActionButtonSpec]?
-        // ONE tagged list feeds the separation pass, so recovering
-        // the results needs no positional offset arithmetic and the
-        // input order cannot desynchronize from the readback.
         enum TaggedSpec {
             case key(ButtonSpec)
             case action(ActionButtonSpec)
         }
-        var buttonInputs: [(x: Double, y: Double, size: Double)] = []
-        var taggedSpecs: [TaggedSpec] = []
-
-        func mappedCenter(x: Double, y: Double, size: Double) -> (x: Double, y: Double) {
-            mapCenter(
-                fractionX: x,
-                fractionY: y,
-                sourceWidth: sourceWidth,
-                sourceHeight: sourceHeight,
-                sourceLeading: sourceLeading,
-                sourceTrailing: sourceTrailing,
-                sourceTop: sourceTop,
-                sourceBottom: sourceBottom,
-                targetWidth: targetWidth,
-                targetHeight: targetHeight,
-                targetLeading: targetLeading,
-                targetTrailing: targetTrailing,
-                targetTop: targetTop,
-                targetBottom: targetBottom,
-                elementSize: size
-            )
-        }
-
-        if let buttons = source.buttons {
-            derivedButtons = []
-            for spec in buttons {
-                let size = spec.size ?? 56
-                let center = mappedCenter(x: spec.x, y: spec.y, size: size)
-                buttonInputs.append((center.x, center.y, size))
-                taggedSpecs.append(.key(spec))
-            }
-        }
-
-        if let actionButtons = source.actionButtons {
-            derivedActionButtons = []
-            for spec in actionButtons {
-                let size = spec.size ?? 56
-                let center = mappedCenter(x: spec.x, y: spec.y, size: size)
-                buttonInputs.append((center.x, center.y, size))
-                taggedSpecs.append(.action(spec))
-            }
-        }
-
-        if !buttonInputs.isEmpty {
-            let obstacles = dpadObstacle.map { [$0] } ?? []
-            let separated = ButtonSeparation.separate(
-                buttonInputs,
-                width: targetWidth,
-                height: targetHeight,
-                obstacles: obstacles
-            )
-
-            var separatedButtons: [ButtonSpec] = []
-            var separatedActionButtons: [ActionButtonSpec] = []
-            for (index, tagged) in taggedSpecs.enumerated() {
-                let point = separated.positions[index]
-                let x = clampFraction(point.x / targetWidth)
-                let y = clampFraction(point.y / targetHeight)
-                switch tagged {
-                case .key(let spec):
-                    separatedButtons.append(
-                        ButtonSpec(
-                            label: spec.label, key: spec.key, x: x, y: y,
-                            size: spec.size ?? 56, opacity: spec.opacity))
-                case .action(let spec):
-                    separatedActionButtons.append(
-                        ActionButtonSpec(
-                            action: spec.action, x: x, y: y,
-                            size: spec.size ?? 56, opacity: spec.opacity))
+        let tagged =
+            (source.buttons ?? []).map(TaggedSpec.key)
+            + (source.actionButtons ?? []).map(TaggedSpec.action)
+        let inputs = tagged.map { spec -> (x: Double, y: Double, size: Double) in
+            let (x, y, size) =
+                switch spec {
+                case .key(let button): (button.x, button.y, button.size)
+                case .action(let button): (button.x, button.y, button.size)
                 }
-            }
-            if source.buttons != nil {
-                derivedButtons = separatedButtons
-            }
-            if source.actionButtons != nil {
-                derivedActionButtons = separatedActionButtons
-            }
+            let resolvedSize = size ?? ControlLimits.defaultButtonSize
+            let center = mappedCenter(x: x, y: y, size: resolvedSize)
+            return (center.x, center.y, resolvedSize)
         }
+        let positions =
+            inputs.isEmpty
+            ? []
+            : ButtonSeparation.separate(
+                inputs, width: targetWidth, height: targetHeight,
+                obstacles: dpadObstacle.map { [$0] } ?? []
+            ).positions
 
-        if var dpad = derivedDpad, let obstacle = dpadObstacle {
-            dpad.x = clampFraction(obstacle.x / targetWidth)
-            dpad.y = clampFraction(obstacle.y / targetHeight)
-            derivedDpad = dpad
+        var derivedButtons: [ButtonSpec] = []
+        var derivedActionButtons: [ActionButtonSpec] = []
+        for (spec, position) in zip(tagged, positions) {
+            let placed = fraction(position)
+            switch spec {
+            case .key(let button):
+                derivedButtons.append(
+                    ButtonSpec(
+                        label: button.label, key: button.key, x: placed.x, y: placed.y,
+                        size: button.size ?? ControlLimits.defaultButtonSize,
+                        opacity: button.opacity))
+            case .action(let button):
+                derivedActionButtons.append(
+                    ActionButtonSpec(
+                        action: button.action, x: placed.x, y: placed.y,
+                        size: button.size ?? ControlLimits.defaultButtonSize,
+                        opacity: button.opacity))
+            }
         }
 
         return TouchLayout(
             dpad: derivedDpad,
-            buttons: derivedButtons,
-            actionButtons: derivedActionButtons
+            buttons: source.buttons.map { _ in derivedButtons },
+            actionButtons: source.actionButtons.map { _ in derivedActionButtons }
         )
     }
 
+    /// A control on the left half keeps its distance from the left
+    /// edge of the safe area, and a control on the right half from the
+    /// right edge. All controls keep their distance from the bottom.
     private static func mapCenter(
-        fractionX: Double,
-        fractionY: Double,
-        sourceWidth: Double,
-        sourceHeight: Double,
-        sourceLeading: Double,
-        sourceTrailing: Double,
-        sourceTop: Double,
-        sourceBottom: Double,
-        targetWidth: Double,
-        targetHeight: Double,
-        targetLeading: Double,
-        targetTrailing: Double,
-        targetTop: Double,
-        targetBottom: Double,
-        elementSize: Double
-    ) -> (x: Double, y: Double) {
-        let sourceCenterX = fractionX * sourceWidth
-        let sourceCenterY = fractionY * sourceHeight
-
-        let targetX: Double
-        if sourceCenterX < sourceWidth * 0.5 {
-            let offsetFromLeft = sourceCenterX - sourceLeading
-            targetX = targetLeading + offsetFromLeft
-        } else {
-            let offsetFromRight = (sourceWidth - sourceTrailing) - sourceCenterX
-            targetX = (targetWidth - targetTrailing) - offsetFromRight
-        }
-
-        let offsetFromBottom = (sourceHeight - sourceBottom) - sourceCenterY
-        let targetY = (targetHeight - targetBottom) - offsetFromBottom
-
-        return clampInZone(
-            x: targetX,
-            y: targetY,
-            size: elementSize,
-            width: targetWidth,
-            height: targetHeight,
-            leading: targetLeading,
-            trailing: targetTrailing,
-            top: targetTop,
-            bottom: targetBottom
-        )
-    }
-
-    private static func clampInZone(
-        x: Double,
-        y: Double,
+        x fractionX: Double,
+        y fractionY: Double,
         size: Double,
-        width: Double,
-        height: Double,
-        leading: Double,
-        trailing: Double,
-        top: Double,
-        bottom: Double
+        metrics: TouchZoneMetrics,
+        sourceIsLandscape: Bool
     ) -> (x: Double, y: Double) {
-        let half = size * 0.5
-        let minX = leading + half
-        let maxX = max(minX, width - trailing - half)
-        let minY = top + half
-        let maxY = max(minY, height - bottom - half)
-        return (
-            min(max(x, minX), maxX),
-            min(max(y, minY), maxY)
-        )
-    }
+        let source = sourceIsLandscape
+        let target = !sourceIsLandscape
+        let sourceWidth = metrics.width(isLandscape: source)
+        let sourceHeight = metrics.height(isLandscape: source)
+        let targetWidth = metrics.width(isLandscape: target)
+        let targetHeight = metrics.height(isLandscape: target)
 
-    private static func clampFraction(_ value: Double) -> Double {
-        min(max(value, coordMin), coordMax)
+        let sourceX = fractionX * sourceWidth
+        let sourceY = fractionY * sourceHeight
+
+        let targetX =
+            sourceX < sourceWidth * 0.5
+            ? metrics.leadingInset(isLandscape: target)
+                + (sourceX - metrics.leadingInset(isLandscape: source))
+            : (targetWidth - metrics.trailingInset(isLandscape: target))
+                - (sourceWidth - metrics.trailingInset(isLandscape: source) - sourceX)
+        let offsetFromBottom = (sourceHeight - metrics.bottomInset(isLandscape: source)) - sourceY
+        let targetY = (targetHeight - metrics.bottomInset(isLandscape: target)) - offsetFromBottom
+
+        let half = size * 0.5
+        let minX = metrics.leadingInset(isLandscape: target) + half
+        let maxX = max(minX, targetWidth - metrics.trailingInset(isLandscape: target) - half)
+        let minY = metrics.topInset(isLandscape: target) + half
+        let maxY = max(minY, targetHeight - metrics.bottomInset(isLandscape: target) - half)
+        return (min(max(targetX, minX), maxX), min(max(targetY, minY), maxY))
     }
 }

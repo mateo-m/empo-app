@@ -241,20 +241,16 @@ struct RootView: View {
         }
         .onChange(of: appState.shownError) { _, error in
             if error != nil {
-                AppWindow.setAllowKeyWindow(true)
-            } else if appState.phase == .playing, appState.infoMessage == nil {
-                AppWindow.setAllowKeyWindow(false)
-            } else if appState.phase != .playing, appState.infoMessage == nil {
-                AppWindow.setAllowKeyWindow(false)
+                AppWindow.claimKey(.alert)
+            } else {
+                AppWindow.releaseKey(.alert)
             }
         }
         .onChange(of: appState.infoMessage) { _, message in
             if message != nil {
-                AppWindow.setAllowKeyWindow(true)
-            } else if appState.phase == .playing, appState.shownError == nil {
-                AppWindow.setAllowKeyWindow(false)
-            } else if appState.phase != .playing, appState.shownError == nil {
-                AppWindow.setAllowKeyWindow(false)
+                AppWindow.claimKey(.info)
+            } else {
+                AppWindow.releaseKey(.info)
             }
         }
     }

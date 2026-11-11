@@ -1,16 +1,9 @@
 import Foundation
 import GameProbe
 
-/// This device's side of the sync document, per SPEC 10.5 steps 3
-/// and 4.
-///
-/// It reads what the device holds now into the model, and it applies
-/// a merged model back to UserDefaults, to the global controller
-/// bindings, and to the layout profile files.
 @MainActor
 enum SyncLocalValues {
 
-    /// The document leaves this device would publish now.
     static func current(identities: inout SyncProfileIdentities) -> SyncDocumentModel {
         var model = SyncDocumentModel()
         model.preferences = preferences()
@@ -24,11 +17,8 @@ enum SyncLocalValues {
         return model
     }
 
-    /// The portable preferences, without the one key that has a
-    /// finer home. `controllerMap.global` rides
-    /// `controllerBindings`, per 10.3, so carrying it here as well
-    /// would give one binding two homes with no precedence between
-    /// them.
+    /// `controllerBindings` already carries `controllerMap.global`. A
+    /// second copy here gives one binding two homes with no precedence.
     static func preferences() -> [String: JSONValue] {
         var values = DevicePreferences.currentDefaults()
         values.removeValue(forKey: PreferenceKeys.controllerMapGlobal.name)
@@ -48,9 +38,7 @@ enum SyncLocalValues {
                     of: store.readProfile(name)?.touch ?? TouchSection()),
                 screen: screenValue(name: name, store: store))
         }
-        // A profile this device deleted travels as a record, per
-        // 10.6. The name comes from the merged document, which is
-        // why the record carries none.
+        // The record has no name. The merged document supplies it.
         for (id, date) in identities.deleted {
             out[id] = SyncProfile(name: "", deletedAt: date)
         }
@@ -73,78 +61,99 @@ enum SyncLocalValues {
         applyDescriptors(model.targetDescriptors)
     }
 
-    /// The profile rules of 10.6 and 10.7.
-    ///
-    /// A profile arrives as it is: no refit and no refusal. On a name
-    /// collision the incoming profile takes the name, and the whole
-    /// local folder moves aside as `<name>.empo-displaced`.
-    private static func applyProfiles(
+    static func applyProfiles(
         _ model: SyncDocumentModel, identities: inout SyncProfileIdentities
     ) {
         let store = LayoutProfilesManager.store
 
         for (id, profile) in model.layoutProfiles where profile.isDeleted {
             guard let local = identities.name(ofId: id) else { continue }
-            LayoutProfilesManager.deleteProfile(local)
-            identities.forget(profile: local)
+            do {
+                try LayoutProfilesManager.deleteProfile(local)
+                identities.forget(profile: local)
+            } catch {
+                NSLog("sync: delete of profile \(local) failed: \(error)")
+            }
         }
 
         for (id, profile) in model.liveProfiles
         where LayoutProfileStore.validatedName(profile.name) == profile.name {
-            // Each failed step skips the profile. The next steps would
-            // write over a local profile that holds the same name.
-            let local = identities.name(ofId: id)
-            if let local, local != profile.name {
-                guard store.renameProfile(from: local, to: profile.name) else {
-                    BackupLog.line("SyncLocalValues", "\(local) was not renamed to \(profile.name)")
-                    continue
+            // A failed step skips the profile, so that the incoming
+            // profile never writes over a local one.
+            do {
+                var local = identities.name(ofId: id)
+                if let missing = local, !store.profileExists(missing) {
+                    // The Files app can delete or rename the folder.
+                    identities.forget(profile: missing)
+                    local = nil
                 }
-                identities.rename(from: local, to: profile.name)
-            }
-            if local == nil, store.profileExists(profile.name) {
-                guard displace(profile.name, store: store, identities: &identities) else {
-                    BackupLog.line("SyncLocalValues", "\(profile.name) was not moved aside")
-                    continue
+                if let local, local != profile.name {
+                    if store.profileExists(profile.name),
+                        store.storedName(profile.name) != store.storedName(local)
+                    {
+                        try displace(profile.name, store: store, identities: &identities)
+                    }
+                    try store.renameProfile(from: local, to: profile.name)
+                    identities.rename(from: local, to: profile.name)
                 }
+                if local == nil, store.profileExists(profile.name) {
+                    try displace(profile.name, store: store, identities: &identities)
+                }
+                let touch = TouchSectionSyncCoder.section(of: profile.controls)
+                if store.profileExists(profile.name) {
+                    try store.writeProfile(profile.name, touch: touch)
+                } else {
+                    try store.createProfile(profile.name, touch: touch)
+                }
+                identities.ids[profile.name] = id
+                try applyScreen(profile.screen, name: profile.name, store: store)
+            } catch {
+                NSLog("sync: profile \(profile.name) not applied: \(error)")
             }
-            let touch = TouchSectionSyncCoder.section(of: profile.controls)
-            let written =
-                store.profileExists(profile.name)
-                ? store.writeProfile(profile.name, touch: touch)
-                : store.createProfile(profile.name, touch: touch)
-            guard written else {
-                BackupLog.line("SyncLocalValues", "\(profile.name) was not written")
-                continue
-            }
-            identities.ids[profile.name] = id
-            applyScreen(profile.screen, name: profile.name, store: store)
             LayoutProfilesManager.postProfileChange(name: profile.name, from: nil)
         }
     }
 
-    /// The local folder moves whole, per 10.7. This is the stated
-    /// profile-folder exception to the per-file rule of 11.1.
     private static func displace(
         _ name: String, store: LayoutProfileStore, identities: inout SyncProfileIdentities
-    ) -> Bool {
-        let taken = Set(store.listProfiles())
-        let moved = DisplacedCopy.nextTreeName(for: name, taken: taken)
-        guard store.renameProfile(from: name, to: moved) else { return false }
-        identities.rename(from: name, to: moved)
-        return true
+    ) throws {
+        let local = store.storedName(name) ?? name
+        let taken = Set(store.listProfiles().map(LayoutProfileStore.nameKey))
+        var number = 1
+        while taken.contains(LayoutProfileStore.nameKey(copyName(of: local, number: number))) {
+            number += 1
+        }
+        let moved = copyName(of: local, number: number)
+        try store.renameProfile(from: local, to: moved)
+        identities.rename(from: local, to: moved)
     }
 
-    private static func applyScreen(_ value: JSONValue?, name: String, store: LayoutProfileStore) {
+    /// The Mac and iPhone disks refuse a folder name over 255 UTF-16
+    /// units in decomposed form, and an emoji counts as one character
+    /// but many units.
+    static func copyName(of name: String, number: Int) -> String {
+        let mark = DisplacedCopy.treeName(for: "", number: number)
+        var stem = Substring(name.prefix(max(0, LayoutProfileStore.maxNameLength - mark.count)))
+        while !stem.isEmpty,
+            stem.last?.isWhitespace == true
+                || (stem + mark).decomposedStringWithCanonicalMapping.utf16.count > 255
+        {
+            stem = stem.dropLast()
+        }
+        return DisplacedCopy.treeName(for: String(stem), number: number)
+    }
+
+    private static func applyScreen(
+        _ value: JSONValue?, name: String, store: LayoutProfileStore
+    ) throws {
         guard let value, let data = try? JSONEncoder().encode(value) else { return }
         let parsed = ScreenRegionFile.parse(data)
         guard parsed.findings.isEmpty else { return }
-        _ = store.writeScreen(name, portrait: parsed.portrait, landscape: parsed.landscape)
+        try store.writeScreen(name, portrait: parsed.portrait, landscape: parsed.landscape)
     }
 
-    /// The descriptors of 10.8. A descriptor Empo does not hold
-    /// arrives without its secret, which is the target placeholder.
-    /// Removing a target stays local-only, so nothing here deletes,
-    /// and a target this device removed does not come back.
+    /// A new descriptor arrives without its secret. Target removal stays
+    /// on this device, so this function never deletes a target.
     private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
         let removed: Set<String>
         do {
@@ -170,7 +179,6 @@ enum SyncLocalValues {
     }
 }
 
-/// What this device holds now, as the pass reads and applies it.
 @MainActor
 final class DeviceSyncValues: SyncLocalValuesStore {
 

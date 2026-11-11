@@ -25,7 +25,7 @@ final class ControlsManifestSerializerTests: XCTestCase {
             landscape: TouchLayout(
                 dpad: DPadSpec(x: 0.1, y: 0.65, size: 140, opacity: 1),
                 buttons: [
-                    ButtonSpec(label: "OK", key: "Enter", x: 0.8, y: 0.59, size: 56, opacity: 1),
+                    ButtonSpec(label: "OK", key: "Enter", x: 0.8, y: 0.59, size: 56, opacity: 1)
                 ]
             )
         )
@@ -37,10 +37,12 @@ final class ControlsManifestSerializerTests: XCTestCase {
             .element("b"): .unbound,
             .element("start"): .action("$pauseMenu"),
         ])
-        guard let data = ControlsManifestSerializer.serialize(
-            touch: sampleTouch(),
-            bindings: controller
-        ) else {
+        guard
+            let data = ControlsManifestSerializer.serialize(
+                touch: sampleTouch(),
+                bindings: controller
+            )
+        else {
             XCTFail("expected data")
             return
         }
@@ -118,89 +120,23 @@ final class ControlsManifestSerializerTests: XCTestCase {
         XCTAssertEqual(first, second)
     }
 
-    func testUnmappableScancodeDropped() {
-        var dropped: [(String, Int32)] = []
-        let portrait = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: 0.13,
-            dpadY: 0.72,
-            dpadSize: 140,
-            dpadOpacity: 1,
-            buttons: [
-                ControlsManifestSerializer.TouchButtonInput(
-                    label: "Ghost",
-                    scancode: 9999,
-                    x: 0.5,
-                    y: 0.5,
-                    size: 56,
-                    opacity: 1
-                ),
-                ControlsManifestSerializer.TouchButtonInput(
-                    label: "OK",
-                    scancode: 40,
-                    x: 0.7,
-                    y: 0.67,
-                    size: 56,
-                    opacity: 1
-                ),
-            ]
-        )
-        let landscape = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: 0.1,
-            dpadY: 0.65,
-            dpadSize: 140,
-            dpadOpacity: 1,
-            buttons: []
-        )
-
-        let touch = ControlsManifestSerializer.touchSection(
-            portrait: portrait,
-            landscape: landscape
-        ) { label, scancode in
-            dropped.append((label, scancode))
-        }
-
-        XCTAssertEqual(dropped.count, 1)
-        XCTAssertEqual(dropped[0].0, "Ghost")
-        XCTAssertEqual(dropped[0].1, 9999)
-        XCTAssertEqual(touch.portrait?.buttons?.count, 1)
-        XCTAssertEqual(touch.portrait?.buttons?.first?.key, "Enter")
-
-        guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil) else {
-            XCTFail("expected data")
-            return
-        }
-        let result = parseSerialized(data)
-        XCTAssertTrue(result.findings.filter { $0.severity == .error }.isEmpty)
+    func testUnmappableScancodeHasNoKeyName() {
+        XCTAssertNil(KeyCodeTable.code(for: 9999))
+        XCTAssertEqual(KeyCodeTable.code(for: 40), "Enter")
     }
 
     func testClampingProducesValidOutput() {
-        let portrait = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: -0.5,
-            dpadY: 2.0,
-            dpadSize: 50,
-            dpadOpacity: 0.05,
-            buttons: [
-                ControlsManifestSerializer.TouchButtonInput(
-                    label: "Wide",
-                    scancode: 40,
-                    x: 1.5,
-                    y: -1,
-                    size: 10,
-                    opacity: 2
-                ),
-            ]
-        )
-        let landscape = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: 0.1,
-            dpadY: 0.65,
-            dpadSize: 500,
-            dpadOpacity: 1,
-            buttons: []
-        )
-
-        let touch = ControlsManifestSerializer.touchSection(
-            portrait: portrait,
-            landscape: landscape
+        let touch = TouchSection(
+            portrait: TouchLayout(
+                dpad: DPadSpec(x: -0.5, y: 2.0, size: 50, opacity: 0.05),
+                buttons: [
+                    ButtonSpec(label: "Wide", key: "Enter", x: 1.5, y: -1, size: 10, opacity: 2)
+                ]
+            ),
+            landscape: TouchLayout(
+                dpad: DPadSpec(x: 0.1, y: 0.65, size: 500, opacity: 1),
+                buttons: []
+            )
         )
         guard let data = ControlsManifestSerializer.serialize(touch: touch, bindings: nil) else {
             XCTFail("expected data")
@@ -413,36 +349,47 @@ final class ControlsManifestSerializerTests: XCTestCase {
         XCTAssertEqual(reserialized, data)
     }
 
-    func testDPadStyleInputOmitsField() {
-        let input = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: 0.25, dpadY: 0.75, dpadSize: 140, dpadOpacity: 1,
-            dpadStyle: .dpad, buttons: [])
-        let section = ControlsManifestSerializer.touchSection(portrait: input, landscape: input)
-        XCTAssertEqual(section.portrait?.dpad?.style, .dpad)
-
-        let stick = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: 0.25, dpadY: 0.75, dpadSize: 140, dpadOpacity: 1,
-            dpadStyle: .stick, buttons: [])
-        let stickSection = ControlsManifestSerializer.touchSection(portrait: stick, landscape: stick)
-        XCTAssertEqual(stickSection.portrait?.dpad?.style, .stick)
+    func testDPadStyleOmitsField() {
+        let layout = TouchLayout(
+            dpad: DPadSpec(x: 0.25, y: 0.75, size: 140, opacity: 1, style: .dpad), buttons: [])
+        let data = ControlsManifestSerializer.serialize(
+            TouchSection(portrait: layout, landscape: layout))
+        XCTAssertFalse(String(data: data, encoding: .utf8)!.contains("\"style\""))
     }
 
-    func testTouchInputConvertsActionButtons() {
-        let input = ControlsManifestSerializer.TouchOrientedInput(
-            dpadX: 0.13, dpadY: 0.72, dpadSize: 140, dpadOpacity: 1,
+    func testActionButtonsAreClampedOnWrite() {
+        let layout = TouchLayout(
+            dpad: DPadSpec(x: 0.13, y: 0.72, size: 140, opacity: 1),
             buttons: [],
             actionButtons: [
-                ControlsManifestSerializer.TouchActionButtonInput(
-                    action: "$toggleCheats", x: 1.5, y: -0.25, size: 500, opacity: 0)
+                ActionButtonSpec(action: "$toggleCheats", x: 1.5, y: -0.25, size: 500, opacity: 0)
             ]
         )
-        let section = ControlsManifestSerializer.touchSection(portrait: input, landscape: input)
-        // Writer-side clamping keeps the round trip valid.
-        let button = section.portrait?.actionButtons?.first
+        let data = ControlsManifestSerializer.serialize(
+            TouchSection(portrait: layout, landscape: layout))
+        let button = parseSerialized(data).manifest?.touch?.portrait?.actionButtons?.first
         XCTAssertEqual(button?.action, "$toggleCheats")
         XCTAssertEqual(button?.x, 1.0)
         XCTAssertEqual(button?.y, 0.0)
         XCTAssertEqual(button?.size, 100)
         XCTAssertEqual(button?.opacity, 0.2)
+    }
+
+    func testSerializerKeepsAtMost21ControlsAndCutsLabels() throws {
+        let buttons = (0..<25).map {
+            ButtonSpec(label: "LONGLABEL\($0)", key: "Enter", x: 0.5, y: 0.5, size: 56, opacity: 1)
+        }
+        let layout = TouchLayout(
+            dpad: nil, buttons: buttons,
+            actionButtons: [
+                ActionButtonSpec(
+                    action: EmpoActionCatalog.fastForwardHold, x: 0.5, y: 0.5, size: 56, opacity: 1)
+            ])
+        let data = ControlsManifestSerializer.serialize(TouchSection(portrait: layout, landscape: nil))
+        let read = try XCTUnwrap(ControlsManifestLoader.parse(data: data).manifest?.touch?.portrait)
+        XCTAssertEqual(
+            (read.buttons?.count ?? 0) + (read.actionButtons?.count ?? 0),
+            ControlLimits.maxButtonsPerOrientation)
+        XCTAssertEqual(read.buttons?.first?.label, "LONGLABE")
     }
 }

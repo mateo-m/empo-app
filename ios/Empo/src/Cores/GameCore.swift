@@ -197,6 +197,11 @@ struct GameKey: Equatable {
         GameKey(label: "Z", scancode: Int32(GAMECORE_SCANCODE_Z)),
         GameKey(label: "B", scancode: Int32(GAMECORE_SCANCODE_B)),
     ]
+
+    /// The keys of the core that runs the game in `root`.
+    static func keys(forGameAt root: URL) -> [GameKey] {
+        GameCores.core(forGameAt: root)?.defaultKeys(forGameAt: root) ?? standard
+    }
 }
 
 /// One file of an archive, before the probe extracts anything.

@@ -3,13 +3,6 @@
 
 import SwiftUI
 
-/// Modal sheet offering the three image-source options (Photos /
-/// Camera / Files) plus an optional "Delete image" action when the
-/// caller already has an image set. Replaces the previous
-/// `confirmationDialog` action-sheet so the UI matches the rest
-/// of the app's bottom-sheet patterns (library sort, experimental
-/// info). The old system dialog looked out of place next to
-/// native-SwiftUI sheets.
 struct ImageSourceSheet: View {
     @Binding var isPresented: Bool
     let title: LocalizedStringResource
@@ -31,9 +24,10 @@ struct ImageSourceSheet: View {
             barAction: SheetBarAction("Cancel") { isPresented = false }
         ) {
             SheetCard {
-                ImageSourceRow(
+                SheetRow(
                     icon: "photo.on.rectangle",
-                    label: LocalizedStringResource("Photos", comment: "Pick an image from the Photos app")
+                    label: LocalizedStringResource("Photos", comment: "Pick an image from the Photos app"),
+                    iconColor: .secondary
                 ) {
                     isPresented = false
                     onPickPhoto()
@@ -41,67 +35,27 @@ struct ImageSourceSheet: View {
 
                 if cameraAvailable {
                     SheetRowSeparator(leadingColumn: 24)
-                    ImageSourceRow(
-                        icon: "camera",
-                        label: "Take photo"
-                    ) {
+                    SheetRow(icon: "camera", label: "Take photo", iconColor: .secondary) {
                         isPresented = false
                         onTakePhoto()
                     }
                 }
 
                 SheetRowSeparator(leadingColumn: 24)
-                ImageSourceRow(
-                    icon: "folder",
-                    label: "Choose file"
-                ) {
+                SheetRow(icon: "folder", label: "Choose file", iconColor: .secondary) {
                     isPresented = false
                     onPickFile()
                 }
             }
 
             if hasExisting, let onRemove {
-                // Destructive delete action as its own card so
-                // it reads as separate from the sources, per the
-                // sheet rules.
                 SheetCard {
-                    ImageSourceRow(
-                        icon: "trash",
-                        label: "Delete image",
-                        role: .destructive
-                    ) {
+                    SheetRow(icon: "trash", label: "Delete image", role: .destructive) {
                         isPresented = false
                         onRemove()
                     }
                 }
             }
-        }
-    }
-}
-
-/// Single tappable row inside `ImageSourceSheet`. Kept private to
-/// the file because the layout (SF Symbol + label + chevron) is
-/// specific to this sheet. The library sort rows use a different
-/// right-edge accessory (a checkmark).
-private struct ImageSourceRow: View {
-    let icon: String
-    let label: LocalizedStringResource
-    var role: ButtonRole?
-    let action: () -> Void
-
-    var body: some View {
-        Button(role: role, action: action) {
-            HStack(spacing: Spacing.lg) {
-                Image(systemName: icon)
-                    .foregroundStyle(role == .destructive ? .red : .secondary)
-                    .frame(width: 24)
-                Text(label)
-                    .foregroundStyle(role == .destructive ? .red : .primary)
-                Spacer()
-            }
-            .padding(.horizontal, Spacing.lg)
-            .padding(.vertical, Spacing.lg)
-            .contentShape(Rectangle())
         }
     }
 }

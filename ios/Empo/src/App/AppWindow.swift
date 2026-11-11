@@ -4,6 +4,11 @@
 import SwiftUI
 import UIKit
 
+extension Notification.Name {
+    /// A touch began anywhere in the window during play.
+    static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
+}
+
 private class AppRootViewController: UIViewController {
 
     private let hostingController: UIHostingController<RootView>
@@ -80,7 +85,14 @@ private class AppRootViewController: UIViewController {
 class AppWindow: UIWindow {
 
     private static var instance: AppWindow?
-    private var allowKeyWindow = false
+
+    /// The reasons that the overlay stays key while a game in the app
+    /// plays.
+    enum KeyClaim {
+        case alert, info, keyboard, buttonEditor
+    }
+
+    private var keyClaims: Set<KeyClaim> = []
 
     override init(windowScene: UIWindowScene) {
         super.init(windowScene: windowScene)
@@ -171,9 +183,8 @@ class AppWindow: UIWindow {
         return gameView.hitTest(convert(point, to: gameView), with: event) ?? gameView
     }
 
-    /// Any tap during play wakes the toolbar via
-    /// `Notification.Name.gameAreaTouchBegan`. This includes taps
-    /// outside the game surface that die on the hosting view.
+    /// This includes the taps outside the game surface that the hosting
+    /// view drops.
     override func sendEvent(_ event: UIEvent) {
         if AppState.shared.phase == .playing,
             event.type == .touches,
@@ -184,20 +195,19 @@ class AppWindow: UIWindow {
         super.sendEvent(event)
     }
 
-    // Controls handle their own key injection via the bridge.
-
-    /// In library/loading: this window must be key for SwiftUI.
-    /// In player: key only while keyboard mode is active or an alert
-    /// shows. A game in the app needs key for its keys, and SDL would
-    /// steal the OK tap of an alert. A game in its own process shows in
-    /// this window, and its scene gets the keys only while it is key.
+    /// In the library and while a game loads, SwiftUI needs this window
+    /// as the key window. During play, a game in the app needs the key
+    /// window for its keys, so this window is key only while a claim
+    /// holds it, and SDL would otherwise take the OK tap of an alert. A
+    /// game in its own process shows in this window, and its scene gets
+    /// the keys only while this window is key.
     override var canBecomeKey: Bool {
         let state = AppState.shared
         if state.shownError != nil { return true }
         if state.infoMessage != nil { return true }
         if state.phase != .playing { return true }
         if EngineSessionCoordinator.shared.runner != .app { return true }
-        return allowKeyWindow
+        return !keyClaims.isEmpty
     }
 
     static var rootViewController: UIViewController? { instance?.rootViewController }
@@ -224,12 +234,21 @@ class AppWindow: UIWindow {
             top: insets.top, leading: insets.left, bottom: insets.bottom, trailing: insets.right)
     }
 
-    @objc static func setAllowKeyWindow(_ allow: Bool) {
+    static var canvas: ScreenCanvas? {
+        guard let window = instance else { return nil }
+        return ScreenCanvas(size: window.bounds.size, safeArea: currentSafeArea)
+    }
+
+    static func claimKey(_ claim: KeyClaim) {
         guard let window = instance else { return }
-        window.allowKeyWindow = allow
-        if allow {
-            window.makeKey()
-        } else {
+        window.keyClaims.insert(claim)
+        window.makeKey()
+    }
+
+    /// The game gets the key window back when the last claim goes.
+    static func releaseKey(_ claim: KeyClaim) {
+        guard let window = instance, window.keyClaims.remove(claim) != nil else { return }
+        if window.keyClaims.isEmpty {
             resignKeyToGame()
         }
     }

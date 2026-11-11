@@ -3,11 +3,8 @@
 
 import Foundation
 
-/// A game-picture region as fractions of the window, top-left
-/// origin. Dimensionless, so it survives rotation and device
-/// changes. `overlay` floats the touch controls OVER the game
-/// instead of reserving a zone below it. The player opts in per
-/// orientation when the region leaves no room for a controls zone.
+/// Fractions of the window, with a top-left origin. `overlay` puts the
+/// touch controls over the game, not in a zone below it.
 public struct ScreenRegion: Equatable, Sendable {
     public var x: Double
     public var y: Double
@@ -32,42 +29,31 @@ public struct ScreenRegion: Equatable, Sendable {
     }
 }
 
-/// Named screen positions. A preset stores the NAME, never a rect:
-/// the rect gets computed per device at apply time, so one profile
-/// places the game right on an iPhone and an iPad alike.
 public enum ScreenPreset: String, CaseIterable, Sendable {
     case top
     case topCenter = "top-center"
     case center
 }
 
-/// One orientation's screen placement. The single per-orientation
-/// value in `screen.json`. A preset serializes as a bare string, a
-/// custom region as an object. Same key either way.
 public enum ScreenPlacement: Equatable, Sendable {
     case preset(ScreenPreset)
     case region(ScreenRegion)
 
-    /// The custom rect, when this placement carries one.
     public var region: ScreenRegion? {
         if case .region(let region) = self { return region }
         return nil
     }
 
-    /// Presets never float the controls over the game.
     public var overlay: Bool {
         region?.overlay ?? false
     }
 }
 
-/// `Profiles/<Name>/screen.json`: Empo-private, profiles only. NOT
-/// part of the frozen controls v1 spec. The loader never reads it
-/// from game folders. Strict parse with its own small `S` finding
-/// namespace. Invalid content counts as absent for resolution.
+/// This file is only in profile folders. It is not part of the frozen
+/// controls v1 spec, and the loader never reads it from game folders.
 public enum ScreenRegionFile {
     public static let fileName = "screen.json"
 
-    /// Regions below this width or height fraction are invalid.
     public static let minFraction = 0.25
 
     /// Tolerance at the `x + w <= 1` boundary, so authored values
@@ -97,7 +83,7 @@ public enum ScreenRegionFile {
         else {
             return ReadResult(findings: ["S001: screen.json is not a JSON object"])
         }
-        guard let rawVersion = object["version"], let version = asInt(rawVersion),
+        guard let rawVersion = object["version"], let version = JSONNumber.int(rawVersion),
             version == 1
         else {
             return ReadResult(findings: ["S002: version is missing or not 1"])
@@ -117,8 +103,6 @@ public enum ScreenRegionFile {
         _ raw: Any?, key: String, findings: inout [String]
     ) -> ScreenPlacement? {
         guard let raw else { return nil }
-        // A bare string is a named preset. The rect gets computed
-        // per device at apply time.
         if let text = raw as? String {
             guard let preset = ScreenPreset(rawValue: text) else {
                 findings.append("S006: '\(key)' names an unknown preset: \(text)")
@@ -131,7 +115,7 @@ public enum ScreenRegionFile {
             return nil
         }
         func number(_ field: String) -> Double? {
-            entry[field].flatMap(asDouble)
+            JSONNumber.double(entry[field])
         }
         guard let x = number("x"), let y = number("y"),
             let w = number("w"), let h = number("h")
@@ -139,9 +123,7 @@ public enum ScreenRegionFile {
             findings.append("S004: '\(key)' is missing x/y/w/h numbers")
             return nil
         }
-        // Optional per-orientation flag. Only a JSON true enables
-        // it (numbers and strings stay ignored).
-        let overlay = entry["overlay"].map { isJSONBool($0) && ($0 as? Bool) == true } ?? false
+        let overlay = JSONNumber.bool(entry["overlay"]) ?? false
         let region = ScreenRegion(x: x, y: y, w: w, h: h, overlay: overlay).rounded()
         guard region.x >= 0, region.y >= 0,
             region.w >= minFraction, region.h >= minFraction,
@@ -156,9 +138,7 @@ public enum ScreenRegionFile {
 
     // MARK: - Serialize
 
-    /// Stable bytes: fixed key order, fixed 4-decimal numbers. Only
-    /// the orientations that exist are written. Both nil returns nil.
-    /// The caller deletes the file instead of writing an empty one.
+    /// Stable bytes: fixed key order, fixed 4-decimal numbers.
     public static func serialize(
         portrait: ScreenPlacement?, landscape: ScreenPlacement?
     ) -> Data? {
@@ -184,30 +164,5 @@ public enum ScreenRegionFile {
     // on every device locale, so the output stays valid JSON.
     private static func format(_ value: Double) -> String {
         String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"), value)
-    }
-
-    // JSON booleans must not pass as numbers. Type casts cannot
-    // tell them apart on either platform, but JSONSerialization
-    // encodes booleans with objCType "c". Same guard as the
-    // controls loader.
-    private static func isJSONBool(_ value: Any) -> Bool {
-        guard let number = value as? NSNumber else { return value is Bool }
-        return String(cString: number.objCType) == "c"
-    }
-
-    private static func asDouble(_ value: Any) -> Double? {
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return number.doubleValue }
-        if let double = value as? Double { return double }
-        if let int = value as? Int { return Double(int) }
-        return nil
-    }
-
-    private static func asInt(_ value: Any) -> Int? {
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return Int(exactly: number) }
-        if let int = value as? Int { return int }
-        if let double = value as? Double { return Int(exactly: double) }
-        return nil
     }
 }

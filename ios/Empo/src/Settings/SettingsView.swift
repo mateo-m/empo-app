@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import GameProbe
 import SwiftUI
 
 enum SettingsSection: String, Decodable {
@@ -62,9 +63,6 @@ struct SettingsView: View {
                             }
                         }
 
-                        // Title position only affects grid cards. The
-                        // list layout always puts the title next to the
-                        // artwork. Hide the row when it would be a no-op.
                         if settings.libraryDisplayMode == .grid {
                             SettingsPicker(
                                 title: "Title position",
@@ -394,9 +392,6 @@ struct SettingsView: View {
                 .scaledToFit()
                 .frame(width: 64, height: 64)
                 .foregroundStyle(.brand)
-            // Match the splash screen wordmark style so the
-            // first run and the settings header feel
-            // continuous. Scale it down to fit the sheet.
             Text(AppInfo.name)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
@@ -479,7 +474,6 @@ private enum UpdateStatusChipPhase: Hashable {
     }
 }
 
-/// Compact refresh affordance with a spring-driven spin while active.
 /// When the check completes, the icon springs forward until it has
 /// made at least one full turn from when the spin started. It then
 /// resets to 0° invisibly (360° and 0° look identical).
@@ -543,7 +537,6 @@ private struct RefreshSpinIcon: View {
         return (completed + sprungProgress) * 360
     }
 
-    /// One 0→1 spring segment per revolution while checking.
     private func springRevolutionProgress(_ progress: Double) -> Double {
         let t = min(max(progress, 0), 1)
         // Critically damped spring approximation (no overshoot).
@@ -714,9 +707,6 @@ struct UpdateStatusBadge: View {
 
     private static let dismissSwipeThreshold: CGFloat = 24
 
-    /// Library banner: a tap opens the release page, and a swipe down
-    /// or the X dismisses. The settings header keeps a plain `Link`
-    /// instead.
     private var usesDismissiblePromoInteraction: Bool {
         actionURL != nil && dismissAction != nil
     }
@@ -939,23 +929,11 @@ struct UpdateStatusBadge: View {
     }
 }
 
-/// A sheet that appears when the user taps the version label in the
-/// settings header. Shows build details as a grouped list styled to
-/// match GameInfoView. The sheet includes the branch row only when
-/// the current branch differs from the default, so release builds on
-/// `main` stay minimal.
-///
-/// Uses the same navigation-stack-with-inline-title pattern as
-/// SettingsView / GameInfoView / GameSettingsView so the toolbar reads
-/// as native chrome (centered inline title, trailing Done button).
 private struct BuildInfoSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    /// A detail row shown in the list. `value` is the copyable string.
-    /// The optional `annotation` renders next to it but stays out of
-    /// the text-selection range. Users can then long-press to copy only
-    /// the canonical value (e.g. the commit hash without the
-    /// "(uncommitted changes)" suffix).
+    /// `annotation` stays outside the text selection, so a long press
+    /// copies only `value`.
     private struct Row {
         let label: LocalizedStringResource
         let value: String
@@ -994,12 +972,9 @@ private struct BuildInfoSheet: View {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.sm) {
                         Text(row.label)
                         Spacer(minLength: Spacing.md)
-                        // RootView applies `.fontDesign(.rounded)`
-                        // to the whole app tree. Environment
-                        // resolution lets it override any
-                        // `.font(design: .monospaced)` set here.
-                        // Set `.monospaced` again explicitly so the
-                        // value's font reads as fixed-width.
+                        // RootView's `.fontDesign(.rounded)` overrides
+                        // `.font(design: .monospaced)`. Only
+                        // `.fontDesign(.monospaced)` keeps a fixed width.
                         Text(row.value)
                             .font(.system(size: 15))
                             .fontDesign(.monospaced)
@@ -1048,12 +1023,10 @@ private struct ViewportBoundsColorPicker: View {
     }
 }
 
-/// Miniature device mockup showing the game viewport and fill color.
 private struct DevicePreview: View {
     let color: Color
     let isLandscape: Bool
 
-    // Device proportions (roughly iPhone-like)
     private let portraitW: CGFloat = 70
     private let portraitH: CGFloat = 150
     private let cornerRadius: CGFloat = Radius.md
@@ -1065,7 +1038,6 @@ private struct DevicePreview: View {
 
     var body: some View {
         ZStack {
-            // Device bezel
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(.secondary.opacity(0.15))
                 .overlay(
@@ -1073,7 +1045,6 @@ private struct DevicePreview: View {
                         .stroke(.secondary.opacity(Alpha.indicatorStroke), lineWidth: 1)
                 )
 
-            // Screen area
             let screenInset = bezelWidth + 2
             let screenW = deviceW - screenInset * 2
             let screenH = deviceH - screenInset * 2
@@ -1082,14 +1053,12 @@ private struct DevicePreview: View {
                 .fill(color)
                 .padding(screenInset)
 
-            // Game viewport
             let gameRect = gameViewportRect(screenW: screenW, screenH: screenH)
             RoundedRectangle(cornerRadius: 3)
                 .fill(Color.black)
                 .frame(width: gameRect.width, height: gameRect.height)
                 .offset(x: gameRect.offsetX, y: gameRect.offsetY)
 
-            // Notch indicator
             notchView
         }
         .frame(width: deviceW, height: deviceH)
@@ -1098,7 +1067,6 @@ private struct DevicePreview: View {
     private var notchView: some View {
         Group {
             if isLandscape {
-                // Notch on the left
                 UnevenRoundedRectangle(
                     topLeadingRadius: 0,
                     bottomLeadingRadius: 0,
@@ -1109,7 +1077,6 @@ private struct DevicePreview: View {
                 .frame(width: notchHeight, height: 20)
                 .offset(x: -(deviceW / 2 - notchHeight / 2))
             } else {
-                // Notch on top
                 UnevenRoundedRectangle(
                     topLeadingRadius: 0,
                     bottomLeadingRadius: 4,
@@ -1131,38 +1098,20 @@ private struct DevicePreview: View {
     }
 
     private func gameViewportRect(screenW: CGFloat, screenH: CGFloat) -> GameRect {
-        // Simulate a 4:3 game aspect ratio
-        let gameAspect: CGFloat = 4.0 / 3.0
         let safeTopInset: CGFloat = notchHeight + 2
 
         if isLandscape {
-            // Landscape: game centered, safe insets on left
             let safeLeftInset: CGFloat = notchHeight + 2
             let availW = screenW - safeLeftInset
-            let availH = screenH
-            var gameW = availW
-            var gameH = gameW / gameAspect
-            if gameH > availH {
-                gameH = availH
-                gameW = gameH * gameAspect
-            }
+            let game = GameAspect.fit(width: availW, height: screenH)
             let offsetX = (safeLeftInset - 0) / 2
-            return GameRect(width: gameW, height: gameH, offsetX: offsetX, offsetY: 0)
+            return GameRect(width: game.width, height: game.height, offsetX: offsetX, offsetY: 0)
         } else {
-            // Portrait: game top-center aligned within safe area
-            let availW = screenW
-            let availH = screenH - safeTopInset
-            var gameW = availW
-            var gameH = gameW / gameAspect
-            if gameH > availH * 0.6 {
-                gameH = availH * 0.6
-                gameW = gameH * gameAspect
-            }
-            // Top-center: between top and center
-            let topY = -(screenH / 2 - safeTopInset - gameH / 2 - 2)
+            let game = GameAspect.fit(width: screenW, height: (screenH - safeTopInset) * 0.6)
+            let topY = -(screenH / 2 - safeTopInset - game.height / 2 - 2)
             let centerY: CGFloat = 0
             let offsetY = (topY + centerY) / 2
-            return GameRect(width: gameW, height: gameH, offsetX: 0, offsetY: offsetY)
+            return GameRect(width: game.width, height: game.height, offsetX: 0, offsetY: offsetY)
         }
     }
 }

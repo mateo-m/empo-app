@@ -14,13 +14,13 @@ struct ControllerButtonsForm: View {
     @State private var refreshToken = UUID()
     @State private var showResetConfirm = false
 
-    private var scope: BindingsCatalog.Scope { game == nil ? .allGames : .thisGame }
+    private var scope: BindingsCatalog.Scope { container.map(BindingsCatalog.Scope.thisGame) ?? .allGames }
     private var container: GameContainer? { game?.container }
     private var listener: ControllerPressListener { .shared }
 
     private var saved: BindingsCatalog.SavedBindings {
         _ = refreshToken
-        return BindingsCatalog.SavedBindings(scope: scope, container: container, manifest: manifest)
+        return BindingsCatalog.SavedBindings(scope: scope, manifest: manifest)
     }
 
     var body: some View {
@@ -59,7 +59,7 @@ struct ControllerButtonsForm: View {
             .scrollsToPressedRow(listener.highlight, with: proxy)
         }
         .resetBindingsAlert(
-            isPresented: $showResetConfirm, scope: scope, container: container, gameTitle: game?.title
+            isPresented: $showResetConfirm, scope: scope, gameTitle: game?.title
         )
         .onAppear {
             manifest = container.flatMap {
@@ -109,7 +109,7 @@ struct ControllerButtonsForm: View {
         )
         .contentShape(.rect)
         .contextMenu {
-            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, container: container)
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope)
         }
     }
 
@@ -124,8 +124,7 @@ struct ControllerButtonsForm: View {
             isOn: Binding(
                 get: { current == choice.target },
                 set: { _ in
-                    BindingsCatalog.save(
-                        source: row.source, target: choice.target, scope: scope, container: container)
+                    BindingsCatalog.save(source: row.source, target: choice.target, scope: scope)
                 })
         ) {
             Text(choice.title)

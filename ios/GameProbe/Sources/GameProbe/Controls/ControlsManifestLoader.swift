@@ -5,17 +5,9 @@ import Foundation
 import Json5
 
 public enum ControlsManifestLoader {
-    public static let empoManifestRelativePath = "empo/controls.json"
-    public static let rootManifestRelativePath = "controls.json"
-    public static let kirinManifestRelativePath = KirinControlsTranslator.fileName
-    public static let joiplayManifestRelativePath = JoiPlayControlsTranslator.fileName
-
-    /// Legacy alias for the authoritative `empo/` location.
-    public static let manifestRelativePath = empoManifestRelativePath
-
-    private static let maxFileSize = 128 * 1024
-
-    public enum ManifestLocation: String, Sendable, Equatable {
+    /// The case order is the source order. The first file that exists
+    /// and claims the game wins.
+    public enum ManifestLocation: String, Sendable, Equatable, CaseIterable {
         case empo = "empo/controls.json"
         case root = "controls.json"
         case kirin = "kirin-touch-controls.json"
@@ -41,15 +33,7 @@ public enum ControlsManifestLoader {
         }
     }
 
-    /// The file-format cap on key buttons + action buttons per
-    /// orientation. Public: the app's add UI gates on the SAME
-    /// value, so a saved layout can never fail V015 on its next
-    /// load.
-    public static let maxButtonsPerOrientation = 21
-
-    /// Every finding code this loader can emit. Emission sites use
-    /// the enum, so a new code cannot ship without appearing here.
-    /// V021 is absent on purpose: W005 superseded it.
+    /// V021 is absent on purpose. W005 replaced it.
     public enum FindingCode: String, CaseIterable, Sendable {
         case v000 = "V000"
         case v001 = "V001"
@@ -73,8 +57,6 @@ public enum ControlsManifestLoader {
         case j001 = "J001"
     }
 
-    /// Derived from the enum: the docs table and the uniqueness
-    /// test read this, and it cannot drift from the emission sites.
     public static var emittedFindingCodes: [String] {
         FindingCode.allCases.map(\.rawValue)
     }
@@ -116,174 +98,94 @@ public enum ControlsManifestLoader {
             self.message = message
         }
 
-        /// Loader emission sites go through the typed code, so the
-        /// emitted set and `emittedFindingCodes` cannot drift.
         init(severity: Severity, code: FindingCode, path: String, message: String) {
             self.init(
                 severity: severity, code: code.rawValue, path: path, message: message)
         }
     }
 
-    /// nil when no manifest location exists. Never throws for content
-    /// problems. Those land in `findings`.
     public static func load(gameRoot: URL) -> LoadOutcome? {
         load(gameRoot: gameRoot, metrics: .reference)
     }
 
     public static func load(gameRoot: URL, metrics: TouchZoneMetrics) -> LoadOutcome? {
-        let fileManager = FileManager.default
-        let empoURL = gameRoot.appendingPathComponent(empoManifestRelativePath)
-        let rootURL = gameRoot.appendingPathComponent(rootManifestRelativePath)
-        let kirinURL = gameRoot.appendingPathComponent(kirinManifestRelativePath)
-        let joiplayURL = gameRoot.appendingPathComponent(joiplayManifestRelativePath)
-        let empoExists = fileManager.fileExists(atPath: empoURL.path)
-        let rootExists = fileManager.fileExists(atPath: rootURL.path)
-        let kirinExists = fileManager.fileExists(atPath: kirinURL.path)
-        let joiplayExists = fileManager.fileExists(atPath: joiplayURL.path)
+        let present = ManifestLocation.allCases.filter {
+            FileManager.default.fileExists(atPath: gameRoot.appendingPathComponent($0.rawValue).path)
+        }
+        guard !present.isEmpty else { return nil }
 
-        guard empoExists || rootExists || kirinExists || joiplayExists else { return nil }
-
-        if empoExists {
-            let result = loadEmpo(at: empoURL)
-            let notes: [LoadOutcome.Note] =
-                if rootExists {
-                    [.rootSkippedBecauseEmpoExists]
-                } else if kirinExists {
-                    [.kirinSkippedBecauseManifestExists]
-                } else if joiplayExists {
-                    [.joiplaySkippedBecauseOtherSourceExists]
-                } else {
-                    []
+        var unclaimedNotes: [LoadOutcome.Note] = []
+        for (index, location) in present.enumerated() {
+            let data = try? Data(contentsOf: gameRoot.appendingPathComponent(location.rawValue))
+            var result: Result
+            switch location {
+            case .empo:
+                result = data.map(parse(data:)) ?? readFailure
+            case .root:
+                switch claimRoot(data) {
+                case .claimed(let root): result = manifestResult(from: root)
+                case .unclaimed(let note):
+                    unclaimedNotes.append(note)
+                    continue
                 }
-            return LoadOutcome(result: result, notes: notes)
-        }
-
-        if rootExists {
-            return loadRoot(
-                at: rootURL,
-                metrics: metrics,
-                kirinExists: kirinExists,
-                kirinURL: kirinURL,
-                joiplayExists: joiplayExists,
-                joiplayURL: joiplayURL
-            )
-        }
-
-        if kirinExists {
-            return loadKirin(at: kirinURL, metrics: metrics, joiplayExists: joiplayExists)
-        }
-
-        return loadJoiplay(at: joiplayURL, metrics: metrics)
-    }
-
-    private static func loadEmpo(at url: URL) -> Result {
-        guard let data = try? Data(contentsOf: url) else {
-            return Result(
-                manifest: nil,
-                findings: [
-                    Finding(
-                        severity: .error,
-                        code: .v000,
-                        path: "",
-                        message: "Failed to read controls manifest"
-                    )
-                ],
-                location: .empo
-            )
-        }
-        var result = parse(data: data)
-        result.location = .empo
-        return result
-    }
-
-    private static func loadRoot(
-        at url: URL,
-        metrics: TouchZoneMetrics,
-        kirinExists: Bool,
-        kirinURL: URL,
-        joiplayExists: Bool,
-        joiplayURL: URL
-    ) -> LoadOutcome {
-        let unclaimed = { (note: LoadOutcome.Note) in
-            var outcome =
-                if kirinExists {
-                    loadKirin(at: kirinURL, metrics: metrics, joiplayExists: joiplayExists)
-                } else if joiplayExists {
-                    loadJoiplay(at: joiplayURL, metrics: metrics)
-                } else {
-                    LoadOutcome(result: Result(manifest: nil, findings: []))
-                }
-            outcome.notes.insert(note, at: 0)
-            return outcome
-        }
-
-        guard let data = try? Data(contentsOf: url) else {
-            return unclaimed(.rootUnclaimedNotObject)
-        }
-
-        if data.count > maxFileSize {
-            return unclaimed(.rootUnclaimedOversized)
-        }
-
-        guard let text = String(data: data, encoding: .utf8),
-            let root = JSON5LiteParser.parseObject(text)
-        else {
-            return unclaimed(.rootUnclaimedNotObject)
-        }
-
-        guard root["version"] != nil else {
-            return unclaimed(.rootUnclaimedNoVersion)
-        }
-
-        var result = parse(data: data)
-        result.location = .root
-        let notes: [LoadOutcome.Note] =
-            if kirinExists {
-                [.kirinSkippedBecauseManifestExists]
-            } else if joiplayExists {
-                [.joiplaySkippedBecauseOtherSourceExists]
-            } else {
-                []
+            case .kirin:
+                let translation = KirinControlsTranslator.translate(
+                    data: data ?? Data(), metrics: metrics)
+                result = Result(
+                    manifest: translation.manifest,
+                    findings: translation.notes.map {
+                        Finding(severity: .warning, code: .k001, path: "", message: $0)
+                    })
+            case .joiplay:
+                let translation = JoiPlayControlsTranslator.translate(
+                    data: data ?? Data(), metrics: metrics)
+                result = Result(
+                    manifest: translation.manifest,
+                    findings: translation.notes.map {
+                        Finding(severity: .warning, code: .j001, path: "", message: $0)
+                    })
             }
-        return LoadOutcome(result: result, notes: notes)
+            result.location = location
+            let skipped = present.dropFirst(index + 1).first.map(skipNote(for:))
+            return LoadOutcome(result: result, notes: unclaimedNotes + (skipped.map { [$0] } ?? []))
+        }
+        return LoadOutcome(result: Result(manifest: nil, findings: []), notes: unclaimedNotes)
     }
 
-    private static func loadKirin(
-        at url: URL,
-        metrics: TouchZoneMetrics,
-        joiplayExists: Bool = false
-    ) -> LoadOutcome {
-        let data = (try? Data(contentsOf: url)) ?? Data()
-        let translation = KirinControlsTranslator.translate(data: data, metrics: metrics)
-        let findings = translation.notes.map { note in
-            Finding(severity: .warning, code: .k001, path: "", message: note)
+    private static let readFailure = Result(
+        manifest: nil,
+        findings: [
+            Finding(
+                severity: .error, code: .v000, path: "",
+                message: "Failed to read controls manifest")
+        ])
+
+    private static func skipNote(for location: ManifestLocation) -> LoadOutcome.Note {
+        switch location {
+        case .empo, .root: .rootSkippedBecauseEmpoExists
+        case .kirin: .kirinSkippedBecauseManifestExists
+        case .joiplay: .joiplaySkippedBecauseOtherSourceExists
         }
-        let result = Result(
-            manifest: translation.manifest,
-            findings: findings,
-            location: .kirin
-        )
-        let notes: [LoadOutcome.Note] =
-            joiplayExists ? [.joiplaySkippedBecauseOtherSourceExists] : []
-        return LoadOutcome(result: result, notes: notes)
     }
 
-    private static func loadJoiplay(at url: URL, metrics: TouchZoneMetrics) -> LoadOutcome {
-        let data = (try? Data(contentsOf: url)) ?? Data()
-        let translation = JoiPlayControlsTranslator.translate(data: data, metrics: metrics)
-        let findings = translation.notes.map { note in
-            Finding(severity: .warning, code: .j001, path: "", message: note)
+    private enum RootClaim {
+        case claimed([String: Any])
+        case unclaimed(LoadOutcome.Note)
+    }
+
+    /// A `controls.json` at the game root can belong to another tool.
+    private static func claimRoot(_ data: Data?) -> RootClaim {
+        guard let data else { return .unclaimed(.rootUnclaimedNotObject) }
+        if data.count > ControlLimits.maxFileSize { return .unclaimed(.rootUnclaimedOversized) }
+        guard case .object(let root) = decodeObject(data) else {
+            return .unclaimed(.rootUnclaimedNotObject)
         }
-        let result = Result(
-            manifest: translation.manifest,
-            findings: findings,
-            location: .joiplay
-        )
-        return LoadOutcome(result: result)
+        guard root["version"] != nil else { return .unclaimed(.rootUnclaimedNoVersion) }
+        return .claimed(root)
     }
 
     public static func parse(data: Data) -> Result {
-        if data.count > maxFileSize {
+        if data.count > ControlLimits.maxFileSize {
             return Result(
                 manifest: nil,
                 findings: [
@@ -291,85 +193,52 @@ public enum ControlsManifestLoader {
                         severity: .error,
                         code: .v001,
                         path: "",
-                        message: "Controls manifest exceeds 128 KiB"
+                        message: "Controls manifest exceeds \(ControlLimits.maxFileSizeText)"
                     )
                 ]
             )
         }
+        switch decodeObject(data) {
+        case .object(let root): return manifestResult(from: root)
+        case .failure(let message):
+            return Result(
+                manifest: nil,
+                findings: [Finding(severity: .error, code: .v000, path: "", message: message)])
+        }
+    }
 
+    private enum Decoded {
+        case object([String: Any])
+        case failure(String)
+    }
+
+    private static func decodeObject(_ data: Data) -> Decoded {
         guard let text = String(data: data, encoding: .utf8) else {
-            return Result(
-                manifest: nil,
-                findings: [
-                    Finding(
-                        severity: .error,
-                        code: .v000,
-                        path: "",
-                        message: "Controls manifest is not valid UTF-8"
-                    )
-                ]
-            )
+            return .failure("Controls manifest is not valid UTF-8")
         }
-
-        // Parse with the engine's json5pp grammar. A syntax error
-        // carries a position, which goes into the finding so the
-        // controls.json.log diagnostics name the broken line.
-        let root: [String: Any]
         do {
-            let strict = try Json5.normalizeToStrictJSON(text)
-            guard let strictData = strict.data(using: .utf8),
-                let object = try? JSONSerialization.jsonObject(with: strictData)
-                    as? [String: Any]
-            else {
-                return Result(
-                    manifest: nil,
-                    findings: [
-                        Finding(
-                            severity: .error,
-                            code: .v000,
-                            path: "",
-                            message: "Invalid JSON in controls manifest"
-                        )
-                    ]
-                )
+            guard let root = try JSON5LiteParser.parseObjectReportingSyntaxError(text) else {
+                return .failure("Invalid JSON in controls manifest")
             }
-            root = object
+            return .object(root)
         } catch let error as Json5SyntaxError {
-            return Result(
-                manifest: nil,
-                findings: [
-                    Finding(
-                        severity: .error,
-                        code: .v000,
-                        path: "",
-                        message: "Invalid JSON in controls manifest: "
-                            + "\(error.message) "
-                            + "(line \(error.line), column \(error.column))"
-                    )
-                ]
-            )
+            return .failure(
+                "Invalid JSON in controls manifest: \(error.message) "
+                    + "(line \(error.line), column \(error.column))")
         } catch {
-            return Result(
-                manifest: nil,
-                findings: [
-                    Finding(
-                        severity: .error,
-                        code: .v000,
-                        path: "",
-                        message: "Invalid JSON in controls manifest"
-                    )
-                ]
-            )
+            return .failure("Invalid JSON in controls manifest")
         }
+    }
 
-        if let versionValue = root["version"], let version = asInt(versionValue), version > 1 {
+    private static func manifestResult(from root: [String: Any]) -> Result {
+        if let versionValue = root["version"], let version = JSONNumber.int(versionValue), version > 1 {
             return Result(manifest: nil, findings: [], ignoredNewerVersion: true)
         }
 
         var findings: [Finding] = []
         var manifest = ControlsManifest(version: 0)
 
-        if let versionValue = root["version"], let version = asInt(versionValue) {
+        if let versionValue = root["version"], let version = JSONNumber.int(versionValue) {
             manifest.version = version
             if version != 1 {
                 findings.append(
@@ -405,8 +274,8 @@ public enum ControlsManifestLoader {
             )
         }
 
-        // `controller` is the section's first name. It stays valid
-        // for ever: manifests already in the wild use it.
+        // `controller` is the old name of the section. Manifests in the
+        // wild use it, so it stays valid.
         let bindingsKey = root["bindings"] != nil ? "bindings" : "controller"
         if root["bindings"] != nil && root["controller"] != nil {
             findings.append(
@@ -519,13 +388,14 @@ public enum ControlsManifestLoader {
         }
 
         let combinedCount = (layout.buttons?.count ?? 0) + (layout.actionButtons?.count ?? 0)
-        if combinedCount > maxButtonsPerOrientation {
+        if combinedCount > ControlLimits.maxButtonsPerOrientation {
             findings.append(
                 Finding(
                     severity: .error,
                     code: .v015,
                     path: path,
-                    message: "More than 21 buttons and action buttons combined in one orientation"
+                    message:
+                        "More than \(ControlLimits.maxButtonsPerOrientation) buttons and action buttons combined in one orientation"
                 )
             )
         }
@@ -548,9 +418,8 @@ public enum ControlsManifestLoader {
                 continue
             }
             if key == "style" {
-                // Any junk value (unknown string, wrong type) falls
-                // back to the d-pad with a warning, never an error: a
-                // later style must not poison this version.
+                // An unknown value gives a warning, not an error, so
+                // that a file with a newer style still loads.
                 if let text = value as? String, let parsed = MovementStyle(rawValue: text) {
                     style = parsed
                 } else {
@@ -578,13 +447,13 @@ public enum ControlsManifestLoader {
         path: String,
         findings: inout [Finding]
     ) -> [ButtonSpec] {
-        if array.count > maxButtonsPerOrientation {
+        if array.count > ControlLimits.maxButtonsPerOrientation {
             findings.append(
                 Finding(
                     severity: .error,
                     code: .v013,
                     path: path,
-                    message: "More than \(maxButtonsPerOrientation) buttons in one orientation"
+                    message: "More than \(ControlLimits.maxButtonsPerOrientation) buttons in one orientation"
                 )
             )
         }
@@ -645,16 +514,16 @@ public enum ControlsManifestLoader {
             case "label":
                 if let text = value as? String {
                     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if trimmed.count > 8 {
+                    if trimmed.count > ControlLimits.maxLabelLength {
                         findings.append(
                             Finding(
                                 severity: .warning,
                                 code: .w002,
                                 path: "\(path)/label",
-                                message: "Label truncated to 8 characters"
+                                message: "Label truncated to \(ControlLimits.maxLabelLength) characters"
                             )
                         )
-                        label = String(trimmed.prefix(8))
+                        label = String(trimmed.prefix(ControlLimits.maxLabelLength))
                     } else {
                         label = trimmed
                     }
@@ -701,9 +570,6 @@ public enum ControlsManifestLoader {
 
     // MARK: - Bindings
 
-    /// The grammar itself lives in `BindingMapCoder`, which the app's
-    /// defaults store reads with too. This only turns its issues into
-    /// findings.
     private static func parseBindingMap(
         _ object: [String: Any],
         path: String,
@@ -771,81 +637,43 @@ public enum ControlsManifestLoader {
     }
 
     static func validateCoordinate(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(0.0...1.0).contains(value) {
-            findings.append(
-                Finding(
-                    severity: .error,
-                    code: .v011,
-                    path: path,
-                    message: "Coordinate must be between 0.0 and 1.0"
-                )
-            )
-        }
+        validate(
+            value, in: ControlLimits.coordinate, code: .v011, name: "Coordinate", path: path,
+            findings: &findings)
     }
 
     static func validateButtonSize(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(40.0...100.0).contains(value) {
-            findings.append(
-                Finding(
-                    severity: .error,
-                    code: .v012,
-                    path: path,
-                    message: "Button size must be between 40 and 100"
-                )
-            )
-        }
+        validate(
+            value, in: ControlLimits.buttonSize, code: .v012, name: "Button size", path: path,
+            findings: &findings)
     }
 
     static func validateDPadSize(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(100.0...200.0).contains(value) {
-            findings.append(
-                Finding(
-                    severity: .error,
-                    code: .v012,
-                    path: path,
-                    message: "D-pad size must be between 100 and 200"
-                )
-            )
-        }
+        validate(
+            value, in: ControlLimits.dpadSize, code: .v012, name: "D-pad size", path: path,
+            findings: &findings)
     }
 
     static func validateOpacity(_ value: Double, path: String, findings: inout [Finding]) {
-        if !(0.2...1.0).contains(value) {
-            findings.append(
-                Finding(
-                    severity: .error,
-                    code: .v012,
-                    path: path,
-                    message: "Opacity must be between 0.2 and 1.0"
-                )
-            )
-        }
+        validate(
+            value, in: ControlLimits.opacity, code: .v012, name: "Opacity", path: path, findings: &findings)
     }
 
-    // JSON booleans must not pass as numbers. Type casts cannot tell
-    // them apart (`NSNumber(1) is Bool` and `true as? Int` both succeed
-    // on Darwin and corelibs), but `objCType` can: JSONSerialization
-    // encodes booleans as "c" and integers/doubles as "q"/"d" on both
-    // platforms. CF APIs are not an option. Linux Foundation lacks them.
-    private static func isJSONBool(_ value: Any) -> Bool {
-        guard let number = value as? NSNumber else { return value is Bool }
-        return String(cString: number.objCType) == "c"
+    private static func validate(
+        _ value: Double, in range: ClosedRange<Double>, code: FindingCode, name: String,
+        path: String, findings: inout [Finding]
+    ) {
+        guard !range.contains(value) else { return }
+        findings.append(
+            Finding(
+                severity: .error, code: code, path: path,
+                message:
+                    "\(name) must be between \(rangeText(range.lowerBound)) and \(rangeText(range.upperBound))"
+            ))
     }
 
-    static func asDouble(_ value: Any) -> Double? {
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return number.doubleValue }
-        if let double = value as? Double { return double }
-        if let int = value as? Int { return Double(int) }
-        return nil
-    }
-
-    private static func asInt(_ value: Any) -> Int? {
-        guard !isJSONBool(value) else { return nil }
-        if let number = value as? NSNumber { return Int(exactly: number) }
-        if let int = value as? Int { return int }
-        if let double = value as? Double { return Int(exactly: double) }
-        return nil
+    private static func rangeText(_ bound: Double) -> String {
+        bound == bound.rounded() && bound > 1 ? String(Int(bound)) : String(bound)
     }
 
     static func appendCoordinateError(findings: inout [Finding], path: String) {

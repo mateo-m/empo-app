@@ -9,12 +9,8 @@ struct AddButtonSheet: View {
     var actions: PlayerActionRegistry?
     @Environment(\.dismiss) private var dismiss
 
-    /// The file format caps key buttons + action buttons at 21 per
-    /// orientation. A layout saved over the cap would fail validation
-    /// on its next load and silently reset, so the add rows disable
-    /// at the limit instead.
     private var atCap: Bool {
-        layout.combinedButtonCount >= ControlsManifestLoader.maxButtonsPerOrientation
+        layout.combinedButtonCount >= ControlLimits.maxButtonsPerOrientation
     }
 
     var body: some View {
@@ -23,7 +19,7 @@ struct AddButtonSheet: View {
                 if atCap {
                     Section {
                         Text(
-                            "This layout has the maximum of \(ControlsManifestLoader.maxButtonsPerOrientation) buttons. Delete one to add another."
+                            "This layout has the maximum of \(ControlLimits.maxButtonsPerOrientation) buttons. Delete one to add another."
                         )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -34,26 +30,10 @@ struct AddButtonSheet: View {
                         actionRow(for: action)
                     }
                 }
-                Section("Common keys") {
-                    ForEach(keyCatalog.filter { isCommon($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
-                Section("Letters") {
-                    ForEach(keyCatalog.filter { isLetter($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
-                Section("Numbers") {
-                    ForEach(keyCatalog.filter { isNumber($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
-                Section("Function keys") {
-                    ForEach(keyCatalog.filter { isFunction($0) }) { entry in
-                        row(for: entry)
-                    }
-                }
+                Section("Common keys") { keyRows(EditorKeys.common + EditorKeys.special) }
+                Section("Letters") { keyRows(EditorKeys.letters) }
+                Section("Numbers") { keyRows(EditorKeys.numbers) }
+                Section("Function keys") { keyRows(EditorKeys.function) }
             }
             .navigationTitle("Add button")
             .navigationBarTitleDisplayMode(.inline)
@@ -67,24 +47,17 @@ struct AddButtonSheet: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func row(for entry: KeyEntry) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.label)
-                if let hint = entry.hint {
-                    Text(hint)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+    private func keyRows(_ keys: [EditorKey]) -> some View {
+        ForEach(keys) { key in
+            KeyCodeLabel(key: key)
+                .contentShape(Rectangle())
+                .opacity(atCap ? 0.4 : 1)
+                .onTapGesture {
+                    guard !atCap, let scancode = KeyCodeTable.scancode(for: key.code) else { return }
+                    dismiss()
+                    layout.addButton(
+                        label: KeyCodeTable.buttonLabel(for: key.code) ?? key.code, scancode: scancode)
                 }
-            }
-            Spacer()
-        }
-        .contentShape(Rectangle())
-        .opacity(atCap ? 0.4 : 1)
-        .onTapGesture {
-            guard !atCap else { return }
-            dismiss()
-            layout.addButton(label: entry.label, scancode: entry.scancode)
         }
     }
 
@@ -97,8 +70,10 @@ struct AddButtonSheet: View {
                 Text(action.localizedBlurb)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if let actions, !actions.isAvailable(action.id) {
-                    Text(BindingsCatalog.unavailableActionNote(action.id, in: .addButtonSheet))
+                if let actions, !actions.isAvailable(action.id),
+                    let requirement = PlayerActionRegistry.requirement(of: action.id)
+                {
+                    Text(requirement.addButtonNote)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -113,49 +88,70 @@ struct AddButtonSheet: View {
             layout.addActionButton(action: action.id)
         }
     }
+}
 
-    private func isCommon(_ entry: KeyEntry) -> Bool {
-        let common: Set<Int32> = [
-            Int32(GAMECORE_SCANCODE_Z), Int32(GAMECORE_SCANCODE_X),
-            Int32(GAMECORE_SCANCODE_LSHIFT), Int32(GAMECORE_SCANCODE_LCTRL),
-            Int32(GAMECORE_SCANCODE_SPACE), Int32(GAMECORE_SCANCODE_RETURN),
-            Int32(GAMECORE_SCANCODE_ESCAPE), Int32(GAMECORE_SCANCODE_TAB),
-            Int32(GAMECORE_SCANCODE_LALT), Int32(GAMECORE_SCANCODE_BACKSPACE),
-        ]
-        return common.contains(entry.scancode)
+private struct EditorKey: Identifiable {
+    let code: String
+    var hint: LocalizedStringResource?
+    var id: String { code }
+}
+
+/// The keys of the add-button sheet and the key picker. The binding
+/// picker offers more keys.
+private enum EditorKeys {
+    private static func usualUse(_ value: String.LocalizationValue) -> LocalizedStringResource {
+        LocalizedStringResource(
+            value,
+            comment: "What this key does in most RPG Maker games. Shown next to the key name in the key list."
+        )
     }
 
-    private func isLetter(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(GAMECORE_SCANCODE_A) && entry.scancode <= Int32(GAMECORE_SCANCODE_Z)
-            && !isCommon(entry)
-    }
+    static let common = [
+        EditorKey(code: "KeyZ", hint: usualUse("Confirm")),
+        EditorKey(code: "KeyX", hint: usualUse("Cancel")),
+        EditorKey(code: "ShiftLeft", hint: usualUse("Dash")),
+        EditorKey(code: "ControlLeft", hint: usualUse("Skip")),
+        EditorKey(code: "Space"),
+        EditorKey(code: "Enter"),
+        EditorKey(code: "Escape"),
+        EditorKey(code: "Tab"),
+    ]
+    static let special = [EditorKey(code: "AltLeft"), EditorKey(code: "Backspace")]
+    static let letters = "ABCDEFGHIJKLMNOPQRSTUVWY".map { EditorKey(code: "Key\($0)") }
+    static let numbers = (0...9).map { EditorKey(code: "Digit\($0)") }
+    static let function = (1...12).map { EditorKey(code: "F\($0)") }
+    static let all = common + letters + numbers + function + special
+}
 
-    private func isNumber(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(GAMECORE_SCANCODE_1) && entry.scancode <= Int32(GAMECORE_SCANCODE_0)
-    }
+private struct KeyCodeLabel: View {
+    let key: EditorKey
 
-    private func isFunction(_ entry: KeyEntry) -> Bool {
-        entry.scancode >= Int32(GAMECORE_SCANCODE_F1) && entry.scancode <= Int32(GAMECORE_SCANCODE_F12)
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(KeyCodeTable.buttonLabel(for: key.code) ?? key.code)
+                if let hint = key.hint {
+                    Text(hint)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
     }
 }
 
-/// Size presets shared by the edit sheets, so the progressions
-/// cannot drift between the button kinds.
 enum ControlSizePresets {
     static let button: [(LocalizedStringResource, CGFloat)] = [
         ("Small", 44), ("Medium", 50),
-        ("Standard", 56), ("Large", 68), ("Extra large", 80),
+        ("Standard", CGFloat(ControlLimits.defaultButtonSize)), ("Large", 68), ("Extra large", 80),
     ]
-    /// Matches the button progression's feel. The D-pad's default
-    /// (140pt) is the middle preset.
     static let dpad: [(LocalizedStringResource, CGFloat)] = [
         ("Small", 110), ("Medium", 125),
-        ("Standard", 140), ("Large", 160), ("Extra large", 180),
+        ("Standard", CGFloat(ControlLimits.defaultDPadSize)), ("Large", 160), ("Extra large", 180),
     ]
 }
 
-/// The Size / Opacity / Delete sections every control edit sheet
-/// shares. One implementation, so the sheets cannot drift.
 struct ControlSizeSection: View {
     let sizes: [(LocalizedStringResource, CGFloat)]
     let current: CGFloat
@@ -188,9 +184,6 @@ struct ControlOpacitySection: View {
 
     var body: some View {
         Section("Opacity") {
-            // The integer-percent label mirrors the Photos
-            // adjust-panel idiom, so the exact slider value stays
-            // visible while you drag.
             HStack {
                 Slider(
                     value: Binding(get: { opacity }, set: onChange),
@@ -266,7 +259,7 @@ struct ButtonEditSheet: View {
                         NavigationLink {
                             keyPickerList(current: button.scancode)
                         } label: {
-                            LabeledContent("Key", value: scancodeDisplayName(button.scancode))
+                            LabeledContent("Key", value: keyName(button.scancode))
                         }
                     }
 
@@ -302,37 +295,38 @@ struct ButtonEditSheet: View {
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
         .onAppear {
-            AppWindow.setAllowKeyWindow(true)
+            AppWindow.claimKey(.buttonEditor)
             labelText = button?.label ?? ""
         }
         .onDisappear {
-            AppWindow.setAllowKeyWindow(false)
+            AppWindow.releaseKey(.buttonEditor)
         }
+    }
+
+    private func keyName(_ scancode: Int32) -> String {
+        KeyCodeTable.code(for: scancode).flatMap { KeyCodeTable.buttonLabel(for: $0) }
+            ?? String(
+                localized: "Unknown key",
+                comment: "Shown as the key of an on-screen button when Empo does not know its key.")
     }
 
     private func keyPickerList(current scancode: Int32) -> some View {
         List {
-            ForEach(keyCatalog) { entry in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(entry.label)
-                        if let hint = entry.hint {
-                            Text(hint)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+            ForEach(EditorKeys.all) { key in
+                let keyScancode = KeyCodeTable.scancode(for: key.code)
+                KeyCodeLabel(key: key)
+                    .overlay(alignment: .trailing) {
+                        if keyScancode == scancode {
+                            Image(systemName: "checkmark")
+                                .foregroundStyle(.brand)
                         }
                     }
-                    Spacer()
-                    if entry.scancode == scancode {
-                        Image(systemName: "checkmark")
-                            .foregroundStyle(.brand)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        guard let keyScancode else { return }
+                        layout.recordEditSnapshot()
+                        layout.updateButton(id: buttonID, scancode: keyScancode)
                     }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    layout.recordEditSnapshot()
-                    layout.updateButton(id: buttonID, scancode: entry.scancode)
-                }
             }
         }
         .navigationTitle("Key")
@@ -340,9 +334,6 @@ struct ButtonEditSheet: View {
     }
 }
 
-/// Edit sheet for a function button. The action is fixed at add time
-/// (a read-only row shows its name and description). Only size,
-/// opacity, and delete apply.
 struct ActionButtonEditSheet: View {
     var layout: ControlsLayout
     let buttonID: UUID
@@ -409,10 +400,6 @@ struct ActionButtonEditSheet: View {
     }
 }
 
-/// Edit sheet specific to the movement control. Unlike an action
-/// button, it has no label, no key assignment, and no delete option.
-/// So it gets its own smaller sheet with style, size, and opacity
-/// controls.
 struct DPadEditSheet: View {
     var layout: ControlsLayout
     @Environment(\.dismiss) private var dismiss
@@ -421,9 +408,6 @@ struct DPadEditSheet: View {
         NavigationStack {
             List {
                 Section("Style") {
-                    // Applies to the ACTIVE orientation only, same
-                    // scope as size and opacity (and the same
-                    // single-orientation undo snapshot).
                     Picker("Style", selection: styleBinding) {
                         Text("D-pad").tag(MovementStyle.dpad)
                         Text("Joystick").tag(MovementStyle.stick)
@@ -470,8 +454,13 @@ struct DPadEditSheet: View {
 
 /// SwiftUI shows one sheet or alert at a time, and two fingers can tap
 /// two controls in one frame.
-enum ControlsEditDialog: Hashable, Identifiable {
-    case addButton, resetConfirm, dpad
+enum ControlsEditDialog: Hashable {
+    case sheet(ControlsEditSheet)
+    case resetConfirm
+}
+
+enum ControlsEditSheet: Hashable, Identifiable {
+    case addButton, dpad
     case button(UUID)
     case actionButton(UUID)
 
@@ -488,31 +477,56 @@ struct ControlsEditDialogs: ViewModifier {
         content
             .sheet(
                 item: Binding(
-                    get: { dialog == .resetConfirm ? nil : dialog },
-                    set: { dialog = $0 })
-            ) { dialog in
-                switch dialog {
+                    get: { if case .sheet(let sheet) = dialog { sheet } else { nil } },
+                    set: { dialog = $0.map(ControlsEditDialog.sheet) })
+            ) { sheet in
+                switch sheet {
                 case .addButton: AddButtonSheet(layout: layout, actions: actions)
                 case .dpad: DPadEditSheet(layout: layout)
                 case .button(let id): ButtonEditSheet(layout: layout, buttonID: id)
                 case .actionButton(let id): ActionButtonEditSheet(layout: layout, buttonID: id)
-                case .resetConfirm: EmptyView()
                 }
             }
             .alert(
-                layout.resetConfirmationTitle,
+                resetTitle,
                 isPresented: Binding(
                     get: { dialog == .resetConfirm },
                     set: { if !$0, dialog == .resetConfirm { dialog = nil } })
             ) {
-                Button(layout.resetConfirmationActionTitle, role: .destructive) {
+                Button(resetActionTitle, role: .destructive) {
                     layout.resetToResolvedDefault()
                 }
                 .keyboardShortcut(.defaultAction)
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(layout.resetConfirmationMessage())
+                Text(resetMessage())
             }
+    }
+
+    private var resetTitle: LocalizedStringResource {
+        if case .pinnedProfile(let name) = layout.provenance {
+            return "Stop using \(name)?"
+        }
+        return layout.hasManifestTouchSection ? "Reset to game default?" : "Reset to Empo default?"
+    }
+
+    private var resetActionTitle: LocalizedStringResource {
+        if case .pinnedProfile = layout.provenance {
+            return "Stop using"
+        }
+        return "Reset"
+    }
+
+    private func resetMessage() -> LocalizedStringResource {
+        let screenChanges = layout.screenChangesOnReset()
+        if case .pinnedProfile(let name) = layout.provenance {
+            return screenChanges
+                ? "This game stops using the profile \(name). The profile keeps its layout. The screen returns to automatic placement."
+                : "This game stops using the profile \(name). The profile keeps its layout."
+        }
+        return screenChanges
+            ? "This deletes your custom layout and returns the screen to automatic placement. You can't undo this."
+            : "This deletes your custom layout. You can't undo this."
     }
 }
 
@@ -528,5 +542,18 @@ extension View {
                 actions: actions,
                 dialog: dialog
             ))
+    }
+}
+
+extension ActionRequirement {
+    var addButtonNote: String {
+        switch self {
+        case .cheats:
+            String(localized: "This game has no cheats. The button shows in games that have cheats.")
+        case .fastForward:
+            String(
+                localized:
+                    "Fast forward is off for this game. The button shows in games that have Fast forward on.")
+        }
     }
 }

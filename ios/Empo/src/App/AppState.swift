@@ -129,7 +129,9 @@ class AppState {
         launchedSettings = start.launchedSettings
         // Bind the controls layout to this game so edits during play
         // persist to this game's layout profile.
-        ControlsLayout.shared.switchGame(id: game.id, container: start.container, title: game.title)
+        ControlsLayout.shared.switchGame(
+            id: game.id, container: start.container, title: game.title,
+            keys: start.core.defaultKeys(forGameAt: start.container.gameURL))
         PauseManager.shared.reset()
         sessionShowedError = false
         phase = .loading
@@ -424,7 +426,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // game's slot. `switchGame(nil)` also flushes any pending
         // edits.
         ControlsLayout.shared.switchGame(id: nil, container: nil)
-        ScreenRegionApplier.endSession()
+        ControlsLayout.shared.screenRegion.endSession()
         engineReady = false
         PauseManager.shared.reset()
         // Last, because 7.6 counts a paused session as live and

@@ -4,8 +4,6 @@
 import Foundation
 
 extension ControlsTarget {
-    /// Text form in files and in stored maps. nil is the JSON null
-    /// that spells an explicit unbind.
     public var name: String? {
         switch self {
         case .key(let code): return code
@@ -15,43 +13,34 @@ extension ControlsTarget {
         }
     }
 
-    /// nil for a word in no vocabulary.
     public init?(name: String) {
         if name.hasPrefix("$") {
             // An unknown action still parses. Every load-modify-save
-            // path rewrites the whole map, so dropping the entry here
-            // would erase a binding written by a newer Empo.
+            // path writes the whole map again. If the parser drops the
+            // entry, the save erases a binding from a newer Empo.
             self = .action(name)
-        } else if KeyCodeTable.scancode(for: name) != nil {
-            self = .key(name)
-        } else if ControllerElement.allNames.contains(name) {
-            self = .element(name)
         } else {
-            return nil
+            switch BindingSource(name: name) {
+            case .key(let code): self = .key(code)
+            case .element(let element): self = .element(element)
+            case nil: return nil
+            }
         }
     }
 }
 
-/// The one reader and writer of a bindings object, shared by the
-/// manifest loader, the manifest writer and the app's own defaults
-/// store. Each caller reports issues its own way. None of them gets
-/// to invent a different grammar.
 public enum BindingMapCoder {
     public enum Issue: Equatable, Sendable {
-        /// Neither a controller element nor a key code.
         case unknownSource
-        /// The value was not a string and not null.
         case targetNotText
-        /// A word in no vocabulary.
         case unknownTarget(String)
-        /// A `$action` this Empo does not know. The entry is KEPT.
+        /// The decoder keeps this entry.
         case unknownAction(String)
-        /// An element bound to an element. One hop only, so this is
-        /// dropped: a chain of elements could loop.
+        /// The decoder drops this entry, because a chain of elements
+        /// can loop.
         case elementChain(String)
     }
 
-    /// Entries with an issue other than `unknownAction` are dropped.
     public static func decode(
         _ object: [String: Any],
         report: (_ source: String, _ issue: Issue) -> Void = { _, _ in }
@@ -94,7 +83,6 @@ public enum BindingMapCoder {
         return BindingMap(entries: entries)
     }
 
-    /// JSON object form, for `JSONSerialization`-backed storage.
     public static func encode(_ map: BindingMap) -> [String: Any] {
         var object: [String: Any] = [:]
         for (source, target) in map.entries {
@@ -103,14 +91,13 @@ public enum BindingMapCoder {
         return object
     }
 
-    /// Vocabulary order, elements before keys. The manifest writer
-    /// emits in this order, so a load-save round trip is byte stable.
+    /// The manifest writer emits in this order, so that a load-save
+    /// round trip is byte stable.
     public static let sourceOrder: [BindingSource] =
         ControllerElement.allElements.map { .element($0) }
         + KeyCodeTable.allCodes.map { .key($0) }
 }
 
-/// The JSON form of `BindingMapCoder.encode`, for `Codable` messages.
 extension BindingMap: Codable {
     public init(from decoder: Decoder) throws {
         let object = try decoder.singleValueContainer().decode([String: String?].self)

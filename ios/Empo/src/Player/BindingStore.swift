@@ -5,29 +5,13 @@ import Foundation
 import GameProbe
 
 extension Notification.Name {
-    /// The store posts this after it saves a global or per-game controller map.
     static let bindingsDidChange = Notification.Name("bindingsDidChange")
-
-    /// The app posts this when a touch begins on the embedded SDL game view during play.
-    static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
 }
 
-/// UserDefaults persistence for global binding overrides. Per-game
-/// overrides live in `EmpoState/controls.json` (SPEC section 3, ticket 009).
-///
-/// The stored shape is the manifest's own bindings object, read and
-/// written by `BindingMapCoder`, so a binding means the same thing
-/// here as it does in a file a game ships.
 enum BindingStore {
     static func loadGlobal() -> BindingMap? {
         guard let map = load(key: DefaultsKey.controllerMapGlobal) else { return nil }
-        // One-time rename migration for Empo-owned storage. Quiet
-        // write: a change notification here would re-enter this load.
-        let migrated = EmpoActionCatalog.migrated(map)
-        if migrated.changed {
-            saveQuietly(migrated.map, key: DefaultsKey.controllerMapGlobal)
-        }
-        return migrated.map
+        return migrated(map) { saveQuietly($0, key: DefaultsKey.controllerMapGlobal) }
     }
 
     static func saveGlobal(_ map: BindingMap) {
@@ -35,9 +19,18 @@ enum BindingStore {
     }
 
     static func loadPerGame(container: GameContainer) -> BindingMap? {
-        guard let result = UserControlsFile.load(in: container) else { return nil }
-        guard !result.findings.contains(where: { $0.severity == .error }) else { return nil }
-        return result.manifest?.bindings
+        guard let map = UserControlsFile.acceptedManifest(in: container)?.bindings else { return nil }
+        return migrated(map) { _ = UserControlsFile.updateBindings(in: container, bindings: $0) }
+    }
+
+    /// The write must not post a change notification, because the
+    /// notification calls the load again.
+    private static func migrated(_ map: BindingMap, write: (BindingMap) -> Void) -> BindingMap {
+        let migrated = EmpoActionCatalog.migrated(map)
+        if migrated.changed {
+            write(migrated.map)
+        }
+        return migrated.map
     }
 
     static func savePerGame(container: GameContainer, map: BindingMap) {
@@ -51,7 +44,7 @@ enum BindingStore {
     }
 
     static func deletePerGame(container: GameContainer) {
-        _ = UserControlsFile.removeBindingsSection(in: container)
+        _ = UserControlsFile.updateBindings(in: container, bindings: nil)
         NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
@@ -68,9 +61,6 @@ enum BindingStore {
             return nil
         }
         let map = BindingMapCoder.decode(object) { source, issue in
-            // Empo owns this file, so a rejected entry means a hand
-            // edit or an older shape. The manifest log is per game.
-            // This one is global, so it goes to the console.
             NSLog("bindings: dropped \(source) from stored map (\(issue))")
         }
         return map.entries.isEmpty ? nil : map
@@ -87,18 +77,6 @@ enum BindingStore {
         UserDefaults.standard.set(data, forKey: key)
     }
 
-    /// One-time rename migration for the per-game controller section.
-    /// Runs at game selection. Quiet: the caller reloads afterwards.
-    static func migrateRenamedActions(container: GameContainer) {
-        guard let result = UserControlsFile.load(in: container),
-            let controller = result.manifest?.bindings
-        else { return }
-        let migrated = EmpoActionCatalog.migrated(controller)
-        guard migrated.changed else { return }
-        _ = UserControlsFile.updateBindings(in: container, bindings: migrated.map)
-    }
-
-    /// Decode a legacy per-game controller map from UserDefaults (migration only).
     static func decodeLegacyPerGameMap(gameID: String) -> BindingMap? {
         load(key: DefaultsKey.controllerMap(gameID: gameID))
     }

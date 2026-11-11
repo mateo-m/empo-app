@@ -2,42 +2,42 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 extension ControlsManifestLoader.Finding {
-    /// Such as "controls.json: [W001] (warning) /touch: Unknown key".
     public func logLine(prefix: String) -> String {
         "\(prefix) [\(code)] (\(severity == .error ? "error" : "warning")) \(path): \(message)"
     }
 }
 
 extension ControlsManifestLoader.LoadOutcome {
-    /// The lines for the game's `controls.json.log`.
+    private typealias Location = ControlsManifestLoader.ManifestLocation
+
     public var logLines: [String] {
         var lines = notes.map(Self.logLine(for:))
         if result.ignoredNewerVersion {
-            lines.append("controls.json: Ignored manifest with version > 1")
+            lines.append("\(Self.prefix(.root)) Ignored manifest with version > 1")
         }
-        let prefix =
-            switch result.location {
-            case .kirin: "kirin-touch-controls.json:"
-            case .joiplay: "gamepad.json:"
-            default: "controls.json:"
-            }
+        let prefix = Self.prefix(result.location ?? .root)
         return lines + result.findings.map { $0.logLine(prefix: prefix) }
     }
 
+    private static func prefix(_ location: Location) -> String {
+        "\(location.rawValue.split(separator: "/").last ?? ""):"
+    }
+
     private static func logLine(for note: Note) -> String {
-        switch note {
+        let root = "\(prefix(.root)) Ignored \(Location.root.rawValue) at game root"
+        return switch note {
         case .rootSkippedBecauseEmpoExists:
-            "controls.json: Skipped controls.json at game root, using empo/controls.json"
+            "\(prefix(.root)) Skipped \(Location.root.rawValue) at game root, using \(Location.empo.rawValue)"
         case .rootUnclaimedNoVersion:
-            "controls.json: Ignored controls.json at game root (no version key, so not an Empo manifest)"
+            "\(root) (no version key, so not an Empo manifest)"
         case .rootUnclaimedNotObject:
-            "controls.json: Ignored controls.json at game root (not a JSON object, so not an Empo manifest)"
+            "\(root) (not a JSON object, so not an Empo manifest)"
         case .rootUnclaimedOversized:
-            "controls.json: Ignored controls.json at game root (larger than 128 KiB, so not an Empo manifest)"
+            "\(root) (larger than \(ControlLimits.maxFileSizeText), so not an Empo manifest)"
         case .kirinSkippedBecauseManifestExists:
-            "kirin-touch-controls.json: Skipped (an Empo controls manifest takes precedence)"
+            "\(prefix(.kirin)) Skipped (an Empo controls manifest takes precedence)"
         case .joiplaySkippedBecauseOtherSourceExists:
-            "gamepad.json: Skipped (a controls manifest or Kirin layout takes precedence)"
+            "\(prefix(.joiplay)) Skipped (a controls manifest or Kirin layout takes precedence)"
         }
     }
 }

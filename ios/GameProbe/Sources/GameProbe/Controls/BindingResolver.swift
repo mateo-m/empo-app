@@ -3,18 +3,14 @@
 
 import Foundation
 
-/// What a physical input does once every layer has had its say.
 public enum ResolvedTarget: Equatable, Sendable {
     case key(Int32)
     case action(String)
     case unbound
 }
 
-/// The merged map both input paths read: elements by name, keys by
-/// the scancode of the physical key.
-///
-/// A key absent from `keys` passes through to the game unchanged, so
-/// a real keyboard keeps typing.
+/// A key that is not in `keys` goes to the game unchanged, so that a
+/// real keyboard keeps typing and the engine hotkeys keep working.
 public struct ResolvedBindings: Equatable, Sendable {
     public var elements: [String: ResolvedTarget]
     public var keys: [Int32: ResolvedTarget]
@@ -28,24 +24,15 @@ public struct ResolvedBindings: Equatable, Sendable {
     }
 }
 
-/// Four-layer binding merge (SPEC section 9). Builtin is always the
-/// base. Each layer in `layers` overlays in order (global, then
-/// manifest, then per-game).
-///
-/// A key bound to an element takes that element's binding, which is
-/// how a pad in keyboard mode inherits every bind the same pad would
-/// get through the GameController framework.
+/// Callers give `layers` in this order: global, then manifest, then
+/// per-game.
 public enum BindingResolver {
-    /// SPEC section 9.1 built-in map, as data.
     public static var builtinDefault: BindingMap {
         BindingMap(entries: builtinEntries)
     }
 
-    /// Later layers override earlier ones per source. `.unbound`
-    /// removes an element binding, because an unbound element has
-    /// nothing left to do. A key keeps its `.unbound` entry: dropping
-    /// it would fall back to pass-through and the key would type
-    /// again.
+    /// A key keeps its `.unbound` entry. Without it, the key falls back
+    /// to pass-through and types again.
     public static func resolve(layers: [BindingMap]) -> [BindingSource: ControlsTarget] {
         var result = builtinEntries
         for layer in layers {
@@ -60,14 +47,13 @@ public enum BindingResolver {
         return result
     }
 
-    /// Both runtime maps from one merge.
     public static func resolveRuntime(layers: [BindingMap] = []) -> ResolvedBindings {
         let merged = BindingMap(entries: resolve(layers: layers))
 
         var elements: [String: ResolvedTarget] = [:]
         for (name, target) in merged.elementEntries {
-            // Element chains are rejected at parse time, and unbound
-            // elements never survive the merge.
+            // The parser rejects element chains, and the merge removes
+            // unbound elements.
             if let resolved = runtimeTarget(target) {
                 elements[name] = resolved
             }
@@ -77,9 +63,8 @@ public enum BindingResolver {
         for (name, target) in merged.keyEntries {
             guard let scancode = KeyCodeTable.scancode(for: name) else { continue }
             if case .element(let element) = target {
-                // The element's own binding decides what the key does.
-                // An element with no binding leaves the key silent:
-                // the player asked for a pad button, not for the key.
+                // An element with no binding makes the key silent. The
+                // player asked for a pad button, not for the key.
                 keys[scancode] = elements[element] ?? .unbound
                 continue
             }
@@ -119,7 +104,7 @@ public enum BindingResolver {
         .element("rightshoulder"): .key("KeyW"),
         .element("leftstick"): .key("KeyS"),
         .element("rightstick"): .key("KeyD"),
-        .element("start"): .action("$pauseMenu"),
-        .element("back"): .action("$toggleTouchControls"),
+        .element("start"): .action(EmpoActionCatalog.pauseMenu),
+        .element("back"): .action(EmpoActionCatalog.toggleTouchControls),
     ]
 }
