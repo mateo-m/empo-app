@@ -4,29 +4,17 @@
 import SwiftUI
 import UIKit
 
-/// Pure geometry helpers for on-screen control placement. We lifted
-/// them out of PlayerView so the layout math is testable and diffable
-/// in isolation, and PlayerView stays focused on state + view
-/// composition.
-
 enum ControlsZone {
     static let padding: CGFloat = 12.0
     static let innerPadding: CGFloat = 6.0
     static let toolbarGap: CGFloat = 8.0
     static let toolbarEdgePad: CGFloat = 4.0
-    static let editToolbarHalfHeight: CGFloat = 20.0
     static let minLandscapeInset: CGFloat = 12.0
     static let fallbackDeviceCornerRadius: CGFloat = 55.0
     static let dragScaleFactor: CGFloat = 1.08
-    /// Snap-to-grid step for control drags in edit mode. Small
-    /// enough for fine placement, large enough to feel the pull.
     static let editGridStep: CGFloat = 10.0
 
-    /// Minimum vertical space below the game rect required to place
-    /// the toolbar + controls in the dedicated zone below the game.
-    /// When the game fills most of the screen (fixedAspectRatio off)
-    /// there isn't enough room, so the layout falls back to overlay mode (same
-    /// as landscape: toolbar at top, controls over the game).
+    /// With less space below the game, the controls go over the game.
     static let minControlsZoneHeight: CGFloat = 120
 
     static func bounds(controlsMinY: CGFloat, safeArea: EdgeInsets, geoSize: CGSize) -> CGRect {
@@ -38,13 +26,10 @@ enum ControlsZone {
         return CGRect(x: leading, y: top, width: trailing - leading, height: bottom - top)
     }
 
-    /// The physical display corner radius never changes, and this
-    /// lookup (scene walk + KVC) sits on the hot layout path:
-    /// `absolutePosition` runs per control per frame while the zone
-    /// animates, and the uncached call cost hundreds of main-thread
-    /// UIKit round trips a second. Cached on the first access that
-    /// finds a screen. An early pre-scene access must not
-    /// freeze the fallback for the whole process.
+    /// `absolutePosition` runs for each control at each frame of a zone
+    /// animation, and the KVC read of `displayCornerRadius` costs many
+    /// UIKit calls. An access before a scene exists must not keep the
+    /// fallback.
     private static var cachedDeviceCornerRadius: CGFloat?
 
     private static var deviceCornerRadius: CGFloat {
@@ -75,25 +60,25 @@ enum ControlsZone {
         isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, geoHeight: CGFloat,
         forcedOverlay: Bool? = nil
     ) -> Bool {
-        // An active screen region carries an explicit per-profile
-        // choice. The geometry heuristic only decides when no
-        // region is in play.
         if let forcedOverlay { return forcedOverlay }
         guard isPortrait, gameRect.height > 0 else { return false }
         let spaceBelow = geoHeight - (gameRect.origin.y + gameRect.height) - safeArea.bottom
         return spaceBelow < minControlsZoneHeight
     }
 
-    static func landscapeControlsTopInset(safeArea: EdgeInsets, toolbarButtonSize: CGFloat) -> CGFloat {
-        let topInset = max(safeArea.top, minLandscapeInset)
-        return topInset + toolbarEdgePad + toolbarButtonSize + toolbarEdgePad
+    /// The top leading corner of the chrome when the toolbar is a row
+    /// at the top of the screen.
+    static func topChromeOrigin(safeArea: EdgeInsets) -> CGPoint {
+        CGPoint(
+            x: max(safeArea.leading, minLandscapeInset) + toolbarEdgePad,
+            y: max(safeArea.top, minLandscapeInset) + toolbarEdgePad)
     }
 
-    /// Top edge of the controls zone: controls can only live below
-    /// this Y. In portrait with space below the game, the zone begins
-    /// right at the game's bottom edge (toolbar is now at the top so
-    /// it doesn't push controls down). In overlay / landscape, the
-    /// zone begins below the toolbar that sits in the top-right.
+    static func landscapeControlsTopInset(safeArea: EdgeInsets, toolbarButtonSize: CGFloat) -> CGFloat {
+        topChromeOrigin(safeArea: safeArea).y + toolbarButtonSize + toolbarEdgePad
+    }
+
+    /// The top edge of the controls zone.
     static func toolbarBottomY(
         isPortrait: Bool, gameRect: CGRect, safeArea: EdgeInsets, btnSize: CGFloat,
         geoHeight: CGFloat, forcedOverlay: Bool? = nil
@@ -165,19 +150,13 @@ enum ControlsZone {
             ?? point
     }
 
-    /// Anchor the toolbar to the top-right of the device viewport. In
-    /// portrait it used to tuck below the game rect, which left the
-    /// keyboard-toggle button covered by the keyboard whenever it was
-    /// up. Placing it at the top keeps it reachable in every
-    /// orientation + layout mode. A sensor strip takes the toolbar as
-    /// a column, in the highest gap of the strip that the system does
-    /// not draw over.
+    /// A sensor strip takes the toolbar as a column, in the highest gap
+    /// of the strip that the system does not draw over.
     static func toolbarPlacement(
         safeArea: EdgeInsets, geoSize: CGSize, occluded: [CGRect], btnSize: CGFloat, gap: CGFloat,
         count: CGFloat
     ) -> ToolbarPlacement {
         let length = count * btnSize + (count - 1) * gap
-        let topInset = max(safeArea.top, minLandscapeInset)
         if let edge = safeArea.sensorStripEdge(minWidth: btnSize + 2 * toolbarEdgePad) {
             let strip =
                 edge == .trailing
@@ -194,7 +173,7 @@ enum ControlsZone {
         }
         let rightInset = max(safeArea.trailing, minLandscapeInset)
         let x = geoSize.width - rightInset - toolbarEdgePad - length / 2
-        let y = topInset + toolbarEdgePad + btnSize / 2
+        let y = topChromeOrigin(safeArea: safeArea).y + btnSize / 2
         return ToolbarPlacement(
             center: CGPoint(x: x, y: y), isVertical: false, length: length, thickness: btnSize)
     }
@@ -214,11 +193,9 @@ enum ControlsZone {
         return (top + bottom) / 2
     }
 
-    /// Align a control onto the edit grid by its TOP-LEFT EDGE, not
-    /// its center: borders then sit on lattice lines whatever the
-    /// control's size, instead of drifting by size/2. The lattice
-    /// anchors at the zone's top-left, so the same drag lands on the
-    /// same points whatever the safe-area insets are.
+    /// Snaps the top leading edge of the control, not its center, so the
+    /// borders sit on the grid at all sizes. The grid starts at the top
+    /// leading corner of the zone.
     static func snappedToEditGrid(
         _ point: CGPoint, controlSize: CGFloat, geoSize: CGSize,
         safeArea: EdgeInsets, controlsMinY: CGFloat
@@ -233,24 +210,13 @@ enum ControlsZone {
     }
 
     static func absolutePosition(
-        for relativeCenter: CGPoint, in size: CGSize, controlSize: CGSize, safeArea: EdgeInsets,
+        for relativeCenter: CGPoint, in size: CGSize, controlSize: CGFloat, safeArea: EdgeInsets,
         controlsMinY: CGFloat, keepout: CGRect
     ) -> CGPoint {
-        let pad = padding + innerPadding
-        let hw = controlSize.width * 0.5
-        let hh = controlSize.height * 0.5
-        let minX = safeArea.leading + pad + hw
-        let minY = max(safeArea.top + pad + hh, controlsMinY + pad + hh)
-        let maxX = size.width - safeArea.trailing - pad - hw
-        let maxY = size.height - safeArea.bottom - pad - hh
-        let cx = max(minX, min(relativeCenter.x * size.width, maxX))
-        let cy = max(minY, min(relativeCenter.y * size.height, maxY))
-        let zone = bounds(controlsMinY: controlsMinY, safeArea: safeArea, geoSize: size)
-        let radii = cornerRadii(safeArea: safeArea)
-        let pushed = pushedOutOfKeepout(
-            CGPoint(x: cx, y: cy), controlHalf: max(hw, hh), keepout: keepout,
-            geoSize: size, safeArea: safeArea, controlsMinY: controlsMinY)
-        return clampToRoundedCorners(pushed, controlHalf: max(hw, hh), zone: zone, radii: radii)
+        clampToSafeArea(
+            CGPoint(x: relativeCenter.x * size.width, y: relativeCenter.y * size.height),
+            controlSize: controlSize, geoSize: size, safeArea: safeArea, controlsMinY: controlsMinY,
+            keepout: keepout)
     }
 
     static func clampToSafeArea(

@@ -4,8 +4,8 @@
 import GameProbe
 import SwiftUI
 
-/// Per-game / global binding screen (ticket 005). Controller buttons
-/// have fixed rows. Keyboard keys arrive by being pressed.
+/// Controller buttons have fixed rows. A keyboard key gets a row when
+/// the user presses it.
 struct BindingsView: View {
     let container: GameContainer?
     let gameTitle: String?
@@ -29,7 +29,7 @@ struct BindingsView: View {
         }
     }
 
-    @State private var scope: BindingsCatalog.Scope = .thisGame
+    @State private var scope: BindingsCatalog.Scope
     @State private var step: Step?
     @State private var highlight = PressedRowHighlight()
     @State private var showResetConfirm = false
@@ -43,7 +43,23 @@ struct BindingsView: View {
 
     private var saved: BindingsCatalog.SavedBindings {
         _ = refreshToken
-        return BindingsCatalog.SavedBindings(scope: scope, container: container, manifest: manifest)
+        return BindingsCatalog.SavedBindings(scope: scope, manifest: manifest)
+    }
+
+    private var scopes: [BindingsCatalog.Scope] {
+        [container.map(BindingsCatalog.Scope.thisGame), .allGames].compactMap { $0 }
+    }
+
+    init(
+        container: GameContainer?, gameTitle: String?, manifest: BindingMap?, input: SessionInput,
+        actions: PlayerActionRegistry
+    ) {
+        self.container = container
+        self.gameTitle = gameTitle
+        self.manifest = manifest
+        self.input = input
+        self.actions = actions
+        _scope = State(initialValue: container.map(BindingsCatalog.Scope.thisGame) ?? .allGames)
     }
 
     var body: some View {
@@ -51,7 +67,7 @@ struct BindingsView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Picker("Applies to", selection: $scope) {
-                    ForEach(BindingsCatalog.Scope.allCases, id: \.self) { option in
+                    ForEach(scopes, id: \.self) { option in
                         Text(option.title).tag(option)
                     }
                 }
@@ -95,7 +111,7 @@ struct BindingsView: View {
                 }
             }
             .resetBindingsAlert(
-                isPresented: $showResetConfirm, scope: scope, container: container, gameTitle: gameTitle
+                isPresented: $showResetConfirm, scope: scope, gameTitle: gameTitle
             )
             .sheet(item: $step) { step in
                 switch step {
@@ -108,41 +124,27 @@ struct BindingsView: View {
                         scope: scope,
                         actions: actions
                     ) { target in
-                        BindingsCatalog.save(
-                            source: row.source,
-                            target: target,
-                            scope: scope,
-                            container: container
-                        )
-                        refreshToken = UUID()
+                        BindingsCatalog.save(source: row.source, target: target, scope: scope)
                     }
                 }
             }
             .onAppear {
-                // The screen reads edges without playing them, and it
-                // holds both handlers for its whole life: no child
-                // takes them away, so none has to give them back.
-                input.suppressInjection = true
-                input.controller.elementActivityHandler = { element in
-                    highlight.flash(element)
-                }
-                input.controller.connectionHandler = { refreshToken = UUID() }
-                input.keyboard.keyActivityHandler = { code in
-                    if case .capturingKey = step {
-                        let source = BindingSource.key(code)
-                        step = .choosingTarget(
-                            BindingsCatalog.Row(
-                                source: source, label: BindingsCatalog.label(for: source)))
-                    } else {
-                        highlight.flash(code)
-                    }
-                }
+                input.remapListener = SessionInput.RemapListener(
+                    elementPressed: { highlight.flash($0) },
+                    controllersChanged: { refreshToken = UUID() },
+                    keyPressed: { code in
+                        if case .capturingKey = step {
+                            let source = BindingSource.key(code)
+                            step = .choosingTarget(
+                                BindingsCatalog.Row(
+                                    source: source, label: BindingsCatalog.label(for: source)))
+                        } else {
+                            highlight.flash(code)
+                        }
+                    })
             }
             .onDisappear {
-                input.suppressInjection = false
-                input.controller.elementActivityHandler = nil
-                input.controller.connectionHandler = nil
-                input.keyboard.keyActivityHandler = nil
+                input.remapListener = nil
             }
             .onReceive(NotificationCenter.default.publisher(for: .bindingsDidChange)) { _ in
                 refreshToken = UUID()
@@ -205,10 +207,10 @@ struct BindingsView: View {
         .buttonStyle(.plain)
         .listRowBackground(highlight.background(for: row.id))
         .contextMenu {
-            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, container: container)
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, container: container)
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope)
         }
     }
 }

@@ -113,46 +113,19 @@ enum LayoutProfilesManager {
         return profiles.filter { $0.localizedCaseInsensitiveContains(trimmed) }
     }
 
-    static func createProfileFromBuiltins(rawName: String) throws {
+    static func createProfileFromBuiltins(rawName: String, keys: [GameKey]) throws {
         guard let name = LayoutProfileStore.validatedName(rawName) else {
             throw LayoutProfileStore.StoreError.invalidName(rawName)
         }
         try store.createProfile(
             name,
             touch: ProfileMaterializer.materialize(
-                user: nil, manifest: nil, builtins: builtins(), metrics: .reference
+                user: nil, manifest: nil, builtins: builtins(keys: keys), metrics: .reference
             ).section)
     }
 
-    // MARK: - Off-player materialization
-
-    static func materializedLayout(for container: GameContainer) -> TouchSection {
-        let manifestTouch = ControlsManifestLoader.load(
-            gameRoot: container.gameURL, metrics: .reference)?.result.manifest?.touch
-        let resolved = LayoutResolution.resolve(
-            pin: store.loadPin(forGameFolder: container.url).pin,
-            gameLayoutOccupied: manifestTouch != nil,
-            store: store,
-            defaultProfileName: defaultProfileName)
-
-        switch resolved.provenance {
-        case .pinnedProfile(let name), .defaultProfile(let name):
-            let touch = store.readProfile(name)?.touch
-            return ProfileMaterializer.materialize(
-                user: touch, manifest: nil, builtins: builtins(), metrics: .reference
-            ).section
-        case .gameLayout:
-            return ProfileMaterializer.materialize(
-                user: nil, manifest: manifestTouch, builtins: builtins(), metrics: .reference
-            ).section
-        case .builtin:
-            return ProfileMaterializer.materialize(
-                user: nil, manifest: nil, builtins: builtins(), metrics: .reference
-            ).section
-        }
-    }
-
-    nonisolated static func builtins() -> ProfileMaterializer.Builtins {
-        ProfileMaterializer.Builtins(keys: ControlsLayout.builtinKeys)
+    nonisolated static func builtins(keys: [GameKey]) -> ProfileMaterializer.Builtins {
+        ProfileMaterializer.Builtins(
+            keys: keys.map { BuiltinLayout.Key(label: $0.label, code: KeyCodeTable.code(for: $0.scancode)) })
     }
 }

@@ -1,15 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-// TouchControls.mm - UIKit touch control helpers that still need UIKit.
-//
-// Contains the invisible keyboard field (for system-keyboard IME).
-// The on-screen action button and D-pad live in GameControls.swift.
-// The keyboard accessory bar lives in KeyboardAccessoryBar.swift.
-
-#import "TouchControls.h"
-
-// TCKeyboardField (intercepts backspace)
+#import "TCKeyboardField.h"
 
 @implementation TCKeyboardField {
     NSMutableSet<UIPress *> *_hardwarePresses;

@@ -21,7 +21,7 @@ final class SavedBindingsTests: XCTestCase {
 
     private func saved(after entries: [BindingSource: BindingMap.Target]) -> BindingsCatalog.SavedBindings {
         BindingStore.savePerGame(container: container, map: BindingMap(entries: entries))
-        return BindingsCatalog.SavedBindings(scope: .thisGame, container: container, manifest: nil)
+        return BindingsCatalog.SavedBindings(scope: .thisGame(container), manifest: nil)
     }
 
     func testButtonSetToDoNothingShowsDoNothing() {

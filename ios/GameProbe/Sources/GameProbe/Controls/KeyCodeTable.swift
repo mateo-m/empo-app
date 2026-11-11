@@ -8,6 +8,8 @@ public enum KeyCodeTable {
         let code: String
         let scancode: Int32
         let displayName: String
+        /// A touch button shows a word where the binding list shows a symbol.
+        var buttonLabel: String?
     }
 
     private static let entries: [Entry] = [
@@ -47,8 +49,8 @@ public enum KeyCodeTable {
         Entry(code: "Digit8", scancode: 37, displayName: "8"),
         Entry(code: "Digit9", scancode: 38, displayName: "9"),
         Entry(code: "Digit0", scancode: 39, displayName: "0"),
-        Entry(code: "Enter", scancode: 40, displayName: "↵"),
-        Entry(code: "Escape", scancode: 41, displayName: "Esc"),
+        Entry(code: "Enter", scancode: 40, displayName: "↵", buttonLabel: "Enter"),
+        Entry(code: "Escape", scancode: 41, displayName: "Esc", buttonLabel: "Escape"),
         Entry(code: "Backspace", scancode: 42, displayName: "Backspace"),
         Entry(code: "Tab", scancode: 43, displayName: "Tab"),
         Entry(code: "Space", scancode: 44, displayName: "Space"),
@@ -110,7 +112,7 @@ public enum KeyCodeTable {
         Entry(code: "IntlRo", scancode: 135, displayName: "Ro"),
         Entry(code: "IntlYen", scancode: 137, displayName: "Yen"),
         Entry(code: "ControlLeft", scancode: 224, displayName: "Ctrl"),
-        Entry(code: "ShiftLeft", scancode: 225, displayName: "⇧"),
+        Entry(code: "ShiftLeft", scancode: 225, displayName: "⇧", buttonLabel: "Shift"),
         Entry(code: "AltLeft", scancode: 226, displayName: "Alt"),
         Entry(code: "MetaLeft", scancode: 227, displayName: "⌘"),
         Entry(code: "ControlRight", scancode: 228, displayName: "Ctrl"),
@@ -134,6 +136,10 @@ public enum KeyCodeTable {
 
     public static func displayName(for code: String) -> String? {
         byCode[code]?.displayName
+    }
+
+    public static func buttonLabel(for code: String) -> String? {
+        byCode[code].map { $0.buttonLabel ?? $0.displayName }
     }
 
     public static func code(for scancode: Int32) -> String? {

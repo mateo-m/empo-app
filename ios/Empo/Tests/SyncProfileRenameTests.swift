@@ -19,7 +19,7 @@ final class SyncProfileRenameTests: XCTestCase {
     }
 
     private func makeProfile(_ name: String, buttonX: Double) throws -> TouchSection {
-        try LayoutProfilesManager.createProfileFromBuiltins(rawName: name)
+        try LayoutProfilesManager.createProfileFromBuiltins(rawName: name, keys: GameKey.standard)
         let touch = try touch(of: name, buttonX: buttonX)
         try store.writeProfile(name, touch: touch)
         return touch
@@ -50,7 +50,7 @@ final class SyncProfileRenameTests: XCTestCase {
 
     func testARenameOfOnlyTheCaseStillAppliesTheControls() throws {
         let name = "Case Sync \(tag)"
-        try LayoutProfilesManager.createProfileFromBuiltins(rawName: name)
+        try LayoutProfilesManager.createProfileFromBuiltins(rawName: name, keys: GameKey.standard)
         let incoming = try touch(of: name, buttonX: 0.42)
 
         let renamed = name.lowercased()

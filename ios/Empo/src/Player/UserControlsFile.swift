@@ -8,16 +8,12 @@ enum UserControlsFile {
     static let logFileName = "controls.json.log"
     static let logPrefix = "user controls.json:"
 
-    static func url(in container: GameContainer) -> URL {
-        container.userControlsURL
-    }
-
     static func exists(in container: GameContainer) -> Bool {
-        FileManager.default.fileExists(atPath: url(in: container).path)
+        FileManager.default.fileExists(atPath: container.userControlsURL.path)
     }
 
     static func load(in container: GameContainer) -> ControlsManifestLoader.Result? {
-        let fileURL = url(in: container)
+        let fileURL = container.userControlsURL
         guard FileManager.default.fileExists(atPath: fileURL.path),
             let data = try? Data(contentsOf: fileURL)
         else {
@@ -41,8 +37,8 @@ enum UserControlsFile {
         return result.manifest
     }
 
-    static func write(_ data: Data?, in container: GameContainer) -> Bool {
-        let fileURL = url(in: container)
+    private static func write(_ data: Data?, in container: GameContainer) -> Bool {
+        let fileURL = container.userControlsURL
         guard let data else {
             guard exists(in: container) else { return true }
             do {
@@ -75,31 +71,7 @@ enum UserControlsFile {
         return write(data, in: container)
     }
 
-    static func updateTouch(in container: GameContainer, touch: TouchSection?) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(
-            in: container,
-            touch: touch,
-            bindings: existing?.bindings
-        )
-    }
-
     static func updateBindings(in container: GameContainer, bindings: BindingMap?) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(
-            in: container,
-            touch: existing?.touch,
-            bindings: bindings
-        )
-    }
-
-    static func removeTouchSection(in container: GameContainer) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(in: container, touch: nil, bindings: existing?.bindings)
-    }
-
-    static func removeBindingsSection(in container: GameContainer) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(in: container, touch: existing?.touch, bindings: nil)
+        write(in: container, touch: acceptedManifest(in: container)?.touch, bindings: bindings)
     }
 }

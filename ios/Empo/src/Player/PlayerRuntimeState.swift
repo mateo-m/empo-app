@@ -22,20 +22,19 @@ struct PlayerEngine {
     }
 }
 
-/// Session runtime state the player actions act on. SwiftUI recycles
-/// `PlayerView` on pause/resume while the engine's multiplier is
-/// process-static, so this does not live in the view.
-/// The bridge is the source of truth. This model re-derives from it
-/// at every safe point and on every activation, never from a cached
-/// flag.
+/// The game setting that an action needs.
+enum ActionRequirement {
+    case fastForward
+    case cheats
+}
+
+/// SwiftUI makes `PlayerView` again on pause and resume, but the
+/// multiplier of the engine stays for the process, so this state is not
+/// in the view. The fast forward state comes from the engine each time.
 @MainActor
 @Observable
 final class PlayerRuntimeState {
-    /// True while the engine multiplier is above 1. Drives the More
-    /// sheet toggle and the active state of fast-forward buttons.
     private(set) var fastForwardActive = false
-    /// Per-game multiplier from Game Settings. nil = fast forward is
-    /// off for this game and the fast-forward actions are unavailable.
     private(set) var fastForwardMultiplier: Int?
     private(set) var cheatsAvailable = false
 
@@ -50,8 +49,6 @@ final class PlayerRuntimeState {
         FastForwardArbiter.usableMultiplier(fastForwardMultiplier) != nil
     }
 
-    /// Binds the model to a new session and adopts bridge state. A
-    /// nil multiplier turns fast forward off for the game.
     func bind(fastForwardMultiplier: Int?, cheatsAvailable: Bool) {
         arbiter = FastForwardArbiter()
         self.cheatsAvailable = cheatsAvailable
@@ -67,7 +64,7 @@ final class PlayerRuntimeState {
             bridgeMultiplier: bridgeMultiplier()
         )
         apply(outcome.write)
-        fastForwardActive = outcome.active
+        refreshFastForwardActive()
     }
 
     // MARK: - Fast forward
@@ -94,10 +91,7 @@ final class PlayerRuntimeState {
         refreshFastForwardActive()
     }
 
-    /// Binding adapter for the More sheet's Toggle row. Unlike the
-    /// stateless toggle button, the Toggle carries an explicit target
-    /// value: OFF must clear the latch even while a hold keeps the
-    /// speed up, never arm it.
+    /// Off clears the latch also while a hold keeps the speed up.
     func setFastForward(active: Bool) {
         guard active != fastForwardActive else { return }
         if active {
@@ -106,17 +100,6 @@ final class PlayerRuntimeState {
             apply(arbiter.latchCleared(bridgeMultiplier: bridgeMultiplier()))
             refreshFastForwardActive()
         }
-    }
-
-    /// Fires when every hold must drop at once (input suppression,
-    /// session stop, scene teardown).
-    func releaseAllFastForwardHolds() {
-        let write = arbiter.releaseAllHolds(
-            configuredMultiplier: fastForwardMultiplier,
-            bridgeMultiplier: bridgeMultiplier()
-        )
-        apply(write)
-        refreshFastForwardActive()
     }
 
     // MARK: - Bridge
@@ -135,9 +118,6 @@ final class PlayerRuntimeState {
     }
 }
 
-/// One dispatch point for every Empo action, shared by the touch and
-/// controller input paths. Replaces the hardcoded action switch in
-/// `ControllerInputManager`.
 @MainActor
 final class PlayerActionRegistry {
     let runtime: PlayerRuntimeState
@@ -149,35 +129,22 @@ final class PlayerActionRegistry {
         runtime = PlayerRuntimeState(engine: engine)
     }
 
-    /// The actions this app runs. Empo Player on the Mac has no touch
-    /// controls.
+    /// Empo Player on the Mac has no touch controls.
     static let actionIDs: Set<String> = {
         #if os(macOS)
-        [
-            EmpoActionCatalog.fastForwardHold, EmpoActionCatalog.fastForwardToggle,
-            EmpoActionCatalog.pauseMenu,
-            EmpoActionCatalog.toggleCheats,
-        ]
+        EmpoActionCatalog.allIDs.subtracting([EmpoActionCatalog.toggleTouchControls])
         #else
         EmpoActionCatalog.allIDs
         #endif
     }()
     static let actions = EmpoActionCatalog.all.filter { actionIDs.contains($0.id) }
 
-    /// Wired by the player scene on appear.
     var pauseMenu: () -> Void = {}
     var toggleTouchControls: () -> Void = {}
     var log: (String) -> Void = { _ in }
 
-    /// One behavior record per action: availability, latched state,
-    /// and the edge handler. Availability, dispatch, and the button
-    /// face all read THIS table, so a new action registers in one
-    /// place. No kind-vs-id split across files.
     private struct ActionBehavior {
-        var isAvailable: () -> Bool = { true }
         var isActive: () -> Bool = { false }
-        /// Receives both edges. Toggle and instant behaviors wrap
-        /// themselves in `pressOnly`.
         var handle: (Bool) -> Void
     }
 
@@ -192,23 +159,20 @@ final class PlayerActionRegistry {
     /// closures read the wiring the player scene sets after init.
     private lazy var behaviors: [String: ActionBehavior] = [
         EmpoActionCatalog.fastForwardHold: ActionBehavior(
-            isAvailable: { [runtime] in runtime.fastForwardAvailable },
             handle: { [runtime] pressed in
                 runtime.fastForwardHoldChanged(pressed: pressed)
             }),
         EmpoActionCatalog.fastForwardToggle: ActionBehavior(
-            isAvailable: { [runtime] in runtime.fastForwardAvailable },
             isActive: { [runtime] in runtime.fastForwardActive },
             handle: Self.pressOnly { [runtime] in runtime.fastForwardToggled() }),
         EmpoActionCatalog.pauseMenu: ActionBehavior(
             handle: Self.pressOnly { [weak self] in self?.pauseMenu() }),
         EmpoActionCatalog.toggleCheats: ActionBehavior(
-            isAvailable: { [runtime] in runtime.cheatsAvailable },
             handle: Self.pressOnly { [engine] in
-                // The engine's cheat scripts open their menu on HOME while
-                // the bridge flag is on. The KEYUP must land at least one
-                // RGSS tick after the KEYDOWN or Input.trigger?(HOME) never
-                // sees the edge.
+                // The cheat scripts of the engine open their menu on HOME
+                // while the bridge flag is on. The key-up must come at
+                // least one RGSS tick after the key-down, or
+                // Input.trigger?(HOME) never sees the press.
                 engine.setCheatsEnabled(true)
                 engine.tapKey(Int32(GAMECORE_SCANCODE_HOME), 100)
             }),
@@ -220,7 +184,20 @@ final class PlayerActionRegistry {
     /// unavailable action's touch button hides during play. A
     /// controller binding to one stays inert.
     func isAvailable(_ actionID: String) -> Bool {
-        Self.actionIDs.contains(actionID) && behaviors[actionID]?.isAvailable() ?? false
+        guard Self.actionIDs.contains(actionID), behaviors[actionID] != nil else { return false }
+        switch Self.requirement(of: actionID) {
+        case .fastForward?: return runtime.fastForwardAvailable
+        case .cheats?: return runtime.cheatsAvailable
+        case nil: return true
+        }
+    }
+
+    static func requirement(of actionID: String) -> ActionRequirement? {
+        switch actionID {
+        case EmpoActionCatalog.fastForwardHold, EmpoActionCatalog.fastForwardToggle: .fastForward
+        case EmpoActionCatalog.toggleCheats: .cheats
+        default: nil
+        }
     }
 
     /// A latched toggle shows its engaged state on the button face.
@@ -252,12 +229,5 @@ final class PlayerActionRegistry {
 
         behaviors[actionID]?.handle(pressed)
         return true
-    }
-
-    /// Drops every held action at once. `ControllerInputManager`
-    /// calls this from its release-all path so a held fast-forward
-    /// cannot stick when suppression starts or the session stops.
-    func releaseAllHolds() {
-        runtime.releaseAllFastForwardHolds()
     }
 }

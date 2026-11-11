@@ -56,7 +56,7 @@ enum GameSession {
         // The reset in `configure` cleared the region of the game
         // before. The engine's first layout reads the region, so it
         // goes in before the game starts.
-        ScreenRegionApplier.beginSession(container: container)
+        ControlsLayout.shared.screenRegion.beginSession(container: container)
         // Seed the touch-mouse atomic before boot. The reset in
         // `configure` leaves it alone, so without
         // this the new game inherits the previous game's value until

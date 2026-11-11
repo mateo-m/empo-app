@@ -126,6 +126,7 @@ struct LayoutProfilePickerSheet: View {
 // MARK: - Manager
 
 struct LayoutProfilesSettingsView: View {
+    @Environment(\.controlsLayout) private var playerLayout
     @State private var profiles: [String] = []
     @State private var defaultName: String?
     @State private var renaming: String?
@@ -152,7 +153,7 @@ struct LayoutProfilesSettingsView: View {
             if searchText.trimmingCharacters(in: .whitespaces).isEmpty {
                 Section {
                     NavigationLink {
-                        BuiltinLayoutViewerView()
+                        BuiltinLayoutViewerView(keys: playerLayout.gameKeys)
                     } label: {
                         HStack {
                             Text("Empo default")
@@ -247,7 +248,7 @@ struct LayoutProfilesSettingsView: View {
 
     private func profileRow(_ name: String) -> some View {
         NavigationLink {
-            LayoutProfileEditorView(profileName: name)
+            LayoutProfileEditorView(profileName: name, keys: playerLayout.gameKeys)
         } label: {
             HStack {
                 Text(name)
@@ -373,16 +374,19 @@ struct LayoutProfileEditorView: View {
     @State private var savedOnLeave = false
     @Environment(\.dismiss) private var dismiss
 
-    init(profileName: String) {
+    init(profileName: String, keys: [GameKey]) {
         self.profileName = profileName
         _currentName = State(initialValue: profileName)
         _layout = State(
             initialValue: ControlsLayout(
-                editorForProfile: profileName, metrics: .reference))
+                editorForProfile: profileName, metrics: .reference, keys: keys))
     }
 
-    private var canvasSize: CGSize { EditorCanvas.size(for: editingOrientation) }
-    private var canvasSafeArea: EdgeInsets { EditorCanvas.safeArea(for: editingOrientation) }
+    private var canvas: ScreenCanvas {
+        ScreenCanvas(
+            size: EditorCanvas.size(for: editingOrientation),
+            safeArea: EditorCanvas.safeArea(for: editingOrientation))
+    }
     private var fakeGameRect: CGRect { EditorCanvas.fakeGameRect(for: editingOrientation) }
 
     private var screenPlacement: ScreenPlacement? {
@@ -391,32 +395,11 @@ struct LayoutProfileEditorView: View {
     }
 
     private var screenRegion: ScreenRegion? {
-        guard let placement = screenPlacement else { return nil }
-        switch placement {
-        case .region(let region):
-            return region
-        case .preset(let preset):
-            let size = canvasSize
-            let safeArea = canvasSafeArea
-            return ScreenPresetPlacement.region(
-                preset: preset,
-                canvasWidth: Double(size.width),
-                canvasHeight: Double(size.height),
-                safeTop: Double(safeArea.top),
-                safeBottom: Double(safeArea.bottom),
-                safeLeading: Double(safeArea.leading),
-                safeTrailing: Double(safeArea.trailing),
-                isPortrait: editingOrientation == .portrait,
-                aspect: GameAspect.typical)
-        }
+        screenPlacement.flatMap { canvas.region(for: $0, aspect: GameAspect.typical) }
     }
 
     private var screenRegionRect: CGRect? {
-        guard let region = screenRegion else { return nil }
-        let size = canvasSize
-        return CGRect(
-            x: region.x * size.width, y: region.y * size.height,
-            width: region.w * size.width, height: region.h * size.height)
+        screenRegion.map { canvas.rect(for: $0) }
     }
 
     private var placeholderGameRect: CGRect {
@@ -440,12 +423,12 @@ struct LayoutProfileEditorView: View {
                 placeholderRect: placeholderGameRect,
                 forcedOverlay: screenRegion?.overlay,
                 editDialog: $editDialog
-            ) { size, gameRect in
-                screenGizmoLayers(size: size, gameRect: gameRect)
+            ) { _, gameRect in
+                screenGizmoLayers(gameRect: gameRect)
             }
 
             HStack(spacing: Spacing.xl) {
-                Button("Add button") { editDialog = .addButton }
+                Button("Add button") { editDialog = .sheet(.addButton) }
                 Button {
                     layout.undoLastEdit()
                 } label: {
@@ -586,21 +569,16 @@ struct LayoutProfileEditorView: View {
     /// These layers must stay below the controls overlay. Above it,
     /// the move surface takes drags from controls inside the region.
     @ViewBuilder
-    private func screenGizmoLayers(size: CGSize, gameRect: CGRect) -> some View {
+    private func screenGizmoLayers(gameRect: CGRect) -> some View {
         ScreenRegionGizmo(
-            canvasSize: size,
+            canvas: canvas,
             allowedRect: layout.screenDragAllowedRect(
-                isPortrait: editingOrientation == .portrait,
-                overlayOn: screenRegion?.overlay ?? false,
-                canvasSize: size, safeArea: canvasSafeArea),
+                in: canvas, overlayOn: screenRegion?.overlay ?? false),
             baseRect: screenRegionRect ?? gameRect,
             onDragBegan: {
-                let auto = EditorCanvas.fakeGameRect(for: editingOrientation)
                 layout.beginScreenDrag(
                     autoReference: screenPlacement == nil
-                        ? ScreenRegion(
-                            x: auto.minX / size.width, y: auto.minY / size.height,
-                            w: auto.width / size.width, h: auto.height / size.height)
+                        ? canvas.region(for: fakeGameRect)
                         : nil)
             },
             onDragChanged: { region in
@@ -692,7 +670,8 @@ struct EditorCanvasShell<UnderControls: View>: View {
                     editMode: editMode,
                     safeArea: safeArea,
                     isPreview: true,
-                    editDialog: editDialog
+                    editDialog: editDialog,
+                    keys: EngineSessionCoordinator.shared.heldKeys
                 )
             }
             .allowsHitTesting(hitTesting)
@@ -718,6 +697,7 @@ private struct NewProfileAlert: ViewModifier {
     @Binding var isPresented: Bool
     let onCreate: () -> Void
 
+    @Environment(\.controlsLayout) private var playerLayout
     @State private var name = ""
     @State private var showNameError = false
     @State private var showSaveFailure = false
@@ -742,7 +722,7 @@ private struct NewProfileAlert: ViewModifier {
 
     private func create() {
         do {
-            try LayoutProfilesManager.createProfileFromBuiltins(rawName: name)
+            try LayoutProfilesManager.createProfileFromBuiltins(rawName: name, keys: playerLayout.gameKeys)
             onCreate()
         } catch is LayoutProfileStore.StoreError {
             showNameError = true
@@ -778,10 +758,14 @@ extension View {
 // MARK: - Built-in viewer
 
 struct BuiltinLayoutViewerView: View {
-    @State private var layout = ControlsLayout(viewerForBuiltins: .reference)
+    @State private var layout: ControlsLayout
     @State private var actions = PlayerActionRegistry()
     @State private var orientation: ControlsOrientation = .portrait
     @State private var showCreateDialog = false
+
+    init(keys: [GameKey]) {
+        _layout = State(initialValue: ControlsLayout(viewerForBuiltins: .reference, keys: keys))
+    }
 
     var body: some View {
         VStack(spacing: Spacing.md) {

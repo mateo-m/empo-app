@@ -11,7 +11,6 @@ struct PlayerView: View {
     @Environment(\.pauseManager) private var pauseManager
     @Environment(\.appSettings) private var settings
     private var editMode: Bool { layout.editSessionActive }
-    @AppStorage(DefaultsKey.controlsEditSnapToGrid) private var snapToGrid = false
     @State private var controlsHidden = false
     @State private var keyboardMode = false
     @State private var showDebugOverlay = false
@@ -37,12 +36,13 @@ struct PlayerView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let isPortrait = geo.size.height > geo.size.width
-            let gameRect = engineState.gameRect
             let safeArea = AppWindow.currentSafeArea
+            let canvas = ScreenCanvas(size: geo.size, safeArea: safeArea)
+            let isPortrait = canvas.isPortrait
+            let gameRect = engineState.gameRect
             let toolbarBtnSize = IconButtonSize.sm.points
             let activeScreenPlacement = layout.effectiveScreenPlacement(
-                stored: ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait))
+                stored: layout.screenRegion.resolvedPlacement(isPortrait: isPortrait))
             let forcedOverlay = activeScreenPlacement?.overlay
             let controlsMinY = ControlsZone.toolbarBottomY(
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
@@ -52,6 +52,7 @@ struct PlayerView: View {
                 isPortrait: isPortrait, safeArea: safeArea, geoSize: geo.size)
             let controlsSafeArea = ControlsZone.controlsSafeArea(safeArea, toolbar: toolbarPlacement)
             let toolbarKeepout = ControlsZone.toolbarKeepout(toolbarPlacement, geoSize: geo.size)
+            let screenContext = editMode ? screenGizmoContext(canvas: canvas, gameRect: gameRect) : nil
 
             ZStack {
                 if settings.showTouchZone, !gameRect.isEmpty {
@@ -75,7 +76,7 @@ struct PlayerView: View {
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .ignoresSafeArea()
-                        .chromeHitRegion("editMode")
+                        .chromeHitRegion()
                         .allowsHitTesting(false)
 
                     editZoneBackground(
@@ -86,8 +87,9 @@ struct PlayerView: View {
                             geoSize: geo.size)
                     }
 
-                    screenRegionGizmo(
-                        geoSize: geo.size, isPortrait: isPortrait, gameRect: gameRect)
+                }
+                if let screenContext {
+                    screenRegionGizmo(context: screenContext)
                 }
                 // Sits above the SDL game view, so a tap on the game
                 // area closes the keyboard.
@@ -95,7 +97,7 @@ struct PlayerView: View {
                     Color.clear
                         .contentShape(Rectangle())
                         .ignoresSafeArea()
-                        .chromeHitRegion("keyboardMode")
+                        .chromeHitRegion()
                         .onTapGesture {
                             toggleKeyboard()
                         }
@@ -109,13 +111,13 @@ struct PlayerView: View {
                         controlsMinY: controlsMinY,
                         editMode: editMode,
                         safeArea: controlsSafeArea,
-                        editDialog: $editDialog
+                        editDialog: $editDialog,
+                        keys: EngineSessionCoordinator.shared.heldKeys
                     )
                 }
 
-                if editMode {
-                    screenRegionChips(
-                        geoSize: geo.size, isPortrait: isPortrait, gameRect: gameRect)
+                if let screenContext {
+                    screenRegionChips(context: screenContext)
                 }
 
                 if controlsVisible {
@@ -183,10 +185,7 @@ struct PlayerView: View {
                 // the way down. A mounted field resigns cleanly.
                 KeyboardFieldRepresentable(
                     isActive: keyboardMode,
-                    excludedScancodes: { accessoryExcludedScancodes },
-                    onActivate: {
-                        AppWindow.setAllowKeyWindow(true)
-                    }
+                    excludedScancodes: { accessoryExcludedScancodes }
                 )
                 .frame(width: 0, height: 0)
 
@@ -199,7 +198,7 @@ struct PlayerView: View {
                 }
 
                 if layout.gameLayoutNoticePending && !editMode && !layout.importOfferPending {
-                    noticeCapsule(hitRegionKey: "gameLayoutNotice", safeArea: safeArea) {
+                    noticeCapsule(safeArea: safeArea) {
                         Text("This game's own control layout is now active.")
                             .font(.footnote)
                             .foregroundStyle(.white)
@@ -212,7 +211,7 @@ struct PlayerView: View {
                 }
 
                 if layout.importOfferPending && !editMode {
-                    noticeCapsule(hitRegionKey: "importOffer", safeArea: safeArea) {
+                    noticeCapsule(safeArea: safeArea) {
                         Text("This game includes its own control layout.")
                             .font(.footnote)
                             .foregroundStyle(.white)
@@ -233,35 +232,23 @@ struct PlayerView: View {
                 layout.setOrientation(nowPortrait ? .portrait : .landscape)
                 // Rotation must send the region again. Until it
                 // arrives, the engine draws automatic placement.
-                // `endPreview()` sends the region from disk.
-                if let pending = layout.pendingScreenEdit {
-                    ScreenRegionApplier.preview(
-                        pending.placement.flatMap {
-                            ScreenRegionApplier.region(for: $0, isPortrait: nowPortrait)
-                        },
-                        isPortrait: nowPortrait)
-                } else {
-                    ScreenRegionApplier.endPreview()
-                }
+                layout.screenRegion.show(pending: layout.pendingScreenEdit, isPortrait: nowPortrait)
             }
             // `initial: true`: the engine usually publishes gameRect
             // before PlayerView appears. Without it, the one real value
             // is lost, and translated layouts keep their estimated bands.
             .onChange(of: engineState.gameRect, initial: true) { _, rect in
                 layout.refreshForGameGeometryChange()
-                ScreenRegionApplier.gameRectChanged(rect)
+                layout.screenRegion.gameRectChanged(rect)
             }
             .onChange(of: toolbarKeepout, initial: true) { _, keepout in
                 layout.toolbarKeepout = keepout
             }
             .onChange(of: editMode) { _, editing in
-                // No undo on exit: `endEditSession()` drops the
-                // restore record, so Done keeps the snap.
-                guard editing, snapToGrid else { return }
-                layout.applyGridSnap(
-                    geoSize: geo.size,
-                    safeArea: controlsSafeArea,
-                    controlsMinY: controlsMinY)
+                layout.editModeChanged(
+                    editing,
+                    in: ControlsLayout.EditGeometry(
+                        geoSize: geo.size, safeArea: controlsSafeArea, controlsMinY: controlsMinY))
             }
         }
         .ignoresSafeArea()
@@ -277,12 +264,7 @@ struct PlayerView: View {
                 // keyboard: no binding stands between the player and
                 // the letters they type.
                 input.textInputActive = active
-                if active != keyboardMode {
-                    keyboardMode = active
-                    if active {
-                        AppWindow.setAllowKeyWindow(true)
-                    }
-                }
+                keyboardMode = active
             }
 
             // The registry must be wired BEFORE controller input
@@ -403,88 +385,61 @@ struct PlayerView: View {
     }
 
     private struct ScreenGizmoContext {
+        var canvas: ScreenCanvas
+        var gameRect: CGRect
         /// nil: the engine picks the placement.
         var effectivePlacement: ScreenPlacement?
         var effectiveRegion: ScreenRegion?
         var baseRect: CGRect
         var allowedRect: CGRect
         var autoRegion: ScreenRegion
-        var overlayOn: Bool
+        var overlayOn: Bool { effectivePlacement?.overlay ?? false }
     }
 
-    private func screenGizmoContext(
-        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
-    ) -> ScreenGizmoContext {
-        let resolved = ScreenRegionApplier.resolvedPlacement(isPortrait: isPortrait)
-        let effectivePlacement = layout.effectiveScreenPlacement(stored: resolved)
-        let effectiveRegion = effectivePlacement.flatMap {
-            ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
-        }
-        // Clamp like the applier does. Stored fractions can fall
-        // outside the safe area of this device.
-        let baseRect: CGRect = {
-            if let region = effectiveRegion {
-                let clamped = ScreenRegionApplier.clampToSafeArea(region)
-                return CGRect(
-                    x: clamped.x * geoSize.width,
-                    y: clamped.y * geoSize.height,
-                    width: clamped.w * geoSize.width,
-                    height: clamped.h * geoSize.height)
-            }
-            return gameRect.isEmpty
-                ? CGRect(origin: .zero, size: geoSize)
-                : gameRect
-        }()
+    private func screenGizmoContext(canvas: ScreenCanvas, gameRect: CGRect) -> ScreenGizmoContext {
+        let effectivePlacement = layout.effectiveScreenPlacement(
+            stored: layout.screenRegion.resolvedPlacement(isPortrait: canvas.isPortrait))
+        let effectiveRegion = effectivePlacement.flatMap { layout.screenRegion.region(for: $0) }
+        // Stored fractions can be outside the safe area of this device,
+        // and the applier clamps them before it sends them.
+        let baseRect =
+            effectiveRegion.map { canvas.rect(for: canvas.clampedToSafeArea($0)) }
+            ?? (gameRect.isEmpty ? CGRect(origin: .zero, size: canvas.size) : gameRect)
         return ScreenGizmoContext(
+            canvas: canvas,
+            gameRect: gameRect,
             effectivePlacement: effectivePlacement,
             effectiveRegion: effectiveRegion,
             baseRect: baseRect,
             allowedRect: layout.screenDragAllowedRect(
-                isPortrait: isPortrait, overlayOn: effectivePlacement?.overlay ?? false,
-                canvasSize: geoSize, safeArea: AppWindow.currentSafeArea),
-            autoRegion: ScreenRegion(
-                x: gameRect.minX / max(geoSize.width, 1),
-                y: gameRect.minY / max(geoSize.height, 1),
-                w: gameRect.width / max(geoSize.width, 1),
-                h: gameRect.height / max(geoSize.height, 1)),
-            overlayOn: effectivePlacement?.overlay ?? false)
+                in: canvas, overlayOn: effectivePlacement?.overlay ?? false),
+            autoRegion: canvas.region(for: gameRect))
     }
 
     @ViewBuilder
-    private func screenRegionGizmo(
-        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
-    ) -> some View {
-        let context = screenGizmoContext(
-            geoSize: geoSize, isPortrait: isPortrait, gameRect: gameRect)
+    private func screenRegionGizmo(context: ScreenGizmoContext) -> some View {
+        let isPortrait = context.canvas.isPortrait
         GeometryReader { _ in
             ScreenRegionGizmo(
-                canvasSize: geoSize,
+                canvas: context.canvas,
                 allowedRect: context.allowedRect,
                 baseRect: context.baseRect,
                 onDragBegan: {
                     // Snap-to-auto needs a live automatic rect. With a
                     // region active, the engine publishes the region rect.
                     layout.beginScreenDrag(
-                        autoReference: context.effectivePlacement == nil && !gameRect.isEmpty
+                        autoReference: context.effectivePlacement == nil && !context.gameRect.isEmpty
                             ? context.autoRegion : nil)
                 },
                 onDragChanged: { region in
                     layout.screenDragChanged(region)
-                    ScreenRegionApplier.preview(region, isPortrait: isPortrait)
+                    layout.screenRegion.preview(region, isPortrait: isPortrait)
                 },
                 onDragEnded: { region in
                     layout.endScreenDrag(region: region)
-                    if let pending = layout.pendingScreenEdit {
-                        ScreenRegionApplier.preview(
-                            pending.placement.flatMap {
-                                ScreenRegionApplier.region(for: $0, isPortrait: isPortrait)
-                            },
-                            isPortrait: isPortrait)
-                    } else {
-                        // Nothing is pending, so leave preview mode.
-                        // A stuck preview freezes the applier.
-                        ScreenRegionApplier.endPreview()
-                    }
+                    // With no pending edit, this ends the preview. A
+                    // preview that does not end freezes the applier.
+                    layout.screenRegion.show(pending: layout.pendingScreenEdit, isPortrait: isPortrait)
                 },
                 overlayOn: context.overlayOn
             )
@@ -495,11 +450,9 @@ struct PlayerView: View {
     /// Drawn above the controls. In overlay mode, the controls cover
     /// the game area and would hide the chips.
     @ViewBuilder
-    private func screenRegionChips(
-        geoSize: CGSize, isPortrait: Bool, gameRect: CGRect
-    ) -> some View {
-        let context = screenGizmoContext(
-            geoSize: geoSize, isPortrait: isPortrait, gameRect: gameRect)
+    private func screenRegionChips(context: ScreenGizmoContext) -> some View {
+        let isPortrait = context.canvas.isPortrait
+        let gameRect = context.gameRect
         GeometryReader { _ in
             ScreenRegionChips(
                 rect: context.baseRect,
@@ -508,17 +461,8 @@ struct PlayerView: View {
                     withAnimation(ScreenRegionGizmo.moveAnimation) {
                         layout.resetScreenEdit()
                     }
-                    if let current = context.effectiveRegion,
-                        let target = estimatedAutoRegion(
-                            geoSize: geoSize, isPortrait: isPortrait,
-                            aspect: gameRect.height > 0
-                                ? gameRect.width / gameRect.height : GameAspect.typical)
-                    {
-                        ScreenRegionApplier.animateResetToAuto(
-                            from: current, toEstimate: target, isPortrait: isPortrait)
-                    } else {
-                        ScreenRegionApplier.preview(nil, isPortrait: isPortrait)
-                    }
+                    layout.screenRegion.resetToAuto(
+                        from: context.effectiveRegion, in: context.canvas, isPortrait: isPortrait)
                 },
                 overlayOn: context.overlayOn,
                 onToggleOverlay: {
@@ -526,39 +470,15 @@ struct PlayerView: View {
                         let region = context.effectiveRegion
                             ?? (gameRect.isEmpty ? nil : context.autoRegion)
                     else { return }
-                    let toggled = layout.overlayToggledRegion(
-                        from: region, isPortrait: isPortrait, canvasSize: geoSize,
-                        safeArea: AppWindow.currentSafeArea)
+                    let toggled = layout.overlayToggledRegion(from: region, in: context.canvas)
                     withAnimation(ScreenRegionGizmo.moveAnimation) {
                         layout.recordScreenEdit(.region(toggled))
                     }
-                    ScreenRegionApplier.preview(toggled, isPortrait: isPortrait)
+                    layout.screenRegion.preview(toggled, isPortrait: isPortrait)
                 }
             )
         }
         .ignoresSafeArea()
-    }
-
-    private func estimatedAutoRegion(
-        geoSize: CGSize, isPortrait: Bool, aspect: CGFloat
-    ) -> ScreenRegion? {
-        let preset: ScreenPreset
-        switch gamecore_getVerticalAlignment() {
-        case GAMECORE_VALIGN_TOP: preset = .top
-        case GAMECORE_VALIGN_CENTER: preset = .center
-        default: preset = .topCenter
-        }
-        let safeArea = AppWindow.currentSafeArea
-        return ScreenPresetPlacement.region(
-            preset: preset,
-            canvasWidth: Double(geoSize.width),
-            canvasHeight: Double(geoSize.height),
-            safeTop: Double(safeArea.top),
-            safeBottom: Double(safeArea.bottom),
-            safeLeading: Double(safeArea.leading),
-            safeTrailing: Double(safeArea.trailing),
-            isPortrait: isPortrait,
-            aspect: Double(aspect))
     }
 
     private var editZoneCaptionText: LocalizedStringResource? {
@@ -617,7 +537,7 @@ struct PlayerView: View {
     /// Without a hit region, taps inside gameRect go to the engine,
     /// not to the buttons.
     private func noticeCapsule(
-        hitRegionKey: String, safeArea: EdgeInsets,
+        safeArea: EdgeInsets,
         @ViewBuilder content: () -> some View
     ) -> some View {
         VStack {
@@ -629,7 +549,7 @@ struct PlayerView: View {
             .padding(.vertical, Spacing.md)
             .background(Color.black.opacity(Scrim.heavy))
             .clipShape(Capsule())
-            .chromeHitRegion(hitRegionKey)
+            .chromeHitRegion()
             .padding(.bottom, safeArea.bottom + Spacing.md)
         }
     }
@@ -730,10 +650,7 @@ struct PlayerView: View {
     private var accessoryExcludedScancodes: Set<Int32> {
         var covered = Set<Int32>()
         if !controlsHidden {
-            covered.formUnion([
-                Int32(GAMECORE_SCANCODE_UP), Int32(GAMECORE_SCANCODE_DOWN),
-                Int32(GAMECORE_SCANCODE_LEFT), Int32(GAMECORE_SCANCODE_RIGHT),
-            ])
+            covered.formUnion(ControlDirection.allCases.map(\.scancode))
             for button in layout.buttons {
                 covered.insert(button.scancode)
             }

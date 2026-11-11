@@ -4,7 +4,7 @@
 import Foundation
 import GameProbe
 
-/// Builds the binding override layers, newest last (SPEC section 9).
+/// Builds the binding override layers, newest last.
 @MainActor
 enum BindingLayers {
     static func overrideLayers(for container: GameContainer?, manifest: BindingMap?) -> [BindingMap] {

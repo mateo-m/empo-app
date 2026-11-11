@@ -4,7 +4,6 @@
 import GameProbe
 import SwiftUI
 
-/// Key, button and action picker for one binding row (ticket 005 section 4).
 struct BindingTargetPicker: View {
     let source: BindingSource
     let current: BindingMap.Target?

@@ -440,6 +440,33 @@ struct SheetRowSeparator: View {
     }
 }
 
+/// A card row that the person taps: an icon and a label, with the full
+/// row as the hit target.
+struct SheetRow: View {
+    let icon: String
+    let label: LocalizedStringResource
+    var iconColor: Color = .primary
+    var role: ButtonRole?
+    let action: () -> Void
+
+    var body: some View {
+        Button(role: role, action: action) {
+            HStack(spacing: Spacing.lg) {
+                Image(systemName: icon)
+                    .foregroundStyle(role == .destructive ? .red : iconColor)
+                    .frame(width: 24)
+                Text(label)
+                    .foregroundStyle(role == .destructive ? .red : .primary)
+                    .multilineTextAlignment(.leading)
+                Spacer()
+            }
+            .padding(.horizontal, Spacing.lg)
+            .padding(.vertical, Spacing.lg)
+            .contentShape(Rectangle())
+        }
+    }
+}
+
 /// The sheet's one full-width primary action, at the bottom.
 struct SheetPrimaryButton: View {
     let title: LocalizedStringResource
