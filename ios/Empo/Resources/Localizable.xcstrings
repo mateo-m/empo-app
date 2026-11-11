@@ -70242,60 +70242,60 @@
         }
       }
     },
-    "Use the game's own keyboard for names instead of the iOS one. Turn it on for Pokemon Essentials games with custom keys." : {
+    "Pick the letters of a name on the game's own keyboard instead of typing them. Turn it on for Pokemon Essentials games with custom keys." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nutzt für Namen die Tastatur des Spiels statt der von iOS. Schalte das für Pokemon-Essentials-Spiele mit eigenen Tasten ein."
+            "value" : "Wähle die Buchstaben eines Namens auf der Tastatur des Spiels, statt sie zu tippen. Schalte das für Pokemon-Essentials-Spiele mit eigenen Tasten ein."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa el teclado del propio juego para los nombres en vez del de iOS. Actívalo en juegos de Pokemon Essentials con teclas personalizadas."
+            "value" : "Elige las letras de un nombre en el teclado del propio juego en vez de escribirlas. Actívalo en juegos de Pokemon Essentials con teclas personalizadas."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Utilise le clavier du jeu pour les noms au lieu de celui d'iOS. Active-le pour les jeux Pokemon Essentials avec des touches personnalisées."
+            "value" : "Choisis les lettres d'un nom sur le clavier du jeu au lieu de les taper. Active-le pour les jeux Pokemon Essentials avec des touches personnalisées."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa la tastiera del gioco per i nomi invece di quella di iOS. Attivala per i giochi Pokemon Essentials con tasti personalizzati."
+            "value" : "Scegli le lettere di un nome sulla tastiera del gioco invece di digitarle. Attivala per i giochi Pokemon Essentials con tasti personalizzati."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iOSのキーボードの代わりに、名前入力でゲーム独自のキーボードを使います。独自のキーを使うPokemon Essentialsのゲームではオンにしてください。"
+            "value" : "名前の文字を入力する代わりに、ゲーム独自のキーボードで選びます。独自のキーを使うPokemon Essentialsのゲームではオンにしてください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이름을 입력할 때 iOS 키보드 대신 게임 자체 키보드를 써요. 키를 따로 정한 Pokemon Essentials 게임에서 켜 주세요."
+            "value" : "이름을 직접 입력하는 대신 게임 자체 키보드에서 글자를 골라요. 키를 따로 정한 Pokemon Essentials 게임에서 켜 주세요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa o teclado do próprio jogo para nomes em vez do teclado do iOS. Ligue para jogos de Pokemon Essentials com teclas personalizadas."
+            "value" : "Escolha as letras de um nome no teclado do próprio jogo em vez de digitá-las. Ligue para jogos de Pokemon Essentials com teclas personalizadas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вводить имена с клавиатуры самой игры, а не iOS. Включите для игр на Pokemon Essentials с нестандартными клавишами."
+            "value" : "Выбирать буквы имени на клавиатуре самой игры, а не вводить их. Включите для игр на Pokemon Essentials с нестандартными клавишами."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入名字时使用游戏自己的键盘，而不是 iOS 键盘。适合有自定义按键的 Pokemon Essentials 游戏。"
+            "value" : "在游戏自己的键盘上选择名字的字母，而不是直接输入。适合有自定义按键的 Pokemon Essentials 游戏。"
           }
         }
       }
