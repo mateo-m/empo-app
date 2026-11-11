@@ -25,8 +25,10 @@ enum BackupNamespaceMove {
         do {
             try move(to: namespaceId, except: targetId)
         } catch {
-            try BackupLedgerRebuild.mark([targetId])
+            // A move can fail because the rebuild list does not write, so
+            // the clear goes first. The clear marks the rebuild again.
             try waiting.add([targetId])
+            try BackupLedgerRebuild.mark([targetId])
             throw error
         }
     }
@@ -58,6 +60,7 @@ enum BackupNamespaceMove {
     /// uploads.
     static func clearIfWaiting(targetId: String, store: BackupStateStore) throws {
         guard try waiting.ids().contains(targetId) else { return }
+        try BackupLedgerRebuild.mark([targetId])
         try store.clearNamespaceState(targetId: targetId)
         try waiting.remove(targetId)
     }

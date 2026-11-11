@@ -282,6 +282,31 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
     }
 
+    func testASplitThatCannotMarkItsRebuildStillClearsItsLocationBeforeItsNextRun() throws {
+        let target = try addATarget()
+        // The move marks only the other locations, so a second one makes it fail.
+        _ = try addATarget()
+        try blockTheRebuildList()
+
+        XCTAssertThrowsError(
+            try BackupNamespaceMove.afterSplit(to: "split-test-\(UUID().uuidString)", targetId: target.id))
+
+        XCTAssertEqual(try BackupKeychain.namespaceId(), namespaceBefore)
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "namespace-clear.json").ids().contains(target.id))
+    }
+
+    func testAClearMarksTheSnapshotListRebuildOfItsLocation() throws {
+        let target = try addATarget()
+        try BackupTargetWaitList(fileName: "namespace-clear.json").add([target.id])
+        let store = try BackupRoot.openStateStore()
+        defer { store.close() }
+
+        try BackupNamespaceMove.clearIfWaiting(targetId: target.id, store: store)
+
+        XCTAssertFalse(try BackupTargetWaitList(fileName: "namespace-clear.json").ids().contains(target.id))
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
+    }
+
     func testALocationAddedAgainRebuildsItsSnapshotList() throws {
         let target = TargetDescriptor(
             id: "damaged-settings-\(UUID().uuidString)", provider: .webdav, label: "Test",
