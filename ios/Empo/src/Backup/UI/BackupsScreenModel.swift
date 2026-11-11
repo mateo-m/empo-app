@@ -129,9 +129,9 @@ final class BackupsScreenModel {
             descriptors = []
             targetsFileIsDamaged = true
         } catch {
-            BackupLog.line("BackupsScreenModel", "targets.json was not read: \(error)")
-            descriptors = []
-            targetsFileIsDamaged = false
+            // No rows would show the empty state, which asks for a new location.
+            BackupLog.line("BackupsScreenModel", "targets.json was not read, the last rows stay: \(error)")
+            return
         }
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []

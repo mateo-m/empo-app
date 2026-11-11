@@ -109,6 +109,22 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try BackupRoot.writerConflicts().answer(for: target.id), .takeOver)
     }
 
+    func testTheBackupsScreenKeepsItsLocationsWhenTheListDoesNotRead() async throws {
+        let target = try addATarget()
+        let model = BackupsScreenModel(iCloudAvailability: { .ready })
+        await model.refresh()
+        // A folder in place of the file makes every read of the list fail.
+        let list = layout.targetsFile
+        try FileManager.default.removeItem(at: list)
+        try FileManager.default.createDirectory(at: list, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: list) }
+
+        await model.refresh()
+
+        XCTAssertTrue(model.items?.contains { $0.descriptor.id == target.id } ?? false)
+        XCTAssertFalse(model.targetsFileIsDamaged)
+    }
+
     func testTheBackupSheetAsksForTheModeAgainOverADamagedSettingsFile() async throws {
         try damaged.write(to: intentFile)
         try FileManager.default.createDirectory(
