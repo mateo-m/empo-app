@@ -270,8 +270,25 @@ final class DamagedBackupSettingsTests: XCTestCase {
 
         SyncJoin.switchTheGroup(to: SyncGroup.makeId())
 
-        let joined = try SyncStore.state().groupId != groupBefore
-        XCTAssertFalse(joined && FileManager.default.fileExists(atPath: document.path))
+        XCTAssertEqual(try SyncStore.state().groupId, groupBefore)
+        XCTAssertEqual(try Data(contentsOf: document), Data("old group".utf8))
+    }
+
+    func testAJoinThatIsNotSavedPutsTheOldDocumentBack() throws {
+        try removeTheSyncSettings()
+        try SyncStore.update { $0.startAGroup() }
+        let groupBefore = try SyncStore.state().groupId
+        let document = layout.syncDocumentFile
+        try Data("old group".utf8).write(to: document)
+        let settings = layout.applicationSupport.appendingPathComponent(SyncState.fileName)
+        // The system refuses to replace a locked file, so the save fails.
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: settings.path)
+        defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: settings.path) }
+
+        SyncJoin.switchTheGroup(to: SyncGroup.makeId())
+
+        XCTAssertEqual(try SyncStore.state().groupId, groupBefore)
+        XCTAssertEqual(try Data(contentsOf: document), Data("old group".utf8))
     }
 
     func testAJoinRemovesTheOldDocument() throws {
