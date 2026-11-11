@@ -63,7 +63,11 @@ enum BackupTargets {
     }
 
     /// Adds one target, or replaces the one that carries its id.
+    ///
+    /// A location added again still holds the snapshots of this device,
+    /// and the snapshot list starts without them.
     static func add(_ target: TargetDescriptor) throws {
+        try BackupLedgerRebuild.mark([target.id])
         try update { targets in
             if let at = targets.firstIndex(where: { $0.id == target.id }) {
                 targets[at] = target

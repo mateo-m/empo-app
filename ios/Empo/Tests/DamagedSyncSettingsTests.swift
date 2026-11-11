@@ -24,6 +24,7 @@ final class DamagedSyncSettingsTests: XCTestCase {
             syncFile, layout.targetsFile, layout.preferenceRollbackFile,
             layout.applicationSupport.appendingPathComponent(WriterConflicts.fileName),
             PreferenceRestore.restoredFile,
+            layout.root.appendingPathComponent("ledger-rebuild.json"),
         ]
         for url in kept {
             saved[url] = .some(try? Data(contentsOf: url))

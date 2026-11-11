@@ -282,6 +282,16 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
     }
 
+    func testALocationAddedAgainRebuildsItsSnapshotList() throws {
+        let target = TargetDescriptor(
+            id: "damaged-settings-\(UUID().uuidString)", provider: .webdav, label: "Test",
+            root: "Empo")
+
+        try BackupTargets.add(target)
+
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
+    }
+
     func testAnAdoptRebuildsTheSnapshotListOfEachLocation() throws {
         let target = try addATarget()
 
@@ -426,6 +436,8 @@ final class DamagedBackupSettingsTests: XCTestCase {
             id: "damaged-settings-\(UUID().uuidString)", provider: .webdav, label: "Test",
             root: "Empo")
         try BackupTargets.add(target)
+        // The add marks a rebuild, and the tests check for the marks of their own step.
+        try? FileManager.default.removeItem(at: rebuildList)
         return target
     }
 

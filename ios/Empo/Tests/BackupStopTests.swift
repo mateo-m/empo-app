@@ -50,13 +50,18 @@ final class BackupStopTests: XCTestCase {
     }
 
     func testAPausedPassStopsWhileALocationDoesNotOpen() async throws {
-        let targetsFile = BackupRoot.layout.targetsFile
-        let saved = try? Data(contentsOf: targetsFile)
+        let files = [
+            BackupRoot.layout.targetsFile,
+            BackupRoot.layout.root.appendingPathComponent("ledger-rebuild.json"),
+        ]
+        let saved = files.map { try? Data(contentsOf: $0) }
         defer {
-            if let saved {
-                try? saved.write(to: targetsFile, options: .atomic)
-            } else {
-                try? FileManager.default.removeItem(at: targetsFile)
+            for (file, data) in zip(files, saved) {
+                if let data {
+                    try? data.write(to: file, options: .atomic)
+                } else {
+                    try? FileManager.default.removeItem(at: file)
+                }
             }
         }
         try BackupTargets.add(
