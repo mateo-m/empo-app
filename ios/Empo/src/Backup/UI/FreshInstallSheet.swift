@@ -57,11 +57,11 @@ final class FreshInstallModel {
 
     var asksToAdopt: Bool { !adoptableNamespaceIds.isEmpty }
 
-    func answerTheAdopt(_ answer: AdoptQuestion.Answer) {
+    func answerTheAdopt(_ answer: AdoptQuestion.Answer) async {
         hasAnsweredTheAdopt = true
         guard answer == .adopt, let first = adoptableNamespaceIds.first else { return }
         do {
-            try BackupNamespaceMove.move(to: first)
+            try await BackupNamespaceMove.adopt(first)
         } catch {
             BackupLog.line("FreshInstallSheet", "The adopt was not saved: \(error)")
         }
@@ -321,8 +321,10 @@ struct FreshInstallSheet: View {
     }
 
     private func answer(_ answer: AdoptQuestion.Answer) {
-        model.answerTheAdopt(answer)
-        start()
+        Task {
+            await model.answerTheAdopt(answer)
+            start()
+        }
     }
 
     private func start() {

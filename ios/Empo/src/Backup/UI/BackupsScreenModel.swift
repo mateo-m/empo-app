@@ -452,10 +452,10 @@ final class BackupsScreenModel {
         adoptBanners = adoptBanners.filter { $0.targetId != targetId } + banners
     }
 
-    func answerTheAdoptBanner(_ banner: AdoptBannerItem, adopts: Bool) {
+    func answerTheAdoptBanner(_ banner: AdoptBannerItem, adopts: Bool) async {
         if adopts {
             do {
-                try BackupNamespaceMove.move(to: banner.namespaceId)
+                try await BackupNamespaceMove.adopt(banner.namespaceId)
             } catch {
                 BackupLog.line("BackupsScreenModel", "The adopt was not saved: \(error)")
                 return

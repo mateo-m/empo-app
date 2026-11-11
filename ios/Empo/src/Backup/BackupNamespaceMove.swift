@@ -12,6 +12,12 @@ enum BackupNamespaceMove {
     private static let waiting = BackupTargetWaitList(
         fileName: "namespace-clear.json", afterDamage: BackupLedgerRebuild.mark)
 
+    /// A pass in flight writes rows of the old namespace after they
+    /// clear, so no pass runs during the move.
+    static func adopt(_ namespaceId: String) async throws {
+        try await BackupScheduler.shared.withRunsHeld { Result { try move(to: namespaceId) } }.get()
+    }
+
     /// `except` is the target whose run made the move. Its engine
     /// cleared its own rows.
     static func move(to namespaceId: String, except: String? = nil) throws {

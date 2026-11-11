@@ -254,10 +254,10 @@ struct BackupsScreen: View {
             Section {
                 question(AdoptQuestion.question, note: String(localized: "On \(banner.targetLabel)."))
                 Button(AdoptQuestion.label(of: .adopt)) {
-                    model.answerTheAdoptBanner(banner, adopts: true)
+                    Task { await model.answerTheAdoptBanner(banner, adopts: true) }
                 }
                 Button(AdoptQuestion.label(of: .startFresh)) {
-                    model.answerTheAdoptBanner(banner, adopts: false)
+                    Task { await model.answerTheAdoptBanner(banner, adopts: false) }
                 }
             }
         }
