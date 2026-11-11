@@ -21,10 +21,8 @@ public enum S3 {
 
     public static let capabilities = TargetCapabilities(
         canQueryQuota: false,
-        reportsObjectAge: true,
         supportsBackgroundTransfer: true,
-        maxFileSize: S3.maxFileSizeBytes,
-        foldsCase: false)
+        maxFileSize: S3.maxFileSizeBytes)
 
     // MARK: - The sizes of 9.4
 
@@ -199,7 +197,7 @@ public enum S3 {
         var text = "<CompleteMultipartUpload>"
         for part in parts.sorted(by: { $0.number < $1.number }) {
             text += "<Part><PartNumber>\(part.number)</PartNumber>"
-            text += "<ETag>\(S3XML.escape(part.eTag))</ETag></Part>"
+            text += "<ETag>\(XMLText.escape(part.eTag))</ETag></Part>"
         }
         text += "</CompleteMultipartUpload>"
         return Data(text.utf8)
@@ -237,26 +235,17 @@ public enum S3 {
         }
     }
 
-    /// S3 stamps `LastModified` in RFC 3339, with a fraction of a
-    /// second on some services and none on others.
-    public static func date(fromTimestamp text: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: text)
-    }
-
     public static func page(fromBody body: Data) -> ObjectPage? {
         guard let xml = String(data: body, encoding: .utf8) else { return nil }
         guard xml.contains("<ListBucketResult") else { return nil }
+        let dates = ProviderDate.rfc3339Reader()
         let objects = S3XML.blocks(named: "Contents", in: xml).compactMap { block -> Object? in
             guard let key = S3XML.value(of: "Key", in: block), !key.isEmpty else { return nil }
             return Object(
                 key: key,
                 sizeBytes: S3XML.int64("Size", in: block) ?? 0,
                 lastModified: S3XML.value(of: "LastModified", in: block)
-                    .flatMap(date(fromTimestamp:)))
+                    .flatMap(dates))
         }
         // A page that is not truncated carries no token, and a
         // service that sends one anyway means nothing by it.
@@ -266,18 +255,12 @@ public enum S3 {
         return ObjectPage(objects: objects, nextContinuationToken: token)
     }
 
-    /// Every object of every page, as `list` reports them, per 8.1.
-    ///
-    /// The result is sorted, because 8.1 states a flat namespace and
-    /// two callers compare two lists.
+    /// The service already took the prefix.
     public static func objects(fromPages pages: [ObjectPage]) -> [RemoteObject] {
-        pages
-            .flatMap(\.objects)
-            .map {
-                RemoteObject(
-                    path: $0.key, sizeBytes: $0.sizeBytes, modifiedAt: $0.lastModified)
-            }
-            .sorted { $0.path < $1.path }
+        let objects = pages.flatMap(\.objects).map {
+            RemoteObject(path: $0.key, sizeBytes: $0.sizeBytes, modifiedAt: $0.lastModified)
+        }
+        return RemoteObject.listing(objects, prefix: "")
     }
 
     /// The id `CreateMultipartUpload` answered.
@@ -311,42 +294,16 @@ public enum S3 {
     ) -> [String] {
         guard let xml = String(data: body, encoding: .utf8) else { return [] }
         let cutoff = now.addingTimeInterval(-S3MultipartUpload.lifetime)
+        let dates = ProviderDate.rfc3339Reader()
         return S3XML.blocks(named: "Upload", in: xml).compactMap { block in
             guard S3XML.value(of: "Key", in: block) == key else { return nil }
             guard let id = S3XML.value(of: "UploadId", in: block), !id.isEmpty else { return nil }
             if id == ownUploadId { return id }
-            guard let initiated = S3XML.value(of: "Initiated", in: block).flatMap(date(fromTimestamp:)),
+            guard let initiated = S3XML.value(of: "Initiated", in: block).flatMap(dates),
                 initiated < cutoff
             else { return nil }
             return id
         }
-    }
-
-    // MARK: - Throttling, per 9.4
-
-    /// The wait when the service throttles and states no time.
-    public static let defaultRetryAfter: TimeInterval = 2
-
-    /// The longest wait the truncated backoff ever makes.
-    public static let backoffCeilingSeconds: TimeInterval = 64
-
-    /// The truncated exponential delay for attempt 1, 2, 3, and so
-    /// on. It doubles and then stops at the ceiling.
-    public static func backoffSeconds(attempt: Int) -> TimeInterval {
-        let step = max(1, attempt)
-        guard step < 32 else { return backoffCeilingSeconds }
-        return min(backoffCeilingSeconds, TimeInterval(1 << (step - 1)))
-    }
-
-    /// `Retry-After` in seconds, per 8.6. S3 states it in seconds
-    /// when it states it at all, and the backoff covers the rest.
-    public static func retryAfterSeconds(_ header: String?, attempt: Int = 1) -> TimeInterval {
-        guard let header, let seconds = TimeInterval(header.trimmingCharacters(in: .whitespaces)),
-            seconds > 0
-        else {
-            return backoffSeconds(attempt: attempt)
-        }
-        return seconds
     }
 
     // MARK: - The error map, per 8.4
@@ -428,7 +385,7 @@ public enum S3 {
         if outOfSpaceCodes.contains(failure.code) { return .outOfSpace }
         if credentialCodes.contains(failure.code) { return .authExpired }
         if throttleCodes.contains(failure.code) {
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         }
 
         switch status {
@@ -448,7 +405,7 @@ public enum S3 {
             if notFoundCodes.contains(failure.code) { return .notFound }
             return refusal(failure)
         case Status.tooManyRequests, Status.unavailable:
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         case Status.insufficientStorage:
             return .outOfSpace
         case Status.serverError..<600:
@@ -477,16 +434,20 @@ public enum S3 {
     /// Whether a failed upload has to abort what it started.
     ///
     /// An abandoned multipart upload leaves parts on the service and
-    /// parts cost money, per 9.4. A failure that stops the run is
-    /// permanent, so nothing later would ever finish that upload and
-    /// the parts would sit there. A throttle or an offline device is
-    /// not permanent, and the next pass carries on from the same id,
-    /// so those keep their parts.
+    /// parts cost money, per 9.4. After a permanent failure nothing
+    /// later would ever finish that upload, so the parts would sit
+    /// there. After a throttle or an offline device the next pass
+    /// carries on from the same id, so those keep their parts.
     ///
     /// `outOfSpace` keeps them too: the prune ladder of 5.14 runs and
     /// the retry that follows uses the parts already there.
     public static func abortsMultipart(after error: BackupProviderError) -> Bool {
-        error.effect.stopsTheRun
+        switch error {
+        case .authExpired, .permissionDenied, .rejected:
+            return true
+        case .outOfSpace, .throttled, .offline, .serverError, .notFound:
+            return false
+        }
     }
 
     /// Whether the service dropped the multipart upload, so the

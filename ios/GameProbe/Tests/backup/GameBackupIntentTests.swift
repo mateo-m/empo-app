@@ -120,19 +120,19 @@ final class GameBackupIntentTests: XCTestCase {
         // before the first settings write.
         try intent.save(to: stateDirectory)
 
-        XCTAssertEqual(GameBackupIntent.load(from: stateDirectory), intent)
+        XCTAssertEqual(try GameBackupIntent.load(from: stateDirectory), intent)
         XCTAssertEqual(GameBackupIntent.fileName, "backup.json")
     }
 
-    func testAMissingFileLoadsTheEmptyIntent() {
-        XCTAssertEqual(GameBackupIntent.load(from: tempRoot), GameBackupIntent())
+    func testAMissingFileLoadsTheEmptyIntent() throws {
+        XCTAssertEqual(try GameBackupIntent.load(from: tempRoot), GameBackupIntent())
     }
 
-    func testAnUnreadableFileLoadsTheEmptyIntent() throws {
+    func testADamagedFileIsAnError() throws {
         try "not json at all".write(
             to: tempRoot.appendingPathComponent(GameBackupIntent.fileName),
             atomically: true, encoding: .utf8)
 
-        XCTAssertEqual(GameBackupIntent.load(from: tempRoot), GameBackupIntent())
+        XCTAssertThrowsError(try GameBackupIntent.load(from: tempRoot))
     }
 }

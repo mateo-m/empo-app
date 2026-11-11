@@ -1,10 +1,8 @@
 import GameProbe
 import SwiftUI
 
-/// The one sheet that comes before the system prompt, per SPEC 13.19.
-///
-/// "Not now" calls nothing and marks nothing, so Empo's one chance at
-/// the system prompt stays unspent.
+/// "Not now" leaves the system prompt unspent, because iOS gives an
+/// app one chance at it.
 struct NotificationAskSheet: View {
 
     let answer: (BackupNotificationAnswer) -> Void

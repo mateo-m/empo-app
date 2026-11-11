@@ -100,23 +100,15 @@ public struct GameBackupIntent: Equatable, Sendable {
         fields[Key.manualMarks] = .array(manualMarks.map { .string($0) })
         fields[Key.declinedSuggestions] = .array(declinedSuggestions.map { .string($0) })
 
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        return try encoder.encode(fields)
+        return try BackupJSON.encoder().encode(fields)
     }
 
     // MARK: - The file
 
-    /// Reads `EmpoState/backup.json`. A missing or unreadable file
-    /// gives the empty intent, the way `GameSettings.load` does.
-    public static func load(from stateDirectory: URL) -> GameBackupIntent {
-        let url = stateDirectory.appendingPathComponent(fileName)
-        guard let data = try? Data(contentsOf: url),
-            let intent = try? decode(json: data)
-        else {
-            return GameBackupIntent()
-        }
-        return intent
+    public static func load(from stateDirectory: URL) throws -> GameBackupIntent {
+        guard let data = try SettingsFile.data(at: stateDirectory.appendingPathComponent(fileName))
+        else { return GameBackupIntent() }
+        return try decode(json: data)
     }
 
     /// Writes `EmpoState/backup.json`, and makes `EmpoState/` first

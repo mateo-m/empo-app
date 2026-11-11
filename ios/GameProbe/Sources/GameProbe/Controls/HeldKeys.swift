@@ -19,6 +19,10 @@ public final class HeldKeys<Holder: Hashable> {
     /// (about 16 ms at 60 fps, with headroom).
     public nonisolated static var minimumHold: Duration { .milliseconds(50) }
 
+    /// The hold of one key tap. Heavy scenes read input at well below
+    /// 40 fps, and a shorter tap can fall between two reads.
+    public nonisolated static var tapHoldMilliseconds: Int { 120 }
+
     /// A key the engine sees as down. A holder with a release task
     /// still holds the key until the task ends.
     private struct Key {

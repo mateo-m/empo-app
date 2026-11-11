@@ -4,20 +4,44 @@
 import Foundation
 import GameProbe
 
-/// Table-driven labels and scope handling for the bindings screen
-/// (ticket 005). Everything here speaks `BindingSource`, so a row is
-/// a row whether it reads a pad element or a key.
 @MainActor
 enum BindingsCatalog {
 
-    enum Scope: CaseIterable {
-        case thisGame
+    /// The overrides that a binding screen changes.
+    enum Scope: Hashable {
+        case thisGame(GameContainer)
         case allGames
 
         var title: LocalizedStringResource {
             switch self {
             case .thisGame: "This game"
             case .allGames: "All games"
+            }
+        }
+
+        var overrides: BindingMap? {
+            switch self {
+            case .thisGame(let container): BindingStore.loadPerGame(container: container)
+            case .allGames: BindingStore.loadGlobal()
+            }
+        }
+
+        /// An empty map removes the stored overrides.
+        func store(_ map: BindingMap) throws(UserControlsFile.SaveRefusal) {
+            guard !map.entries.isEmpty else {
+                try deleteOverrides()
+                return
+            }
+            switch self {
+            case .thisGame(let container): try BindingStore.savePerGame(container: container, map: map)
+            case .allGames: BindingStore.saveGlobal(map)
+            }
+        }
+
+        func deleteOverrides() throws(UserControlsFile.SaveRefusal) {
+            switch self {
+            case .thisGame(let container): try BindingStore.deletePerGame(container: container)
+            case .allGames: BindingStore.deleteGlobal()
             }
         }
     }
@@ -49,7 +73,7 @@ enum BindingsCatalog {
         var id: String { source.name }
     }
 
-    /// RPG Maker meaning hints for the Common key group (ticket 005 section 4).
+    /// What each key of the common group does in most RPG Maker games.
     static let commonKeyAnnotations: [String: String] = [
         "Enter": String(
             localized: "Confirm",
@@ -221,16 +245,15 @@ enum BindingsCatalog {
         var result = baseSections
         let extras = extrasSection.elements.filter { exposed.contains($0.source.name) }
         if !extras.isEmpty {
-            result.append(
-                Section(
-                    id: "extras",
-                    title: String(localized: "Extras"),
-                    elements: extras))
+            result.append(Section(id: extrasSection.id, title: extrasSection.title, elements: extras))
         }
         return result
     }
 
-    /// Row label for any source.
+    static func keyName(_ code: String) -> String {
+        KeyCodeTable.displayName(for: code) ?? code
+    }
+
     static func label(for source: BindingSource) -> String {
         switch source {
         case .element(let name):
@@ -241,7 +264,7 @@ enum BindingsCatalog {
             }
             return name
         case .key(let code):
-            let name = KeyCodeTable.displayName(for: code) ?? code
+            let name = keyName(code)
             return name == code
                 ? name
                 : String(
@@ -260,14 +283,14 @@ enum BindingsCatalog {
         private let perGame: BindingMap?
         private let merged: [BindingSource: ControlsTarget]
 
-        init(scope: Scope, container: GameContainer?, manifest: BindingMap?) {
+        init(scope: Scope, manifest: BindingMap?) {
             self.scope = scope
             self.manifest = manifest
             let global = BindingStore.loadGlobal()
             self.global = global
             switch scope {
-            case .thisGame:
-                let perGame = container.flatMap(BindingStore.loadPerGame)
+            case .thisGame(let container):
+                let perGame = BindingStore.loadPerGame(container: container)
                 self.perGame = perGame
                 merged = BindingResolver.resolve(
                     layers: BindingLayers.overrideLayers(global: global, manifest: manifest, perGame: perGame)
@@ -279,7 +302,10 @@ enum BindingsCatalog {
         }
 
         var hasOverrides: Bool {
-            (scope == .thisGame ? perGame : global) != nil
+            switch scope {
+            case .thisGame: perGame != nil
+            case .allGames: global != nil
+            }
         }
 
         /// Rows for the keyboard section: the keys bound in this scope,
@@ -319,81 +345,62 @@ enum BindingsCatalog {
     }
 
     static func displayName(for target: BindingMap.Target?) -> String {
-        guard let target else {
-            return String(localized: "None", comment: "A controller button that does nothing.")
-        }
         switch target {
-        case .key(let code):
-            return KeyCodeTable.displayName(for: code) ?? code
-        case .element(let name):
+        case nil, .unbound?:
+            return String(localized: "None", comment: "A controller button that does nothing.")
+        case .key(let code)?:
+            return keyName(code)
+        case .element(let name)?:
             return label(for: .element(name))
-        case .action(let name):
-            // Unknown = written by a newer Empo or by hand. The
-            // binding stays in the map (W005 rule) and does nothing.
+        case .action(let name)?:
+            // A newer Empo or a person wrote this action. The binding
+            // stays in the map and does nothing.
             return EmpoActionCatalog.action(id: name)?.localizedName
                 ?? String(localized: "Not supported in this version of Empo")
-        case .unbound:
-            return String(localized: "None", comment: "A controller button that does nothing.")
         }
     }
 
     static func save(
-        source: BindingSource,
-        target: BindingMap.Target,
-        scope: Scope,
-        container: GameContainer?
-    ) {
-        edit(scope: scope, container: container) { $0.entries[source] = target }
+        source: BindingSource, target: BindingMap.Target, scope: Scope
+    ) throws(UserControlsFile.SaveRefusal) {
+        var map = scope.overrides ?? BindingMap()
+        map.entries[source] = target
+        try scope.store(map)
     }
 
-    static func removeOverride(
-        source: BindingSource,
-        scope: Scope,
-        container: GameContainer?
-    ) {
-        edit(scope: scope, container: container) { $0.entries.removeValue(forKey: source) }
+    static func removeOverride(source: BindingSource, scope: Scope) throws(UserControlsFile.SaveRefusal) {
+        var map = scope.overrides ?? BindingMap()
+        map.entries.removeValue(forKey: source)
+        try scope.store(map)
     }
 
-    /// Load, change, save. An edit that empties the map removes the
-    /// stored override instead of leaving an empty one behind.
-    private static func edit(
-        scope: Scope,
-        container: GameContainer?,
-        _ change: (inout BindingMap) -> Void
-    ) {
-        switch scope {
-        case .thisGame:
-            guard let container else { return }
-            var map = BindingStore.loadPerGame(container: container) ?? BindingMap()
-            change(&map)
-            if map.entries.isEmpty {
-                BindingStore.deletePerGame(container: container)
-            } else {
-                BindingStore.savePerGame(container: container, map: map)
-            }
-        case .allGames:
-            var map = BindingStore.loadGlobal() ?? BindingMap()
-            change(&map)
-            if map.entries.isEmpty {
-                BindingStore.deleteGlobal()
-            } else {
-                BindingStore.saveGlobal(map)
-            }
-        }
-    }
-
-    static func resetOverrides(scope: Scope, container: GameContainer?) {
-        switch scope {
-        case .thisGame:
-            guard let container else { return }
-            BindingStore.deletePerGame(container: container)
-        case .allGames:
-            BindingStore.deleteGlobal()
+    static func refusalMessage(_ refusal: UserControlsFile.SaveRefusal) -> LocalizedStringResource {
+        switch refusal {
+        case .fileHasErrors:
+            #if os(macOS)
+            """
+            Couldn't save your buttons. This game's controls file has errors. \
+            Fix it in Finder and try again.
+            """
+            #else
+            """
+            Couldn't save your buttons. This game's controls file has errors. \
+            Fix it in the Files app and try again.
+            """
+            #endif
+        case .fileNeedsNewerEmpo:
+            """
+            Couldn't save your buttons. This game's controls file needs a newer \
+            version of Empo. Update Empo and try again.
+            """
         }
     }
 
     static func resetTitle(scope: Scope) -> LocalizedStringResource {
-        scope == .thisGame ? "Reset buttons for this game?" : "Reset buttons for all games?"
+        switch scope {
+        case .thisGame: "Reset buttons for this game?"
+        case .allGames: "Reset buttons for all games?"
+        }
     }
 
     static func resetFooter(scope: Scope) -> LocalizedStringResource {
@@ -411,37 +418,19 @@ enum BindingsCatalog {
         available || scope == .allGames
     }
 
-    enum UnavailableNotePlace {
-        case editModeBadge
-        case addButtonSheet
-        case bindingList(Scope)
-    }
-
-    static func unavailableActionNote(_ actionID: String, in place: UnavailableNotePlace) -> String {
-        let cheats = actionID == EmpoActionCatalog.toggleCheats
-        switch place {
-        case .editModeBadge:
-            return cheats
-                ? String(localized: "This game has no cheats.")
-                : String(localized: "Turn this on in this game's settings")
-        case .addButtonSheet:
-            return cheats
-                ? String(localized: "This game has no cheats. The button shows in games that have cheats.")
-                : String(
-                    localized:
-                        "Fast forward is off for this game. The button shows in games that have Fast forward on."
-                )
-        case .bindingList(.thisGame):
-            return cheats
-                ? String(localized: "This game has no cheats.")
-                : String(localized: "Fast forward is off for this game. Turn it on in this game's settings.")
-        case .bindingList(.allGames):
-            return cheats
-                ? String(localized: "This game has no cheats. This button works in games that have cheats.")
-                : String(
-                    localized:
-                        "Fast forward is off for this game. This button works in games that have Fast forward on."
-                )
+    static func unavailableActionNote(_ requirement: ActionRequirement, scope: Scope) -> String {
+        switch (requirement, scope) {
+        case (.cheats, .thisGame):
+            String(localized: "This game has no cheats.")
+        case (.fastForward, .thisGame):
+            String(localized: "Fast forward is off for this game. Turn it on in this game's settings.")
+        case (.cheats, .allGames):
+            String(localized: "This game has no cheats. This button works in games that have cheats.")
+        case (.fastForward, .allGames):
+            String(
+                localized:
+                    "Fast forward is off for this game. This button works in games that have Fast forward on."
+            )
         }
     }
 
@@ -476,7 +465,11 @@ enum BindingsCatalog {
                 return TargetChoice(
                     title: action.localizedName,
                     blurb: action.localizedBlurb,
-                    note: available ? nil : unavailableActionNote(action.id, in: .bindingList(scope)),
+                    note: available
+                        ? nil
+                        : PlayerActionRegistry.requirement(of: action.id).map {
+                            unavailableActionNote($0, scope: scope)
+                        },
                     target: .action(action.id),
                     enabled: offersAction(available: available, scope: scope))
             } + [
@@ -506,7 +499,7 @@ enum BindingsCatalog {
                 title: group.localizedTitle,
                 choices: codes.map { code in
                     TargetChoice(
-                        title: KeyCodeTable.displayName(for: code) ?? code,
+                        title: keyName(code),
                         blurb: group == .common ? commonKeyAnnotations[code] : nil,
                         target: .key(code))
                 })

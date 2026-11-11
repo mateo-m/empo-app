@@ -17,22 +17,30 @@ struct BackupsScreen: View {
     @State private var unsavedPackage: PackageRecord?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var looksForAGroup = false
+    @State private var setUpAgainFailure: String?
 
     var body: some View {
-        ReadFirst(value: model.items) { items in
-            List {
-                if items.isEmpty {
-                    emptyState
-                    fileSection
-                } else {
-                    statusSection
-                    writerQuestions
-                    splitLine
-                    adoptBanners
-                    locations(items)
-                    optionsSection
-                    fileSection
-                    syncSection
+        Group {
+            if model.items == nil, model.targetsFile == .didNotOpen {
+                List { targetsFileLine }
+            } else {
+                ReadFirst(value: model.items) { items in
+                    List {
+                        targetsFileLine
+                        if items.isEmpty {
+                            emptyState
+                            fileSection
+                        } else {
+                            statusSection
+                            writerQuestions
+                            splitLine
+                            adoptBanners
+                            locations(items)
+                            optionsSection
+                            fileSection
+                            syncSection
+                        }
+                    }
                 }
             }
         }
@@ -218,6 +226,36 @@ struct BackupsScreen: View {
         }
     }
 
+    @ViewBuilder private var targetsFileLine: some View {
+        switch model.targetsFile {
+        case .read:
+            EmptyView()
+        case .damaged:
+            Section {
+                question(
+                    String(localized: "Empo can't read your list of locations."),
+                    note: String(
+                        localized:
+                            "Your backups are still there. Add your locations again to keep backing up."))
+                Button("Add locations again") {
+                    Task {
+                        await model.setAsideTheDamagedTargets()
+                        if model.targetsFile == .read { sheets.show(.add) }
+                    }
+                }
+            }
+        case .didNotOpen:
+            Section {
+                question(
+                    String(localized: "Empo can't read your list of locations."),
+                    note: String(localized: "Your backups are still there."))
+                Button("Try again") {
+                    Task { await model.refresh() }
+                }
+            }
+        }
+    }
+
     @ViewBuilder private var splitLine: some View {
         if model.showsTheSplitLine {
             Section {
@@ -234,10 +272,10 @@ struct BackupsScreen: View {
             Section {
                 question(AdoptQuestion.question, note: String(localized: "On \(banner.targetLabel)."))
                 Button(AdoptQuestion.label(of: .adopt)) {
-                    model.answerTheAdoptBanner(banner, adopts: true)
+                    Task { await model.answerTheAdoptBanner(banner, adopts: true) }
                 }
                 Button(AdoptQuestion.label(of: .startFresh)) {
-                    model.answerTheAdoptBanner(banner, adopts: false)
+                    Task { await model.answerTheAdoptBanner(banner, adopts: false) }
                 }
             }
         }
@@ -382,10 +420,13 @@ struct BackupsScreen: View {
     private var syncSection: some View {
         Section {
             Button {
-                lookForAGroup()
+                if SyncPass.shared.settingsAreDamaged { setUpSyncAgain() } else { lookForAGroup() }
             } label: {
                 HStack {
-                    Text("Sync settings with another device")
+                    Text(
+                        SyncPass.shared.settingsAreDamaged
+                            ? SyncGroupCopy.setUpAgainLabel
+                            : String(localized: "Sync settings with another device"))
                     Spacer()
                     if looksForAGroup { ProgressView() }
                 }
@@ -393,12 +434,35 @@ struct BackupsScreen: View {
             .disabled(looksForAGroup)
         } footer: {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                if SyncPass.shared.lastPassFailed {
-                    Label(SyncGroupCopy.failedLine, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.warning)
+                if SyncPass.shared.settingsAreDamaged {
+                    Label(
+                        setUpAgainFailure ?? SyncGroupCopy.stoppedLine,
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.warning)
+                } else {
+                    if SyncPass.shared.lastPassFailed {
+                        Label(SyncGroupCopy.failedLine, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.warning)
+                    }
+                    Text(SyncGroupCopy.stableLine)
                 }
-                Text(SyncGroupCopy.stableLine)
             }
+        }
+    }
+
+    private func setUpSyncAgain() {
+        looksForAGroup = true
+        setUpAgainFailure = nil
+        Task {
+            do {
+                let ask = try await SyncJoin.setUpAgain()
+                sheets.show(.join(SyncJoinPrompt(ask: ask)))
+            } catch {
+                BackupLog.line("BackupsScreen", "sync.json was not set aside: \(error)")
+                setUpAgainFailure = String(localized: "Empo couldn't set up sync again. Try again.")
+            }
+            looksForAGroup = false
         }
     }
 

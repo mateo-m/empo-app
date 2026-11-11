@@ -26,7 +26,8 @@ final class ControlsLayoutDefaultsTests: XCTestCase {
         let psdk = try container(named: "psdk", psdk: true)
         let rpgMaker = try container(named: "rpg-maker", psdk: false)
 
-        ControlsLayout.shared.switchGame(id: rpgMaker.id, container: rpgMaker)
+        ControlsLayout.shared.switchGame(
+            id: rpgMaker.id, container: rpgMaker, keys: GameKey.keys(forGameAt: rpgMaker.gameURL))
         XCTAssertEqual(
             scancodes(),
             [
@@ -34,7 +35,8 @@ final class ControlsLayoutDefaultsTests: XCTestCase {
                 Int32(GAMECORE_SCANCODE_Z), Int32(GAMECORE_SCANCODE_B),
             ])
 
-        ControlsLayout.shared.switchGame(id: psdk.id, container: psdk)
+        ControlsLayout.shared.switchGame(
+            id: psdk.id, container: psdk, keys: GameKey.keys(forGameAt: psdk.gameURL))
         XCTAssertEqual(
             scancodes(),
             [
@@ -59,7 +61,8 @@ final class ControlsLayoutDefaultsTests: XCTestCase {
         try Data("<html>".utf8).write(to: mvmz.gameURL.appendingPathComponent("index.html"))
         try Data("{}".utf8).write(to: data.appendingPathComponent("System.json"))
 
-        ControlsLayout.shared.switchGame(id: mvmz.id, container: mvmz)
+        ControlsLayout.shared.switchGame(
+            id: mvmz.id, container: mvmz, keys: GameKey.keys(forGameAt: mvmz.gameURL))
         XCTAssertEqual(
             scancodes(),
             [
@@ -69,7 +72,7 @@ final class ControlsLayoutDefaultsTests: XCTestCase {
     }
 
     private func scancodes() -> [Int32] {
-        ControlsLayout.defaultButtonsPortrait.map(\.scancode)
+        ControlsLayout.shared.gameKeys.map(\.scancode)
     }
 
     /// A game folder the core detection accepts. `PsdkGame.isGameRoot`

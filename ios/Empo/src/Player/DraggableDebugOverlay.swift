@@ -3,11 +3,8 @@
 
 import SwiftUI
 
-/// Positioned, draggable wrapper around `DebugOverlayView`. Owns its
-/// own drag / offset / measured-height state so gesture ticks don't
-/// invalidate the parent `PlayerView` body (which would rebuild the
-/// D-pad and every action button at ~60 Hz during a drag of the
-/// overlay).
+/// The drag state is in this view, not in `PlayerView`. A change to the
+/// `PlayerView` state makes all the controls draw again at each drag event.
 struct DraggableDebugOverlay: View {
     let state: DebugOverlayState
     let visible: Bool
@@ -32,10 +29,10 @@ struct DraggableDebugOverlay: View {
         DebugOverlayView(state: state)
             .frame(width: AppSize.debugOverlayWidth)
             .contentShape(Rectangle())
-            // Measure the region BEFORE .position, which expands to
-            // the full proposed space. The global frame here still
-            // reflects the position/offset applied further down.
-            .chromeHitRegion("debugOverlay")
+            // `.position` fills the full proposed space, so measure the
+            // region before it. The global frame includes the position
+            // and the offset below.
+            .chromeHitRegion()
             .onPreferenceChange(DebugOverlayHeightKey.self) { newHeight in
                 guard newHeight > 0 else { return }
                 height = newHeight
@@ -68,17 +65,12 @@ struct DraggableDebugOverlay: View {
         let halfH = height / 2
         if isPortrait, gameRect.height > 0, !useOverlayLayout {
             return CGPoint(
-                x: safeArea.leading + PlayerLayoutTokens.toolbarEdgePad + halfW,
-                y: gameRect.origin.y + gameRect.height + PlayerLayoutTokens.toolbarGap + halfH
-            )
-        } else {
-            let leftInset = max(safeArea.leading, PlayerLayoutTokens.minLandscapeInset)
-            let topInset = max(safeArea.top, PlayerLayoutTokens.minLandscapeInset)
-            return CGPoint(
-                x: leftInset + PlayerLayoutTokens.toolbarEdgePad + halfW,
-                y: topInset + PlayerLayoutTokens.toolbarEdgePad + halfH
+                x: safeArea.leading + ControlsZone.toolbarEdgePad + halfW,
+                y: gameRect.maxY + ControlsZone.toolbarGap + halfH
             )
         }
+        let origin = ControlsZone.topChromeOrigin(safeArea: safeArea)
+        return CGPoint(x: origin.x + halfW, y: origin.y + halfH)
     }
 
     private func clampDelta(base: CGSize, delta: CGSize) -> CGSize {
@@ -99,14 +91,4 @@ struct DraggableDebugOverlay: View {
             height: clampedY - a.y - base.height
         )
     }
-}
-
-/// Layout constants duplicated into a public enum so the extracted
-/// overlay view can reuse them without an import of PlayerView's
-/// private state. The namespace (`PlayerLayoutTokens`) avoids a
-/// clash with any other design-system enum.
-enum PlayerLayoutTokens {
-    static let toolbarGap: CGFloat = 8
-    static let toolbarEdgePad: CGFloat = 4
-    static let minLandscapeInset: CGFloat = 12
 }

@@ -60,7 +60,7 @@ public enum S3SigV4 {
     public static let emptyPayloadHash = ContentHash.hex(of: Data())
 
     /// The longest life a presigned URL may state, per 9.4.
-    public static let maximumExpiry: TimeInterval = 7 * 24 * 60 * 60
+    public static let maximumExpiry: TimeInterval = 7 * .day
 
     // MARK: - The two time forms
 

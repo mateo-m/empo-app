@@ -13,6 +13,7 @@ struct EmpoMacApp: App {
         if CommandLine.arguments.contains(GameLauncher.checkCoresArgument) {
             exit(GameLauncher.checkCores() ? 0 : 1)
         }
+        ErrorReports.apply(enabled: AppSettings.shared.errorReports)
     }
 
     var body: some Scene {

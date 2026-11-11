@@ -17,7 +17,6 @@ final class BackupRunMonitor: BackupRunObserver {
     private(set) var plan = BackupRunPlan()
     private(set) var startedAt: Date?
     private(set) var finishedAt: Date?
-    /// The id of the run the engine runs now, or `nil` between runs.
     var liveRunId: String?
     /// The games the pass covers, in the order the run takes them,
     /// with the name each card shows.
@@ -61,7 +60,6 @@ final class BackupRunMonitor: BackupRunObserver {
 
     // MARK: - What the pass reports
 
-    /// The scheduler opened its gates and the pass starts.
     func runBegins() {
         clearThePass()
         startedAt = Date()
@@ -71,7 +69,6 @@ final class BackupRunMonitor: BackupRunObserver {
         startTheTicker()
     }
 
-    /// The pass names what it covers.
     func runCovers(names: [String: String], progress: Progress? = nil, targetCount: Int = 0) {
         namesByKey = names
         self.progress = progress

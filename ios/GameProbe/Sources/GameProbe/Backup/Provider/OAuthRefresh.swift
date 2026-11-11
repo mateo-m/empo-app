@@ -21,7 +21,7 @@ public enum OAuthRefresh {
         case 429:
             return .throttled(
                 retryAfter: kind == .googleDrive
-                    ? GoogleDrive.retryAfterSeconds(retryAfterHeader)
+                    ? RetryWait.seconds(retryAfter: retryAfterHeader, attempt: 1)
                     : Dropbox.retryAfterSeconds(retryAfterHeader))
         case 500..<600:
             return .serverError(status: status)

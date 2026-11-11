@@ -18,21 +18,21 @@ final class DropboxTests: XCTestCase {
         let error = Dropbox.error(
             status: 401, errorSummary: "expired_access_token/")
         XCTAssertEqual(error, .authExpired)
-        XCTAssertEqual(error.effect, .needsSignIn)
+        XCTAssertEqual(error.runStop, .needsSignIn)
     }
 
     func testInsufficientSpaceRunsThePruneLadder() {
         let error = Dropbox.error(
             status: 409, errorSummary: "path/insufficient_space/")
         XCTAssertEqual(error, .outOfSpace)
-        XCTAssertEqual(error.effect, .runPruneLadder)
+        XCTAssertEqual(error.runStop, .full(reason: QuotaCheck.prunedAndStillFullLine))
     }
 
     func testTooManyRequestsCarriesTheStatedWait() {
         let error = Dropbox.error(
             status: 429, errorSummary: "too_many_requests/", retryAfterHeader: "17")
         XCTAssertEqual(error, .throttled(retryAfter: 17))
-        XCTAssertEqual(error.effect, .waitAndKeepRun(seconds: 17))
+        XCTAssertEqual(error.runStop, .throttled(retryAfter: 17))
     }
 
     func testAThrottleWithNoHeaderTakesTheDefaultWait() {
@@ -44,13 +44,16 @@ final class DropboxTests: XCTestCase {
         let error = Dropbox.error(status: 403, errorSummary: "access_denied/")
         XCTAssertEqual(error, .permissionDenied)
         // A re-sign-in does not fix a revoked scope, per 8.4.
-        XCTAssertEqual(error.effect, .blocked)
+        XCTAssertNil(error.runStop)
     }
 
     func testAMissingPathDropsTheObjectFromTheCache() {
         let error = Dropbox.error(status: 409, errorSummary: "path/not_found/")
         XCTAssertEqual(error, .notFound)
-        XCTAssertEqual(error.effect, .dropFromCache)
+        XCTAssertEqual(
+            error.runStop,
+            .rejected(
+                message: "A backup file is missing from this location. Back up again to replace it."))
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
@@ -60,7 +63,7 @@ final class DropboxTests: XCTestCase {
     func testAnUnknownReasonShowsNoTagOrStatus() {
         let error = Dropbox.error(status: 409, errorSummary: "path/malformed_path/")
         XCTAssertEqual(error, .rejected(message: "Dropbox refused the request."))
-        XCTAssertTrue(error.effect.stopsTheRun)
+        XCTAssertEqual(error.runStop, .rejected(message: "Dropbox refused the request."))
     }
 
     func testAMalformedLookupPathIsNotReadAsNotFound() {
@@ -164,7 +167,7 @@ final class DropboxTests: XCTestCase {
         XCTAssertEqual(page.entries.first?.sizeBytes, 7)
         XCTAssertEqual(
             page.entries.first?.serverModified,
-            Dropbox.date(fromTimestamp: "2026-08-27T14:30:00Z"))
+            ProviderDate.rfc3339Reader()("2026-08-27T14:30:00Z"))
     }
 
     // MARK: - 5. delete_batch splits
@@ -218,9 +221,7 @@ final class DropboxTests: XCTestCase {
     func testTheCapabilityFlagsReadAsSectionNineStates() {
         let flags = Dropbox.capabilities
         XCTAssertTrue(flags.canQueryQuota)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
-        XCTAssertTrue(flags.foldsCase)
         XCTAssertEqual(flags.maxFileSize, 2 * 1024 * 1024 * 1024 * 1024)
     }
 

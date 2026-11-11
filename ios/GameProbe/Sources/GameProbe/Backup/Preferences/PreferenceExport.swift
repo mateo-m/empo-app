@@ -45,6 +45,7 @@ public enum PreferenceKeys {
     public static let controllerHaptics = PreferenceEntry("controllerHaptics", .portable)
     public static let respectsSilentMode = PreferenceEntry("respectsSilentMode", .portable)
     public static let controlsEditSnapToGrid = PreferenceEntry("controlsEditSnapToGrid", .portable)
+    public static let errorReports = PreferenceEntry("errorReports", .portable)
     public static let debugMode = PreferenceEntry("debugMode", .deviceLocal)
     public static let debugLogs = PreferenceEntry("debugLogs", .deviceLocal)
     public static let maxLogFiles = PreferenceEntry("maxLogFiles", .deviceLocal)
@@ -119,8 +120,8 @@ public enum PreferenceKeys {
     // MARK: - The table
 
     public static let all: [PreferenceEntry] = [
-        theme, interfaceHaptics, controllerHaptics, respectsSilentMode, controlsEditSnapToGrid, debugMode, debugLogs,
-        maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
+        theme, interfaceHaptics, controllerHaptics, respectsSilentMode, controlsEditSnapToGrid, errorReports,
+        debugMode, debugLogs, maxLogFiles, showViewportBounds, showTouchZone, pointerInjection, caBundleLastRefresh,
         rubyGameRunner, lastGameReport, dataAppGroup, quitClosesGamesWithoutAsking,
         libraryDisplayMode, librarySortOption, showContinuePlaying, titlePosition,
         cleanupInvalidGames, pendingDuplicateGameNames, pendingSaveRecoveries, controllerMapGlobal,
@@ -135,7 +136,8 @@ public enum PreferenceKeys {
     public static let hintDismissedPrefix = "hint.dismissed."
 
     /// The two legacy families of 10.2. A game that the player never
-    /// opened since the migration shipped may still hold one.
+    /// opened since the migration shipped may still hold one, and so
+    /// may a game whose old value did not read.
     public static let controlsLayoutPrefix = "controlsLayout."
     public static let controllerMapPrefix = "controllerMap."
 
@@ -172,16 +174,11 @@ public enum PreferenceExport {
             version: currentVersion,
             exportedAt: date,
             values: portableValues(of: defaults))
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes, .prettyPrinted]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(document)
+        return try BackupJSON.encoder().encode(document)
     }
 
     public static func decode(json data: Data) throws -> PreferenceDocument {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(PreferenceDocument.self, from: data)
+        try BackupJSON.decoder().decode(PreferenceDocument.self, from: data)
     }
 }
 

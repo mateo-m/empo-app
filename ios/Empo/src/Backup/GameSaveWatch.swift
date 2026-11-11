@@ -30,7 +30,7 @@ final class GameSaveWatch {
     private var joinedPathsByGame: [String: Set<String>] = [:]
 
     /// The paths over the 50 MB limit that wait for an answer, per
-    /// 3.6. Tickets 017 and 018 show the ask.
+    /// 3.6.
     private var pendingAsksByGame: [String: [String]] = [:]
 
     private var session: Session?
@@ -62,7 +62,7 @@ final class GameSaveWatch {
     /// the launch and not in front of it.
     func beginSession(container: GameContainer) {
         endSession()
-        guard GameBackupIntent.load(from: container.empoStateURL).mode == .slim else {
+        guard (try? GameBackupIntent.load(from: container.empoStateURL))?.mode == .slim else {
             return
         }
         let gameURL = container.gameURL
@@ -132,8 +132,9 @@ final class GameSaveWatch {
         alreadyJoined: Set<String>
     ) -> Pass {
         let after = readTree(at: container.gameURL)
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
-        guard intent.mode == .slim else { return Pass(after: after, result: nil) }
+        guard let intent = try? GameBackupIntent.load(from: container.empoStateURL),
+            intent.mode == .slim
+        else { return Pass(after: after, result: nil) }
 
         let written = RuntimeWatch.writtenPaths(before: before, after: after, since: since)
         let files = written.compactMap { path -> BackupSetResolver.WalkedFile? in
@@ -155,17 +156,12 @@ final class GameSaveWatch {
     }
 
     private func apply(_ result: RuntimeWatchResult, forGame containerId: String) {
-        // The Backups screen and the Backup sheet do not exist yet,
-        // so this line is the only place a join shows. Tickets 016
-        // and 018 read the same numbers into the UI.
-        if AppSettings.shared.debugLogs, !result.isEmpty {
-            NSLog(
-                "[GameSaveWatch] %@: %ld joined, %ld to ask, %ld suggested: %@",
-                containerId,
-                result.joined.count,
-                result.asks.count,
-                result.suggestions.count,
-                (result.joined + result.asks).joined(separator: ", "))
+        if !result.isEmpty {
+            BackupLog.debug(
+                "GameSaveWatch",
+                "\(containerId): \(result.joined.count) joined, \(result.asks.count) to ask, "
+                    + "\(result.suggestions.count) suggested: "
+                    + (result.joined + result.asks).joined(separator: ", "))
         }
         if !result.joined.isEmpty {
             joinedPathsByGame[containerId, default: []].formUnion(result.joined)
@@ -205,9 +201,12 @@ final class GameSaveWatch {
     func declineAsk(path: String, container: GameContainer) {
         pendingAsksByGame[container.id]?.removeAll { $0 == path }
         let stateURL = container.empoStateURL
-        let intent = RuntimeWatch.declining(
-            path, in: GameBackupIntent.load(from: stateURL))
-        try? intent.save(to: stateURL)
+        do {
+            let intent = RuntimeWatch.declining(path, in: try GameBackupIntent.load(from: stateURL))
+            try intent.save(to: stateURL)
+        } catch {
+            BackupLog.line("GameSaveWatch", "The declined \(path) was not saved: \(error)")
+        }
     }
 
     // MARK: - The reading

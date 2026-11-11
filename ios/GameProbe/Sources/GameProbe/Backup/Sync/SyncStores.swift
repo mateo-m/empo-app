@@ -85,7 +85,7 @@ public protocol SyncTargets: AnyObject {
 /// and a join or a profile rename lands in the middle of one.
 @MainActor
 public protocol SyncStateStore: AnyObject {
-    func state() -> SyncState
+    func state() throws -> SyncState
     func update(_ change: (inout SyncState) -> Void) throws
     func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) throws
 }

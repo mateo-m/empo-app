@@ -48,7 +48,7 @@ final class RestorePlanTests: XCTestCase {
 
         XCTAssertEqual(
             plan.steps.map(\.action),
-            [.writeAfterDisplacing("UserData/save.rxdata.empo-displaced.bak")])
+            [.writeAfterDisplacing])
         XCTAssertEqual(plan.displacementCount, 1)
     }
 
@@ -169,20 +169,11 @@ final class RestorePlanTests: XCTestCase {
     // MARK: - Displacement, per 11.1
 
     func testASecondDisplacementOfOneFileIsNumbered() {
-        let plan = RestorePlanner.plan(
-            manifest: manifest([entry("UserData/save.rxdata", hash: "new")]),
-            scope: .wholeGame,
-            localFiles: [
-                RestoreLocalFile(
-                    root: .container, path: "UserData/save.rxdata", size: 90, hash: "old"),
-                RestoreLocalFile(
-                    root: .container, path: "UserData/save.rxdata.empo-displaced.bak",
-                    size: 80, hash: "older"),
-            ])
-
         XCTAssertEqual(
-            plan.steps.map(\.action),
-            [.writeAfterDisplacing("UserData/save.rxdata.empo-displaced-2.bak")])
+            DisplacedCopy.nextFileName(for: "save.rxdata") {
+                $0 == "save.rxdata.empo-displaced.bak"
+            },
+            "save.rxdata.empo-displaced-2.bak")
     }
 
     func testADisplacedCopyStaysOutOfTheBackupSet() {
@@ -360,15 +351,15 @@ final class RestorePlanTests: XCTestCase {
         XCTAssertFalse(
             VersionMarkerSheet.shows(
                 mode: .slim, scope: .wholeGame,
-                snapshot: SnapshotManifest.VersionMarker(fileCount: 4),
-                local: SnapshotManifest.VersionMarker(fileCount: 9)))
+                markerDiffers: SnapshotManifest.VersionMarker(fileCount: 4)
+                    != SnapshotManifest.VersionMarker(fileCount: 9)))
     }
 
     func testTheSheetNeverFiresWhenTheMarkersMatch() {
         let marker = SnapshotManifest.VersionMarker(gameINIHash: "abc", fileCount: 4)
         XCTAssertFalse(
             VersionMarkerSheet.shows(
-                mode: .full, scope: .wholeGame, snapshot: marker, local: marker))
+                mode: .full, scope: .wholeGame, markerDiffers: marker != marker))
     }
 
     func testTheThreeActionsCarryTheirScopeAndTheirReplace() {

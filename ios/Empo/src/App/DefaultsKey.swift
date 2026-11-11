@@ -23,6 +23,7 @@ enum DefaultsKey {
     static let showViewportBounds = PreferenceKeys.showViewportBounds.name
     static let showTouchZone = PreferenceKeys.showTouchZone.name
     static let debugLogs = PreferenceKeys.debugLogs.name
+    static let errorReports = PreferenceKeys.errorReports.name
     static let maxLogFiles = PreferenceKeys.maxLogFiles.name
     static let interfaceHaptics = PreferenceKeys.interfaceHaptics.name
     static let controllerHaptics = PreferenceKeys.controllerHaptics.name
@@ -107,9 +108,9 @@ enum DefaultsKey {
 
     /// LEGACY. Per-game controls layout, `controlsLayout.<gameID>`
     /// -> JSON. The live store is `EmpoState/controls.json`
-    /// (`UserControlsFile`). This key survives only until
-    /// `LegacyControlsMigration.run` moves it into the container and
-    /// removes it, which a backup run and the player both call.
+    /// (`UserControlsFile`). `LegacyControlsMigration.run` moves this
+    /// key into the container and removes it, which a backup run and
+    /// the player both call. A key that gives nothing to move stays.
     static let controlsLayoutPrefix = PreferenceKeys.controlsLayoutPrefix
     static func controlsLayout(gameID: String) -> String {
         controlsLayoutPrefix + gameID

@@ -13,6 +13,7 @@ import UIKit
 final class SyncPass {
 
     private(set) var lastPassFailed = false
+    private(set) var settingsAreDamaged = false
 
     static let shared = SyncPass()
 
@@ -122,16 +123,30 @@ final class SyncPass {
         state = .running(newsArrived: false)
         defer { runTheNextPass() }
 
+        settingsAreDamaged = SyncStore.settingsAreDamaged()
+
         guard let engine = engine ?? makeTheEngine() else { return }
+        do {
+            _ = try AutomergeDocumentStore.bytes()
+        } catch {
+            lastPassFailed = true
+            BackupLog.line("SyncPass", "The local document was not read: \(error)")
+            return
+        }
         switch await engine.run(trigger) {
         case .runAgain:
             state = .running(newsArrived: true)
         case .failed(let reason):
             lastPassFailed = true
-            log(reason)
+            BackupLog.debug("SyncPass", reason)
         case .done, .nothingToDo, .noLocalNews:
             lastPassFailed = false
         }
+    }
+
+    func settingsWereSetUpAgain() {
+        settingsAreDamaged = false
+        lastPassFailed = false
     }
 
     /// The pass that follows, where news arrived while this one ran.
@@ -146,24 +161,29 @@ final class SyncPass {
     }
 
     private func makeTheEngine() -> SyncEngine? {
-        guard let namespaceId = try? BackupKeychain.namespaceId() else { return nil }
+        guard let deviceId = BackupDevice.id else {
+            BackupLog.line("SyncPass", "The device id is not known")
+            return nil
+        }
+        let namespaceId: String
+        do {
+            namespaceId = try BackupKeychain.namespaceId()
+        } catch {
+            BackupLog.line("SyncPass", "The namespace id was not read: \(error)")
+            return nil
+        }
         let engine = SyncEngine(
             document: AutomergeDocumentStore(),
             targets: ProviderSyncTargets(),
             state: SyncFileStore(),
             local: DeviceSyncValues(),
             device: DeviceRecord(
-                deviceId: BackupDevice.id, model: BackupDevice.model, name: BackupDevice.name,
+                deviceId: deviceId, model: BackupDevice.model, name: BackupDevice.name,
                 lastWriteAt: Date()),
             namespaceId: namespaceId,
             now: { Date() },
-            note: { [weak self] in self?.log($0) })
+            note: { BackupLog.debug("SyncPass", $0) })
         self.engine = engine
         return engine
-    }
-
-    private func log(_ message: String) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("SyncPass", message)
     }
 }

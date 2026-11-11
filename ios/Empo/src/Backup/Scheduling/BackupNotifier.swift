@@ -51,20 +51,30 @@ enum BackupNotifier {
     /// every cause, which costs the user one repeated notification
     /// and never a missed one.
     static func report(_ targets: [BackupPassTarget], store: BackupStateStore) {
-        var ledger = (try? store.notificationLedger()) ?? BackupNotificationLedger()
+        var ledger: BackupNotificationLedger
+        do {
+            ledger = try store.notificationLedger()
+        } catch {
+            BackupLog.line("BackupNotifier", "The ledger was not read, every cause posts: \(error)")
+            ledger = BackupNotificationLedger()
+        }
         let toPost = ledger.post(pass: targets.map { ($0.id, $0.causes) })
-        try? store.saveNotificationLedger(ledger)
+        do {
+            try store.saveNotificationLedger(ledger)
+        } catch {
+            BackupLog.line("BackupNotifier", "The ledger was not saved: \(error)")
+        }
         for (target, posts) in zip(targets, toPost) {
             BackupLog.line(
                 "BackupNotifier",
                 "\(target.label) carries \(target.causes.count) cause, posts \(posts.causes.count)")
             for cause in posts.causes {
-                post(cause, targetLabel: target.label)
+                post(cause, targetId: target.id, targetLabel: target.label)
             }
         }
     }
 
-    private static func post(_ cause: BackupFailFastCause, targetLabel: String) {
+    private static func post(_ cause: BackupFailFastCause, targetId: String, targetLabel: String) {
         let content = UNMutableNotificationContent()
         content.body = BackupNotificationRule.text(
             for: cause,
@@ -72,7 +82,7 @@ enum BackupNotifier {
             deviceName: BackupDeviceConditions.deviceName)
         content.sound = .default
         let request = UNNotificationRequest(
-            identifier: "\(cause.rawValue).\(targetLabel)",
+            identifier: "\(cause.rawValue).\(targetId)",
             content: content,
             trigger: nil)
         UNUserNotificationCenter.current().add(request)

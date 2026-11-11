@@ -141,25 +141,16 @@ public struct SyncState: Codable, Equatable, Sendable {
     // MARK: - The file
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     /// The saved state, or a fresh one with a new actor identity.
     public static func read(
         applicationSupport: URL, actorId: @autoclosure () -> String
-    )
-        -> SyncState
-    {
-        let url = applicationSupport.appendingPathComponent(fileName)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        guard let data = try? Data(contentsOf: url),
-            let state = try? decoder.decode(SyncState.self, from: data)
+    ) throws -> SyncState {
+        guard let data = try SettingsFile.data(at: applicationSupport.appendingPathComponent(fileName))
         else { return SyncState(actorId: actorId()) }
-        return state
+        return try BackupJSON.decoder().decode(SyncState.self, from: data)
     }
 
     public func write(applicationSupport: URL) throws {

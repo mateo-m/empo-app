@@ -116,6 +116,9 @@ public struct PackagePlan: Sendable {
 
         var progress = PackageBuildProgress(totalFileCount: fileCount, totalBytes: sourceBytes)
         var written: [PackageStream] = []
+        // Two games can share one save folder, so their streams name
+        // the same ZIP path.
+        var copies: [String: ZipWriter.Entry] = [:]
         let record = PackageRecord(
             id: id, kind: .built, fileName: fileName, gameName: gameName, createdAt: date)
 
@@ -146,8 +149,10 @@ public struct PackagePlan: Sendable {
                     else {
                         throw ZipFailure.cannotRead(member.path)
                     }
-                    let written = try writer.add(
-                        file: file, at: path, modifiedAt: member.modifiedAt)
+                    let written =
+                        try copies[path]
+                        ?? writer.add(file: file, at: path, modifiedAt: member.modifiedAt)
+                    copies[path] = written
                     entry.size = written.uncompressedSize
                     entry.hash = written.hash
                     entries.append(entry)

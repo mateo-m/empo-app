@@ -9,7 +9,6 @@ import GameProbe
 @MainActor
 final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let launch: PlayerLaunch
-    private let core: GameCoreLibrary
     private let messages: FileHandle
     private let liveChanges: FileHandle
     private var window: NSWindow
@@ -27,20 +26,19 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     private var adoptedGame = false
     private var endSources: [any DispatchSourceProtocol] = []
 
-    init(launch: PlayerLaunch, core: GameCoreLibrary, messages: FileHandle, liveChanges: FileHandle) {
+    init(launch: PlayerLaunch, messages: FileHandle, liveChanges: FileHandle) {
         self.launch = launch
-        self.core = core
         self.messages = messages
         self.liveChanges = liveChanges
         window = Self.makeWindow(title: launch.title)
         let keys = HeldKeys<KeyHolder>(send: { scancode, pressed in
-            core.injectKeyEvent(scancode, pressed ? 1 : 0)
+            gamecore_injectKeyEvent(scancode, pressed ? 1 : 0)
         })
         actions = PlayerActionRegistry(
             engine: PlayerEngine(
-                fastForwardMultiplier: { Int(core.getFastForwardMultiplier()) },
-                setFastForwardMultiplier: { core.setFastForwardMultiplier(Int32($0)) },
-                setCheatsEnabled: { core.setCheatsEnabled($0) },
+                fastForwardMultiplier: { Int(gamecore_getFastForwardMultiplier()) },
+                setFastForwardMultiplier: { gamecore_setFastForwardMultiplier(Int32($0)) },
+                setCheatsEnabled: { gamecore_setCheatsEnabled($0) },
                 tapKey: { keys.tap($0, holdMilliseconds: $1, by: .touch("tap")) }))
         controllers = ControllerInputManager(keys: keys)
     }
@@ -143,27 +141,21 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     private func prepareGame() {
-        core.setLauncherIdentity("empo", AppInfo.version)
-        core.setCABundlePath(launch.caBundlePath)
-        core.setDebugLogPath(launch.debugLogPath)
-        for setting in launch.settings {
-            core.setSetting(setting.key, setting.value)
-        }
-        GameCoreSessionConfig.with(
+        gamecore_setLauncherIdentity("empo", AppInfo.version)
+        gamecore_setCABundlePath(launch.caBundlePath)
+        GameCoreLaunch.configure(
+            settings: launch.settings,
             userDataDirectory: launch.userDataDirectory,
-            sharedFontsDirectory: launch.fontsDirectory,
-            verticalAlignment: launch.verticalAlignment
-        ) { core.applySessionConfig($0) }
-        core.resetSessionState()
-        // Empo Player reads the controllers and sends their keys.
-        core.setGameControllerCaptureEnabled(false)
-        core.setEngineTerminatedCallback(
+            fontsDirectory: launch.fontsDirectory,
+            verticalAlignment: launch.verticalAlignment,
+            debugLogPath: launch.debugLogPath)
+        gamecore_setEngineTerminatedCallback(
             { context in
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { PlayerAppDelegate.delegate(context).engineTerminated() }
                 }
             }, context)
-        core.setGameRectChangedCallback(
+        gamecore_setGameRectChangedCallback(
             { _, _, width, height, context in
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
@@ -171,34 +163,25 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                     }
                 }
             }, context)
-        core.setErrorMessageCallback(
+        gamecore_setErrorMessageCallback(
             { message, context in
                 let text = message.map { String(cString: $0) }
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { PlayerAppDelegate.delegate(context).showError(text) }
                 }
             }, context)
-        core.setInfoMessageCallback(
+        gamecore_setInfoMessageCallback(
             { message, context in
                 let text = message.map { String(cString: $0) } ?? ""
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { PlayerAppDelegate.delegate(context).showInfo(text) }
                 }
             }, context)
-        core.setGamePath(launch.gamePath)
     }
 
     private func runGame() {
-        // gamecore_run_app may hold the main thread for the whole game,
-        // so it runs from a run loop callout and not from a main queue
-        // block (GameCore.h).
-        RunLoop.main.perform { [core] in
-            // PSDK's Ruby reads argv[0] for its own paths (psdk_core.h). The
-            // other arguments hold the launch JSON, which is not for a game.
-            let argv = UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>.allocate(capacity: 2)
-            argv[0] = CommandLine.unsafeArgv[0]
-            argv[1] = nil
-            _ = core.runApp(1, argv)
+        RunLoop.main.perform { [launch] in
+            GameCoreLaunch.run(gamePath: launch.gamePath)
         }
         RunLoop.main.perform { [self] in
             MainActor.assumeIsolated { adoptGame() }
@@ -209,7 +192,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     /// mkxp core gives the NSWindow that SDL made for it. SDL keeps
     /// that window's delegate, and reads its size from that window.
     private func adoptGame() {
-        guard !adoptedGame, let pointer = core.getGameWindow() else { return }
+        guard !adoptedGame, let pointer = gamecore_getGameWindow() else { return }
         switch Unmanaged<AnyObject>.fromOpaque(pointer).takeUnretainedValue() {
         case let gameWindow as NSWindow:
             window.close()
@@ -300,7 +283,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func engineTerminated() {
         gameEnded = true
-        if core.didEngineExitCleanly() == 0, !reportedError {
+        if gamecore_didEngineExitCleanly() == 0, !reportedError {
             showError(nil)
         } else if errorAlertsOnScreen == 0 {
             NSApp.terminate(nil)
@@ -308,6 +291,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 
     private func showError(_ message: String?) {
+        send(.error(message))
         reportedError = true
         errorAlertsOnScreen += 1
         let alert = NSAlert()
@@ -317,17 +301,18 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         alert.addButton(withTitle: String(localized: "Got it"))
         alert.beginSheetModal(for: windowForSheet()) { [self] _ in
             errorAlertsOnScreen -= 1
-            core.signalErrorDismissed()
+            gamecore_signalErrorDismissed()
             if gameEnded, errorAlertsOnScreen == 0 { NSApp.terminate(nil) }
         }
     }
 
     private func showInfo(_ message: String) {
+        send(.info(message))
         let alert = NSAlert()
         alert.messageText = launch.title
         alert.informativeText = message
         alert.addButton(withTitle: String(localized: "Continue"))
-        alert.beginSheetModal(for: windowForSheet()) { [self] _ in core.signalInfoDismissed() }
+        alert.beginSheetModal(for: windowForSheet()) { _ in gamecore_signalInfoDismissed() }
     }
 
     /// A core that fails before it shows its game leaves this app's
@@ -354,13 +339,17 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         let paused = isPaused
         if paused {
             controllers.releaseAllHeldInputs()
-            core.requestPause()
+            gamecore_requestPause()
         } else {
-            core.requestResume()
+            gamecore_requestResume()
         }
         pausedOverlay.isHidden = !paused
-        let message = paused ? PlayerMessage.paused : .resumed
-        try? messages.write(contentsOf: Data((message.rawValue + "\n").utf8))
+        send(paused ? .paused : .resumed)
+    }
+
+    private func send(_ message: PlayerMessage) {
+        guard let line = try? JSONEncoder().encode(message) else { return }
+        try? messages.write(contentsOf: line + Data("\n".utf8))
     }
 
     @objc func toggleFastForward(_ sender: Any?) {
@@ -464,7 +453,6 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
     }
 }
 
-/// Covers the game while it is paused.
 final class PausedOverlay: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)

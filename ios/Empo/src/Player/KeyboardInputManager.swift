@@ -5,76 +5,37 @@ import Foundation
 import GameController
 import GameProbe
 
-/// Host-side hardware keyboard input (SPEC section 10.3).
+/// A controller in keyboard mode, such as the 8BitDo Micro, is a
+/// Bluetooth keyboard to iOS, not a `GCController`. A pad in keyboard
+/// mode logs a keyboard line, not a controller line.
 ///
-/// A controller in keyboard mode, the 8BitDo Micro and its kin, is
-/// a Bluetooth keyboard to iOS, never a `GCController`. Reading the
-/// keyboard here puts those pads on the same binding layers as every
-/// other controller, so one set of binds serves them all.
-///
-/// The manager owns the keyboard while a session runs: it takes the
-/// `keyChangedHandler` slot, which holds exactly one handler, so the
-/// engine's SDL never sees a key and no press can arrive twice. A key
-/// with no binding is injected unchanged, which keeps typing and the
-/// engine hotkeys working.
-@MainActor
-final class KeyboardInputManager {
-    /// Dispatches action targets: (action id, pressed).
-    /// Returns false when the action refuses the press.
-    var actionHandler: ((String, Bool) -> Bool)?
-
-    /// Runs on physical key press edges (listen mode for the remap
-    /// UI). The argument is the W3C key code.
+/// While a session runs, the manager takes the `keyChangedHandler`
+/// slot, which holds one handler, so the SDL of the engine sees no key.
+/// A key with no binding goes to the game unchanged.
+final class KeyboardInputManager: InputManager<Int32> {
+    /// Gets the W3C key code of each physical key press.
     var keyActivityHandler: ((String) -> Void)?
 
-    /// Reports keyboard connects to `controls.json.log`. A pad in
-    /// keyboard mode arrives here, not through GameController, so a
-    /// bug report needs the line to tell the two apart.
-    var deviceLogHandler: ((String) -> Void)?
-
-    /// When true, edges neither inject keys nor dispatch actions (the
-    /// remap screen is frontmost). Keys held at that moment release,
-    /// because their release edges no longer reach the engine.
-    var suppressInjection = false {
-        didSet {
-            if suppressInjection, !oldValue {
-                releaseAllHeldKeys()
-            }
-        }
-    }
-
-    /// The session's overlay rule. The manager reports the first key
-    /// press to it and never writes the player's visibility flag.
-    weak var overlay: OverlayVisibilityController?
-
-    /// True once a hardware keyboard has connected during this session.
     private(set) var hasHadKeyboardThisSession = false
 
-    /// Set while the game asks for text input. The player is typing,
-    /// so every key passes through unmapped.
+    /// While the game asks for text, each key goes to the game unmapped.
     var textInputActive = false {
         didSet {
             if textInputActive, !oldValue {
-                releaseAllHeldKeys()
+                releaseAllHeldInputs()
             }
         }
     }
-
-    private var sessionActive = false
-    private var resolvedMap: [Int32: ResolvedTarget] = [:]
-    /// source scancode -> injected scancode, so a release repeats the
-    /// press-time decision even if the map or the text input mode
-    /// changed meanwhile.
-    private var pressedKeyScancode: [Int32: Int32] = [:]
-    private var pressedKeyAction: [Int32: String] = [:]
 
     private var connectObserver: NSObjectProtocol?
     private var disconnectObserver: NSObjectProtocol?
 
-    /// Atomically swap the merged key map. Keys held mid-press keep
-    /// their press-time target until release.
-    func updateResolvedMap(_ map: [Int32: ResolvedTarget]) {
-        resolvedMap = map
+    init(keys: HeldKeys<KeyHolder>) {
+        super.init(keys: keys, source: .keyboard, holder: KeyHolder.keyboard)
+    }
+
+    convenience init() {
+        self.init(keys: EngineSessionCoordinator.shared.heldKeys)
     }
 
     func start() {
@@ -116,7 +77,7 @@ final class KeyboardInputManager {
 
     func stop() {
         sessionActive = false
-        releaseAllHeldKeys()
+        releaseAllHeldInputs()
 
         if let connectObserver {
             NotificationCenter.default.removeObserver(connectObserver)
@@ -127,8 +88,6 @@ final class KeyboardInputManager {
         connectObserver = nil
         disconnectObserver = nil
 
-        // Nothing outside a session needs these keys, and `start()`
-        // claims the slot again for the next one.
         GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = nil
         EmpoGameProcessClient.setKeyHandler(nil)
         textInputActive = false
@@ -141,13 +100,9 @@ final class KeyboardInputManager {
         }
         hasHadKeyboardThisSession = true
 
-        // SDL claims this same slot when the engine starts, and again
-        // on every keyboard connect. The slot holds one handler, so
-        // taking it makes the host the only reader and nothing can
-        // arrive twice. Our connect observer hops through the main
-        // actor, which puts it after SDL's synchronous one. If the
-        // host ever lost the race, SDL would deliver plain keys to
-        // the game: unmapped, but never dead.
+        // SDL takes this slot when the engine starts and on each
+        // keyboard connect. The connect observer above goes through the
+        // main actor, so it runs after the synchronous observer of SDL.
         input.keyChangedHandler = { [weak self] _, _, keyCode, pressed in
             // SDL points the profile's handler queue at a background
             // queue, and that queue outlives its handler.
@@ -158,7 +113,7 @@ final class KeyboardInputManager {
     }
 
     private func detach() {
-        releaseAllHeldKeys()
+        releaseAllHeldInputs()
     }
 
     private func handle(keyCode: GCKeyCode, pressed: Bool) {
@@ -175,46 +130,10 @@ final class KeyboardInputManager {
         guard !suppressInjection else { return }
 
         if pressed {
-            // While the game is taking text, the keyboard is a keyboard.
-            if textInputActive {
-                press(source: source, scancode: source)
-                return
-            }
-            switch resolvedMap[source] {
-            case .key(let scancode):
-                press(source: source, scancode: scancode)
-            case .action(let name):
-                if actionHandler?(name, true) == true {
-                    pressedKeyAction[source] = name
-                }
-            case .unbound:
-                break
-            case nil:
-                // No binding: the key is itself.
-                press(source: source, scancode: source)
-            }
+            let target: ResolvedTarget = textInputActive ? .key(source) : resolvedMap[source] ?? .key(source)
+            press(source, as: target)
         } else {
-            if let action = pressedKeyAction.removeValue(forKey: source) {
-                _ = actionHandler?(action, false)
-                return
-            }
-            guard let scancode = pressedKeyScancode.removeValue(forKey: source) else { return }
-            EngineSessionCoordinator.shared.releaseKey(scancode: scancode, by: .keyboard(source))
+            release(source)
         }
-    }
-
-    private func press(source: Int32, scancode: Int32) {
-        pressedKeyScancode[source] = scancode
-        EngineSessionCoordinator.shared.holdKey(scancode: scancode, by: .keyboard(source))
-    }
-
-    private func releaseAllHeldKeys() {
-        EngineSessionCoordinator.shared.releaseKeys(from: .keyboard)
-        pressedKeyScancode.removeAll()
-
-        for action in pressedKeyAction.values {
-            _ = actionHandler?(action, false)
-        }
-        pressedKeyAction.removeAll()
     }
 }

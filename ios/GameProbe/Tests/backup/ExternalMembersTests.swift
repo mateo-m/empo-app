@@ -63,11 +63,17 @@ final class ExternalMembersTests: XCTestCase {
     func testARecordedPathOutsideTheDataFolderNamesNoDirectory() {
         for path in [
             "../Games/Other Quest", "Data/../Games/Other Quest", "Games/Other Quest",
-            "/var/mobile/Data/x", "Data", "Data//x", "Data/./x", "Data/x\\..\\y",
+            "/var/mobile/Data/x", "Data", "Data/", "Data//x", "Data/./x",
         ] {
             XCTAssertNil(
                 ExternalMembers.url(ofRecordedPath: path, documentsRoot: documents), path)
         }
+    }
+
+    func testABackslashIsPartOfAFolderNameInARecordedPath() {
+        XCTAssertEqual(
+            ExternalMembers.url(ofRecordedPath: "Data/x\\..\\y", documentsRoot: documents)?.lastPathComponent,
+            "x\\..\\y")
     }
 
     // MARK: - One directory, two games, per 4.5
@@ -124,9 +130,7 @@ final class ExternalMembersTests: XCTestCase {
         // what 4.4 warns on, and the tree did not change.
         XCTAssertFalse(
             VersionMarkerBuilder.warnsBeforeRestore(
-                mode: .full,
-                snapshot: newer.versionMarker,
-                local: older.versionMarker))
+                mode: .full, differs: newer.versionMarker != older.versionMarker))
     }
 
     // MARK: - The Rescued Saves buckets, per 4.5

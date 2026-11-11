@@ -19,10 +19,8 @@ public enum Dropbox {
 
     public static let capabilities = TargetCapabilities(
         canQueryQuota: true,
-        reportsObjectAge: true,
         supportsBackgroundTransfer: true,
-        maxFileSize: Dropbox.maxFileSizeBytes,
-        foldsCase: true)
+        maxFileSize: Dropbox.maxFileSizeBytes)
 
     // MARK: - The endpoints
 
@@ -110,25 +108,6 @@ public enum Dropbox {
     /// trades disk against the work a failed append repeats.
     public static let uploadChunkBytes: Int64 = 16 * 1024 * 1024
 
-    /// An upload session stays valid for 7 days, per 9.2.
-    public static let uploadSessionLifetime: TimeInterval = 7 * 24 * 60 * 60
-
-    /// One append of an upload session.
-    public struct Chunk: Equatable, Sendable {
-        public let offset: Int64
-        public let length: Int64
-        /// Whether `finish` commits after this one.
-        public let isLast: Bool
-
-        public init(offset: Int64, length: Int64, isLast: Bool) {
-            self.offset = offset
-            self.length = length
-            self.isLast = isLast
-        }
-
-        public var endOffset: Int64 { offset + length }
-    }
-
     /// How one file goes up, per 9.2.
     public enum UploadPlan: Equatable, Sendable {
         /// One `files/upload` call. Dropbox commits it whole, so it
@@ -137,7 +116,7 @@ public enum Dropbox {
         /// `upload_session/start`, then an `append_v2` per chunk,
         /// then `finish`. Nothing appears at the path until the
         /// commit, which is how a session meets 8.2.
-        case session(chunks: [Chunk])
+        case session(chunks: [UploadChunk])
     }
 
     public static func uploadPlan(forFileOfSize size: Int64) -> UploadPlan {
@@ -145,24 +124,9 @@ public enum Dropbox {
         return .session(chunks: chunks(ofFileSize: size, from: 0))
     }
 
-    /// The appends left for a file of this size, starting at
-    /// `offset`.
-    ///
-    /// A session that broke resumes from the offset Dropbox reports,
-    /// so it never restarts from zero. An offset at the end of the
-    /// file leaves no append, and `finish` still has to run.
-    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [Chunk] {
-        let start = max(0, min(offset, size))
-        guard start < size else { return [] }
-
-        var chunks: [Chunk] = []
-        var cursor = start
-        while cursor < size {
-            let length = min(uploadChunkBytes, size - cursor)
-            cursor += length
-            chunks.append(Chunk(offset: cursor - length, length: length, isLast: cursor >= size))
-        }
-        return chunks
+    /// An offset at the end of the file leaves no append, and `finish` still has to run.
+    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [UploadChunk] {
+        UploadChunk.plan(fileSize: size, from: offset, chunkBytes: uploadChunkBytes)
     }
 
     // MARK: - Delete
@@ -247,16 +211,8 @@ public enum Dropbox {
     /// The default wait when Dropbox throttles and states no time.
     public static let defaultRetryAfter: TimeInterval = 5
 
-    /// `Retry-After` in seconds, per 8.6. A missing or unreadable
-    /// header takes the default, because a throttle Empo ignores
-    /// earns a second throttle.
     public static func retryAfterSeconds(_ header: String?) -> TimeInterval {
-        guard let header, let seconds = TimeInterval(header.trimmingCharacters(in: .whitespaces)),
-            seconds > 0
-        else {
-            return defaultRetryAfter
-        }
-        return seconds
+        RetryWait.headerSeconds(header) ?? defaultRetryAfter
     }
 
     /// One Dropbox failure onto one error kind of 8.4.
@@ -366,29 +322,19 @@ public struct DropboxEntry: Equatable, Sendable {
 
 extension Dropbox {
 
-    /// Dropbox stamps `server_modified` in this form.
-    public static let timestampFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
-
-    public static func date(fromTimestamp text: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = timestampFormat
-        return formatter.date(from: text)
-    }
-
     /// Reads one `list_folder` or `list_folder/continue` answer.
     public static func page(fromBody body: Data) -> DropboxListPage? {
         guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             return nil
         }
         let raw = root["entries"] as? [[String: Any]] ?? []
+        let dates = ProviderDate.rfc3339Reader()
         let entries = raw.map { entry in
             DropboxEntry(
                 tag: entry[".tag"] as? String ?? "",
                 path: entry["path_display"] as? String ?? entry["path_lower"] as? String ?? "",
                 sizeBytes: (entry["size"] as? NSNumber)?.int64Value ?? 0,
-                serverModified: (entry["server_modified"] as? String).flatMap(date(fromTimestamp:)))
+                serverModified: (entry["server_modified"] as? String).flatMap(dates))
         }
         return DropboxListPage(
             entries: entries,
@@ -396,27 +342,16 @@ extension Dropbox {
             hasMore: root["has_more"] as? Bool ?? false)
     }
 
-    /// Every object of every page, as `list` reports them, per 8.1.
-    ///
     /// Dropbox lists a whole folder, so the prefix filter runs here.
-    /// The result is sorted, because 8.1 states a flat namespace and
-    /// two callers compare two lists.
     public static func objects(
         fromPages pages: [DropboxListPage], prefix: String
     ) -> [RemoteObject] {
-        var found: [RemoteObject] = []
-        for page in pages {
-            for entry in page.entries where entry.isFile {
-                let path = empoPath(forAPIPath: entry.path)
-                guard path.hasPrefix(prefix) else { continue }
-                found.append(
-                    RemoteObject(
-                        path: path,
-                        sizeBytes: entry.sizeBytes,
-                        modifiedAt: entry.serverModified))
-            }
+        let files = pages.flatMap(\.entries).filter(\.isFile).map {
+            RemoteObject(
+                path: empoPath(forAPIPath: $0.path), sizeBytes: $0.sizeBytes,
+                modifiedAt: $0.serverModified)
         }
-        return found.sorted { $0.path < $1.path }
+        return RemoteObject.listing(files, prefix: prefix)
     }
 
     // MARK: - users/get_space_usage

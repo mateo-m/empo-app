@@ -41,22 +41,35 @@ final class PlusStoreTests: XCTestCase {
 
     func testAnEndedSubscriptionTakesPlusAway() async throws {
         let store = PlusStore.shared
-        session.timeRate = .oneRenewalEveryTwoSeconds
         await store.loadProduct()
         try await store.purchase()
         XCTAssertTrue(store.isSubscribed)
-        let transaction = try XCTUnwrap(session.allTransactions().first)
-        try session.disableAutoRenewForTransaction(identifier: UInt(transaction.identifier))
-        guard case .verified(let latest)? = await Transaction.latest(for: PlusStore.productID),
-            let end = latest.expirationDate
-        else { return XCTFail("No subscription on the device") }
+
+        // On Xcode 27.2, expireSubscription(productIdentifier:) leaves the
+        // expiry date of the transaction 1 month away. A purchase dated
+        // 2 months ago that never renews gives a subscription that ended.
+        session.clearTransactions()
+        let start = try XCTUnwrap(Calendar.current.date(byAdding: .month, value: -2, to: .now))
+        let ended = try await session.buyProduct(
+            identifier: PlusStore.productID,
+            options: [.purchaseDate(start, renewalBehavior: .cancelImmediately)])
+        XCTAssertLessThan(try XCTUnwrap(ended.expirationDate), .now)
 
         // StoreKit sends no update when a subscription runs out. The app
         // sees the end at its next refresh.
-        try await Task.sleep(for: .seconds(max(0, end.timeIntervalSinceNow) + 0.5))
         await store.refresh()
 
-        XCTAssertFalse(store.isSubscribed)
+        var left: [String] = []
+        for await entitlement in Transaction.currentEntitlements(for: PlusStore.productID) {
+            let transaction = entitlement.unsafePayloadValue
+            left.append(
+                "id \(transaction.id), bought \(transaction.purchaseDate), "
+                    + "ends \(transaction.expirationDate.map { "\($0)" } ?? "never"), "
+                    + "revoked \(transaction.revocationDate.map { "\($0)" } ?? "no")")
+        }
+        XCTAssertFalse(
+            store.isSubscribed,
+            "the ended purchase is id \(ended.id). StoreKit still gives: \(left)")
     }
 
     func testARefundTakesPlusAway() async throws {
@@ -68,7 +81,9 @@ final class PlusStoreTests: XCTestCase {
         let refunded = expectation(description: "Plus ends")
         watchUntilNotSubscribed(store, refunded)
         try session.refundTransaction(identifier: UInt(transaction.identifier))
-        await fulfillment(of: [refunded], timeout: 10)
+        // On a GitHub-hosted Mac, the refund took 115 seconds once to
+        // reach `Transaction.updates`. On a fast Mac it takes under 1.
+        await fulfillment(of: [refunded], timeout: 300)
     }
 
     private func watchUntilNotSubscribed(_ store: PlusStore, _ done: XCTestExpectation) {

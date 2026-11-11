@@ -237,16 +237,11 @@ public struct SnapshotManifest: Codable, Equatable, Sendable {
     // MARK: - The JSON codec
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder(pretty: false).encode(self)
     }
 
     public static func decode(json data: Data) throws -> SnapshotManifest {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(SnapshotManifest.self, from: data)
+        try BackupJSON.decoder().decode(SnapshotManifest.self, from: data)
     }
 
     /// A manifest goes to the target compressed, per 5.6. Tens of KB

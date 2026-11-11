@@ -6,19 +6,22 @@
 #
 # The repository variable MACOS_RUNNER chooses the Mac. The value is
 # JSON: a label list such as ["self-hosted","macOS"], or one quoted
-# label such as "xcode-27". A bare xcode-27 fails. With no variable,
-# the Mac jobs run on a GitHub-hosted Mac. Every pull request does too,
-# also one from a branch of this repository or from Dependabot. A pull
-# request runs the workflow files of its own branch, so a pull request
-# that edits this file can still choose the self-hosted Mac. Only the
-# repository's approval rule for fork runs stops that for a fork.
+# label such as "xcode-27". A bare xcode-27 fails. It applies only to
+# a run that someone starts by hand. With no variable, that run uses a
+# GitHub-hosted Mac. Every pull request and every push to main uses a
+# GitHub-hosted Mac, also a pull request from a branch of this
+# repository or from Dependabot. A pull request runs the workflow files
+# of its own branch, so a pull request that edits this file can still
+# choose the self-hosted Mac. Only the repository's approval rule for
+# fork runs stops that for a fork.
 #
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
 # next. A job-completed hook on that runner that cleans the checkout
 # must keep them, as the prepare-xcode-project action does.
 # A GitHub-hosted Mac keeps the same folders in the GitHub cache. A pull
-# request reads the cache of its own earlier runs.
+# request reads the cache of its own earlier runs, or else the cache of
+# main. A pull request cannot read the cache of another pull request.
 
 name: CI
 
@@ -48,7 +51,8 @@ concurrency:
 jobs:
   # A docs-only change cannot break the GameProbe tests or an app build,
   # so those jobs skip. A push to main also skips them when a pull
-  # request run already passed on the same source tree.
+  # request run already passed on the same source tree. On a push, the
+  # Mac jobs run all the same, to save the build data of main.
   #
   # The skip MUST be a job-level `if:`, never a workflow-level
   # `paths-ignore`. The ruleset requires the "CI" context. A workflow
@@ -70,8 +74,8 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
-      # JSON for runs-on. A pull request always runs on a GitHub-hosted Mac.
-      mac_runner: ${{ github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"' }}
+      # JSON for runs-on.
+      mac_runner: ${{ github.event_name == 'workflow_dispatch' && vars.MACOS_RUNNER || '"xcode-27"' }}
     steps:
       - name: Classify the changed paths
         id: classify
@@ -293,6 +297,19 @@ jobs:
           REQUIRE_PUBLISHED: "0"
         run: scripts/verify-empo-deps-pins.sh
 
+  generated:
+    name: Generated files
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Check the files that GameCore.h generates
+        run: bun tools/gamecore/generate.ts --check
+
   test:
     name: GameProbe (swift test, Linux)
     needs: changes
@@ -345,13 +362,42 @@ jobs:
 
       - run: bun x tsc -p .
 
-  # The two Mac jobs run at the same time on two runners. Each keeps
-  # its build data in the runner's tool cache, which no job deletes, so
-  # the next run of the job builds only what changed.
+  # The three Mac jobs run at the same time on GitHub-hosted runners.
+  # The self-hosted Macs have two runners, so there one job waits. Each
+  # job keeps its build data in the runner's tool cache, which no job
+  # deletes, so the next run of the job builds only what changed. They
+  # run on each push to main, also when the gate skips the other jobs,
+  # so main saves the build data that the next pull request reads.
+  #
+  # macOS is the only runner that can run every check: Linux
+  # Foundation has no legacy text encodings. EMPO_TESTS_NO_SKIP=1 turns a skip
+  # here into a failure, so a check cannot go missing on both
+  # runners at once.
+  swift-packages:
+    name: Swift package tests (macOS)
+    needs: changes
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
+    runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+          clean: false
+
+      - uses: ./.github/actions/prepare-xcode-project
+        with:
+          build-data: swift-packages
+
+      - name: Swift package tests, with no skips allowed
+        env:
+          EMPO_TESTS_NO_SKIP: "1"
+        run: scripts/run-swift-tests.sh
+
   simulator:
     name: Simulator build
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 60
     steps:
@@ -364,36 +410,14 @@ jobs:
         with:
           build-data: simulator
 
-      # macOS is the only runner that can run every check: Linux
-      # Foundation has no legacy text encodings. EMPO_TESTS_NO_SKIP=1 turns a skip
-      # here into a failure, so a check cannot go missing on both
-      # runners at once.
-      - name: Swift package tests, with no skips allowed
-        env:
-          EMPO_TESTS_NO_SKIP: "1"
-        run: scripts/run-swift-tests.sh
-
-      - name: Build the app and its tests (iOS Simulator)
-        working-directory: ios/Empo
-        run: |
-          set -o pipefail
-          xcodebuild \
-            -project Empo.xcodeproj \
-            -scheme Empo \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$DERIVED_DATA" \
-            build-for-testing 2>&1 | tail -n 60
-
       # A Simulator of its own for each runner: another job or a person
-      # can boot a shared one, and `simctl boot` then fails. The first
-      # boot of a new Simulator takes about 30 seconds, so the runner
-      # keeps it for the next run.
-      - name: Start the app on the runner's Simulator
-        # A Simulator that does not boot holds the runner until this limit.
+      # can boot a shared one, and `simctl boot` then fails. The
+      # self-hosted runners keep their Simulator for the next run. On a
+      # GitHub-hosted runner, the first boot of a new Simulator takes up
+      # to 5 minutes, so it starts here and goes on during the build.
+      - name: Boot the runner's Simulator
         timeout-minutes: 10
         run: |
-          APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Empo.app"
-          [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
           read -r RUNTIME DEVICE_TYPE < <(xcrun simctl list runtimes available -j | jq -r '
             [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
             "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
@@ -410,6 +434,30 @@ jobs:
           [ -n "$UDID" ] || UDID="$(xcrun simctl create "$NAME" "$DEVICE_TYPE" "$RUNTIME")"
           echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
           echo "Simulator $NAME ($UDID)"
+          # `simctl boot` fails on a booted Simulator. It returns before
+          # the Simulator is ready, and the start step waits for the rest.
+          STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
+          [ "$STATE" = Booted ] || xcrun simctl boot "$UDID"
+
+      - name: Build the app and its tests (iOS Simulator)
+        working-directory: ios/Empo
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Empo.xcodeproj \
+            -scheme Empo \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$DERIVED_DATA" \
+            build-for-testing 2>&1 | tail -n 60
+
+      - name: Start the app on the runner's Simulator
+        # A Simulator that does not boot holds the runner until this limit.
+        timeout-minutes: 10
+        env:
+          UDID: ${{ env.SIM_UDID }}
+        run: |
+          APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Empo.app"
+          [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
           # -b boots the Simulator, or only waits when it already runs.
           xcrun simctl bootstatus "$UDID" -b >/dev/null
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
@@ -467,7 +515,7 @@ jobs:
   mac:
     name: Mac build
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 60
     steps:
@@ -494,8 +542,10 @@ jobs:
     needs:
       - changes
       - lint
+      - generated
       - test
       - api
+      - swift-packages
       - simulator
       - mac
     if: always()

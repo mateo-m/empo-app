@@ -1,28 +1,13 @@
 import Foundation
 
-/// One multipart upload that outlived the process, per SPEC 9.4.
-///
-/// A file over 5 GiB goes up in parts, and each part needs the app to
-/// run code. iOS ends a suspended app whenever it wants, so an upload
-/// that keeps its id in memory alone starts again from part 1 at the
-/// next launch.
-///
-/// The record is worth more here than on the OAuth services, because
-/// an abandoned multipart upload leaves parts on the service and
-/// parts cost money, per 9.4. The id on disk is what lets the next
-/// run carry on, and, where it cannot, abort what the last run left.
-///
-/// This is the same rule ticket 009 wrote for Dropbox and ticket 010
-/// wrote for Google Drive. S3 names an upload with an id and numbers
-/// its parts, so the record carries both.
-public struct S3MultipartUpload: Codable, Equatable, Sendable {
+/// A multipart upload that S3 never finishes leaves parts on the service, and parts cost money, per
+/// SPEC 9.4. The id on disk lets the next run carry on or abort what the last run left.
+public struct S3MultipartUpload: ResumableUpload, Equatable {
 
     /// The id `CreateMultipartUpload` answered.
     public var uploadId: String
     /// The key this upload writes.
     public var key: String
-    /// The size of the file. A file of another size at the same key
-    /// is another upload.
     public var fileSize: Int64
     /// What one part holds. A resumed run keeps it, because a part
     /// of another size would not line up with the parts already
@@ -32,14 +17,6 @@ public struct S3MultipartUpload: Codable, Equatable, Sendable {
     public var parts: [S3.CompletedPart]
     /// When the service answered the id.
     public var startedAt: Date
-
-    /// How long Empo carries on from a record.
-    ///
-    /// The service keeps a multipart upload until someone aborts it
-    /// or a rule of the bucket removes it, so nothing forces this
-    /// number. 7 days is the life of a presigned URL in 9.4, and a
-    /// run that has not finished in a week is a run that failed.
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
 
     public init(
         uploadId: String,
@@ -57,16 +34,8 @@ public struct S3MultipartUpload: Codable, Equatable, Sendable {
         self.startedAt = startedAt
     }
 
-    /// Whether a later `put` may carry on from this record.
-    ///
-    /// The id has to be there, the file has to be the same size, and
-    /// the record has to be inside the week. A record that fails any
-    /// of them is dead weight, and the caller aborts it and starts a
-    /// new upload.
-    public func isUsable(at now: Date, forFileOfSize size: Int64) -> Bool {
-        guard !uploadId.isEmpty else { return false }
-        guard fileSize == size, partSize > 0 else { return false }
-        return now.timeIntervalSince(startedAt) < Self.lifetime
+    public func hasCursor(forFileOfSize size: Int64) -> Bool {
+        !uploadId.isEmpty && partSize > 0
     }
 
     /// The tag of one part, or `nil` where the service does not hold

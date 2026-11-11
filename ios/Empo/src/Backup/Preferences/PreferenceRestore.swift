@@ -22,10 +22,10 @@ enum PreferenceRestore {
     /// reaches every device of the group, per 10.9.
     static var confirmation: String {
         let line = GameProbe.PreferenceRestore.confirmationLine
-        return SyncStore.state().hasJoined ? line + " " + PreferenceRollback.confirmation : line
+        return (try? SyncStore.state())?.hasJoined == true
+            ? line + " " + PreferenceRollback.confirmation : line
     }
 
-    /// Applies the file a restore just wrote.
     static func applyTheRestoredFile(at date: Date = Date()) -> Bool {
         defer { try? FileManager.default.removeItem(at: restoredFile) }
         guard let data = try? Data(contentsOf: restoredFile),
@@ -81,7 +81,7 @@ enum PreferenceRestore {
     /// A removal the sync state did not record comes back from the
     /// group on the next pass, so nothing changes without it.
     private static func apply(_ plan: PreferenceRollbackPlan) throws {
-        if SyncStore.state().hasJoined, !plan.deletes.isEmpty {
+        if !plan.deletes.isEmpty, try SyncStore.state().hasJoined {
             try SyncStore.update {
                 $0.removedPreferenceKeys = Array(Set($0.removedPreferenceKeys).union(plan.deletes))
                     .sorted()

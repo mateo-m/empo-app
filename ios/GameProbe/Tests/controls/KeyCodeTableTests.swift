@@ -44,6 +44,14 @@ final class KeyCodeTableTests: XCTestCase {
         XCTAssertEqual(KeyCodeTable.displayName(for: "Space"), "Space")
     }
 
+    func testTouchButtonsKeepTheirWordLabels() {
+        XCTAssertEqual(KeyCodeTable.buttonLabel(for: "Enter"), "Enter")
+        XCTAssertEqual(KeyCodeTable.buttonLabel(for: "Escape"), "Escape")
+        XCTAssertEqual(KeyCodeTable.buttonLabel(for: "ShiftLeft"), "Shift")
+        XCTAssertEqual(KeyCodeTable.buttonLabel(for: "KeyZ"), "Z")
+        XCTAssertNil(KeyCodeTable.buttonLabel(for: "NotAKey"))
+    }
+
     func testUnknownCodeReturnsNil() {
         XCTAssertNil(KeyCodeTable.scancode(for: "NotAKey"))
         XCTAssertNil(KeyCodeTable.displayName(for: "NotAKey"))

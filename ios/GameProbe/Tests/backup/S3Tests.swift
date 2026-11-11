@@ -35,14 +35,14 @@ final class S3Tests: XCTestCase {
                 code: "SignatureDoesNotMatch",
                 message: "The request signature we calculated does not match."))
         XCTAssertEqual(error, .authExpired)
-        XCTAssertEqual(error.effect, .needsSignIn)
+        XCTAssertEqual(error.runStop, .needsSignIn)
     }
 
     func testADeniedCallBlocksTheTarget() {
         let error = S3.error(
             status: 403, failure: failure(code: "AccessDenied", message: "Access Denied"))
         XCTAssertEqual(error, .permissionDenied)
-        XCTAssertEqual(error.effect, .blocked)
+        XCTAssertNil(error.runStop)
     }
 
     func testAKeyTheServiceDoesNotKnowAsksForANewOne() {
@@ -51,7 +51,7 @@ final class S3Tests: XCTestCase {
             failure: failure(
                 code: "InvalidAccessKeyId", message: "The access key does not exist."))
         XCTAssertEqual(error, .authExpired)
-        XCTAssertEqual(error.effect, .needsSignIn)
+        XCTAssertEqual(error.runStop, .needsSignIn)
     }
 
     func testAMissingKeyDropsItFromTheCache() {
@@ -59,7 +59,10 @@ final class S3Tests: XCTestCase {
             status: 404,
             failure: failure(code: "NoSuchKey", message: "The specified key does not exist."))
         XCTAssertEqual(error, .notFound)
-        XCTAssertEqual(error.effect, .dropFromCache)
+        XCTAssertEqual(
+            error.runStop,
+            .rejected(
+                message: "A backup file is missing from this location. Back up again to replace it."))
     }
 
     func testSlowDownThrottles() {
@@ -68,16 +71,16 @@ final class S3Tests: XCTestCase {
             failure: failure(code: "SlowDown", message: "Please reduce your request rate."),
             retryAfterHeader: "9")
         XCTAssertEqual(error, .throttled(retryAfter: 9))
-        XCTAssertEqual(error.effect, .waitAndKeepRun(seconds: 9))
+        XCTAssertEqual(error.runStop, .throttled(retryAfter: 9))
     }
 
     func testAThrottleWithNoStatedTimeTakesTheTruncatedBackoff() {
         let error = S3.error(
             status: 503, failure: failure(code: "SlowDown"), attempt: 4)
-        XCTAssertEqual(error, .throttled(retryAfter: S3.backoffSeconds(attempt: 4)))
-        XCTAssertEqual(S3.backoffSeconds(attempt: 1), 1)
-        XCTAssertEqual(S3.backoffSeconds(attempt: 4), 8)
-        XCTAssertEqual(S3.backoffSeconds(attempt: 40), S3.backoffCeilingSeconds)
+        XCTAssertEqual(error, .throttled(retryAfter: RetryWait.backoffSeconds(attempt: 4)))
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 1), 1)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 4), 8)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 40), RetryWait.backoffCeilingSeconds)
     }
 
     func testAFullBucketRunsThePruneLadder() {
@@ -85,7 +88,7 @@ final class S3Tests: XCTestCase {
             status: 403,
             failure: failure(code: "QuotaExceeded", message: "The bucket is over its quota."))
         XCTAssertEqual(error, .outOfSpace)
-        XCTAssertEqual(error.effect, .runPruneLadder)
+        XCTAssertEqual(error.runStop, .full(reason: QuotaCheck.prunedAndStillFullLine))
     }
 
     func testAServiceWithNoRoomLeftRunsThePruneLadder() {
@@ -104,13 +107,13 @@ final class S3Tests: XCTestCase {
             error,
             .rejected(
                 message: "The bucket refused the request. It said: “The specified bucket does not exist.”"))
-        XCTAssertTrue(error.effect.stopsTheRun)
+        XCTAssertTrue(S3.abortsMultipart(after: error))
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
         XCTAssertEqual(S3.error(status: 500), .serverError(status: 500))
         XCTAssertEqual(S3.error(status: 502), .serverError(status: 502))
-        XCTAssertEqual(S3.error(status: 500).effect, .retryOnNextPass)
+        XCTAssertEqual(S3.error(status: 500).runStop, .serverError(status: 500))
     }
 
     func testAnUnknownCodeReachesTheUserWordForWord() {
@@ -306,7 +309,7 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(parts.map(\.eTag), ["\"5f363e0e58a95f06cbe9bbc662c5dfb6\"", "\"two\""])
         let commit = String(decoding: S3.completeBody(parts: parts), as: UTF8.self)
         XCTAssertTrue(commit.contains("<ETag>&quot;5f363e0e58a95f06cbe9bbc662c5dfb6&quot;</ETag>"))
-        XCTAssertEqual(S3XML.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
+        XCTAssertEqual(XMLText.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
     }
 
     func testTheCommitBodyListsThePartsInOrder() {
@@ -338,7 +341,7 @@ final class S3Tests: XCTestCase {
             <Initiated>2026-10-01T10:00:00.000Z</Initiated></Upload>\
             </ListMultipartUploadsResult>
             """.utf8)
-        let now = S3.date(fromTimestamp: "2026-11-05T10:00:00.000Z")!
+        let now = ProviderDate.rfc3339Reader()("2026-11-05T10:00:00.000Z")!
 
         XCTAssertEqual(
             S3.abandonedUploadIds(fromBody: body, key: "Empo/a", ownUploadId: "mine", now: now),
@@ -402,7 +405,8 @@ final class S3Tests: XCTestCase {
             name: "my-saves", usesPathStyle: true)
         XCTAssertEqual(
             bucket.refusal, .rejected(message: TransportSecurity.plainAddressMessage))
-        XCTAssertEqual(bucket.refusal?.effect.stopsTheRun, true)
+        XCTAssertEqual(
+            bucket.refusal?.runStop, .rejected(message: TransportSecurity.plainAddressMessage))
     }
 
     func testAnHTTPSAddressWithABucketAndARegionPasses() {
@@ -431,7 +435,7 @@ final class S3Tests: XCTestCase {
             .rejected(
                 message: "The certificate for this server is invalid. "
                     + TransportSecurity.systemTrustMessage))
-        XCTAssertEqual(error?.effect.stopsTheRun, true)
+        XCTAssertEqual(error.map(S3.abortsMultipart(after:)), true)
         XCTAssertTrue(TransportSecurity.systemTrustMessage.contains("self-signed"))
     }
 
@@ -493,9 +497,7 @@ final class S3Tests: XCTestCase {
         let flags = S3.capabilities
         // 9.7: S3-compatible storage has no free-space call.
         XCTAssertFalse(flags.canQueryQuota)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
-        XCTAssertFalse(flags.foldsCase)
         XCTAssertEqual(flags.maxFileSize, S3.r2MaxFileSizeBytes)
     }
 

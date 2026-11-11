@@ -28,20 +28,15 @@ public struct PreferenceUndoFile: Codable, Equatable, Sendable {
     }
 
     public func isExpired(now: Date) -> Bool {
-        now.timeIntervalSince(savedAt) > Double(Self.expiryDays) * 24 * 60 * 60
+        now.timeIntervalSince(savedAt) > Double(Self.expiryDays) * .day
     }
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func decode(json data: Data) throws -> PreferenceUndoFile {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(PreferenceUndoFile.self, from: data)
+        try BackupJSON.decoder().decode(PreferenceUndoFile.self, from: data)
     }
 
     public static func read(applicationSupport: URL) -> PreferenceUndoFile? {

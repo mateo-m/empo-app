@@ -10,51 +10,17 @@ import UIKit
 import AppKit
 #endif
 
-/// Host-side physical controller input (SPEC section 10.2). Maps
-/// controller elements to keyboard scancodes via the merged four-layer
-/// map (section 9). A reader turns each pad's input into SDL element
-/// names: Apple's GameController on iOS, SDL on the Mac.
-@MainActor
-final class ControllerInputManager {
-    /// Dispatches action targets: (action id, pressed). Wired to
-    /// `PlayerActionRegistry.handle`. Hold actions rely on the
-    /// release edge. See `releaseAllHeldKeys` for the paths where
-    /// release edges cannot arrive.
-    /// Returns false when the action refuses the press.
-    var actionHandler: ((String, Bool) -> Bool)?
-
-    /// Runs on physical element press edges (listen mode for the remap UI).
+final class ControllerInputManager: InputManager<String> {
     var elementActivityHandler: ((String) -> Void)?
 
     var connectionHandler: (() -> Void)?
 
-    /// When true, edges still update internal state but do not inject keys
-    /// or dispatch host actions (remap screen is frontmost). When
-    /// suppression begins, the manager releases the keys held at that
-    /// moment. Their swallowed release edges then cannot leave the
-    /// engine with a stuck key.
-    var suppressInjection = false {
-        didSet {
-            if suppressInjection, !oldValue {
-                releaseAllHeldInputs()
-            }
-        }
-    }
-
-    /// The session's overlay rule. The manager reports facts to it
-    /// and never writes the player's visibility flag itself.
-    weak var overlay: OverlayVisibilityController?
-
-    /// True once any controller has connected during this session.
     private(set) var hasHadControllerThisSession = false
 
-    /// True while at least one controller is attached.
     var hasConnectedController: Bool {
         !connectedControllers.isEmpty
     }
 
-    /// Scancodes a connected controller can press through the merged
-    /// element map. The keyboard accessory bar hides these keys.
     var boundKeyScancodes: Set<Int32> {
         Set(
             resolvedMap.values.compactMap { target in
@@ -63,8 +29,6 @@ final class ControllerInputManager {
             })
     }
 
-    /// SDL element names for optional hardware (paddles, touchpad) that
-    /// at least one currently connected controller exposes.
     var exposedOptionalElements: Set<String> {
         connectedControllers.values.reduce(into: []) { $0.formUnion($1.optionalElements) }
     }
@@ -80,23 +44,17 @@ final class ControllerInputManager {
     private typealias Reader = GameControllerReader
     #endif
 
-    private var sessionActive = false
     private var reducer = ControllerStateReducer()
-    private var resolvedMap = BindingResolver.resolveRuntime().elements
-    private var elementPressScancode: [String: Int32] = [:]
-    // element -> action id held by that element, mirroring
-    // elementPressScancode so hold actions get their release edge.
-    private var elementPressAction: [String: String] = [:]
     private var connectedControllers: [String: ConnectedPad] = [:]
-    private var heldStickDirections: [String: Set<ControllerStickMapper.Direction>] = [:]
+    private var heldStickDirections: [String: Set<ControlDirection>] = [:]
     private lazy var reader = Reader(manager: self)
-
-    private let keys: HeldKeys<KeyHolder>
 
     private var activeObserver: NSObjectProtocol?
 
     init(keys: HeldKeys<KeyHolder>) {
-        self.keys = keys
+        super.init(
+            keys: keys, source: .controller, holder: KeyHolder.controller,
+            resolvedMap: BindingResolver.resolveRuntime().elements)
     }
 
     #if os(iOS)
@@ -104,12 +62,6 @@ final class ControllerInputManager {
         self.init(keys: EngineSessionCoordinator.shared.heldKeys)
     }
     #endif
-
-    /// Atomically swap the merged map. Keys held mid-press keep their
-    /// press-time scancode until release (SPEC section 10.2 / ticket 004).
-    func updateResolvedMap(_ map: [String: ResolvedTarget]) {
-        resolvedMap = map
-    }
 
     func start() {
         stop()
@@ -151,20 +103,8 @@ final class ControllerInputManager {
         controllersWithLoggedInput.removeAll()
         heldStickDirections.removeAll()
         reducer = ControllerStateReducer()
-        elementPressScancode.removeAll()
-        elementPressAction.removeAll()
     }
 
-    /// Reports every connected device to `controls.json.log`, whether
-    /// or not the mapper can use it. A bug report about a controller
-    /// that "does nothing" is unanswerable without this: it tells
-    /// apart a pad the system never exposed, a pad with element names
-    /// Empo does not know, and a pad that works but is bound elsewhere.
-    var deviceLogHandler: ((String) -> Void)?
-
-    /// One line per controller per session, on its first edge. With
-    /// the "connected" line it tells apart a pad whose handlers never
-    /// fire from a pad whose elements have no binding.
     private var controllersWithLoggedInput: Set<String> = []
 
     private func logFirstInput(controllerID: String, element: String) {
@@ -258,42 +198,13 @@ final class ControllerInputManager {
             }
             if suppressInjection { continue }
             if edge.pressed {
-                guard let target = resolvedMap[edge.element] else { continue }
-                switch target {
-                case .key(let scancode):
-                    elementPressScancode[edge.element] = scancode
-                    keys.hold(scancode, by: .controller(edge.element))
-                case .action(let name):
-                    if actionHandler?(name, true) == true {
-                        elementPressAction[edge.element] = name
-                    }
-                case .unbound:
-                    break
+                if let target = resolvedMap[edge.element] {
+                    press(edge.element, as: target)
                 }
             } else {
-                if let action = elementPressAction.removeValue(forKey: edge.element) {
-                    _ = actionHandler?(action, false)
-                    continue
-                }
-                guard let scancode = elementPressScancode.removeValue(forKey: edge.element) else {
-                    continue
-                }
-                keys.release(scancode, by: .controller(edge.element))
+                release(edge.element)
             }
         }
-    }
-
-    /// Drops everything this path holds. Suppression and stop()
-    /// swallow the physical release edges, and a held fast-forward
-    /// with no release would leave the engine sped up.
-    func releaseAllHeldInputs() {
-        keys.release { $0.source == .controller }
-        elementPressScancode.removeAll()
-
-        for action in elementPressAction.values {
-            _ = actionHandler?(action, false)
-        }
-        elementPressAction.removeAll()
     }
 
     /// Also forgets which elements are down, so the poll when the app

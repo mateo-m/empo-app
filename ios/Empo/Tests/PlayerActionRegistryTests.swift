@@ -38,22 +38,22 @@ final class PlayerActionRegistryTests: XCTestCase {
 
     func testUnavailableNoteNamesTheReason() {
         XCTAssertEqual(
-            BindingsCatalog.unavailableActionNote(EmpoActionCatalog.toggleCheats, in: .editModeBadge),
+            PlayerActionRegistry.requirement(of: EmpoActionCatalog.toggleCheats)?.editModeNote,
             "This game has no cheats.")
         XCTAssertEqual(
-            BindingsCatalog.unavailableActionNote(EmpoActionCatalog.fastForwardHold, in: .editModeBadge),
+            PlayerActionRegistry.requirement(of: EmpoActionCatalog.fastForwardHold)?.editModeNote,
             "Turn this on in this game's settings")
         XCTAssertEqual(
             BindingsCatalog.unavailableActionNote(
-                EmpoActionCatalog.fastForwardHold, in: .bindingList(.thisGame)),
+                .fastForward, scope: .thisGame(GameContainer(folderName: "test"))),
             "Fast forward is off for this game. Turn it on in this game's settings.")
     }
 
     func testKeyCanStandInForAButtonButAButtonCannot() {
         let forKey = BindingsCatalog.targetChoices(
-            for: .key("Enter"), scope: .thisGame, isAvailable: { _ in true })
+            for: .key("Enter"), scope: .allGames, isAvailable: { _ in true })
         let forButton = BindingsCatalog.targetChoices(
-            for: .element("a"), scope: .thisGame, isAvailable: { _ in true })
+            for: .element("a"), scope: .allGames, isAvailable: { _ in true })
 
         XCTAssertFalse(forKey.elements.isEmpty)
         XCTAssertTrue(forButton.elements.isEmpty)

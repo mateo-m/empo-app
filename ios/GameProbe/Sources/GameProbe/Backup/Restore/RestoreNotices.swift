@@ -36,13 +36,19 @@ public enum RestoreNotices {
 
     public static let unreadableLine = screenText("Empo couldn't read this backup. Try another one.")
 
+    public static let recordsUnavailableLine = screenText(
+        "Empo couldn't open its records on this device. Close Empo, open it again, then try again.")
+
     /// What a restore ended with, per 11.14. Every line that is not a
     /// success says what to do next.
     public static func line(of outcome: RestoreOutcome) -> String {
         switch outcome {
         case .finished(let result):
-            return [screenText("Restored."), partialPathsLine(count: result.partialPathCount)]
-                .compactMap { $0 }.joined(separator: " ")
+            return [
+                partialPathsLine(count: result.partialPathCount),
+                screenText("Open the game to play from this backup."),
+            ]
+            .compactMap { $0 }.joined(separator: " ")
         case .notEnoughSpace(let shortfall):
             let missing = ByteCountFormatter.string(
                 fromByteCount: shortfall.missingBytes, countStyle: .file)

@@ -11,19 +11,58 @@ import GameProbe
 @MainActor
 enum SyncStore {
 
-    static func state() -> SyncState {
+    /// For the changes to `sync.json` alone. A Keychain error is not
+    /// "this device holds no id", so the id in the file stays. A fresh
+    /// id here would split this device's history.
+    static func state() throws -> SyncState {
+        let deviceActorId: String?
+        do {
+            deviceActorId = try BackupKeychain.syncActorId()
+        } catch {
+            BackupLog.line("SyncStore", "The actor id was not read: \(error)")
+            return try SyncState.read(
+                applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
+        }
+        return try state(deviceActorId: deviceActorId)
+    }
+
+    /// The pass writes the document as this actor, so it reads the state
+    /// only after the Keychain answers.
+    static func state(deviceActorId: String?) throws -> SyncState {
         let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
-        var state = SyncState.read(
+        var state = try SyncState.read(
             applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
         let replaced = state.replaceActor(
-            unlessTheDeviceHolds: try? BackupKeychain.syncActorId(), fresh: { UUID().uuidString })
+            unlessTheDeviceHolds: deviceActorId, fresh: { UUID().uuidString })
         if replaced {
-            try? BackupKeychain.setSyncActorId(state.actorId)
+            logFailure("The actor id was not saved") {
+                try BackupKeychain.setSyncActorId(state.actorId)
+            }
         }
         if replaced || !FileManager.default.fileExists(atPath: url.path) {
-            try? state.write(applicationSupport: BackupRoot.layout.applicationSupport)
+            logFailure("sync.json was not saved") {
+                try state.write(applicationSupport: BackupRoot.layout.applicationSupport)
+            }
         }
         return state
+    }
+
+    /// Nothing repairs a damaged file, so sync stays off until the user sets it up again.
+    static func settingsAreDamaged() -> Bool {
+        do {
+            _ = try SyncState.read(applicationSupport: BackupRoot.layout.applicationSupport, actorId: "")
+            return false
+        } catch is DecodingError {
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    static func setAsideTheDamagedFile() throws {
+        guard settingsAreDamaged() else { return }
+        try BackupRoot.setAside(
+            BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName))
     }
 
     /// Other devices hold the changes of the old id, numbered from 1.
@@ -31,9 +70,17 @@ enum SyncStore {
     /// and Automerge refuses every copy that holds both.
     static func newActorId() -> String {
         let actorId = UUID().uuidString
-        try? BackupKeychain.setSyncActorId(actorId)
-        try? update { $0.actorId = actorId }
+        logFailure("The actor id was not saved") { try BackupKeychain.setSyncActorId(actorId) }
+        logFailure("sync.json was not saved") { try update { $0.actorId = actorId } }
         return actorId
+    }
+
+    private static func logFailure(_ what: String, _ body: () throws -> Void) {
+        do {
+            try body()
+        } catch {
+            BackupLog.line("SyncStore", "\(what): \(error)")
+        }
     }
 
     /// Changes the state on the file and not on a copy.
@@ -43,19 +90,19 @@ enum SyncStore {
     /// after would put the old group back, so every change reads the
     /// file again first.
     static func update(_ change: (inout SyncState) -> Void) throws {
-        var state = state()
+        var state = try state()
         change(&state)
         try state.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
-    static func identities() -> SyncProfileIdentities {
-        SyncProfileIdentities.read(applicationSupport: BackupRoot.layout.applicationSupport)
+    static func identities() throws -> SyncProfileIdentities {
+        try SyncProfileIdentities.read(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     /// Changes the profile identities on the file and not on a copy,
     /// for the same reason `update` does.
     static func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) throws {
-        var identities = identities()
+        var identities = try identities()
         change(&identities)
         try identities.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
@@ -65,13 +112,17 @@ enum SyncStore {
     /// A delete travels as its own record, per 10.6, so the identity
     /// has to outlive the folder until the next pass publishes it.
     static func profileWasDeleted(_ name: String) {
-        try? updateIdentities { $0.markDeleted(profile: name, at: Date()) }
+        logFailure("The delete of \(name) was not saved") {
+            try updateIdentities { $0.markDeleted(profile: name, at: Date()) }
+        }
     }
 
     static func profileWasRenamed(from oldName: String, to newName: String) {
-        try? updateIdentities { identities in
-            guard identities.knownId(ofProfile: oldName) != nil else { return }
-            identities.rename(from: oldName, to: newName)
+        logFailure("The rename of \(oldName) was not saved") {
+            try updateIdentities { identities in
+                guard identities.knownId(ofProfile: oldName) != nil else { return }
+                identities.rename(from: oldName, to: newName)
+            }
         }
     }
 }
@@ -80,8 +131,14 @@ enum SyncStore {
 @MainActor
 final class SyncFileStore: SyncStateStore {
 
-    func state() -> SyncState {
-        SyncStore.state()
+    private let readTheDeviceActorId: @MainActor () throws -> String?
+
+    init(deviceActorId: @escaping @MainActor () throws -> String? = BackupKeychain.syncActorId) {
+        readTheDeviceActorId = deviceActorId
+    }
+
+    func state() throws -> SyncState {
+        try SyncStore.state(deviceActorId: try readTheDeviceActorId())
     }
 
     func update(_ change: (inout SyncState) -> Void) throws {

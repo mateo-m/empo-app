@@ -28,6 +28,14 @@ struct FirstBackupAskSheet: View {
             title: BackupModePicker.askTitle,
             barAction: SheetBarAction(BackupModePicker.skipLabel) { dismiss() }
         ) {
+            if model.settingsUnread {
+                SheetBodyText(
+                    String(
+                        localized:
+                            "Empo couldn't read your backup choices for \(model.gameName), so it's asking again."
+                    ),
+                    naming: model.gameName)
+            }
             SheetBodyText(
                 BackupModePicker.askBody(
                     gameName: model.gameName,

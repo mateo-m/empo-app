@@ -25,12 +25,12 @@ final class IdentityAliasesTests: XCTestCase {
         let snapshot = SnapshotIdentity(containerFolderName: "Fixture Quest")
         let alias = try XCTUnwrap(GameIdentityMatch.alias(attaching: snapshot, to: game))
 
-        var store = IdentityAliases.load(from: stateDirectory)
+        var store = try IdentityAliases.load(from: stateDirectory)
         XCTAssertTrue(store.add(alias, forFolderName: game.folderName))
         try store.save(to: stateDirectory)
 
         // The first place: the game's own `EmpoState/`.
-        let reloaded = IdentityAliases.load(from: stateDirectory)
+        let reloaded = try IdentityAliases.load(from: stateDirectory)
         XCTAssertEqual(reloaded.aliases, ["Fixture Quest"])
 
         // The second place: the header of every later manifest.
@@ -86,8 +86,17 @@ final class IdentityAliasesTests: XCTestCase {
         XCTAssertFalse(restored.merge(local, forFolderName: "Fixture Quest 2"))
     }
 
-    func testAMissingFileGivesTheEmptyStore() {
-        XCTAssertEqual(IdentityAliases.load(from: stateDirectory).aliases, [])
+    func testAMissingFileGivesTheEmptyStore() throws {
+        XCTAssertEqual(try IdentityAliases.load(from: stateDirectory).aliases, [])
+    }
+
+    func testADamagedFileIsAnError() throws {
+        try FileManager.default.createDirectory(
+            at: stateDirectory, withIntermediateDirectories: true)
+        try Data("{\"aliases\":".utf8).write(
+            to: stateDirectory.appendingPathComponent(IdentityAliases.fileName))
+
+        XCTAssertThrowsError(try IdentityAliases.load(from: stateDirectory))
     }
 
     func testTheFileKeepsAFieldThisBuildDoesNotKnow() throws {
@@ -100,7 +109,7 @@ final class IdentityAliasesTests: XCTestCase {
         try written.write(
             to: stateDirectory.appendingPathComponent(IdentityAliases.fileName))
 
-        var store = IdentityAliases.load(from: stateDirectory)
+        var store = try IdentityAliases.load(from: stateDirectory)
         XCTAssertEqual(store.version, 2)
         XCTAssertEqual(store.aliases, ["Fixture Quest"])
 

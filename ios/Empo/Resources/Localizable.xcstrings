@@ -6397,6 +6397,122 @@
         }
       }
     },
+    "Add locations again" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speicherorte erneut hinzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volver a añadir ubicaciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter à nouveau les emplacements"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi di nuovo le posizioni"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存先をもう一度追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "저장 위치 다시 추가"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar locais de novo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить хранилища снова"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新添加备份位置"
+          }
+        }
+      }
+    },
+    "Empo can't read your list of locations." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo kann deine Liste der Speicherorte nicht lesen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no puede leer tu lista de ubicaciones."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo ne peut pas lire ta liste d'emplacements."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non riesce a leggere l'elenco delle posizioni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empoは保存先の一覧を読み込めません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 저장 위치 목록을 읽을 수 없습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não consegue ler sua lista de locais."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не может прочитать список хранилищ."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法读取你的备份位置列表。"
+          }
+        }
+      }
+    },
     "a game is running" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -16865,6 +16981,238 @@
         }
       }
     },
+    "Couldn't save your buttons. This game's controls file has errors. Fix it in Finder and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels hat Fehler. Korrigiere sie im Finder und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego tiene errores. Corrígelo en el Finder e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu contient des erreurs. Corrige-le dans le Finder et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco ha degli errori. Correggilo nel Finder e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルにエラーがあります。Finderで修正して、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일에 오류가 있어요. Finder에서 고친 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo tem erros. Corrija-o no Finder e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. В файле управления этой игры есть ошибки. Исправьте его в Finder и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件有错误。请在访达中修正，然后再试一次。"
+          }
+        }
+      }
+    },
+    "Couldn't save your buttons. This game's controls file has errors. Fix it in the Files app and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels hat Fehler. Korrigiere sie in der Dateien-App und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego tiene errores. Corrígelo en la app Archivos e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu contient des erreurs. Corrige-le dans l'app Fichiers et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco ha degli errori. Correggilo nell'app File e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルにエラーがあります。“ファイル”Appで修正して、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일에 오류가 있어요. 파일 앱에서 고친 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo tem erros. Corrija-o no app Arquivos e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. В файле управления этой игры есть ошибки. Исправьте его в приложении «Файлы» и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件有错误。请在“文件” App 中修正，然后再试一次。"
+          }
+        }
+      }
+    },
+    "Couldn't save your buttons. This game's controls file needs a newer version of Empo. Update Empo and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels braucht eine neuere Version von Empo. Aktualisiere Empo und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego necesita una versión más reciente de Empo. Actualiza Empo e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu nécessite une version plus récente d'Empo. Mets à jour Empo et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco richiede una versione più recente di Empo. Aggiorna Empo e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルには新しいバージョンのEmpoが必要です。Empoをアップデートして、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일은 최신 버전의 Empo가 필요해요. Empo를 업데이트한 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo precisa de uma versão mais recente do Empo. Atualize o Empo e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. Для файла управления этой игры нужна более новая версия Empo. Обновите Empo и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件需要更新版本的 Empo。请更新 Empo，然后再试一次。"
+          }
+        }
+      }
+    },
+    "Couldn't save your layout. Free up some space and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Layout konnte nicht gespeichert werden. Schaff etwas Platz und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar tu diseño. Libera algo de espacio e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer ta disposition. Libère un peu d'espace et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare il layout. Libera un po' di spazio e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイアウトを保存できませんでした。空き容量を増やして、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "레이아웃을 저장하지 못했어요. 공간을 조금 확보한 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seu layout. Libere um pouco de espaço e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить раскладку. Освободите немного места и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的布局。请腾出一些空间，然后再试一次。"
+          }
+        }
+      }
+    },
     "Couldn't sign in" : {
       "localizations" : {
         "de" : {
@@ -24593,6 +24941,64 @@
         }
       }
     },
+    "Empo couldn't prepare the upload on this device. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte den Upload auf diesem Gerät nicht vorbereiten. Versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo preparar la subida en este dispositivo. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu préparer l'envoi sur cet appareil. Réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a preparare il caricamento su questo dispositivo. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスでアップロードを準備できませんでした。もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 이 기기에서 업로드를 준비하지 못했어요. 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu preparar o upload neste dispositivo. Tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось подготовить отправку на этом устройстве. Попробуйте ещё раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法在此设备上准备上传内容。请重试。"
+          }
+        }
+      }
+    },
     "Empo couldn't reach %@. Check your connection, then try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -25063,6 +25469,180 @@
         }
       }
     },
+    "Empo couldn't read your backup choices for %@, so it's asking again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte deine Backup-Auswahl für %@ nicht lesen und fragt deshalb noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo leer tus opciones de copia de %@, así que vuelve a preguntar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu lire tes choix de copie de secours pour %@, alors il te redemande."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a leggere le tue scelte di backup per %@, quindi te lo chiede di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ のバックアップ設定を読み込めなかったため、もう一度お聞きしています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 %@의 백업 선택을 읽지 못해서 다시 물어봐요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu ler suas escolhas de backup de %@, então está perguntando de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось прочитать ваши настройки резервной копии для %@, поэтому он спрашивает снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法读取 %@ 的备份选择，所以再问一次。"
+          }
+        }
+      }
+    },
+    "Empo couldn't read your backup choices for %@. Open the game's settings, tap Backup, and choose again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte deine Backup-Auswahl für %@ nicht lesen. Öffne die Einstellungen des Spiels, tippe auf Backup und wähle erneut."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo leer tus opciones de copia de %@. Abre los ajustes del juego, toca Copia de seguridad y vuelve a elegir."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu lire tes choix de copie de secours pour %@. Ouvre les réglages du jeu, touche Copie de secours et choisis à nouveau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a leggere le tue scelte di backup per %@. Apri le impostazioni del gioco, tocca Backup e scegli di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ のバックアップ設定を読み込めませんでした。ゲームの設定を開いて「バックアップ」をタップし、もう一度選んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 %@의 백업 선택을 읽지 못했어요. 게임 설정을 열고 백업을 탭한 다음 다시 선택해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu ler suas escolhas de backup de %@. Abra os ajustes do jogo, toque em Backup e escolha de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось прочитать ваши настройки резервной копии для %@. Откройте настройки игры, нажмите «Резервная копия» и выберите снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法读取 %@ 的备份选择。请打开游戏设置，轻点“备份”，然后重新选择。"
+          }
+        }
+      }
+    },
+    "Empo couldn't read your backup choices for this game. Choose what gets backed up, then check your save files." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte deine Backup-Auswahl für dieses Spiel nicht lesen. Wähle, was gesichert wird, und prüfe dann deine Spielstände."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo leer tus opciones de copia de este juego. Elige qué se copia y luego revisa tus partidas guardadas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu lire tes choix de copie de secours pour ce jeu. Choisis le contenu de la copie de secours, puis vérifie tes fichiers de sauvegarde."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a leggere le tue scelte di backup per questo gioco. Scegli cosa include il backup, poi controlla i tuoi file di salvataggio."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲームのバックアップ設定を読み込めませんでした。バックアップの対象を選んでから、セーブデータを確認してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 이 게임의 백업 선택을 읽지 못했어요. 백업할 항목을 고른 다음 세이브 파일을 확인해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu ler suas escolhas de backup deste jogo. Escolha o que entra no backup e depois confira seus arquivos de save."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось прочитать ваши настройки резервной копии для этой игры. Выберите, что копировать, а затем проверьте файлы сохранений."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法读取此游戏的备份选择。请选择备份内容，然后检查你的存档文件。"
+          }
+        }
+      }
+    },
     "Empo couldn't remove this location. Try again." : {
       "localizations" : {
         "de" : {
@@ -25239,6 +25819,64 @@
         }
       }
     },
+    "Empo couldn't save the download on this device. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte den Download auf diesem Gerät nicht speichern. Versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo guardar la descarga en este dispositivo. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu enregistrer le téléchargement sur cet appareil. Réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a salvare il download su questo dispositivo. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスにダウンロードを保存できませんでした。もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 이 기기에 다운로드를 저장하지 못했어요. 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu salvar o download neste dispositivo. Tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось сохранить загрузку на этом устройстве. Попробуйте ещё раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法在此设备上保存下载内容。请重试。"
+          }
+        }
+      }
+    },
     "Empo couldn't save the sign-in on this device. Try again." : {
       "localizations" : {
         "de" : {
@@ -25293,6 +25931,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Empo 无法在此设备上保存登录信息。请重试。"
+          }
+        }
+      }
+    },
+    "Empo couldn't send a request to Dropbox. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte keine Anfrage an Dropbox senden. Versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo enviar una solicitud a Dropbox. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu envoyer de demande à Dropbox. Réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a inviare una richiesta a Dropbox. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dropbox にリクエストを送信できませんでした。もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 Dropbox에 요청을 보내지 못했어요. 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu enviar uma solicitação ao Dropbox. Tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось отправить запрос в Dropbox. Попробуйте ещё раз."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 无法向 Dropbox 发送请求。请重试。"
           }
         }
       }
@@ -42281,6 +42977,65 @@
         }
       }
     },
+    "Open the game to play from this backup." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffne das Spiel, um ab diesem Backup zu spielen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre el juego para jugar desde esta copia de seguridad."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre le jeu pour jouer depuis cette copie de secours."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apri il gioco per giocare da questo backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームを開くと、このバックアップの続きからプレイできます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임을 열면 이 백업부터 플레이할 수 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abra o jogo para jogar a partir deste backup."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Откройте игру, чтобы играть с этой резервной копии."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开游戏，即可从这个备份开始玩。"
+          }
+        }
+      }
+    },
     "Open-source licenses" : {
       "localizations" : {
         "de" : {
@@ -48004,65 +48759,6 @@
         }
       }
     },
-    "Restored." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wiederhergestellt."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restaurado."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restauré."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ripristinato."
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "復元しました。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "복원했어요."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Restaurado."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Восстановлено."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已恢复。"
-          }
-        }
-      }
-    },
     "Restoring" : {
       "localizations" : {
         "de" : {
@@ -53119,6 +53815,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选中"
+          }
+        }
+      }
+    },
+    "Send error reports" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fehlerberichte senden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar informes de errores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyer les rapports d'erreur"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invia segnalazioni di errore"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "エラーレポートを送信"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "오류 보고서 보내기"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar relatórios de erro"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Отправлять отчёты об ошибках"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送错误报告"
           }
         }
       }
@@ -63927,6 +64681,64 @@
         }
       }
     },
+    "This game's controls need a newer version of Empo. Update Empo to use them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Steuerung dieses Spiels braucht eine neuere Version von Empo. Aktualisiere Empo, um sie zu nutzen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los controles de este juego necesitan una versión más reciente de Empo. Actualiza Empo para usarlos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les commandes de ce jeu nécessitent une version plus récente d'Empo. Mets à jour Empo pour les utiliser."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I controlli di questo gioco richiedono una versione più recente di Empo. Aggiorna Empo per usarli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲームの操作設定には新しいバージョンのEmpoが必要です。使うにはEmpoをアップデートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 게임의 컨트롤은 최신 버전의 Empo가 필요해요. 사용하려면 Empo를 업데이트해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os controles deste jogo precisam de uma versão mais recente do Empo. Atualize o Empo para usá-los."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для управления этой игрой нужна более новая версия Empo. Обновите Empo, чтобы использовать его."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个游戏的按键设置需要更新版本的 Empo。请更新 Empo 后使用。"
+          }
+        }
+      }
+    },
     "This JoiPlay archive uses \"%@\", which Empo can't run. Empo imports only JoiPlay archives of %@." : {
       "comment" : "First placeholder: the game type the archive names. Second: a list of game kinds, such as \"RPG Maker XP, VX, and VX Ace games\".",
       "localizations" : {
@@ -65910,6 +66722,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个布局是只读的。想要自己的布局，就复制一份再编辑副本。"
+          }
+        }
+      }
+    },
+    "This layout profile needs a newer version of Empo. Update Empo to use it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Layout-Profil braucht eine neuere Version von Empo. Aktualisiere Empo, um es zu nutzen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este perfil de controles necesita una versión más reciente de Empo. Actualiza Empo para usarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce profil de disposition nécessite une version plus récente d'Empo. Mets à jour Empo pour l'utiliser."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo profilo layout richiede una versione più recente di Empo. Aggiorna Empo per usarlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このレイアウトプロファイルには新しいバージョンのEmpoが必要です。使うにはEmpoをアップデートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 레이아웃 프로필은 최신 버전의 Empo가 필요해요. 사용하려면 Empo를 업데이트해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este perfil de layout precisa de uma versão mais recente do Empo. Atualize o Empo para usá-lo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для этого профиля раскладки нужна более новая версия Empo. Обновите Empo, чтобы его использовать."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个布局方案需要更新版本的 Empo。请更新 Empo 后使用。"
           }
         }
       }
@@ -69372,60 +70242,60 @@
         }
       }
     },
-    "Use the game's own keyboard for names instead of the iOS one. Turn it on for Pokemon Essentials games with custom keys." : {
+    "Pick the letters of a name on the game's own keyboard instead of typing them. Turn it on for Pokemon Essentials games with custom keys." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nutzt für Namen die Tastatur des Spiels statt der von iOS. Schalte das für Pokemon-Essentials-Spiele mit eigenen Tasten ein."
+            "value" : "Wähle die Buchstaben eines Namens auf der Tastatur des Spiels, statt sie zu tippen. Schalte das für Pokemon-Essentials-Spiele mit eigenen Tasten ein."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa el teclado del propio juego para los nombres en vez del de iOS. Actívalo en juegos de Pokemon Essentials con teclas personalizadas."
+            "value" : "Elige las letras de un nombre en el teclado del propio juego en vez de escribirlas. Actívalo en juegos de Pokemon Essentials con teclas personalizadas."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Utilise le clavier du jeu pour les noms au lieu de celui d'iOS. Active-le pour les jeux Pokemon Essentials avec des touches personnalisées."
+            "value" : "Choisis les lettres d'un nom sur le clavier du jeu au lieu de les taper. Active-le pour les jeux Pokemon Essentials avec des touches personnalisées."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa la tastiera del gioco per i nomi invece di quella di iOS. Attivala per i giochi Pokemon Essentials con tasti personalizzati."
+            "value" : "Scegli le lettere di un nome sulla tastiera del gioco invece di digitarle. Attivala per i giochi Pokemon Essentials con tasti personalizzati."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iOSのキーボードの代わりに、名前入力でゲーム独自のキーボードを使います。独自のキーを使うPokemon Essentialsのゲームではオンにしてください。"
+            "value" : "名前の文字を入力する代わりに、ゲーム独自のキーボードで選びます。独自のキーを使うPokemon Essentialsのゲームではオンにしてください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이름을 입력할 때 iOS 키보드 대신 게임 자체 키보드를 써요. 키를 따로 정한 Pokemon Essentials 게임에서 켜 주세요."
+            "value" : "이름을 직접 입력하는 대신 게임 자체 키보드에서 글자를 골라요. 키를 따로 정한 Pokemon Essentials 게임에서 켜 주세요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Usa o teclado do próprio jogo para nomes em vez do teclado do iOS. Ligue para jogos de Pokemon Essentials com teclas personalizadas."
+            "value" : "Escolha as letras de um nome no teclado do próprio jogo em vez de digitá-las. Ligue para jogos de Pokemon Essentials com teclas personalizadas."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Вводить имена с клавиатуры самой игры, а не iOS. Включите для игр на Pokemon Essentials с нестандартными клавишами."
+            "value" : "Выбирать буквы имени на клавиатуре самой игры, а не вводить их. Включите для игр на Pokemon Essentials с нестандартными клавишами."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入名字时使用游戏自己的键盘，而不是 iOS 键盘。适合有自定义按键的 Pokemon Essentials 游戏。"
+            "value" : "在游戏自己的键盘上选择名字的字母，而不是直接输入。适合有自定义按键的 Pokemon Essentials 游戏。"
           }
         }
       }
@@ -70478,6 +71348,64 @@
         }
       }
     },
+    "When a game shows an error or crashes, %@ sends the error and the game's log to me, so I can fix it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn ein Spiel einen Fehler zeigt oder abstürzt, schickt mir %@ den Fehler und das Log des Spiels, damit ich ihn beheben kann."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuando un juego muestra un error o se cierra de golpe, %@ me envía el error y el registro del juego para que pueda arreglarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand un jeu affiche une erreur ou plante, %@ m'envoie l'erreur et le journal du jeu pour que je puisse la corriger."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando un gioco mostra un errore o si chiude all'improvviso, %@ mi invia l'errore e il log del gioco, così posso correggerlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームでエラーが出たりクラッシュしたりすると、%@がエラーとゲームのログを私に送ります。修正に使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임에 오류가 뜨거나 게임이 갑자기 꺼지면 %@에서 오류와 게임 로그를 저에게 보내요. 고칠 때 사용해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quando um jogo mostra um erro ou trava, o %@ me envia o erro e o log do jogo para que eu possa corrigir."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Если игра показывает ошибку или вылетает, %@ отправляет мне ошибку и лог игры, чтобы её можно было исправить."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏出错或崩溃时，%@ 会把错误和游戏日志发给我，方便我修复。"
+          }
+        }
+      }
+    },
     "When you quit %@ with games open, ask first." : {
       "localizations" : {
         "de" : {
@@ -71289,6 +72217,122 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的 %@ 登录已过期。请重新登录。"
+          }
+        }
+      }
+    },
+    "Your backups are still there." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Backups sind noch da."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus copias siguen ahí."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tes sauvegardes sont toujours là."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi backup sono ancora lì."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップはそのまま残っています。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "백업은 그대로 남아 있습니다."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seus backups continuam lá."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваши резервные копии на месте."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的备份仍在原处。"
+          }
+        }
+      }
+    },
+    "Your backups are still there. Add your locations again to keep backing up." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Backups sind noch da. Füge deine Speicherorte erneut hinzu, um weiter zu sichern."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus copias siguen ahí. Vuelve a añadir tus ubicaciones para seguir haciendo copias."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tes sauvegardes sont toujours là. Ajoute à nouveau tes emplacements pour continuer à sauvegarder."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi backup sono ancora lì. Aggiungi di nuovo le posizioni per continuare i backup."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "バックアップはそのまま残っています。バックアップを続けるには、保存先をもう一度追加してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "백업은 그대로 남아 있습니다. 백업을 계속하려면 저장 위치를 다시 추가하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seus backups continuam lá. Adicione seus locais de novo para continuar fazendo backup."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваши резервные копии на месте. Добавьте хранилища снова, чтобы продолжить резервное копирование."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的备份仍在原处。重新添加备份位置即可继续备份。"
           }
         }
       }
@@ -72542,6 +73586,64 @@
         }
       }
     },
+    "Empo couldn't set up sync again. Try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo konnte die Synchronisierung nicht erneut einrichten. Versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo no pudo configurar la sincronización de nuevo. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo n'a pas pu configurer à nouveau la synchronisation. Réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo non è riuscito a configurare di nuovo la sincronizzazione. Riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同期をもう一度設定できませんでした。もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo가 동기화를 다시 설정하지 못했어요. 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Empo não conseguiu configurar a sincronização de novo. Tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo не удалось заново настроить синхронизацию. Попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empo 没能重新设置同步。请重试。"
+          }
+        }
+      }
+    },
     "How the game's music sounds." : {
       "localizations" : {
         "de" : {
@@ -72596,6 +73698,122 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "游戏音乐的声音。"
+          }
+        }
+      }
+    },
+    "Set up sync again" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronisierung erneut einrichten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurar la sincronización de nuevo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurer à nouveau la synchronisation"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura di nuovo la sincronizzazione"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同期をもう一度設定"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "동기화 다시 설정"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurar a sincronização de novo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Настроить синхронизацию заново"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新设置同步"
+          }
+        }
+      }
+    },
+    "Settings sync stopped because of a problem on this device." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Synchronisierung der Einstellungen wurde wegen eines Problems auf diesem Gerät gestoppt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La sincronización de ajustes se detuvo por un problema en este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La synchronisation des réglages s'est arrêtée à cause d'un problème sur cet appareil."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La sincronizzazione delle impostazioni si è interrotta per un problema su questo dispositivo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このデバイスの問題により、設定の同期が停止しました。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 기기의 문제로 설정 동기화가 중단됐어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A sincronização de ajustes parou por causa de um problema neste dispositivo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Синхронизация настроек остановлена из-за проблемы на этом устройстве."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由于此设备上的问题，设置同步已停止。"
           }
         }
       }

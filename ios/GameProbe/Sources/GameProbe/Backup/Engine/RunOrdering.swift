@@ -40,7 +40,7 @@ public enum RunOrdering {
     /// When a game that was played goes stale, per 7.1. Ticket 007
     /// owns the rest of the staleness clock. The order needs this
     /// one mark, because rule 1 of 7.8 reads it.
-    public static let staleMark: TimeInterval = 7 * 86_400
+    public static let staleMark: TimeInterval = 7 * .day
 
     /// Whether a game is past the stale mark. A game that never had
     /// a successful snapshot is past it.

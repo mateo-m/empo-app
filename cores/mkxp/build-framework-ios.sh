@@ -49,7 +49,7 @@ fi
 
 STAMP="$TREE/.mkxp-framework"
 WANT_STAMP="$( (echo "$MIN_OS" && cat "$CORE/.fetched-pin" "$DEPS/ANGLE/.version" "$0" \
-    "$ROOT/cores/framework-common.sh" "$ROOT/cores/mkxp/mkxp_app_bridge.c" "$ROOT/cores/GameCore.h" "$ROOT/cores/PrivacyInfo.xcprivacy") | shasum -a 256 | awk '{print $1}')"
+    "$ROOT/cores/framework-common.sh" "$ROOT/cores/mkxp/mkxp_app_bridge.c" "$ROOT/cores/GameCore.h" "$ROOT/cores/gamecore.exports" "$ROOT/cores/PrivacyInfo.xcprivacy") | shasum -a 256 | awk '{print $1}')"
 if [ -f "$FW/MkxpCore" ] && [ "$(cat "$STAMP" 2>/dev/null)" = "$WANT_STAMP" ]; then
     exit 0
 fi
@@ -61,7 +61,6 @@ BRIDGE="$TREE/lib/mkxp-bridge.o"
 "$CC" -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" -std=c11 -O2 -Wall -Werror \
     -I"$ROOT/cores" -I"$CORE/include" \
     -c "$ROOT/cores/mkxp/mkxp_app_bridge.c" -o "$BRIDGE"
-"$ROOT/cores/gamecore-exports.sh" "$TREE/gamecore.exports"
 
 echo "[mkxp-framework] Linking $CORE_VERSION..."
 # LINK names its files relative to <sdk>/. The frameworks differ between
@@ -71,7 +70,7 @@ LINK="$CORE/$SDK/LINK"
 # shellcheck disable=SC2046
 (cd "$CORE/$SDK" && "$CXX" -dynamiclib -isysroot "$SYSROOT" -target "$TARGET" -arch "$ARCH" \
     -install_name "@rpath/MkxpCore.framework/MkxpCore" \
-    -Wl,-exported_symbols_list,"$TREE/gamecore.exports" \
+    -Wl,-exported_symbols_list,"$ROOT/cores/gamecore.exports" \
     -L"$ANGLE/lib" \
     -o "$BIN_DIR/MkxpCore" \
     "$BRIDGE" $(cat "$LINK"))

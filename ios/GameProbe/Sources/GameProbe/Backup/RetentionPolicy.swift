@@ -159,11 +159,9 @@ public enum RetentionPolicy {
         }
     }
 
-    private static let secondsPerDay = 86_400.0
-
     /// The UTC day the date falls in, counted from 1970-01-01.
     static func dayBucket(_ date: Date) -> Int {
-        Int(floor(date.timeIntervalSince1970 / secondsPerDay))
+        Int(floor(date.timeIntervalSince1970 / TimeInterval.day))
     }
 
     /// The UTC week the date falls in. 1970-01-01 was a Thursday, so

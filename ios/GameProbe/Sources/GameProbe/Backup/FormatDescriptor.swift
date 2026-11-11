@@ -63,9 +63,7 @@ public struct FormatDescriptor: Codable, Equatable, Sendable {
     // MARK: - Read and write
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func decode(json data: Data) throws -> FormatDescriptor {

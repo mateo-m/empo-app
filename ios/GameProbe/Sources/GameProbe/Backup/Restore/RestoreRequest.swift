@@ -35,8 +35,7 @@ public struct RestoreRequest: Sendable {
     public var choice: RestoreChoice
     /// Where each named root of the manifest writes on this device.
     public var destination: MemberSource
-    /// Every file the local tree already holds under those roots,
-    /// displaced copies included.
+    /// The files this device already holds at the paths the snapshot names.
     public var localFiles: [RestoreLocalFile]
     public var localVersionMarker: SnapshotManifest.VersionMarker?
     public var freeSpaceBytes: Int64
@@ -83,11 +82,9 @@ public struct RestoreRequest: Sendable {
             BackupSetRules.gameDirectoryName, isDirectory: true)
     }
 
-    /// The local files the plan reads. A replace moves the tree aside
-    /// after the plan and before the first write, so the plan must not
-    /// count on a file in it.
-    var plannedLocalFiles: [RestoreLocalFile] {
-        guard choice == .replaceTheTree else { return localFiles }
+    /// The local files the plan reads when a replace moves `Game/`
+    /// aside before the first write.
+    var localFilesOutsideTheTree: [RestoreLocalFile] {
         let tree = BackupSetRules.gameDirectoryName + "/"
         return localFiles.filter { $0.root != .container || !$0.path.hasPrefix(tree) }
     }

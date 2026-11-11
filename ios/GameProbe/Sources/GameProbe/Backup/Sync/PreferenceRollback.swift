@@ -49,7 +49,7 @@ public struct PreferenceRollbackPlan: Equatable, Sendable {
 public struct PreferenceRollbackUndo: Codable, Equatable, Sendable {
 
     public static let currentVersion = 1
-    public static let lifetime: TimeInterval = 7 * 24 * 60 * 60
+    public static let lifetime: TimeInterval = 7 * .day
 
     public var version: Int
     public var savedAt: Date
@@ -74,10 +74,7 @@ public struct PreferenceRollbackUndo: Codable, Equatable, Sendable {
     // MARK: - The file
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     /// The saved undo, or `nil` where none is there or it expired.
@@ -87,8 +84,7 @@ public struct PreferenceRollbackUndo: Codable, Equatable, Sendable {
     ) -> PreferenceRollbackUndo? {
         let url = BackupRootLayout(applicationSupport: applicationSupport).preferenceRollbackFile
         guard let data = try? Data(contentsOf: url) else { return nil }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
+        let decoder = BackupJSON.decoder()
         guard let undo = try? decoder.decode(PreferenceRollbackUndo.self, from: data) else {
             try? fm.removeItem(at: url)
             return nil

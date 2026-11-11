@@ -97,7 +97,7 @@ final class VersionMarkerTests: XCTestCase {
 
         XCTAssertTrue(
             VersionMarkerBuilder.warnsBeforeRestore(
-                mode: .full, snapshot: snapshot, local: local))
+                mode: .full, differs: snapshot != local))
     }
 
     func testARestoreOfSavesAndSettingsNeverWarns() {
@@ -106,14 +106,14 @@ final class VersionMarkerTests: XCTestCase {
 
         XCTAssertFalse(
             VersionMarkerBuilder.warnsBeforeRestore(
-                mode: .slim, snapshot: snapshot, local: local))
+                mode: .slim, differs: snapshot != local))
     }
 
     func testAFullModeRestoreOverTheSameTreeDoesNotWarn() {
         let both = marker()
 
         XCTAssertFalse(
-            VersionMarkerBuilder.warnsBeforeRestore(mode: .full, snapshot: both, local: both))
+            VersionMarkerBuilder.warnsBeforeRestore(mode: .full, differs: both != both))
     }
 
     // MARK: - The marker is not identity, per 4.4

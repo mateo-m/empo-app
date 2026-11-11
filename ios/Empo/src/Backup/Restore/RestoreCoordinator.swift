@@ -2,14 +2,6 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// The app-side half of SPEC 11: it hands the pure rules the paths
-/// and the numbers only the app knows, and it owns the one running
-/// restore.
-///
-/// One restore runs at a time. Launching a game cancels it at once,
-/// per 7.6, and the cancel leaves the intent record of 6.5 plus the
-/// staged blobs, so the next launch asks once.
-///
 /// What the fresh-install flow of SPEC 11.4 reads off one target.
 struct FreshInstallScan {
     var plan: FreshInstallPlan
@@ -17,6 +9,9 @@ struct FreshInstallScan {
     var adoptableNamespaceIds: [String]
 }
 
+/// One restore runs at a time. Launching a game cancels it at once,
+/// per 7.6, and the cancel leaves the intent record of 6.5 plus the
+/// staged blobs, so the next launch asks once.
 @MainActor
 final class RestoreCoordinator {
 
@@ -34,7 +29,6 @@ final class RestoreCoordinator {
 
     // MARK: - The doors, per 11.3
 
-    /// Whether the manual door is open for one game.
     func availability(gameKey: String) -> RestoreAvailability {
         RestorePicker.availability(
             runInFlight: running?.gameKey == gameKey || BackupRunMonitor.shared.isRunning,
@@ -52,8 +46,14 @@ final class RestoreCoordinator {
         let scan = RestoreScan(provider: provider, descriptor: descriptor)
         let libraryIsEmpty = GameContainer.discover().isEmpty
         let isFirstTarget = targetCount == 1
-        guard libraryIsEmpty, isFirstTarget, let namespaces = try? await scan.namespaces()
-        else { return nil }
+        guard libraryIsEmpty, isFirstTarget else { return nil }
+        let namespaces: [ScannedNamespace]
+        do {
+            namespaces = try await scan.namespaces()
+        } catch {
+            BackupLog.line("RestoreCoordinator", "\(descriptor.label) was not scanned: \(error)")
+            return nil
+        }
 
         let preferencesRows = namespaces.flatMap(\.preferencesRows)
         let newestPreferences = RestorePicker.newestFirst(preferencesRows).first
@@ -70,14 +70,23 @@ final class RestoreCoordinator {
             hints: FreshInstallHints.lines(
                 streamed: streamed,
                 canOpenICloud: await ICloudDriveGate.shared.availability().isReady),
-            joinedSyncGroup: SyncStore.state().hasJoined)
+            joinedSyncGroup: (try? SyncStore.state())?.hasJoined == true)
         guard
             FreshInstallMerge.opens(
                 libraryIsEmpty: libraryIsEmpty, isFirstTarget: isFirstTarget, plan: plan)
         else { return nil }
 
-        let mine = try? BackupKeychain.namespaceId()
-        let thisDevice = UIDevice.current.identifierForVendor?.uuidString ?? ""
+        let mine: String?
+        do {
+            mine = try BackupKeychain.namespaceId()
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The namespace id was not read: \(error)")
+            mine = nil
+        }
+        guard let thisDevice = BackupDevice.id else {
+            BackupLog.line("RestoreCoordinator", "No adopt is offered, the device id is not known")
+            return FreshInstallScan(plan: plan, adoptableNamespaceIds: [])
+        }
         let adoptable = namespaces.filter {
             AdoptQuestion.fires(
                 recordedDeviceId: $0.deviceId, thisDeviceId: thisDevice,
@@ -99,8 +108,6 @@ final class RestoreCoordinator {
 
     // MARK: - Running one restore
 
-    /// Starts a restore and waits for it.
-    ///
     /// The caller has already answered the version-marker sheet of
     /// 11.10 where it fired, so `scope` and `replacesTheTree` carry
     /// that answer.
@@ -120,7 +127,14 @@ final class RestoreCoordinator {
             row, into: container, provider: provider, targetId: descriptor.id,
             root: descriptor.root, scope: scope, replacesTheTree: replacesTheTree,
             movedAsideTree: movedAsideTree
-        ) { try? await scan.manifest(at: path) }
+        ) {
+            do {
+                return try await scan.manifest(at: path)
+            } catch {
+                BackupLog.line("RestoreCoordinator", "\(path) was not read: \(error)")
+                return nil
+            }
+        }
     }
 
     /// The import of 12.6. The package answers the provider protocol
@@ -181,8 +195,16 @@ final class RestoreCoordinator {
         // The downloads ride the background session and survive on
         // their own. The grant covers the hash check and the copy
         // between two of them once the user has left the app.
+        // `BackupBackgroundTask` cancels the body when the grant ends,
+        // and the restore runs in its own task.
         _ = await withTaskCancellationHandler {
-            await BackupBackgroundTask.run(named: "restore") { _ = await task.value }
+            await BackupBackgroundTask.run(named: "restore") {
+                await withTaskCancellationHandler {
+                    _ = await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            }
         } onCancel: {
             task.cancel()
         }
@@ -195,7 +217,7 @@ final class RestoreCoordinator {
         }
         cancelledByTheUser = false
         BackupScheduler.shared.conditionsDidChange()
-        log("restore of \(row.snapshotId): \(outcome)")
+        BackupLog.debug("RestoreCoordinator", "restore of \(row.snapshotId): \(outcome)")
         return outcome
     }
 
@@ -216,8 +238,8 @@ final class RestoreCoordinator {
             return .failed(RestoreNotices.unreadableLine)
         }
         let destination = Self.destination(for: container, manifest: manifest)
-        let localFiles = await Self.localFiles(
-            destination: destination, manifest: manifest, scope: scope)
+        let localFiles = await Self.localFilesForTheRestore(
+            of: Self.stream(of: row), destination: destination, manifest: manifest, scope: scope)
         guard !Task.isCancelled, !gameLaunches, !BackupDeviceConditions.isSessionLive else {
             return .stopped(.gameLaunched, RestoreResult())
         }
@@ -232,13 +254,13 @@ final class RestoreCoordinator {
             destination: destination,
             localFiles: localFiles,
             localVersionMarker: container.map(GameIdentities.versionMarker(for:)),
-            freeSpaceBytes: Self.freeSpaceBytes,
+            freeSpaceBytes: BackupRoot.freeSpaceBytes,
             mode: manifest.mode,
             movedAsideTree: movedAsideTree)
 
         let store: BackupStateStore
         do {
-            store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            store = try BackupRoot.openStateStore()
         } catch {
             return .failed(
                 String(
@@ -249,13 +271,20 @@ final class RestoreCoordinator {
 
         // `EmpoState/` always restores, so the snapshot's alias file
         // replaces this one, the attach of 4.3 included.
-        let aliasesBefore = container.map { IdentityAliases.load(from: $0.empoStateURL) }
+        let aliasesBefore = container.flatMap { try? IdentityAliases.load(from: $0.empoStateURL) }
         let engine = RestoreEngine(provider: provider, store: store, localRoot: BackupRoot.layout.root)
         var outcome = await engine.run(request)
-        if let container, let aliasesBefore {
-            var aliases = IdentityAliases.load(from: container.empoStateURL)
+        if let container, let aliasesBefore,
+            var aliases = try? IdentityAliases.load(from: container.empoStateURL)
+        {
             if aliases.merge(aliasesBefore, forFolderName: container.folderName) {
-                try? aliases.save(to: container.empoStateURL)
+                do {
+                    try aliases.save(to: container.empoStateURL)
+                } catch {
+                    BackupLog.line(
+                        "RestoreCoordinator",
+                        "The aliases of \(container.folderName) were not saved: \(error)")
+                }
             }
         }
         // The rollback of 10.9. The stream carries one export file,
@@ -289,7 +318,7 @@ final class RestoreCoordinator {
     /// when the restore wrote its last file.
     func stopForGameLaunch() async {
         await stop()
-        log("a game launched, so the restore stopped")
+        BackupLog.debug("RestoreCoordinator", "a game launched, so the restore stopped")
     }
 
     /// The Stop of the fresh-install screen. The engine reads any
@@ -298,7 +327,7 @@ final class RestoreCoordinator {
         guard running != nil else { return }
         cancelledByTheUser = true
         await stop()
-        log("the user stopped the restore")
+        BackupLog.debug("RestoreCoordinator", "the user stopped the restore")
     }
 
     private var cancelledByTheUser = false
@@ -319,24 +348,29 @@ final class RestoreCoordinator {
 
     // MARK: - The resume question, per 11.9
 
-    /// The record the next launch asks about, or `nil` when there is
-    /// nothing to ask.
     func pendingResume() -> BackupIntentRecord? {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return nil }
-        defer { store.close() }
-        // `try?` flattens the optional the store returns, so this is
-        // one level, not two.
-        let record = try? store.intent(kind: .interruptedRestore)
-        guard RestoreResumeQuestion.asks(record) else { return nil }
-        return record
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            let record = try RestoreResumeQuestion.unfinishedRecord(
+                in: store, layout: BackupRoot.layout)
+            return RestoreResumeQuestion.asks(record) ? record : nil
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume record was not read: \(error)")
+            return nil
+        }
     }
 
     /// Marked when the sheet shows. A kill with the sheet open runs no
     /// `onDisappear`, so the answer is too late to mark it.
     func markResumeAsked() {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
-        defer { store.close() }
-        try? store.markIntentAsked(kind: .interruptedRestore)
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            try store.markIntentAsked(kind: .interruptedRestore)
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume ask was not marked: \(error)")
+        }
     }
 
     /// Continues the restore the record names, with the same scope
@@ -355,8 +389,14 @@ final class RestoreCoordinator {
             case .restore(let choice, let movedAsideTree) = record.work
         else { return .failed(String(localized: "This location isn't set up on this device any more.")) }
 
-        let scan = RestoreScan(provider: provider, descriptor: descriptor)
-        guard let namespaces = try? await scan.namespaces(),
+        let namespaces: [ScannedNamespace]
+        do {
+            namespaces = try await RestoreScan(provider: provider, descriptor: descriptor).namespaces()
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume scan of \(descriptor.label) failed: \(error)")
+            return .failed(RestoreNotices.unreadableLine)
+        }
+        guard
             let row = namespaces.flatMap({ $0.gameRows + $0.preferencesRows })
                 .first(where: { $0.snapshotId == snapshotId })
         else { return .failed(RestoreNotices.unreadableLine) }
@@ -400,12 +440,16 @@ final class RestoreCoordinator {
     /// Applies one answer. The caller resumes the restore itself when
     /// the effect says to start it now.
     func answerResume(_ action: RestoreResumeQuestion.Action, record: BackupIntentRecord) {
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
-        defer { store.close() }
-
         let effect = RestoreResumeQuestion.effect(of: action)
         guard !effect.keepsRecord else { return }
-        try? store.clearIntent(kind: .interruptedRestore)
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            try store.clearIntent(kind: .interruptedRestore)
+        } catch {
+            BackupLog.line("RestoreCoordinator", "The resume record was not cleared: \(error)")
+            return
+        }
         guard effect.deletesStagedBlobs else { return }
         Self.deleteStagedBlobs()
         // Stopping an import deletes the staged package as well as
@@ -460,12 +504,27 @@ final class RestoreCoordinator {
             userDefaultsExport: isPreferences ? PreferenceRestore.restoredFile : nil)
     }
 
-    /// Every local file the plan has to know about.
-    ///
-    /// Two kinds go in. The files the snapshot names, so the planner
-    /// can tell a write from a displacement, and every other name in
-    /// the directories it touches, so a second displacement of one
-    /// file numbers against the names already there.
+    /// Applying the settings file deletes it, so a file here comes from a
+    /// restore that stopped before it applied. The delete must come before
+    /// the list: a listed file with the same bytes makes the plan skip the
+    /// download, and the restore then has no file to apply.
+    static func localFilesForTheRestore(
+        of stream: BackupStream, destination: MemberSource, manifest: SnapshotManifest,
+        scope: RestoreScope
+    ) async -> [RestoreLocalFile] {
+        if stream == .preferences {
+            do {
+                try FileManager.default.removeItem(at: PreferenceRestore.restoredFile)
+            } catch CocoaError.fileNoSuchFile {
+            } catch {
+                BackupLog.line("RestoreCoordinator", "The old settings file stays: \(error)")
+            }
+        }
+        return await localFiles(destination: destination, manifest: manifest, scope: scope)
+    }
+
+    /// The local files the snapshot names, so the planner can tell a write
+    /// from a displacement.
     ///
     /// A hash costs a full read, so it is read only where the local
     /// size matches the entry's. A file of a different size can
@@ -476,15 +535,10 @@ final class RestoreCoordinator {
     ) async -> [RestoreLocalFile] {
         let fm = FileManager.default
         var files: [RestoreLocalFile] = []
-        var seen: Set<String> = []
-        var directories: Set<Folder> = []
-
         for entry in manifest.entries where scope.covers(entry) {
-            directories.insert(Folder(root: entry.root, path: directory(of: entry.path)))
             guard let url = destination.url(of: entry),
                 let stamp = BackupSetResolver.stamp(of: url, fm: fm)
             else { continue }
-            seen.insert(key(entry.root, entry.path))
             files.append(
                 RestoreLocalFile(
                     root: entry.root,
@@ -492,45 +546,6 @@ final class RestoreCoordinator {
                     size: stamp.size,
                     hash: stamp.size == entry.size ? try? ContentHash.hexOfFile(at: url) : nil))
         }
-
-        for folder in directories {
-            guard let url = destination.url(root: folder.root, path: folder.path) else { continue }
-            for name in (try? fm.contentsOfDirectory(atPath: url.path)) ?? [] {
-                let path = folder.path.isEmpty ? name : folder.path + "/" + name
-                guard seen.insert(key(folder.root, path)).inserted else { continue }
-                let stamp = BackupSetResolver.stamp(of: url.appendingPathComponent(name), fm: fm)
-                files.append(
-                    RestoreLocalFile(
-                        root: folder.root, path: path, size: stamp?.size ?? 0, hash: nil))
-            }
-        }
         return files
-    }
-
-    /// One directory under one named root.
-    private struct Folder: Hashable {
-        var root: EntryRoot
-        var path: String
-    }
-
-    nonisolated private static func key(_ root: EntryRoot, _ path: String) -> String {
-        root.rawValue + "/" + path
-    }
-
-    nonisolated private static func directory(of path: String) -> String {
-        guard let slash = path.lastIndex(of: "/") else { return "" }
-        return String(path[path.startIndex..<slash])
-    }
-
-    /// What the space check of 11.8 measures against.
-    private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.layout.root.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? 0
-    }
-
-    private func log(_ message: String) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("RestoreCoordinator", message)
     }
 }

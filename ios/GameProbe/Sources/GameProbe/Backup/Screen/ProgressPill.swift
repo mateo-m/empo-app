@@ -27,26 +27,6 @@ public enum ProgressPill {
         case complete
     }
 
-    /// The stop reason for a stop that no stale cause names, or
-    /// `nil` where the pill can only say that the target did not
-    /// finish.
-    public static func stopReason(of stop: BackupRunStop, targetLabel: String) -> String? {
-        switch stop {
-        case .offline:
-            return screenText("Empo couldn't connect to %@.", targetLabel)
-        case .serverError:
-            return screenText("%@ had a server error.", targetLabel)
-        case .throttled:
-            return screenText("%@ asked Empo to wait.", targetLabel)
-        case .readOnlyFormat(.newerFormatVersion):
-            return screenText("%@ needs a newer version of Empo.", targetLabel)
-        case .readOnlyFormat(.unreadableFormat), .needsSignIn, .blocked, .full, .quotaShortfall, .rejected,
-            .writerConflict,
-            .gameStarted, .paused:
-            return nil
-        }
-    }
-
     /// How a run ended. A stop keeps its line on screen longer.
     public enum End: Equatable, Sendable {
         case finished(at: Date)

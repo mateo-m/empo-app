@@ -1,18 +1,10 @@
 import Foundation
 
-/// One line of backup evidence, in the two places a device check can
-/// read it.
-///
-/// `NSLog` writes to the unified log and to standard error.
-/// `devicectl device process launch --console` prints standard error,
-/// which is enough while the Mac starts the app. A tap launch has no
-/// console, and a Mac cannot collect the unified log from a device
-/// without root, so every line also goes to a file. The device check
-/// of ticket 007 pulls the file with `devicectl device copy from`.
+/// A tap launch has no console, and a Mac cannot collect the unified
+/// log from a device without root, so every line also goes to a file.
+/// `devicectl device copy from` pulls the file.
 enum BackupLog {
 
-    /// The file inside the app container, under
-    /// `Library/Logs/backup-log.txt`.
     static var fileURL: URL {
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
         return library.appendingPathComponent("Logs/backup-log.txt")
@@ -22,11 +14,16 @@ enum BackupLog {
     /// for minutes, so the file stays small.
     static let sizeLimit = 256 * 1024
 
-    /// Writes one line. `tag` names the part that wrote it, without
-    /// the brackets.
     static func line(_ tag: String, _ message: String) {
         NSLog("[%@] %@", tag, message)
         write("\(stamp.string(from: Date())) [\(tag)] \(message)\n")
+    }
+
+    /// Writes one line only while the Debug logs setting is on.
+    @MainActor
+    static func debug(_ tag: String, _ message: @autoclosure () -> String) {
+        guard AppSettings.shared.debugLogs else { return }
+        line(tag, message())
     }
 
     private static let lock = NSLock()

@@ -38,9 +38,10 @@ final class SessionLogger {
     func beginSession(
         for game: GameEntry,
         container: GameContainer,
+        core: any GameCore,
         debugLogsEnabled: Bool
     ) {
-        openDebugLog(for: game, container: container, enabled: debugLogsEnabled)
+        openDebugLog(for: game, container: container, core: core, enabled: debugLogsEnabled)
         beginSession(for: game, container: container)
     }
 
@@ -110,6 +111,7 @@ final class SessionLogger {
     func openDebugLog(
         for game: GameEntry,
         container: GameContainer,
+        core: any GameCore,
         enabled: Bool
     ) {
         guard enabled else {
@@ -127,13 +129,16 @@ final class SessionLogger {
         }
         let logPath = logsDir.appendingPathComponent(Self.sessionLogName(for: start)).path
 
-        let header =
-            Self.logHeader(
-                title: "\(AppInfo.name) debug log",
-                extras: [
-                    "game: \(game.title) [\(game.id)]",
-                    "session: \(Self.sessionLogStampFormatter.string(from: start))",
-                ]) + "\n"
+        let header = [
+            "\(AppInfo.name) debug log",
+            "commit: \(GitInfo.commit)\(GitInfo.dirty ? " (dirty)" : "")",
+            "core: \(core.framework) \(core.version)",
+            "game: \(game.title) [\(game.id)]",
+            "session: \(Self.sessionLogStampFormatter.string(from: start))",
+            "---",
+            "",
+            "",
+        ].joined(separator: "\n")
         try? header.write(toFile: logPath, atomically: true, encoding: .utf8)
         logURL = URL(fileURLWithPath: logPath)
 
@@ -221,21 +226,5 @@ final class SessionLogger {
         for name in sessionLogsOldestFirst(names).dropLast(limit) {
             try? fm.removeItem(at: logsDir.appendingPathComponent(name))
         }
-    }
-
-    private static func commitSuffix() -> String {
-        GitInfo.dirty ? " (dirty)" : ""
-    }
-
-    private static func logHeader(title: String, extras: [String] = []) -> String {
-        var header = "\(title)\n"
-        header += "commit: \(GitInfo.commit)\(commitSuffix())\n"
-        let cores = GameCores.inThisBuild.map { "\($0.framework) \($0.version)" }
-        header += "cores: \(cores.joined(separator: ", "))\n"
-        for line in extras {
-            header += "\(line)\n"
-        }
-        header += "---\n"
-        return header
     }
 }

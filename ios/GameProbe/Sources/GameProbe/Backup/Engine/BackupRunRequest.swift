@@ -68,10 +68,16 @@ public struct BackupRunRequest: Sendable {
     /// What the user chose after a writer mismatch, per 5.12. A run
     /// that meets a mismatch with no choice stops and asks.
     public var writerAnswer: WriterConflicts.Answer?
-    /// The sync group this device joined, per 10.4. The run carries
-    /// it into `device.json`, which is where a second device of the
-    /// same person finds the group, per 10.5 step 1.
-    public var syncGroupId: String?
+    /// The run writes the group into `device.json`, where a second device of the same person finds
+    /// it, per 10.5 step 1.
+    public var syncGroup: SyncGroupChoice
+
+    public enum SyncGroupChoice: Sendable, Equatable {
+        /// The group this device joined, per 10.4, or `nil` for none.
+        case known(String?)
+        /// The sync settings do not read, so the run keeps the group that `device.json` holds.
+        case keepRecorded
+    }
 
     public init(
         runId: String,
@@ -86,7 +92,7 @@ public struct BackupRunRequest: Sendable {
         preferences: LibraryBackupSetRequest? = nil,
         games: [BackupRunGame] = [],
         writerAnswer: WriterConflicts.Answer? = nil,
-        syncGroupId: String? = nil
+        syncGroup: SyncGroupChoice = .known(nil)
     ) {
         self.runId = runId
         self.trigger = trigger
@@ -100,6 +106,6 @@ public struct BackupRunRequest: Sendable {
         self.preferences = preferences
         self.games = games
         self.writerAnswer = writerAnswer
-        self.syncGroupId = syncGroupId
+        self.syncGroup = syncGroup
     }
 }

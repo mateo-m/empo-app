@@ -224,22 +224,11 @@ final class FakeBackupTargetTests: XCTestCase {
         XCTAssertEqual(listed.map(\.path), [blobPath])
     }
 
-    func testATargetThatReportsNoObjectAgeListsNoModifiedTime() async throws {
-        let target = makeTarget(capabilities: TargetCapabilities(reportsObjectAge: false))
-        try await target.put(localFile: try localFile("blob"), path: blobPath)
-
-        let listed = try await target.list(prefix: "")
-        XCTAssertNil(listed[0].modifiedAt)
-        XCTAssertEqual(listed[0].sizeBytes, 4)
-    }
-
     func testTheFlagsReachTheEngineWithoutAnAwait() {
         let capabilities = TargetCapabilities(
             canQueryQuota: true,
-            reportsObjectAge: true,
             supportsBackgroundTransfer: false,
-            maxFileSize: 150 * 1024 * 1024,
-            foldsCase: true)
+            maxFileSize: 150 * 1024 * 1024)
         let target = makeTarget(capabilities: capabilities)
 
         XCTAssertEqual(target.capabilities, capabilities)

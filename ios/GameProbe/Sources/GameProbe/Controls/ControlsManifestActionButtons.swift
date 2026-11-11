@@ -3,16 +3,8 @@
 
 import Foundation
 
-/// Parsing for the `actionButtons` arrays. Split from the main
-/// loader file for size. The shared placement fields keep the
-/// x/y/size/opacity rules identical to plain buttons.
 extension ControlsManifestLoader {
-    /// The x/y/size/opacity fields every placeable control shares.
-    /// One consumer for the d-pad, key buttons, and action buttons,
-    /// so the validation and the error emission cannot drift per
-    /// kind.
     struct PlacementFields {
-        /// The d-pad's size range differs from the buttons'.
         enum SizeRule {
             case button
             case dpad
@@ -24,15 +16,12 @@ extension ControlsManifestLoader {
         var size: Double?
         var opacity: Double?
 
-        /// Consumes one manifest field when it is a placement
-        /// field. Returns false when the field belongs to the
-        /// caller.
         mutating func consume(
             field: String, value: Any, path: String, findings: inout [Finding]
         ) -> Bool {
             switch field {
             case "x":
-                if let number = ControlsManifestLoader.asDouble(value) {
+                if let number = JSONNumber.double(value) {
                     x = number
                     ControlsManifestLoader.validateCoordinate(
                         number, path: "\(path)/x", findings: &findings)
@@ -41,7 +30,7 @@ extension ControlsManifestLoader {
                         findings: &findings, path: "\(path)/x")
                 }
             case "y":
-                if let number = ControlsManifestLoader.asDouble(value) {
+                if let number = JSONNumber.double(value) {
                     y = number
                     ControlsManifestLoader.validateCoordinate(
                         number, path: "\(path)/y", findings: &findings)
@@ -50,7 +39,7 @@ extension ControlsManifestLoader {
                         findings: &findings, path: "\(path)/y")
                 }
             case "size":
-                if let number = ControlsManifestLoader.asDouble(value) {
+                if let number = JSONNumber.double(value) {
                     size = number
                     switch sizeRule {
                     case .button:
@@ -65,7 +54,7 @@ extension ControlsManifestLoader {
                         findings: &findings, path: "\(path)/size")
                 }
             case "opacity":
-                if let number = ControlsManifestLoader.asDouble(value) {
+                if let number = JSONNumber.double(value) {
                     opacity = number
                     ControlsManifestLoader.validateOpacity(
                         number, path: "\(path)/opacity", findings: &findings)
@@ -79,9 +68,8 @@ extension ControlsManifestLoader {
             return true
         }
 
-        /// The buttons' trailing rule: a missing coordinate is a
-        /// V011 error, never a silent drop. A silently dropped
-        /// button would vanish from disk on the next
+        /// A missing coordinate is an error, not a silent drop. A
+        /// dropped button vanishes from disk on the next
         /// load-modify-save cycle.
         func requireCoordinates(
             path: String, findings: inout [Finding]
@@ -151,10 +139,9 @@ extension ControlsManifestLoader {
             }
         }
 
-        // An action this Empo version does not know skips only this
-        // button. This is the documented exception to the
-        // no-partial-application rule, scoped to actionButtons, so a
-        // file written for a newer vocabulary still loads.
+        // An unknown action skips only this button, so that a file for
+        // a newer Empo still loads. This is an exception to the
+        // no-partial-application rule.
         guard let action, EmpoActionCatalog.touchIDs.contains(action) else {
             findings.append(
                 Finding(

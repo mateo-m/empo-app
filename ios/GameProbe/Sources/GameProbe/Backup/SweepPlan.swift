@@ -37,7 +37,7 @@ public enum SweepPlan {
 
     /// How long an unreferenced blob is safe, per 5.11. The margin
     /// absorbs clock skew and uploads still in flight.
-    public static let margin: TimeInterval = 7 * 86_400
+    public static let margin: TimeInterval = 7 * .day
 
     /// Every hash the manifests name.
     ///

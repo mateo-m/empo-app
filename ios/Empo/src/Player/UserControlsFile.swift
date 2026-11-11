@@ -4,22 +4,16 @@
 import Foundation
 import GameProbe
 
-/// Read/write `<container>/EmpoState/controls.json` (SPEC section 3 user layer, ticket 009).
 enum UserControlsFile {
     static let logFileName = "controls.json.log"
     static let logPrefix = "user controls.json:"
 
-    static func url(in container: GameContainer) -> URL {
-        container.userControlsURL
-    }
-
     static func exists(in container: GameContainer) -> Bool {
-        FileManager.default.fileExists(atPath: url(in: container).path)
+        FileManager.default.fileExists(atPath: container.userControlsURL.path)
     }
 
-    /// Parse the user manifest. Returns `nil` when the file is absent.
     static func load(in container: GameContainer) -> ControlsManifestLoader.Result? {
-        let fileURL = url(in: container)
+        let fileURL = container.userControlsURL
         guard FileManager.default.fileExists(atPath: fileURL.path),
             let data = try? Data(contentsOf: fileURL)
         else {
@@ -28,19 +22,39 @@ enum UserControlsFile {
         return ControlsManifestLoader.parse(data: data)
     }
 
-    static func logFindings(_ findings: [ControlsManifestLoader.Finding], container: GameContainer) {
-        guard !findings.isEmpty else { return }
-        for finding in findings {
+    static func loadAndLog(in container: GameContainer) -> ControlsManifestLoader.Result? {
+        let result = load(in: container)
+        for finding in result?.findings ?? [] {
             container.appendLogLine(finding.logLine(prefix: logPrefix), fileName: logFileName)
         }
+        return result
     }
 
-    /// Write or delete the user manifest. `nil` data removes the file.
-    static func write(_ data: Data?, in container: GameContainer) -> Bool {
-        let fileURL = url(in: container)
+    enum SaveRefusal: Error {
+        case fileHasErrors
+        case fileNeedsNewerEmpo
+    }
+
+    static func acceptedManifest(in container: GameContainer) -> ControlsManifest? {
+        load(in: container).flatMap(accepted)
+    }
+
+    private static func accepted(_ result: ControlsManifestLoader.Result) -> ControlsManifest? {
+        guard !result.findings.contains(where: { $0.severity == .error }) else { return nil }
+        return result.manifest
+    }
+
+    private static func write(_ data: Data?, in container: GameContainer) -> Bool {
+        let fileURL = container.userControlsURL
         guard let data else {
-            try? FileManager.default.removeItem(at: fileURL)
-            return true
+            guard exists(in: container) else { return true }
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+                return true
+            } catch {
+                NSLog("controls.json: Failed to remove user controls: \(error.localizedDescription)")
+                return false
+            }
         }
         container.ensureEmpoStateDirectory()
         do {
@@ -52,7 +66,6 @@ enum UserControlsFile {
         }
     }
 
-    /// Replace the on-disk manifest. Keep the sections that this call does not update.
     static func write(
         in container: GameContainer,
         touch: TouchSection?,
@@ -65,40 +78,17 @@ enum UserControlsFile {
         return write(data, in: container)
     }
 
-    /// Read-modify-write: update only the `touch` section.
-    static func updateTouch(in container: GameContainer, touch: TouchSection?) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(
-            in: container,
-            touch: touch,
-            bindings: existing?.bindings
-        )
-    }
-
-    /// Read-modify-write: update only the `bindings` section.
-    static func updateBindings(in container: GameContainer, bindings: BindingMap?) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(
-            in: container,
-            touch: existing?.touch,
-            bindings: bindings
-        )
-    }
-
-    static func removeTouchSection(in container: GameContainer) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(in: container, touch: nil, bindings: existing?.bindings)
-    }
-
-    static func removeBindingsSection(in container: GameContainer) -> Bool {
-        let existing = acceptedManifest(in: container)
-        return write(in: container, touch: existing?.touch, bindings: nil)
-    }
-
-    private static func acceptedManifest(in container: GameContainer) -> ControlsManifest? {
-        guard let result = load(in: container) else { return nil }
-        let hasError = result.findings.contains { $0.severity == .error }
-        guard !hasError else { return nil }
-        return result.manifest
+    /// A file that Empo cannot use stays as it is, because a write keeps
+    /// only the parts that Empo can read.
+    static func updateBindings(
+        in container: GameContainer, bindings: BindingMap?
+    ) throws(SaveRefusal) -> Bool {
+        guard exists(in: container) else {
+            return write(in: container, touch: nil, bindings: bindings)
+        }
+        guard let result = load(in: container) else { throw .fileHasErrors }
+        if result.ignoredNewerVersion { throw .fileNeedsNewerEmpo }
+        guard let manifest = accepted(result) else { throw .fileHasErrors }
+        return write(in: container, touch: manifest.touch, bindings: bindings)
     }
 }

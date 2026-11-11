@@ -71,7 +71,6 @@ final class ICloudDriveTests: XCTestCase {
         cache.record(.ready)
 
         XCTAssertEqual(cache.value, .ready)
-        XCTAssertEqual(cache.probeCount, 1)
     }
 
     func testTheIdentityChangeReprobesAndDisablesTheTargetWithoutDeletingIt() {
@@ -88,7 +87,6 @@ final class ICloudDriveTests: XCTestCase {
         guard let availability = cache.value else {
             return XCTFail("the reprobe left no answer")
         }
-        XCTAssertEqual(cache.probeCount, 2)
         // The target keeps its row and reads the line of 9.1.
         XCTAssertEqual(
             ICloudDrive.rowState(of: targets[0], availability: availability),
@@ -121,7 +119,7 @@ final class ICloudDriveTests: XCTestCase {
         XCTAssertEqual(error, .outOfSpace)
         // There is no space query on iCloud, per 9.7, so this is the
         // one door the ladder of 5.14 comes through.
-        XCTAssertEqual(error.effect, .runPruneLadder)
+        XCTAssertEqual(error.runStop, .full(reason: QuotaCheck.prunedAndStillFullLine))
     }
 
     func testAFullDiskMapsToOutOfSpace() {
@@ -140,7 +138,7 @@ final class ICloudDriveTests: XCTestCase {
             description: "iCloud is not available")
 
         XCTAssertEqual(error, .offline)
-        XCTAssertEqual(error.effect, .retryOnNextPass)
+        XCTAssertEqual(error.runStop, .offline)
     }
 
     func testARefusedWriteMapsToPermissionDenied() {
@@ -150,7 +148,7 @@ final class ICloudDriveTests: XCTestCase {
             description: "you do not have permission")
 
         XCTAssertEqual(error, .permissionDenied)
-        XCTAssertEqual(error.effect, .blocked)
+        XCTAssertNil(error.runStop)
     }
 
     func testAMissingItemMapsToNotFound() {
@@ -181,7 +179,7 @@ final class ICloudDriveTests: XCTestCase {
 
         XCTAssertEqual(error, .rejected(message: "the connection to service was interrupted"))
         XCTAssertEqual(
-            error.effect, .stopAndShow(message: "the connection to service was interrupted"))
+            error.runStop, .rejected(message: "the connection to service was interrupted"))
     }
 
     // MARK: - The capability flags, per 8.3 and section 9
@@ -190,10 +188,8 @@ final class ICloudDriveTests: XCTestCase {
         let capabilities = ICloudDrive.capabilities
 
         XCTAssertFalse(capabilities.canQueryQuota)
-        XCTAssertTrue(capabilities.reportsObjectAge)
         XCTAssertTrue(capabilities.supportsBackgroundTransfer)
         XCTAssertNil(capabilities.maxFileSize)
-        XCTAssertFalse(capabilities.foldsCase)
     }
 
     func testNoFileSizeIsRejectedBecauseTheAccountQuotaSetsTheLimit() {

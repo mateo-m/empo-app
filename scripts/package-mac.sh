@@ -6,6 +6,7 @@
 #
 # Usage: scripts/package-mac.sh <version>
 # EMPO_CORES in the environment ships only the cores it names.
+# SENTRY_DSN in the environment turns on the error reports.
 # EMPO_MAC_DERIVED_DATA in the environment keeps the build data in that
 # folder, so the next build compiles only what changed. Without it,
 # each build starts clean.
@@ -46,6 +47,7 @@ xcodebuild \
     -derivedDataPath "$DERIVED_DATA" \
     -xcconfig "$PROJECT_DIR/Sideload.xcconfig" \
     ${EMPO_CORES:+"EMPO_CORES=$EMPO_CORES"} \
+    ${SENTRY_DSN:+SENTRY_DSN="$SENTRY_DSN"} \
     build 2>&1 | grep -E "^(\*\* BUILD|error:)" >&2
 [[ -d "$APP" ]] || fail "build failed: $APP not found"
 

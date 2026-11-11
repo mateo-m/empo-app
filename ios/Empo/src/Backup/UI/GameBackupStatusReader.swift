@@ -49,7 +49,6 @@ enum GameBackupStatusReader {
     }
 }
 
-/// One game's backup state, read once.
 struct GameBackupRead {
     var status: GameBackupStatus
     var late: LateGame?

@@ -128,11 +128,11 @@ final class DPadTouchReducerTests: XCTestCase {
 
     private let size = 150.0
 
-    private func press(_ direction: DPadTouchReducer.Direction) -> DPadTouchReducer.Edge {
+    private func press(_ direction: ControlDirection) -> DPadTouchReducer.Edge {
         DPadTouchReducer.Edge(direction: direction, pressed: true)
     }
 
-    private func release(_ direction: DPadTouchReducer.Direction) -> DPadTouchReducer.Edge {
+    private func release(_ direction: ControlDirection) -> DPadTouchReducer.Edge {
         DPadTouchReducer.Edge(direction: direction, pressed: false)
     }
 
@@ -434,7 +434,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// the active set.
     func testInnerRingSweepHoldsExactlyOneDirection() {
         var reducer = DPadTouchReducer()
-        var held = Set<DPadTouchReducer.Direction>()
+        var held = Set<ControlDirection>()
 
         for step in 0..<1440 {
             let angle = Double(step) / 720.0 * 2 * .pi
@@ -700,7 +700,7 @@ final class DPadTouchReducerTests: XCTestCase {
     /// set, and opposite directions held together.
     func testFullSweepEdgeStreamStaysConsistent() {
         var reducer = DPadTouchReducer()
-        var held = Set<DPadTouchReducer.Direction>()
+        var held = Set<ControlDirection>()
 
         for step in 0..<1440 {
             let angle = Double(step) / 720.0 * 2 * .pi

@@ -15,9 +15,10 @@
 
 #import "AppMemoryHeap.h"
 #import "EmpoGameProcessProtocol.h"
+#import "GameProcessService.h"
 #include "fishhook.h"
 
-#define PAGE (16u << 10)
+#define PAGE EMPO_HEAP_PAGE
 
 // Raw pages: the mmap calls of the cores.
 
@@ -219,10 +220,7 @@ NSString *EmpoUseAppMemory(xpc_object_t memory) {
     gBlockStart = (char *)start;
     gBlockEnd = gBlockStart + size;
 
-    // The extension sits in Empo.app/Extensions, and the cores in
-    // Empo.app/Frameworks.
-    NSURL *frameworks = [NSBundle.mainBundle.bundleURL.URLByDeletingLastPathComponent.URLByDeletingLastPathComponent
-        URLByAppendingPathComponent:@"Frameworks/"];
+    NSURL *frameworks = EmpoAppFrameworksURL();
     // With no prefix, the hooks would go into every system library.
     if (realpath(frameworks.fileSystemRepresentation, gFrameworks) != NULL) {
         strlcat(gFrameworks, "/", sizeof gFrameworks);

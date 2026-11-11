@@ -56,8 +56,22 @@ public struct TouchZoneMetrics: Sendable {
         self.landscapeTrailingInset = landscapeTrailingInset
     }
 
-    /// Reference metrics for tests, and a fallback when the host
-    /// passes nothing: 402x874 / 874x402 (iPhone 17 Pro points).
+    public struct WindowInsets: Sendable {
+        public var top: Double
+        public var bottom: Double
+        public var leading: Double
+        public var trailing: Double
+    }
+
+    /// The window safe area of the reference phone (the notch and the
+    /// home indicator). The zone insets of `reference` start from it.
+    public static func referenceWindowInsets(isLandscape: Bool) -> WindowInsets {
+        isLandscape
+            ? WindowInsets(top: 0, bottom: 21, leading: 59, trailing: 59)
+            : WindowInsets(top: 59, bottom: 34, leading: 0, trailing: 0)
+    }
+
+    /// The sizes are iPhone 17 Pro points: 402x874 and 874x402.
     /// The insets match typical host chrome: landscapeTopInset ≈96
     /// is the toolbar line, portraitTopInset ≈369 estimates the 4:3
     /// game bottom, and the bottom insets are ≈40.
@@ -72,8 +86,8 @@ public struct TouchZoneMetrics: Sendable {
         landscapeBottomInset: 40,
         portraitLeadingInset: 0,
         portraitTrailingInset: 0,
-        landscapeLeadingInset: 59,
-        landscapeTrailingInset: 59
+        landscapeLeadingInset: referenceWindowInsets(isLandscape: true).leading,
+        landscapeTrailingInset: referenceWindowInsets(isLandscape: true).trailing
     )
 
     public func width(isLandscape: Bool) -> Double {
@@ -100,8 +114,6 @@ public struct TouchZoneMetrics: Sendable {
         isLandscape ? landscapeTrailingInset : portraitTrailingInset
     }
 
-    /// The vertical span available for grid or cluster layout after
-    /// the host insets and the translator edge margins on both sides.
     public func usableHeight(isLandscape: Bool, edgeMargin: Double) -> Double {
         let h = height(isLandscape: isLandscape)
         return h - topInset(isLandscape: isLandscape) - bottomInset(isLandscape: isLandscape)

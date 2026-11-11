@@ -259,13 +259,13 @@ final class BackupSheetTests: XCTestCase {
             gameINIHash: "b", fileCount: 90, totalSize: 10)
         XCTAssertTrue(
             VersionMarkerSheet.shows(
-                mode: .full, scope: .wholeGame, snapshot: snapshot, local: local))
+                mode: .full, scope: .wholeGame, markerDiffers: snapshot != local))
         XCTAssertFalse(
             VersionMarkerSheet.shows(
-                mode: .full, scope: .savesAndSettings, snapshot: snapshot, local: local))
+                mode: .full, scope: .savesAndSettings, markerDiffers: snapshot != local))
         XCTAssertFalse(
             VersionMarkerSheet.shows(
-                mode: .slim, scope: .wholeGame, snapshot: snapshot, local: local))
+                mode: .slim, scope: .wholeGame, markerDiffers: snapshot != local))
         XCTAssertEqual(
             VersionMarkerSheet.actions.map(\.label),
             ["Saves and settings only", "Keep my files", "Use only this backup"])

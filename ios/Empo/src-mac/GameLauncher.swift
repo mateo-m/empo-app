@@ -38,6 +38,9 @@ final class GameLauncher {
         /// A write to a full pipe waits until Empo Player reads, so the
         /// writes run here and not on the main thread.
         let liveChangesQueue = DispatchQueue(label: "sh.mateo.empo.live-settings")
+        var showedError = false
+
+        @MainActor var reportedGame: ErrorReports.Game? { logger.logURL.map { (gameTitle, $0) } }
     }
 
     private var sessions: [String: Session] = [:]
@@ -98,9 +101,9 @@ final class GameLauncher {
 
         let logger = SessionLogger()
         logger.onPlayTimeFlushed = { GameLibrary.shared.refreshGameEntry(id: $0) }
-        logger.openDebugLog(for: game, container: start.container, enabled: AppSettings.shared.debugLogs)
-        CoreSettingsRecorder.settings = []
-        start.core.launch(start.container)
+        logger.openDebugLog(
+            for: game, container: start.container, core: start.core, enabled: AppSettings.shared.debugLogs)
+        let coreSettings = start.core.launch(start.container)
 
         let manifestBindings = Self.loadManifestBindings(of: start.container)
         let launch = PlayerLaunch(
@@ -114,7 +117,7 @@ final class GameLauncher {
             fixedAspectRatio: start.settings.fixedAspectRatio
                 ?? start.core.displayDefaults(for: start.container).fixedAspectRatio
                 ?? GameConfigDefaults.engineFixedAspectRatio,
-            settings: CoreSettingsRecorder.settings,
+            settings: coreSettings,
             debugLogPath: logger.logURL?.path,
             caBundlePath: CABundleStore.effectivePath,
             iconPath: game.artworkPath,
@@ -197,12 +200,22 @@ final class GameLauncher {
     /// The SessionLogger timer runs only while the game is not paused,
     /// as on iOS.
     private func received(_ line: String, from process: Process) {
-        guard let session = session(of: process), let message = PlayerMessage(rawValue: line) else { return }
+        guard let session = session(of: process),
+            let message = try? JSONDecoder().decode(PlayerMessage.self, from: Data(line.utf8))
+        else { return }
         switch message {
         case .paused:
             session.logger.recordSessionPlayTime()
         case .resumed:
             if let game = entry(session) { session.logger.resumeSessionTiming(for: game) }
+        case .error(let text?):
+            sessions[session.gameID]?.showedError = true
+            ErrorReports.gameError(text, game: session.reportedGame)
+        case .error(nil):
+            sessions[session.gameID]?.showedError = true
+            ErrorReports.gameCrash(game: session.reportedGame)
+        case .info(let text):
+            ErrorReports.gameMessage(text, game: session.reportedGame)
         }
     }
 
@@ -218,8 +231,12 @@ final class GameLauncher {
         session.logger.recordSessionPlayTime()
         guard crashed || ![0, 128 + SIGTERM].contains(status) else { return }
         // 64: the launch data was wrong. 70: the core did not open.
+        let couldNotStart = !crashed && [64, 70].contains(status)
+        if !couldNotStart, !session.showedError {
+            ErrorReports.gameCrash(game: session.reportedGame)
+        }
         let title =
-            !crashed && [64, 70].contains(status)
+            couldNotStart
             ? String(localized: "\"\(session.gameTitle)\" couldn't start.")
             : String(localized: "\"\(session.gameTitle)\" quit unexpectedly.")
         lastFailure = Failure(title: title, logURL: session.logger.logURL)
@@ -252,17 +269,4 @@ final class GameLauncher {
         sessions.removeAll()
         return .terminateNow
     }
-}
-
-/// Collects what a core's `launch(_:)` sends with gamecore_setSetting.
-/// Empo Player gives the settings to the core in its own process.
-enum CoreSettingsRecorder {
-    nonisolated(unsafe) static var settings: [PlayerLaunch.Setting] = []
-}
-
-@_cdecl("gamecore_setSetting")
-func recordCoreSetting(_ key: UnsafePointer<CChar>?, _ value: UnsafePointer<CChar>?) {
-    guard let key else { return }
-    CoreSettingsRecorder.settings.append(
-        PlayerLaunch.Setting(key: String(cString: key), value: value.map { String(cString: $0) } ?? ""))
 }

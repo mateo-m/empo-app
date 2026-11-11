@@ -17,6 +17,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=cores/framework-common.sh
 . "$REPO_ROOT/cores/framework-common.sh"
+# shellcheck source=cores/cores.sh
+. "$REPO_ROOT/cores/cores.sh"
 SDK="${PLATFORM_NAME:-iphoneos}"
 FRAMEWORKS=()
 
@@ -38,7 +40,8 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "${#FRAMEWORKS[@]}" -eq 0 ]; then
-    for ruby in 25 30 32 33; do
+    read -ra RUBIES <<<"$(psdk_rubies)"
+    for ruby in "${RUBIES[@]}"; do
         FRAMEWORKS+=("$REPO_ROOT/ios/Dependencies/build-${SDK}-arm64/Psdk${ruby}Core.framework")
     done
 fi
@@ -50,7 +53,7 @@ fail() {
 
 # A launcher opens the core and calls every name GameCore.h declares.
 # A missing one aborts in the forwarder, so fail here first.
-WANT_NAMES=$("$REPO_ROOT/cores/gamecore-exports.sh" /dev/stdout)
+WANT_NAMES=$(sort -u "$REPO_ROOT/cores/gamecore.exports")
 
 WANT_PLATFORM="$(platform_number "$SDK")"
 

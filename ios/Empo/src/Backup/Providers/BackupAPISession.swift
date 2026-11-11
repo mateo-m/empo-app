@@ -32,7 +32,6 @@ final class BackupAPISession: Sendable {
         session = URLSession(configuration: configuration)
     }
 
-    /// Sends one request and reads the whole answer.
     func answer(for request: URLRequest) async throws -> (Data, URLResponse) {
         var request = request
         let policy = BackupNetwork.policy

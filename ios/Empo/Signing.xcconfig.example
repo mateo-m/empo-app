@@ -30,3 +30,9 @@
 // An empty key hides Dropbox from the add flow at runtime.
 //
 // DROPBOX_APP_KEY = your_app_key
+
+// Optional: the Sentry DSN of the error reports. The release job gets
+// it from the SENTRY_DSN secret of the repo. An xcconfig reads "//" as
+// the start of a comment, so write "/$()/" after "https:".
+//
+// SENTRY_DSN = https:/$()/key@o0.ingest.de.sentry.io/0

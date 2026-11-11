@@ -52,8 +52,7 @@ public enum SyncProfileConflict {
     }
 
     public static func makeId(profileId: String, losing: [String: JSONValue]) -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let encoder = BackupJSON.encoder(pretty: false)
         let lines = losing.keys.sorted().map { key -> String in
             let value = (try? encoder.encode(losing[key])).flatMap { String(data: $0, encoding: .utf8) }
             return key + "=" + (value ?? "")

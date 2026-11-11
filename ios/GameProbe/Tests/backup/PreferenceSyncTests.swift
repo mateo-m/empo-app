@@ -21,7 +21,8 @@ final class PreferenceSyncTests: XCTestCase {
     func testEveryKeyOf101LandsInItsClass() {
         let portable = [
             "theme", "interfaceHaptics", "controllerHaptics", "respectsSilentMode",
-            "controlsEditSnapToGrid", "libraryDisplayMode", "librarySortOption", "showContinuePlaying",
+            "controlsEditSnapToGrid", "errorReports", "libraryDisplayMode", "librarySortOption",
+            "showContinuePlaying",
             "titlePosition",
             "cleanupInvalidGames", "controllerMap.global", "layoutProfiles.gameNoticeShown",
             "layoutProfiles.default",
@@ -458,7 +459,7 @@ final class PreferenceSyncTests: XCTestCase {
         let saved = #"{"version":1,"actorId":"actor-1","groupId":"g1","joinedAt":1700000000000,"targets":[]}"#
         try Data(saved.utf8).write(to: support.appendingPathComponent(SyncState.fileName))
 
-        let read = SyncState.read(applicationSupport: support, actorId: "actor-2")
+        let read = try SyncState.read(applicationSupport: support, actorId: "actor-2")
 
         XCTAssertEqual(read.actorId, "actor-1")
         XCTAssertEqual(read.groupId, "g1")
@@ -466,7 +467,7 @@ final class PreferenceSyncTests: XCTestCase {
 
     func testTheStateFileKeepsTheActorAndTheProgress() throws {
         let support = try temporaryDirectory()
-        var state = SyncState.read(applicationSupport: support, actorId: "actor-1")
+        var state = try SyncState.read(applicationSupport: support, actorId: "actor-1")
         XCTAssertEqual(state.actorId, "actor-1")
         XCTAssertFalse(state.hasJoined)
 
@@ -475,7 +476,7 @@ final class PreferenceSyncTests: XCTestCase {
         state.saw(namespaceId: "ns-1", at: stamp, sizeBytes: 10, targetId: "t1")
         try state.write(applicationSupport: support)
 
-        let read = SyncState.read(applicationSupport: support, actorId: "actor-2")
+        let read = try SyncState.read(applicationSupport: support, actorId: "actor-2")
         XCTAssertEqual(read.actorId, "actor-1")
         XCTAssertEqual(read.groupId, state.groupId)
         XCTAssertEqual(read.progress(ofTarget: "t1")?.confirmedHeads, ["aa"])
@@ -488,7 +489,7 @@ final class PreferenceSyncTests: XCTestCase {
         XCTAssertEqual(forgotten.removedTargetIds, ["t1"])
         try forgotten.write(applicationSupport: support)
         XCTAssertEqual(
-            SyncState.read(applicationSupport: support, actorId: "actor-3").removedTargetIds,
+            try SyncState.read(applicationSupport: support, actorId: "actor-3").removedTargetIds,
             ["t1"])
         forgotten.keep(targetId: "t1")
         XCTAssertTrue(forgotten.removedTargetIds.isEmpty)
@@ -500,20 +501,35 @@ final class PreferenceSyncTests: XCTestCase {
             to: support.appendingPathComponent(SyncState.fileName), atomically: true,
             encoding: .utf8)
         XCTAssertEqual(
-            SyncState.read(applicationSupport: support, actorId: "actor-4").actorId, "actor-1")
+            try SyncState.read(applicationSupport: support, actorId: "actor-4").actorId, "actor-1")
     }
 
     func testTheIdentityFileKeepsTheNamesAndTheDeletions() throws {
         let support = try temporaryDirectory()
-        var identities = SyncProfileIdentities.read(applicationSupport: support)
+        var identities = try SyncProfileIdentities.read(applicationSupport: support)
         let id = identities.id(ofProfile: "Small hands")
         identities.rename(from: "Small hands", to: "Small hands 2")
         try identities.write(applicationSupport: support)
 
-        let read = SyncProfileIdentities.read(applicationSupport: support)
+        let read = try SyncProfileIdentities.read(applicationSupport: support)
         XCTAssertEqual(read.knownId(ofProfile: "Small hands 2"), id)
         XCTAssertEqual(read.name(ofId: id), "Small hands 2")
         XCTAssertNil(read.knownId(ofProfile: "Small hands"))
+    }
+
+    func testADamagedStateFileIsAnError() throws {
+        let support = try temporaryDirectory()
+        try Data("{\"actorId\":".utf8).write(to: support.appendingPathComponent(SyncState.fileName))
+
+        XCTAssertThrowsError(try SyncState.read(applicationSupport: support, actorId: "actor-2"))
+    }
+
+    func testADamagedIdentityFileIsAnError() throws {
+        let support = try temporaryDirectory()
+        try Data("{\"ids\":".utf8).write(
+            to: support.appendingPathComponent(SyncProfileIdentities.fileName))
+
+        XCTAssertThrowsError(try SyncProfileIdentities.read(applicationSupport: support))
     }
 
     // MARK: - Fixtures

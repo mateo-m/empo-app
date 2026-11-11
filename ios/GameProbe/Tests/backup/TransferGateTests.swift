@@ -145,7 +145,7 @@ final class TransferGateTests: XCTestCase {
             // The engine waits the stated time and keeps the run,
             // per 8.4.
             XCTAssertEqual(error, .throttled(retryAfter: 5))
-            XCTAssertEqual(error.effect, .waitAndKeepRun(seconds: 5))
+            XCTAssertEqual(error.runStop, .throttled(retryAfter: 5))
         }
 
         let waits = await clock.waits

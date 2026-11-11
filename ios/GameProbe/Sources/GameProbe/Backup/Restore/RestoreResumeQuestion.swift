@@ -80,6 +80,21 @@ public enum RestoreResumeQuestion {
         return record.asksAtNextLaunch
     }
 
+    /// A finished restore whose record did not clear left the
+    /// finished mark, so this clears that record and returns `nil`.
+    public static func unfinishedRecord(
+        in store: BackupStateStore, layout: BackupRootLayout, fm: FileManager = .default
+    ) throws -> BackupIntentRecord? {
+        let mark = layout.finishedRestoreMark
+        guard fm.fileExists(atPath: mark.path) else {
+            return try store.intent(kind: .interruptedRestore)
+        }
+        if (try? store.clearIntent(kind: .interruptedRestore)) != nil {
+            try? fm.removeItem(at: mark)
+        }
+        return nil
+    }
+
     /// The record an interrupted restore leaves.
     public static func record(
         targetId: String,

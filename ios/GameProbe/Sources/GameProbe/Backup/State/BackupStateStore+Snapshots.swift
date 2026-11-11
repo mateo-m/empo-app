@@ -41,16 +41,19 @@ extension BackupStateStore {
             WHERE targetId = ? AND gameKey = ?
             """,
             [.text(targetId), .text(gameKey)])
+        // The target holds the same manifest, so a row this build cannot
+        // decode counts as no earlier snapshot of this game only.
         guard let row = rows.first,
             let snapshotId = row[0].string,
             let payload = row[1].data,
-            let uploadedAt = row[2].double
+            let uploadedAt = row[2].double,
+            let manifest = try? SnapshotManifest.decode(json: payload)
         else { return nil }
         return UploadedManifestRecord(
             targetId: targetId,
             gameKey: gameKey,
             snapshotId: snapshotId,
-            manifest: try SnapshotManifest.decode(json: payload),
+            manifest: manifest,
             uploadedAt: Date(timeIntervalSince1970: uploadedAt))
     }
 
@@ -72,6 +75,9 @@ extension BackupStateStore {
     /// 8.1. A rebuilt cache knows fewer ids and therefore prunes
     /// less, which loses nothing: the sweep of 5.11 still reclaims
     /// the blobs, and a manifest nobody deletes still restores.
+    ///
+    /// The manifest does not carry the one-off mark, so a rebuild records a snapshot again without it,
+    /// and a saved mark stays.
     public func recordSnapshot(_ entry: SnapshotLedgerEntry) throws {
         try database.run(
             """
@@ -80,7 +86,7 @@ extension BackupStateStore {
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (targetId, gameKey, snapshotId) DO UPDATE SET
                 createdAt = excluded.createdAt,
-                oneOff = excluded.oneOff
+                oneOff = MAX(oneOff, excluded.oneOff)
             """,
             [
                 .text(entry.targetId), .text(entry.gameKey), .text(entry.snapshotId),

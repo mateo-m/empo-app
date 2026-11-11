@@ -3,58 +3,45 @@ import XCTest
 
 @testable import GameProbe
 
-/// The seven error kinds of SPEC 8.4 and the one effect each has.
+/// The seven error kinds of SPEC 8.4 and the run stop each one gives.
 final class BackupProviderErrorTests: XCTestCase {
 
-    func testAuthExpiredSendsTheTargetToNeedsSignInAndStopsTheRun() {
-        let effect = BackupProviderError.authExpired.effect
-
-        XCTAssertEqual(effect, .needsSignIn)
-        XCTAssertTrue(effect.stopsTheRun)
+    func testAuthExpiredStopsTheRunForASignIn() {
+        XCTAssertEqual(BackupProviderError.authExpired.runStop, .needsSignIn)
     }
 
-    func testOutOfSpaceRunsThePruneLadder() {
-        let effect = BackupProviderError.outOfSpace.effect
-
-        XCTAssertEqual(effect, .runPruneLadder)
-        // The ladder of 5.14 decides. A prune that frees enough
-        // keeps the run.
-        XCTAssertFalse(effect.stopsTheRun)
+    func testOutOfSpaceStopsTheRunAsFull() {
+        // The engine runs the ladder of 5.14 first. A prune that frees
+        // enough keeps the run.
+        XCTAssertEqual(
+            BackupProviderError.outOfSpace.runStop,
+            .full(reason: QuotaCheck.prunedAndStillFullLine))
     }
 
-    func testThrottledCarriesTheWaitAndKeepsTheRun() {
-        let effect = BackupProviderError.throttled(retryAfter: 12).effect
-
-        XCTAssertEqual(effect, .waitAndKeepRun(seconds: 12))
-        XCTAssertFalse(effect.stopsTheRun)
+    func testThrottledCarriesTheWait() {
+        XCTAssertEqual(
+            BackupProviderError.throttled(retryAfter: 12).runStop, .throttled(retryAfter: 12))
     }
 
-    func testOfflineRetriesOnTheNextPass() {
-        let effect = BackupProviderError.offline.effect
-
-        XCTAssertEqual(effect, .retryOnNextPass)
-        XCTAssertFalse(effect.stopsTheRun)
+    func testOfflineStopsTheRunAsOffline() {
+        XCTAssertEqual(BackupProviderError.offline.runStop, .offline)
     }
 
-    func testPermissionDeniedBlocksTheTarget() {
-        let effect = BackupProviderError.permissionDenied.effect
-
-        XCTAssertEqual(effect, .blocked)
-        XCTAssertTrue(effect.stopsTheRun)
+    func testPermissionDeniedLeavesTheLineToTheRun() {
+        XCTAssertNil(BackupProviderError.permissionDenied.runStop)
     }
 
-    func testNotFoundDropsTheObjectFromTheCache() {
-        let effect = BackupProviderError.notFound.effect
-
-        XCTAssertEqual(effect, .dropFromCache)
-        XCTAssertFalse(effect.stopsTheRun)
+    func testNotFoundAsksForANewBackup() {
+        XCTAssertEqual(
+            BackupProviderError.notFound.runStop,
+            .rejected(
+                message: "A backup file is missing from this location. Back up again to replace it."))
     }
 
-    func testRejectedCarriesTheMessageWordForWordAndStopsTheRun() {
-        let effect = BackupProviderError.rejected(message: "bucket is read-only").effect
-
-        XCTAssertEqual(effect, .stopAndShow(message: "bucket is read-only"))
-        XCTAssertTrue(effect.stopsTheRun)
+    func testRejectedCarriesTheMessageWordForWord() {
+        XCTAssertEqual(
+            BackupProviderError.rejected(message: "bucket is read-only").runStop,
+            .rejected(message: "bucket is read-only"))
     }
 
     func testAFileOverTheMaxFileSizeIsRejectedAndNotOutOfSpace() {
