@@ -30,10 +30,17 @@ enum UserControlsFile {
         return result
     }
 
+    enum SaveRefusal: Error {
+        case fileHasErrors
+        case fileNeedsNewerEmpo
+    }
+
     static func acceptedManifest(in container: GameContainer) -> ControlsManifest? {
-        guard let result = load(in: container),
-            !result.findings.contains(where: { $0.severity == .error })
-        else { return nil }
+        load(in: container).flatMap(accepted)
+    }
+
+    private static func accepted(_ result: ControlsManifestLoader.Result) -> ControlsManifest? {
+        guard !result.findings.contains(where: { $0.severity == .error }) else { return nil }
         return result.manifest
     }
 
@@ -71,7 +78,17 @@ enum UserControlsFile {
         return write(data, in: container)
     }
 
-    static func updateBindings(in container: GameContainer, bindings: BindingMap?) -> Bool {
-        write(in: container, touch: acceptedManifest(in: container)?.touch, bindings: bindings)
+    /// A file that Empo cannot use stays as it is, because a write keeps
+    /// only the parts that Empo can read.
+    static func updateBindings(
+        in container: GameContainer, bindings: BindingMap?
+    ) throws(SaveRefusal) -> Bool {
+        guard exists(in: container) else {
+            return write(in: container, touch: nil, bindings: bindings)
+        }
+        guard let result = load(in: container) else { throw .fileHasErrors }
+        if result.ignoredNewerVersion { throw .fileNeedsNewerEmpo }
+        guard let manifest = accepted(result) else { throw .fileHasErrors }
+        return write(in: container, touch: manifest.touch, bindings: bindings)
     }
 }

@@ -27,20 +27,20 @@ enum BindingsCatalog {
         }
 
         /// An empty map removes the stored overrides.
-        func store(_ map: BindingMap) {
+        func store(_ map: BindingMap) throws(UserControlsFile.SaveRefusal) {
             guard !map.entries.isEmpty else {
-                deleteOverrides()
+                try deleteOverrides()
                 return
             }
             switch self {
-            case .thisGame(let container): BindingStore.savePerGame(container: container, map: map)
+            case .thisGame(let container): try BindingStore.savePerGame(container: container, map: map)
             case .allGames: BindingStore.saveGlobal(map)
             }
         }
 
-        func deleteOverrides() {
+        func deleteOverrides() throws(UserControlsFile.SaveRefusal) {
             switch self {
-            case .thisGame(let container): BindingStore.deletePerGame(container: container)
+            case .thisGame(let container): try BindingStore.deletePerGame(container: container)
             case .allGames: BindingStore.deleteGlobal()
             }
         }
@@ -360,16 +360,40 @@ enum BindingsCatalog {
         }
     }
 
-    static func save(source: BindingSource, target: BindingMap.Target, scope: Scope) {
+    static func save(
+        source: BindingSource, target: BindingMap.Target, scope: Scope
+    ) throws(UserControlsFile.SaveRefusal) {
         var map = scope.overrides ?? BindingMap()
         map.entries[source] = target
-        scope.store(map)
+        try scope.store(map)
     }
 
-    static func removeOverride(source: BindingSource, scope: Scope) {
+    static func removeOverride(source: BindingSource, scope: Scope) throws(UserControlsFile.SaveRefusal) {
         var map = scope.overrides ?? BindingMap()
         map.entries.removeValue(forKey: source)
-        scope.store(map)
+        try scope.store(map)
+    }
+
+    static func refusalMessage(_ refusal: UserControlsFile.SaveRefusal) -> LocalizedStringResource {
+        switch refusal {
+        case .fileHasErrors:
+            #if os(macOS)
+            """
+            Couldn't save your buttons. This game's controls file has errors. \
+            Fix it in Finder and try again.
+            """
+            #else
+            """
+            Couldn't save your buttons. This game's controls file has errors. \
+            Fix it in the Files app and try again.
+            """
+            #endif
+        case .fileNeedsNewerEmpo:
+            """
+            Couldn't save your buttons. This game's controls file needs a newer \
+            version of Empo. Update Empo and try again.
+            """
+        }
     }
 
     static func resetTitle(scope: Scope) -> LocalizedStringResource {
