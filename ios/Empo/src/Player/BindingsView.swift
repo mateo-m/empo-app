@@ -34,6 +34,10 @@ struct BindingsView: View {
     @State private var highlight = PressedRowHighlight()
     @State private var showResetConfirm = false
     @State private var refreshToken = UUID()
+    @State private var saveRefusal: UserControlsFile.SaveRefusal?
+    /// An alert does not show while the picker sheet closes, so the
+    /// refusal waits for the sheet to close.
+    @State private var pickerRefusal: UserControlsFile.SaveRefusal?
 
     private var sections: [BindingsCatalog.Section] {
         _ = refreshToken
@@ -111,9 +115,13 @@ struct BindingsView: View {
                 }
             }
             .resetBindingsAlert(
-                isPresented: $showResetConfirm, scope: scope, gameTitle: gameTitle
+                isPresented: $showResetConfirm, scope: scope, gameTitle: gameTitle, refusal: $saveRefusal
             )
-            .sheet(item: $step) { step in
+            .bindingsSaveRefusalAlert($saveRefusal)
+            .sheet(item: $step) {
+                saveRefusal = pickerRefusal
+                pickerRefusal = nil
+            } content: { step in
                 switch step {
                 case .capturingKey:
                     KeyCaptureSheet()
@@ -124,7 +132,11 @@ struct BindingsView: View {
                         scope: scope,
                         actions: actions
                     ) { target in
-                        BindingsCatalog.save(source: row.source, target: target, scope: scope)
+                        do throws(UserControlsFile.SaveRefusal) {
+                            try BindingsCatalog.save(source: row.source, target: target, scope: scope)
+                        } catch {
+                            pickerRefusal = error
+                        }
                     }
                 }
             }
@@ -207,10 +219,10 @@ struct BindingsView: View {
         .buttonStyle(.plain)
         .listRowBackground(highlight.background(for: row.id))
         .contextMenu {
-            RemoveOverrideButton(row: row, provenance: provenance, scope: scope)
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, refusal: $saveRefusal)
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            RemoveOverrideButton(row: row, provenance: provenance, scope: scope)
+            RemoveOverrideButton(row: row, provenance: provenance, scope: scope, refusal: $saveRefusal)
         }
     }
 }
