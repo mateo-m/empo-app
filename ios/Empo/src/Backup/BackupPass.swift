@@ -6,7 +6,7 @@ import os
 /// A game whose mode is still unanswered is skipped, per 3.5. The
 /// Backups screen asks about every such game before it starts a run.
 @MainActor
-final class BackupPass {
+final class BackupPass: BackupRunning {
 
     static let shared = BackupPass()
 

@@ -244,6 +244,25 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
     }
 
+    func testAnAdoptWaitsForTheRunningBackup() async throws {
+        _ = try addATarget()
+        let scheduler = BackupScheduler.shared
+        let pass = HeldPass()
+        let runnerBefore = scheduler.runner
+        scheduler.runner = pass
+        defer { scheduler.runner = runnerBefore }
+        let run = Task { await scheduler.run(trigger: .manual) }
+        await pass.started()
+        let adopted = "adopt-test-\(UUID().uuidString)"
+
+        try await BackupNamespaceMove.adopt(adopted)
+        scheduler.pauseTheRun()
+        _ = await run.value
+
+        XCTAssertEqual(pass.namespaceAtEnd, namespaceBefore)
+        XCTAssertEqual(try BackupKeychain.namespaceId(), adopted)
+    }
+
     func testARebuildThatWasNotMarkedIsMarkedAtTheNextOpen() throws {
         let target = try addATarget()
         let database = FileManager.default.temporaryDirectory
@@ -306,6 +325,29 @@ final class DamagedBackupSettingsTests: XCTestCase {
         try removeTheSyncSettings()
         struct Locked: Error {}
         XCTAssertThrowsError(try SyncFileStore(deviceActorId: { throw Locked() }).state())
+    }
+
+    /// Runs until a pause cancels it.
+    private final class HeldPass: BackupRunning {
+        private var didStart = false
+        private var startWaiter: CheckedContinuation<Void, Never>?
+        private(set) var namespaceAtEnd: String?
+
+        func runBackup(
+            scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
+        ) async -> BackupPassResult {
+            didStart = true
+            startWaiter?.resume()
+            startWaiter = nil
+            try? await Task.sleep(for: .seconds(600))
+            namespaceAtEnd = try? BackupKeychain.namespaceId()
+            return BackupPassResult(didFinish: true)
+        }
+
+        func started() async {
+            guard !didStart else { return }
+            await withCheckedContinuation { startWaiter = $0 }
+        }
     }
 
     private let otherDevice = WriterClaim(

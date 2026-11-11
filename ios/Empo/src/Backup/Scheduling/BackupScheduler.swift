@@ -2,6 +2,13 @@ import Foundation
 import GameProbe
 import UIKit
 
+@MainActor
+protocol BackupRunning: AnyObject {
+    func runBackup(
+        scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
+    ) async -> BackupPassResult
+}
+
 struct BackupPassResult: Sendable {
     var didFinish: Bool
     var targets: [BackupPassTarget]
@@ -37,6 +44,8 @@ final class BackupScheduler {
     static let shared = BackupScheduler()
 
     private init() {}
+
+    var runner: any BackupRunning = BackupPass.shared
 
     /// The network cause the stale line carries, per 7.4. It is
     /// `waitingForWiFi` while the switch is off and the device is on
@@ -374,7 +383,7 @@ final class BackupScheduler {
                 BackupRunMonitor.shared.runEnds(cancelled: Task.isCancelled)
                 inFlight = nil
             }
-            return await BackupPass.shared.runBackup(
+            return await runner.runBackup(
                 scope: BackupTriggerPlan.scope(of: trigger, press: press),
                 trigger: trigger,
                 progress: progress)
