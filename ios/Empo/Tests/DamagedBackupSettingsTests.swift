@@ -14,6 +14,7 @@ final class DamagedBackupSettingsTests: XCTestCase {
     private var saved: [URL: Data?] = [:]
     private var namesBefore: [URL: Set<String>] = [:]
     private var container: GameContainer!
+    private var namespaceBefore = ""
 
     private var layout: BackupRootLayout { BackupRoot.layout }
     private var conflictsFile: URL {
@@ -31,6 +32,7 @@ final class DamagedBackupSettingsTests: XCTestCase {
             layout.applicationSupport.appendingPathComponent(SyncState.fileName),
             layout.root.appendingPathComponent("ledger-rebuild.json"),
             layout.root.appendingPathComponent("namespace-clear.json"),
+            layout.syncDocumentFile,
         ]
         for url in kept {
             saved[url] = try? Data(contentsOf: url)
@@ -38,12 +40,15 @@ final class DamagedBackupSettingsTests: XCTestCase {
         for directory in [layout.applicationSupport, layout.root] {
             namesBefore[directory] = names(in: directory)
         }
+        namespaceBefore = try BackupKeychain.namespaceId()
         container = GameContainer(folderName: "damaged-settings-\(UUID().uuidString)")
         try FileManager.default.createDirectory(
             at: container.empoStateURL, withIntermediateDirectories: true)
     }
 
     override func tearDown() async throws {
+        try? FileManager.default.removeItem(at: rebuildList)
+        try? BackupKeychain.adoptNamespaceId(namespaceBefore)
         for (url, data) in saved {
             if let data {
                 try? data.write(to: url, options: .atomic)
@@ -191,11 +196,109 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try damagedCopies(of: list.fileURL), [damaged])
     }
 
+    func testADamagedWaitListStaysWhileTheLocationListDoesNotRead() throws {
+        let list = BackupTargetWaitList(fileName: "damaged-wait-\(UUID().uuidString).json")
+        try damaged.write(to: list.fileURL)
+        try damaged.write(to: layout.targetsFile)
+
+        XCTAssertThrowsError(try list.ids())
+        XCTAssertEqual(try Data(contentsOf: list.fileURL), damaged)
+    }
+
+    func testADamagedWaitListStaysUntilTheSnapshotListRebuildIsMarked() throws {
+        _ = try addATarget()
+        let clearList = layout.root.appendingPathComponent("namespace-clear.json")
+        try damaged.write(to: clearList)
+        try blockTheRebuildList()
+
+        XCTAssertThrowsError(
+            try BackupNamespaceMove.clearIfWaiting(targetId: "any", store: try BackupStateStore(url: nil)))
+        XCTAssertEqual(try Data(contentsOf: clearList), damaged)
+    }
+
+    func testAnAdoptStopsWhenTheLocationListDoesNotRead() throws {
+        _ = try addATarget()
+        try damaged.write(to: layout.targetsFile)
+
+        XCTAssertThrowsError(try BackupNamespaceMove.move(to: "adopt-test-\(UUID().uuidString)"))
+        XCTAssertEqual(try BackupKeychain.namespaceId(), namespaceBefore)
+    }
+
+    func testAnAdoptRebuildsTheSnapshotListOfEachLocation() throws {
+        let target = try addATarget()
+
+        try BackupNamespaceMove.move(to: "adopt-test-\(UUID().uuidString)")
+
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
+    }
+
+    func testARebuildThatWasNotMarkedIsMarkedAtTheNextOpen() throws {
+        let target = try addATarget()
+        let database = FileManager.default.temporaryDirectory
+            .appendingPathComponent("state-\(UUID().uuidString).sqlite")
+        defer { BackupStateStore.removeDatabaseFiles(at: database) }
+        try blockTheRebuildList()
+        (try? BackupRoot.openStateStore(at: database))?.close()
+        try FileManager.default.removeItem(at: rebuildList)
+
+        try BackupRoot.openStateStore(at: database).close()
+
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
+    }
+
+    func testAJoinThatCannotRemoveTheOldDocumentKeepsTheOldGroup() throws {
+        try removeTheSyncSettings()
+        try SyncStore.update { $0.startAGroup() }
+        let groupBefore = try SyncStore.state().groupId
+        let document = layout.syncDocumentFile
+        try Data("old group".utf8).write(to: document)
+        // The system refuses to delete or move a locked file.
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: document.path)
+        defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: document.path) }
+
+        SyncJoin.switchTheGroup(to: SyncGroup.makeId())
+
+        let joined = try SyncStore.state().groupId != groupBefore
+        XCTAssertFalse(joined && FileManager.default.fileExists(atPath: document.path))
+    }
+
+    func testAJoinRemovesTheOldDocument() throws {
+        try removeTheSyncSettings()
+        try Data("old group".utf8).write(to: layout.syncDocumentFile)
+        let group = SyncGroup.makeId()
+
+        SyncJoin.switchTheGroup(to: group)
+
+        XCTAssertEqual(try SyncStore.state().groupId, group)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: layout.syncDocumentFile.path))
+    }
+
+    func testThePassStopsWhenTheDeviceActorDoesNotRead() throws {
+        try removeTheSyncSettings()
+        struct Locked: Error {}
+        XCTAssertThrowsError(try SyncFileStore(deviceActorId: { throw Locked() }).state())
+    }
+
     private let otherDevice = WriterClaim(
         namespaceId: "other", deviceId: "other-device", deviceName: "Other iPad", claimedAt: Date())
 
     private func runResult(stop: BackupRunStop?) -> BackupRunResult {
         BackupRunResult(runId: "run", namespaceId: "mine", outcome: .failed, stop: stop)
+    }
+
+    private func removeTheSyncSettings() throws {
+        do {
+            try FileManager.default.removeItem(
+                at: layout.applicationSupport.appendingPathComponent(SyncState.fileName))
+        } catch CocoaError.fileNoSuchFile {}
+    }
+
+    private var rebuildList: URL { layout.root.appendingPathComponent("ledger-rebuild.json") }
+
+    /// A folder in place of the file makes every write of the list fail.
+    private func blockTheRebuildList() throws {
+        try? FileManager.default.removeItem(at: rebuildList)
+        try FileManager.default.createDirectory(at: rebuildList, withIntermediateDirectories: true)
     }
 
     private func addATarget() throws -> TargetDescriptor {
