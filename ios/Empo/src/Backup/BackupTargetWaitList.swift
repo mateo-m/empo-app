@@ -11,11 +11,9 @@ import GameProbe
 struct BackupTargetWaitList {
 
     let fileURL: URL
-    private let afterDamage: @MainActor (Set<String>) throws -> Void
 
-    init(fileName: String, afterDamage: @escaping @MainActor (Set<String>) throws -> Void = { _ in }) {
+    init(fileName: String) {
         fileURL = BackupRoot.layout.root.appendingPathComponent(fileName)
-        self.afterDamage = afterDamage
     }
 
     func ids() throws -> Set<String> {
@@ -23,10 +21,9 @@ struct BackupTargetWaitList {
         do {
             return try JSONDecoder().decode(Set<String>.self, from: data)
         } catch is DecodingError {
-            // The damaged file stays until its replacement and the work after it are saved, so a
-            // failure here makes every target wait again at the next read.
+            // The damaged file stays until its replacement is saved, so a failure here makes
+            // every target wait again at the next read.
             let every = Set(try BackupTargets.read().map(\.id))
-            try afterDamage(every)
             try BackupRoot.copyAside(fileURL)
             try write(every)
             return every

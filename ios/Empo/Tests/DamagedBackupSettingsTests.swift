@@ -251,15 +251,16 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: list.fileURL), damaged)
     }
 
-    func testADamagedWaitListStaysUntilTheSnapshotListRebuildIsMarked() throws {
-        _ = try addATarget()
-        let clearList = layout.root.appendingPathComponent("namespace-clear.json")
-        try damaged.write(to: clearList)
+    func testAClearThatCannotMarkItsRebuildKeepsItsLocationWaiting() throws {
+        let target = try addATarget()
+        let clearList = BackupTargetWaitList(fileName: "namespace-clear.json")
+        try clearList.add([target.id])
         try blockTheRebuildList()
 
         XCTAssertThrowsError(
-            try BackupNamespaceMove.clearIfWaiting(targetId: "any", store: try BackupStateStore(url: nil)))
-        XCTAssertEqual(try Data(contentsOf: clearList), damaged)
+            try BackupNamespaceMove.clearIfWaiting(targetId: target.id, store: try BackupStateStore(url: nil))
+        )
+        XCTAssertTrue(try clearList.ids().contains(target.id))
     }
 
     func testAnAdoptStopsWhenTheLocationListDoesNotRead() throws {
@@ -279,7 +280,6 @@ final class DamagedBackupSettingsTests: XCTestCase {
 
         XCTAssertEqual(try BackupKeychain.namespaceId(), namespaceBefore)
         XCTAssertTrue(try BackupTargetWaitList(fileName: "namespace-clear.json").ids().contains(target.id))
-        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
     }
 
     func testASplitThatCannotMarkItsRebuildStillClearsItsLocationBeforeItsNextRun() throws {

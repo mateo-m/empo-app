@@ -9,8 +9,7 @@ enum BackupNamespaceMove {
 
     /// Clearing the rows clears the snapshot list too, so each target
     /// that clears also rebuilds its list.
-    private static let waiting = BackupTargetWaitList(
-        fileName: "namespace-clear.json", afterDamage: BackupLedgerRebuild.mark)
+    private static let waiting = BackupTargetWaitList(fileName: "namespace-clear.json")
 
     /// A pass in flight writes rows of the old namespace after they
     /// clear, so no pass runs during the move.
@@ -25,10 +24,7 @@ enum BackupNamespaceMove {
         do {
             try move(to: namespaceId, except: targetId)
         } catch {
-            // A move can fail because the rebuild list does not write, so
-            // the clear goes first. The clear marks the rebuild again.
             try waiting.add([targetId])
-            try BackupLedgerRebuild.mark([targetId])
             throw error
         }
     }
