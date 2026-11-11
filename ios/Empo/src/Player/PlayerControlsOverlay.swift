@@ -177,7 +177,7 @@ struct PlayerControlsOverlay: View {
         guard dragOwner == key else { return }
         dragOwner = nil
         lastDragResolved = nil
-        layout.save()
+        try? layout.save()
     }
 
     @ViewBuilder

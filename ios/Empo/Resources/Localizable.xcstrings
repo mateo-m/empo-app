@@ -16865,6 +16865,64 @@
         }
       }
     },
+    "Couldn't save your layout. Free up some space and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Layout konnte nicht gespeichert werden. Schaff etwas Platz und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar tu diseño. Libera algo de espacio e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer ta disposition. Libère un peu d'espace et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare il layout. Libera un po' di spazio e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイアウトを保存できませんでした。空き容量を増やして、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "레이아웃을 저장하지 못했어요. 공간을 조금 확보한 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seu layout. Libere um pouco de espaço e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить раскладку. Освободите немного места и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的布局。请腾出一些空间，然后再试一次。"
+          }
+        }
+      }
+    },
     "Couldn't sign in" : {
       "localizations" : {
         "de" : {
@@ -63985,6 +64043,64 @@
         }
       }
     },
+    "This game's controls need a newer version of Empo. Update Empo to use them." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Steuerung dieses Spiels braucht eine neuere Version von Empo. Aktualisiere Empo, um sie zu nutzen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los controles de este juego necesitan una versión más reciente de Empo. Actualiza Empo para usarlos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les commandes de ce jeu nécessitent une version plus récente d'Empo. Mets à jour Empo pour les utiliser."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I controlli di questo gioco richiedono una versione più recente di Empo. Aggiorna Empo per usarli."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このゲームの操作設定には新しいバージョンのEmpoが必要です。使うにはEmpoをアップデートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 게임의 컨트롤은 최신 버전의 Empo가 필요해요. 사용하려면 Empo를 업데이트해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os controles deste jogo precisam de uma versão mais recente do Empo. Atualize o Empo para usá-los."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для управления этой игрой нужна более новая версия Empo. Обновите Empo, чтобы использовать его."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个游戏的按键设置需要更新版本的 Empo。请更新 Empo 后使用。"
+          }
+        }
+      }
+    },
     "This JoiPlay archive uses \"%@\", which Empo can't run. Empo imports only JoiPlay archives of %@." : {
       "comment" : "First placeholder: the game type the archive names. Second: a list of game kinds, such as \"RPG Maker XP, VX, and VX Ace games\".",
       "localizations" : {
@@ -65968,6 +66084,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个布局是只读的。想要自己的布局，就复制一份再编辑副本。"
+          }
+        }
+      }
+    },
+    "This layout profile needs a newer version of Empo. Update Empo to use it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Layout-Profil braucht eine neuere Version von Empo. Aktualisiere Empo, um es zu nutzen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este perfil de controles necesita una versión más reciente de Empo. Actualiza Empo para usarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce profil de disposition nécessite une version plus récente d'Empo. Mets à jour Empo pour l'utiliser."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo profilo layout richiede una versione più recente di Empo. Aggiorna Empo per usarlo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このレイアウトプロファイルには新しいバージョンのEmpoが必要です。使うにはEmpoをアップデートしてください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 레이아웃 프로필은 최신 버전의 Empo가 필요해요. 사용하려면 Empo를 업데이트해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este perfil de layout precisa de uma versão mais recente do Empo. Atualize o Empo para usá-lo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Для этого профиля раскладки нужна более новая версия Empo. Обновите Empo, чтобы его использовать."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个布局方案需要更新版本的 Empo。请更新 Empo 后使用。"
           }
         }
       }

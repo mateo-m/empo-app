@@ -10,10 +10,7 @@ public enum KeyCodeTable {
         let displayName: String
     }
 
-    // SPEC section 6. The table order is canonical for `allCodes` and
-    // the reverse lookup.
     private static let entries: [Entry] = [
-        // KeyA … KeyZ → 4 … 29
         Entry(code: "KeyA", scancode: 4, displayName: "A"),
         Entry(code: "KeyB", scancode: 5, displayName: "B"),
         Entry(code: "KeyC", scancode: 6, displayName: "C"),
@@ -40,7 +37,6 @@ public enum KeyCodeTable {
         Entry(code: "KeyX", scancode: 27, displayName: "X"),
         Entry(code: "KeyY", scancode: 28, displayName: "Y"),
         Entry(code: "KeyZ", scancode: 29, displayName: "Z"),
-        // Digit1 … Digit9, Digit0 → 30 … 38, 39
         Entry(code: "Digit1", scancode: 30, displayName: "1"),
         Entry(code: "Digit2", scancode: 31, displayName: "2"),
         Entry(code: "Digit3", scancode: 32, displayName: "3"),
@@ -127,29 +123,23 @@ public enum KeyCodeTable {
         Dictionary(uniqueKeysWithValues: entries.map { ($0.code, $0) })
     }()
 
-    // Keyed lookup, not a scan: every hardware key press asks for it.
     private static let byScancode: [Int32: Entry] = {
         Dictionary(entries.map { ($0.scancode, $0) }, uniquingKeysWith: { first, _ in first })
     }()
 
-    /// W3C KeyboardEvent.code -> SDL/USB-HID scancode. nil means an
-    /// unknown code.
+    /// Maps a W3C `KeyboardEvent.code` to an SDL/USB-HID scancode.
     public static func scancode(for code: String) -> Int32? {
         byCode[code]?.scancode
     }
 
-    /// Short human label for the edit UI and auto-labels.
     public static func displayName(for code: String) -> String? {
         byCode[code]?.displayName
     }
 
-    /// Reverse lookup (first match wins). Hardware key edges and the
-    /// migration of existing layouts both use it.
     public static func code(for scancode: Int32) -> String? {
         byScancode[scancode]?.code
     }
 
-    /// All codes, stable order (table order), for pickers.
     public static var allCodes: [String] {
         entries.map(\.code)
     }

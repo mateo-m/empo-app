@@ -195,10 +195,10 @@ final class ScreenRegionTests: XCTestCase {
     }
 
     func testOverlayFlagPerOrientationThroughTheStore() throws {
-        store.createProfile("P", touch: sampleTouch())
+        try store.createProfile("P", touch: sampleTouch())
         let portrait = ScreenRegion(x: 0, y: 0.5, w: 1, h: 0.5, overlay: true)
         let landscape = ScreenRegion(x: 0, y: 0, w: 1, h: 1)
-        XCTAssertTrue(store.writeScreen("P", portrait: .region(portrait), landscape: .region(landscape)))
+        try store.writeScreen("P", portrait: .region(portrait), landscape: .region(landscape))
 
         let read = try XCTUnwrap(store.readScreen("P"))
         XCTAssertEqual(read.portrait?.overlay, true)
@@ -337,42 +337,42 @@ final class ScreenRegionTests: XCTestCase {
 
     // MARK: - Store
 
-    func testReadScreenMissingFileReturnsNil() {
-        store.createProfile("P", touch: sampleTouch())
+    func testReadScreenMissingFileReturnsNil() throws {
+        try store.createProfile("P", touch: sampleTouch())
         XCTAssertNil(store.readScreen("P"))
     }
 
     func testWriteAndReadScreen() throws {
-        store.createProfile("P", touch: sampleTouch())
+        try store.createProfile("P", touch: sampleTouch())
         let region = ScreenRegion(x: 0.1, y: 0.2, w: 0.5, h: 0.5)
-        XCTAssertTrue(store.writeScreen("P", portrait: .region(region), landscape: nil))
+        try store.writeScreen("P", portrait: .region(region), landscape: nil)
         let read = try XCTUnwrap(store.readScreen("P"))
         XCTAssertEqual(read.portrait, .region(region))
         XCTAssertNil(read.landscape)
     }
 
-    func testWriteScreenZeroOrientationsDeletesTheFile() {
-        store.createProfile("P", touch: sampleTouch())
-        store.writeScreen(
+    func testWriteScreenZeroOrientationsDeletesTheFile() throws {
+        try store.createProfile("P", touch: sampleTouch())
+        try store.writeScreen(
             "P", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.screenURL("P").path))
-        XCTAssertTrue(store.writeScreen("P", portrait: nil, landscape: nil))
+        try store.writeScreen("P", portrait: nil, landscape: nil)
         XCTAssertFalse(FileManager.default.fileExists(atPath: store.screenURL("P").path))
     }
 
-    func testWriteScreenOnMissingProfileFails() {
-        XCTAssertFalse(
-            store.writeScreen(
+    func testWriteScreenOnMissingProfileFails() throws {
+        XCTAssertThrowsError(
+            try store.writeScreen(
                 "Ghost", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil))
     }
 
     func testDuplicateCarriesScreenFile() throws {
-        store.createProfile("P", touch: sampleTouch())
+        try store.createProfile("P", touch: sampleTouch())
         let region = ScreenRegion(x: 0, y: 0.1, w: 0.9, h: 0.6)
-        store.writeScreen("P", portrait: .region(region), landscape: nil)
+        try store.writeScreen("P", portrait: .region(region), landscape: nil)
         store.appendLog("P", file: ScreenRegionFile.fileName, line: "S005: test")
 
-        let copy = try XCTUnwrap(store.duplicateProfile("P"))
+        let copy = try store.duplicateProfile("P")
         let read = try XCTUnwrap(store.readScreen(copy))
         XCTAssertEqual(read.portrait, .region(region))
         // Logs describe the original and must not travel.
@@ -382,25 +382,25 @@ final class ScreenRegionTests: XCTestCase {
     }
 
     func testRenameMovesScreenFile() throws {
-        store.createProfile("P", touch: sampleTouch())
+        try store.createProfile("P", touch: sampleTouch())
         let region = ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5)
-        store.writeScreen("P", portrait: nil, landscape: .region(region))
-        XCTAssertTrue(store.renameProfile(from: "P", to: "Q"))
+        try store.writeScreen("P", portrait: nil, landscape: .region(region))
+        try store.renameProfile(from: "P", to: "Q")
         let read = try XCTUnwrap(store.readScreen("Q"))
         XCTAssertEqual(read.landscape, .region(region))
         XCTAssertNil(store.readScreen("P"))
     }
 
-    func testDeleteRemovesScreenFile() {
-        store.createProfile("P", touch: sampleTouch())
-        store.writeScreen(
+    func testDeleteRemovesScreenFile() throws {
+        try store.createProfile("P", touch: sampleTouch())
+        try store.writeScreen(
             "P", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
-        XCTAssertTrue(store.deleteProfile("P"))
+        try store.deleteProfile("P")
         XCTAssertNil(store.readScreen("P"))
     }
 
     func testPerFileLogPaths() throws {
-        store.createProfile("P", touch: sampleTouch())
+        try store.createProfile("P", touch: sampleTouch())
         store.appendLog("P", line: "V001: controls finding")
         store.appendLog("P", file: ScreenRegionFile.fileName, line: "S001: screen finding")
         let controlsLog = store.profileURL("P").appendingPathComponent("controls.json.log")
@@ -422,12 +422,12 @@ final class ScreenRegionTests: XCTestCase {
             readScreen: { self.store.readScreen($0) })
     }
 
-    func testNamedPinReadsThatProfileOnly() {
-        store.createProfile("Mine", touch: sampleTouch())
-        store.createProfile("Default", touch: sampleTouch())
+    func testNamedPinReadsThatProfileOnly() throws {
+        try store.createProfile("Mine", touch: sampleTouch())
+        try store.createProfile("Default", touch: sampleTouch())
         let mine = ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5)
-        store.writeScreen("Mine", portrait: .region(mine), landscape: nil)
-        store.writeScreen(
+        try store.writeScreen("Mine", portrait: .region(mine), landscape: nil)
+        try store.writeScreen(
             "Default", portrait: .region(ScreenRegion(x: 0.5, y: 0.5, w: 0.5, h: 0.5)),
             landscape: nil)
 
@@ -436,13 +436,13 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertEqual(result.portrait.provenance, .profile("Mine"))
     }
 
-    func testNamedPinIsTerminalOverTheDefault() {
+    func testNamedPinIsTerminalOverTheDefault() throws {
         // The pinned profile has no screen file. A default region
         // exists. The pin is terminal: engine-auto, never the
         // default's region.
-        store.createProfile("Mine", touch: sampleTouch())
-        store.createProfile("Default", touch: sampleTouch())
-        store.writeScreen(
+        try store.createProfile("Mine", touch: sampleTouch())
+        try store.createProfile("Default", touch: sampleTouch())
+        try store.writeScreen(
             "Default", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
 
         let result = resolve(pin: .profile("Mine"), defaultName: "Default")
@@ -451,9 +451,9 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertNil(result.landscape.placement?.region)
     }
 
-    func testGamePinSkipsTheDefault() {
-        store.createProfile("Default", touch: sampleTouch())
-        store.writeScreen(
+    func testGamePinSkipsTheDefault() throws {
+        try store.createProfile("Default", touch: sampleTouch())
+        try store.writeScreen(
             "Default", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
 
         let result = resolve(pin: .gameLayout, defaultName: "Default")
@@ -461,10 +461,10 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertNil(result.portrait.placement?.region)
     }
 
-    func testDefaultPinAndChainReadTheDefault() {
-        store.createProfile("Default", touch: sampleTouch())
+    func testDefaultPinAndChainReadTheDefault() throws {
+        try store.createProfile("Default", touch: sampleTouch())
         let region = ScreenRegion(x: 0, y: 0.25, w: 1, h: 0.5)
-        store.writeScreen("Default", portrait: .region(region), landscape: nil)
+        try store.writeScreen("Default", portrait: .region(region), landscape: nil)
 
         for pin in [LayoutPin.defaultProfile, .followChain] {
             let result = resolve(pin: pin, defaultName: "Default")
@@ -479,10 +479,10 @@ final class ScreenRegionTests: XCTestCase {
         XCTAssertEqual(result.landscape.provenance, .engineAuto)
     }
 
-    func testOrientationsResolveIndependently() {
-        store.createProfile("P", touch: sampleTouch())
+    func testOrientationsResolveIndependently() throws {
+        try store.createProfile("P", touch: sampleTouch())
         let landscape = ScreenRegion(x: 0.1, y: 0, w: 0.8, h: 1)
-        store.writeScreen("P", portrait: nil, landscape: .region(landscape))
+        try store.writeScreen("P", portrait: nil, landscape: .region(landscape))
 
         let result = resolve(pin: .profile("P"), defaultName: nil)
         XCTAssertNil(result.portrait.placement?.region)
@@ -492,7 +492,7 @@ final class ScreenRegionTests: XCTestCase {
     }
 
     func testInvalidScreenFileResolvesAsAbsent() throws {
-        store.createProfile("P", touch: sampleTouch())
+        try store.createProfile("P", touch: sampleTouch())
         try Data("garbage".utf8).write(to: store.screenURL("P"))
 
         let result = resolve(pin: .profile("P"), defaultName: nil)
@@ -503,22 +503,7 @@ final class ScreenRegionTests: XCTestCase {
     // MARK: - Migration interplay
 
     private func builtins() -> ProfileMaterializer.Builtins {
-        ProfileMaterializer.Builtins(
-            portrait: TouchLayout(
-                dpad: DPadSpec(x: 0.13, y: 0.72, size: 140, opacity: 1),
-                buttons: [
-                    ButtonSpec(label: "A", key: "Enter", x: 0.7, y: 0.67, size: 56, opacity: 1)
-                ],
-                actionButtons: []
-            ),
-            landscape: TouchLayout(
-                dpad: DPadSpec(x: 0.10, y: 0.65, size: 140, opacity: 1),
-                buttons: [
-                    ButtonSpec(label: "A", key: "Enter", x: 0.8, y: 0.59, size: 56, opacity: 1)
-                ],
-                actionButtons: []
-            )
-        )
+        ProfileMaterializer.Builtins(keys: [BuiltinLayout.Key(label: "A", code: "Enter")])
     }
 
     private func migrationContext(
@@ -546,39 +531,39 @@ final class ScreenRegionTests: XCTestCase {
         )
     }
 
-    func testMigrationDedupeSkipsScreenBearingProfiles() {
+    func testMigrationDedupeSkipsScreenBearingProfiles() throws {
         // A profile whose controls bytes match the migrating game's
         // layout, but which carries a screen region: pinning to it
         // would silently move the game's screen.
         let touch = sampleTouch()
         let materialized = ProfileMaterializer.materialize(
             user: touch, manifest: nil, builtins: builtins(), metrics: .reference)
-        store.createProfile("Twin", touch: materialized.section)
-        store.writeScreen(
+        try store.createProfile("Twin", touch: materialized.section)
+        try store.writeScreen(
             "Twin", portrait: .region(ScreenRegion(x: 0, y: 0, w: 0.5, h: 0.5)), landscape: nil)
 
         let action = ProfileMigration.decide(
-            context: migrationContext(userTouch: touch), builtins: builtins())
+            context: migrationContext(userTouch: touch), builtins: builtins(), metrics: .reference)
         guard case .createAndPin = action else {
             return XCTFail("expected createAndPin, got \(action)")
         }
     }
 
-    func testMigrationDedupeStillMatchesScreenlessProfiles() {
+    func testMigrationDedupeStillMatchesScreenlessProfiles() throws {
         let touch = sampleTouch()
         let materialized = ProfileMaterializer.materialize(
             user: touch, manifest: nil, builtins: builtins(), metrics: .reference)
-        store.createProfile("Twin", touch: materialized.section)
+        try store.createProfile("Twin", touch: materialized.section)
 
         let action = ProfileMigration.decide(
-            context: migrationContext(userTouch: touch), builtins: builtins())
+            context: migrationContext(userTouch: touch), builtins: builtins(), metrics: .reference)
         guard case .pinToExisting(let profile, _, _) = action else {
             return XCTFail("expected pinToExisting, got \(action)")
         }
         XCTAssertEqual(profile, "Twin")
     }
 
-    func testMigrationRecordIdempotenceWithScreenFilePresent() {
+    func testMigrationRecordIdempotenceWithScreenFilePresent() throws {
         // The record hash covers the game's own touch section, not
         // the profile folder: adding screen.json to the profile
         // later must not re-trigger migration.
@@ -590,13 +575,13 @@ final class ScreenRegionTests: XCTestCase {
         var record = MigrationRecord()
         record.games["game-1"] = MigrationRecord.Entry(hash: hash, profile: "Mine")
 
-        store.createProfile("Mine", touch: materialized.section)
-        store.writeScreen(
+        try store.createProfile("Mine", touch: materialized.section)
+        try store.writeScreen(
             "Mine", portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil)
 
         let action = ProfileMigration.decide(
             context: migrationContext(userTouch: touch, record: record),
-            builtins: builtins())
+            builtins: builtins(), metrics: .reference)
         XCTAssertEqual(action, .none)
     }
 }

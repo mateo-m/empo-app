@@ -445,4 +445,19 @@ final class ControlsManifestSerializerTests: XCTestCase {
         XCTAssertEqual(button?.size, 100)
         XCTAssertEqual(button?.opacity, 0.2)
     }
+
+    func testSerializerKeepsAtMost21ControlsAndCutsLabels() throws {
+        let buttons = (0..<25).map {
+            ButtonSpec(label: "LONGLABEL\($0)", key: "Enter", x: 0.5, y: 0.5, size: 56, opacity: 1)
+        }
+        let layout = TouchLayout(
+            dpad: nil, buttons: buttons,
+            actionButtons: [ActionButtonSpec(action: EmpoActionCatalog.fastForwardHold, x: 0.5, y: 0.5, size: 56, opacity: 1)])
+        let data = ControlsManifestSerializer.serialize(TouchSection(portrait: layout, landscape: nil))
+        let read = try XCTUnwrap(ControlsManifestLoader.parse(data: data).manifest?.touch?.portrait)
+        XCTAssertEqual(
+            (read.buttons?.count ?? 0) + (read.actionButtons?.count ?? 0),
+            ControlLimits.maxButtonsPerOrientation)
+        XCTAssertEqual(read.buttons?.first?.label, "LONGLABE")
+    }
 }

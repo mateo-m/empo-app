@@ -6,9 +6,6 @@ import SwiftUI
 
 // MARK: - Picker
 
-/// Pin picker for one game, shared by Game Settings and the in-player
-/// More sheet. Rows map 1:1 onto the stored pin states, and the
-/// "Automatic" row names what the chain resolves to today.
 struct LayoutProfilePickerSheet: View {
     let container: GameContainer
 
@@ -35,13 +32,7 @@ struct LayoutProfilePickerSheet: View {
                         target: .followChain
                     )
                     if gameShipsLayout {
-                        row(
-                            label: String(
-                                localized: "Game layout",
-                                comment: "The control layout that a game ships with."),
-                            detail: nil,
-                            target: .gameLayout
-                        )
+                        row(label: gameLayoutLabel, detail: nil, target: .gameLayout)
                     }
                     if LayoutProfilesManager.defaultProfileName != nil {
                         row(label: String(localized: "Default profile"), detail: nil, target: .defaultProfile)
@@ -74,25 +65,27 @@ struct LayoutProfilePickerSheet: View {
         .onAppear(perform: reload)
     }
 
+    private var gameLayoutLabel: String {
+        String(localized: "Game layout", comment: "The control layout that a game ships with.")
+    }
+
     private func reload() {
         let store = LayoutProfilesManager.store
         pin = store.loadPin(forGameFolder: container.url).pin
         profiles = store.listProfiles()
-        // What Automatic yields, ignoring any pin. The SAME
-        // resolver entry as the bound layout, so the row cannot
-        // drift from what the player does.
         let ambient = LayoutResolution.resolve(
             pin: .followChain,
             gameRoot: container.gameURL,
             store: store,
-            defaultProfileName: LayoutProfilesManager.defaultProfileName)
-        // Game layout outranks the default in the pinless chain, so
-        // the ambient outcome IS the occupancy signal.
+            defaultProfileName: LayoutProfilesManager.defaultProfileName,
+            metrics: .reference)
+        // The game layout comes before the default profile in the
+        // chain, so the game has a layout exactly when the chain
+        // without a pin picks it.
         gameShipsLayout = ambient.provenance == .gameLayout
         switch ambient.provenance {
         case .gameLayout:
-            automaticResolution = String(
-                localized: "Game layout", comment: "The control layout that a game ships with.")
+            automaticResolution = gameLayoutLabel
         case .defaultProfile(let name):
             automaticResolution = name
         default:
@@ -120,17 +113,18 @@ struct LayoutProfilePickerSheet: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard pin != target else { return }
-            pin = target
-            LayoutProfilesManager.store.writePin(target, forGameFolder: container.url)
-            LayoutProfilesManager.postPinChange(gameID: container.id, from: nil)
+            do {
+                try LayoutProfilesManager.writePin(target, for: container, from: nil)
+                pin = target
+            } catch {
+                NSLog("layout pin: write failed for \(container.id): \(error)")
+            }
         }
     }
 }
 
 // MARK: - Manager
 
-/// App-settings list of layout profiles: create, rename, duplicate,
-/// delete, set default. Row tap opens the editor.
 struct LayoutProfilesSettingsView: View {
     @State private var profiles: [String] = []
     @State private var defaultName: String?
@@ -138,7 +132,6 @@ struct LayoutProfilesSettingsView: View {
     @State private var renameText = ""
     @State private var deleting: String?
     @State private var showCreateDialog = false
-    @State private var createText = ""
     @State private var showNameError = false
     @State private var searchText = ""
 
@@ -176,10 +169,9 @@ struct LayoutProfilesSettingsView: View {
                 }
             }
 
-            // ONE section with the ForEach as its direct content:
-            // the rows read as one list, and List instantiates and
-            // diffs them lazily by their stable name IDs. The shape
-            // that stays smooth when the list grows.
+            // The ForEach must be the direct content of one section,
+            // so that List makes and compares the rows lazily. Other
+            // shapes stutter on a long list.
             if !visibleProfiles.isEmpty {
                 Section("Custom profiles") {
                     ForEach(visibleProfiles, id: \.self) { name in
@@ -194,8 +186,6 @@ struct LayoutProfilesSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    createText = LayoutProfilesManager.store.uniqueName(
-                        base: String(localized: "My layout", comment: "Name of a new layout profile."))
                     showCreateDialog = true
                 } label: {
                     Image(systemName: "plus")
@@ -204,13 +194,7 @@ struct LayoutProfilesSettingsView: View {
             }
         }
         .onAppear(perform: reload)
-        .alert("New profile", isPresented: $showCreateDialog) {
-            TextField("Name", text: $createText)
-            Button("Create") { createBlank() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("A new profile starts from the Empo default layout.")
-        }
+        .newProfileAlert(isPresented: $showCreateDialog, onCreate: reload)
         .alert("Rename profile", isPresented: renameBinding) {
             TextField("Name", text: $renameText)
             Button("Rename") { performRename() }
@@ -292,7 +276,11 @@ struct LayoutProfilesSettingsView: View {
                 renaming = name
             }
             Button("Duplicate") {
-                _ = LayoutProfilesManager.store.duplicateProfile(name)
+                do {
+                    _ = try LayoutProfilesManager.store.duplicateProfile(name)
+                } catch {
+                    NSLog("layout profile: duplicate of \(name) failed: \(error)")
+                }
                 reload()
             }
             Button("Delete", role: .destructive) {
@@ -301,29 +289,15 @@ struct LayoutProfilesSettingsView: View {
         }
     }
 
-    private func createBlank() {
-        let store = LayoutProfilesManager.store
-        guard let name = LayoutProfileStore.validatedName(createText),
-            !store.profileExists(name)
-        else {
-            showNameError = true
-            return
-        }
-        LayoutProfilesManager.createProfileFromBuiltins(named: name)
-        reload()
-    }
-
     private func performRename() {
         guard let oldName = renaming else { return }
         renaming = nil
-        guard let newName = LayoutProfileStore.validatedName(renameText), newName != oldName
-        else {
+        do {
+            if try LayoutProfilesManager.renameProfile(oldName, toRawName: renameText) == nil {
+                showNameError = true
+            }
+        } catch {
             showNameError = true
-            return
-        }
-        guard LayoutProfilesManager.renameProfile(from: oldName, to: newName) else {
-            showNameError = true
-            return
         }
         reload()
     }
@@ -331,9 +305,13 @@ struct LayoutProfilesSettingsView: View {
     private func performDelete(successor: String?) {
         guard let name = deleting else { return }
         deleting = nil
-        _ = LayoutProfilesManager.deleteProfile(name)
-        if let successor {
-            LayoutProfilesManager.defaultProfileName = successor
+        do {
+            try LayoutProfilesManager.deleteProfile(name)
+            if let successor {
+                LayoutProfilesManager.defaultProfileName = successor
+            }
+        } catch {
+            NSLog("layout profile: delete of \(name) failed: \(error)")
         }
         reload()
     }
@@ -341,11 +319,7 @@ struct LayoutProfilesSettingsView: View {
 
 // MARK: - Canvas geometry
 
-/// Mock-canvas geometry shared by the profile editor and the
-/// built-in viewer. Device-stable: everything derives from the
-/// reference metrics, so clamping matches the player exactly.
 enum EditorCanvas {
-    /// Canvas size in device points per orientation.
     static func size(for orientation: ControlsOrientation) -> CGSize {
         let metrics = TouchZoneMetrics.reference
         let isLandscape = orientation == .landscape
@@ -354,40 +328,35 @@ enum EditorCanvas {
             height: metrics.height(isLandscape: isLandscape))
     }
 
-    /// Synthetic WINDOW safe-area insets (notch and home indicator),
-    /// not the zone metrics. Those already contain the game height
-    /// and toolbar line, and stacking them again empties the clamp
-    /// band. The values match the reference device.
+    /// The window safe area, not the zone insets of the metrics. The
+    /// zone insets already hold the game height and the toolbar line,
+    /// and a second copy of them empties the clamp band.
     static func safeArea(for orientation: ControlsOrientation) -> EdgeInsets {
-        if orientation == .portrait {
-            return EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0)
-        }
-        return EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 59)
+        let insets = TouchZoneMetrics.referenceWindowInsets(isLandscape: orientation == .landscape)
+        return EdgeInsets(
+            top: insets.top, leading: insets.leading, bottom: insets.bottom,
+            trailing: insets.trailing)
     }
 
-    /// The placeholder stands in for the game picture: a 4:3 fit at
-    /// the top of the safe area, like a typical RPG Maker viewport.
     static func fakeGameRect(for orientation: ControlsOrientation) -> CGRect {
         let size = size(for: orientation)
-        let safeArea = safeArea(for: orientation)
-        if orientation == .portrait {
-            let width = size.width
-            let height = width * 3 / 4
-            return CGRect(x: 0, y: safeArea.top, width: width, height: height)
-        }
-        let height = size.height
-        let width = height * 4 / 3
-        return CGRect(x: (size.width - width) / 2, y: 0, width: width, height: height)
+        let top = orientation == .portrait ? safeArea(for: orientation).top : 0
+        let game = GameAspect.fit(width: size.width, height: size.height - top)
+        return CGRect(x: (size.width - game.width) / 2, y: top, width: game.width, height: game.height)
+    }
+
+    static func gameRect(in rect: CGRect) -> CGRect {
+        let game = GameAspect.fit(width: rect.width, height: rect.height)
+        return CGRect(
+            x: rect.midX - game.width / 2, y: rect.midY - game.height / 2,
+            width: game.width, height: game.height)
     }
 }
 
 // MARK: - Editor
 
-/// Out-of-player profile editor: the real overlay components on a
-/// mock canvas. Its own `ControlsLayout` instance (the singleton may
-/// be bound to a paused game), synthetic metrics, full device-point
-/// layout with only the rendering scaled, so clamping matches the
-/// player exactly.
+/// The editor has its own `ControlsLayout`, because
+/// `ControlsLayout.shared` can belong to a paused game.
 struct LayoutProfileEditorView: View {
     let profileName: String
 
@@ -400,6 +369,9 @@ struct LayoutProfileEditorView: View {
     @State private var actions = PlayerActionRegistry()
     @State private var editingOrientation: ControlsOrientation = .portrait
     @State private var editDialog: ControlsEditDialog?
+    @State private var showSaveFailure = false
+    @State private var savedOnLeave = false
+    @Environment(\.dismiss) private var dismiss
 
     init(profileName: String) {
         self.profileName = profileName
@@ -413,19 +385,11 @@ struct LayoutProfileEditorView: View {
     private var canvasSafeArea: EdgeInsets { EditorCanvas.safeArea(for: editingOrientation) }
     private var fakeGameRect: CGRect { EditorCanvas.fakeGameRect(for: editingOrientation) }
 
-    /// The profile's screen entry for the shown orientation, with
-    /// this session's pending edit and the in-flight drag on top.
-    /// Same precedence as the player, through the shared helper, so
-    /// the placeholder and the controls follow a drag live here too.
     private var screenPlacement: ScreenPlacement? {
         layout.effectiveScreenPlacement(
             stored: editingOrientation == .portrait ? diskScreen?.portrait : diskScreen?.landscape)
     }
 
-    /// The placement as a rect on the MOCK canvas. A preset
-    /// computes against the reference canvas and the placeholder's
-    /// 4:3 aspect. The same per-device rule the player applies to
-    /// the real window.
     private var screenRegion: ScreenRegion? {
         guard let placement = screenPlacement else { return nil }
         switch placement {
@@ -443,11 +407,10 @@ struct LayoutProfileEditorView: View {
                 safeLeading: Double(safeArea.leading),
                 safeTrailing: Double(safeArea.trailing),
                 isPortrait: editingOrientation == .portrait,
-                aspect: 4.0 / 3.0)
+                aspect: GameAspect.typical)
         }
     }
 
-    /// Region rect on the canvas, when a placement exists.
     private var screenRegionRect: CGRect? {
         guard let region = screenRegion else { return nil }
         let size = canvasSize
@@ -456,35 +419,18 @@ struct LayoutProfileEditorView: View {
             width: region.w * size.width, height: region.h * size.height)
     }
 
-    /// The placeholder is the 4:3 fit INSIDE the region, the
-    /// engine letterboxes centered inside it, so the controls
-    /// clamp against what the player will show.
     private var placeholderGameRect: CGRect {
-        guard let regionRect = screenRegionRect else { return fakeGameRect }
-        var width = regionRect.width
-        var height = width * 3 / 4
-        if height > regionRect.height {
-            height = regionRect.height
-            width = height * 4 / 3
-        }
-        return CGRect(
-            x: regionRect.midX - width / 2, y: regionRect.midY - height / 2,
-            width: width, height: height)
+        screenRegionRect.map(EditorCanvas.gameRect(in:)) ?? fakeGameRect
     }
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            Picker("Orientation", selection: $editingOrientation) {
-                Text("Portrait").tag(ControlsOrientation.portrait)
-                Text("Landscape").tag(ControlsOrientation.landscape)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Spacing.xl)
-            .onChange(of: editingOrientation) { _, new in
-                layout.editorSave()
-                layout.setOrientation(new)
-                diskScreen = LayoutProfilesManager.store.readScreen(currentName)
-            }
+            EditorOrientationPicker(selection: $editingOrientation)
+                .onChange(of: editingOrientation) { _, new in
+                    try? layout.editorSave()
+                    layout.setOrientation(new)
+                    diskScreen = LayoutProfilesManager.store.readScreen(currentName)
+                }
 
             EditorCanvasShell(
                 layout: layout,
@@ -515,7 +461,16 @@ struct LayoutProfileEditorView: View {
         }
         .navigationTitle(currentName)
         .navigationBarTitleDisplayMode(.inline)
+        // Back saves first, so a failed save keeps the editor open.
+        .navigationBarBackButtonHidden()
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button(action: leave) {
+                    Image(systemName: "chevron.backward")
+                }
+                .tint(.primary)
+                .accessibilityLabel("Back")
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     renameText = currentName
@@ -532,6 +487,7 @@ struct LayoutProfileEditorView: View {
             Button("Cancel", role: .cancel) {}
         }
         .profileNameErrorAlert(isPresented: $showRenameError)
+        .layoutSaveFailureAlert(isPresented: $showSaveFailure)
         .onAppear {
             layout.setOrientation(editingOrientation)
             layout.beginEditSession()
@@ -539,23 +495,31 @@ struct LayoutProfileEditorView: View {
         }
         .onDisappear {
             layout.endEditSession()
-            layout.editorSave()
+            // A close of the whole sheet skips Back.
+            if !savedOnLeave {
+                try? layout.editorSave()
+            }
         }
         .controlsEditDialogs(
             layout: layout,
             // The editor's registry has no game, so it reports fast
             // forward as off.
             actions: nil,
-            // The editor has no reset: reset is a per-game concept
-            // (unpin, or back to the ambient chain). Rename and delete
-            // live in the profiles list.
             dialog: $editDialog
         )
     }
 
-    /// Where the game sits in portrait: a named preset (computed
-    /// per device at play time), the automatic engine placement, or
-    /// the custom rect the gizmo drew.
+    private func leave() {
+        do {
+            try layout.editorSave()
+        } catch {
+            showSaveFailure = true
+            return
+        }
+        savedOnLeave = true
+        dismiss()
+    }
+
     private enum PositionChoice: Hashable {
         case automatic
         case preset(ScreenPreset)
@@ -577,7 +541,7 @@ struct LayoutProfileEditorView: View {
                 selection: Binding(
                     get: { positionChoice },
                     set: { choice in
-                        withAnimation(.easeInOut(duration: 0.25)) {
+                        withAnimation(ScreenRegionGizmo.moveAnimation) {
                             switch choice {
                             case .automatic:
                                 layout.resetScreenEdit()
@@ -607,26 +571,20 @@ struct LayoutProfileEditorView: View {
     }
 
     private func performRename() {
-        guard let newName = LayoutProfileStore.validatedName(renameText),
-            newName != currentName,
-            LayoutProfilesManager.renameProfile(from: currentName, to: newName)
-        else {
-            if LayoutProfileStore.validatedName(renameText) != currentName {
-                showRenameError = true
-            }
-            return
+        do {
+            guard
+                let newName = try LayoutProfilesManager.renameProfile(
+                    currentName, toRawName: renameText)
+            else { return }
+            currentName = newName
+            layout.editorRenamed(to: newName)
+        } catch {
+            showRenameError = true
         }
-        currentName = newName
-        layout.editorRenamed(to: newName)
     }
 
-    /// The editor's extra canvas layers: the screen gizmo and its
-    /// chips, BELOW the controls overlay (same order as the player),
-    /// or the move surface would steal drags from any control
-    /// inside the region rect. The allowed rect comes from the same
-    /// policy helper the player uses, so the editor can never
-    /// author a region the player forbids. No live engine here:
-    /// drags stay local until editorSave merges them.
+    /// These layers must stay below the controls overlay. Above it,
+    /// the move surface takes drags from controls inside the region.
     @ViewBuilder
     private func screenGizmoLayers(size: CGSize, gameRect: CGRect) -> some View {
         ScreenRegionGizmo(
@@ -664,7 +622,7 @@ struct LayoutProfileEditorView: View {
                 // The mock canvas has no engine: the SwiftUI
                 // animation on the placeholder IS the reset
                 // animation.
-                withAnimation(.easeInOut(duration: 0.25)) {
+                withAnimation(ScreenRegionGizmo.moveAnimation) {
                     layout.resetScreenEdit()
                 }
             }
@@ -674,24 +632,14 @@ struct LayoutProfileEditorView: View {
 
 // MARK: - Shared canvas shell
 
-/// The mock-canvas shell the editor and the builtin viewer share:
-/// the scale-to-fit wrapper, the black canvas, the game-picture
-/// placeholder, and the controls overlay. `underControls` injects
-/// extra layers BETWEEN the placeholder and the controls (the
-/// editor's screen gizmo). The viewer leaves it empty.
 struct EditorCanvasShell<UnderControls: View>: View {
     var layout: ControlsLayout
     var actions: PlayerActionRegistry
     let orientation: ControlsOrientation
     let editMode: Bool
-    /// nil uses the canvas's fake game rect. The editor passes its
-    /// region-aware placeholder.
     var placeholderRect: CGRect?
-    /// The profile's overlay choice, forwarded to the zone split.
     var forcedOverlay: Bool?
     var editDialog: Binding<ControlsEditDialog?> = .constant(nil)
-    /// The read-only viewer turns hit testing off entirely, so no
-    /// touch reaches the controls and nothing can write.
     var hitTesting = true
     @ViewBuilder let underControls: (CGSize, CGRect) -> UnderControls
 
@@ -723,7 +671,6 @@ struct EditorCanvasShell<UnderControls: View>: View {
             RoundedRectangle(cornerRadius: Radius.sm)
                 .fill(Color.black)
 
-            // Game-picture placeholder.
             Rectangle()
                 .fill(Color.white.opacity(0.08))
                 .overlay(
@@ -754,9 +701,63 @@ struct EditorCanvasShell<UnderControls: View>: View {
     }
 }
 
+struct EditorOrientationPicker: View {
+    @Binding var selection: ControlsOrientation
+
+    var body: some View {
+        Picker("Orientation", selection: $selection) {
+            Text("Portrait").tag(ControlsOrientation.portrait)
+            Text("Landscape").tag(ControlsOrientation.landscape)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, Spacing.xl)
+    }
+}
+
+private struct NewProfileAlert: ViewModifier {
+    @Binding var isPresented: Bool
+    let onCreate: () -> Void
+
+    @State private var name = ""
+    @State private var showNameError = false
+    @State private var showSaveFailure = false
+
+    func body(content: Content) -> some View {
+        content
+            .alert("New profile", isPresented: $isPresented) {
+                TextField("Name", text: $name)
+                Button("Create", action: create)
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("A new profile starts from the Empo default layout.")
+            }
+            .profileNameErrorAlert(isPresented: $showNameError)
+            .layoutSaveFailureAlert(isPresented: $showSaveFailure)
+            .onChange(of: isPresented) { _, presented in
+                guard presented else { return }
+                name = LayoutProfilesManager.store.uniqueName(
+                    base: String(localized: "My layout", comment: "Name of a new layout profile."))
+            }
+    }
+
+    private func create() {
+        do {
+            try LayoutProfilesManager.createProfileFromBuiltins(rawName: name)
+            onCreate()
+        } catch is LayoutProfileStore.StoreError {
+            showNameError = true
+        } catch {
+            NSLog("layout profile: create of \(name) failed: \(error)")
+            showSaveFailure = true
+        }
+    }
+}
+
 extension View {
-    /// The shared name-error alert, so the wording exists once for
-    /// the editor, the viewer, and the settings list.
+    func newProfileAlert(isPresented: Binding<Bool>, onCreate: @escaping () -> Void) -> some View {
+        modifier(NewProfileAlert(isPresented: isPresented, onCreate: onCreate))
+    }
+
     func profileNameErrorAlert(isPresented: Binding<Bool>) -> some View {
         alert("Pick a different name", isPresented: isPresented) {
             Button("Got it") {}
@@ -766,32 +767,28 @@ extension View {
             )
         }
     }
+
+    func layoutSaveFailureAlert(isPresented: Binding<Bool>) -> some View {
+        alert("Couldn't save your layout. Free up some space and try again.", isPresented: isPresented) {
+            Button("Got it") {}
+        }
+    }
 }
 
 // MARK: - Built-in viewer
 
-/// Read-only view of the built-in layout on the same mock canvas the
-/// editor uses. The overlay is display-only (hit testing off), so no
-/// touch reaches the controls and nothing can write.
 struct BuiltinLayoutViewerView: View {
     @State private var layout = ControlsLayout(viewerForBuiltins: .reference)
     @State private var actions = PlayerActionRegistry()
     @State private var orientation: ControlsOrientation = .portrait
     @State private var showCreateDialog = false
-    @State private var createText = ""
-    @State private var showNameError = false
 
     var body: some View {
         VStack(spacing: Spacing.md) {
-            Picker("Orientation", selection: $orientation) {
-                Text("Portrait").tag(ControlsOrientation.portrait)
-                Text("Landscape").tag(ControlsOrientation.landscape)
-            }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, Spacing.xl)
-            .onChange(of: orientation) { _, new in
-                layout.setOrientation(new)
-            }
+            EditorOrientationPicker(selection: $orientation)
+                .onChange(of: orientation) { _, new in
+                    layout.setOrientation(new)
+                }
 
             EditorCanvasShell(
                 layout: layout,
@@ -814,8 +811,6 @@ struct BuiltinLayoutViewerView: View {
             .padding(.horizontal, Spacing.xl)
 
             Button("Duplicate as profile") {
-                createText = LayoutProfilesManager.store.uniqueName(
-                    base: String(localized: "My layout", comment: "Name of a new layout profile."))
                 showCreateDialog = true
             }
             .font(.footnote.weight(.semibold))
@@ -826,25 +821,6 @@ struct BuiltinLayoutViewerView: View {
         .onAppear {
             layout.setOrientation(orientation)
         }
-        .alert("New profile", isPresented: $showCreateDialog) {
-            TextField("Name", text: $createText)
-            Button("Create") { duplicateAsProfile() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("A new profile starts from the Empo default layout.")
-        }
-        .profileNameErrorAlert(isPresented: $showNameError)
+        .newProfileAlert(isPresented: $showCreateDialog, onCreate: {})
     }
-
-    private func duplicateAsProfile() {
-        let store = LayoutProfilesManager.store
-        guard let name = LayoutProfileStore.validatedName(createText),
-            !store.profileExists(name)
-        else {
-            showNameError = true
-            return
-        }
-        LayoutProfilesManager.createProfileFromBuiltins(named: name)
-    }
-
 }

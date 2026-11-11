@@ -3,13 +3,10 @@
 
 import Foundation
 
-/// Hysteresis thresholds for analog triggers and stick half-axes
-/// (SPEC section 7).
 public enum ControllerDigitalThreshold {
     public static let press: Float = 0.5
     public static let release: Float = 0.4
 
-    /// Digital press state for a trigger or half-axis value.
     public static func axisPressed(value: Float, wasPressed: Bool) -> Bool {
         let magnitude = abs(value)
         if wasPressed {
@@ -18,14 +15,11 @@ public enum ControllerDigitalThreshold {
         return magnitude >= press
     }
 
-    /// Digital press state for a binary button (`isPressed` as 0 or 1).
     public static func buttonPressed(value: Float) -> Bool {
         value >= press
     }
 }
 
-/// Pure controller-input reducer: per-element hysteresis, OR-merge across
-/// controllers, and merged-state edge detection. Hardware-independent.
 public struct ControllerStateReducer: Sendable {
     public struct Edge: Equatable, Sendable {
         public let element: String
@@ -42,8 +36,6 @@ public struct ControllerStateReducer: Sendable {
 
     public init() {}
 
-    /// Applies a raw element sample for one controller. Returns edges on
-    /// the OR-merged logical state only.
     public mutating func apply(
         controllerID: String,
         element: String,
@@ -60,13 +52,11 @@ public struct ControllerStateReducer: Sendable {
         return reconcileMerged(element: element)
     }
 
-    /// Drops a disconnected controller and emits any merged release edges.
     public mutating func removeController(_ controllerID: String) -> [Edge] {
         guard perController.removeValue(forKey: controllerID) != nil else { return [] }
         return reconcileAllMerged()
     }
 
-    /// The elements now pressed in the OR-merged view.
     public var mergedPressedElements: [String] {
         merged.filter(\.value).map(\.key).sorted()
     }
@@ -101,22 +91,8 @@ public struct ControllerStateReducer: Sendable {
     }
 }
 
-/// Maps a GCController stick position into SDL half-axis element samples.
-/// GC Y is +up. SDL `-lefty` is stick up (SPEC section 7).
+/// GCController Y is positive up. SDL `-lefty` is stick up.
 public enum ControllerStickMapper {
-    public enum Direction: Sendable, Hashable, CaseIterable {
-        case up, down, left, right
-
-        var elementSuffix: String {
-            switch self {
-            case .up: return "y-"
-            case .down: return "y+"
-            case .left: return "x-"
-            case .right: return "x+"
-            }
-        }
-    }
-
     public struct Sample: Equatable, Sendable {
         public let element: String
         public let value: Float
@@ -140,8 +116,6 @@ public enum ControllerStickMapper {
     /// one direction and two.
     public static let sectorMarginDegrees: Float = 5
 
-    /// The directions a stick sends, or an empty set at rest.
-    ///
     /// The engine resolves two held directions in `updateDir4`
     /// (`src/input/input.cpp`): it keeps the direction held first,
     /// otherwise it takes the first of down, left, right, up. When the
@@ -150,19 +124,19 @@ public enum ControllerStickMapper {
     /// Wireless Controller left stick then walked in a direction that
     /// changed from push to push. A sector emits both edges of a
     /// diagonal in one sample, so the order is fixed.
-    public static func directions(x: Float, y: Float, held: Set<Direction>) -> Set<Direction> {
+    public static func directions(x: Float, y: Float, held: Set<ControlDirection>) -> Set<ControlDirection> {
         let magnitude = (x * x + y * y).squareRoot()
         if magnitude < ControllerDigitalThreshold.release {
             return []
         }
         let angle = atan2(y, x) * 180 / .pi
-        let horizontal: Direction = x >= 0 ? .right : .left
-        let vertical: Direction = y >= 0 ? .up : .down
+        let horizontal: ControlDirection = x >= 0 ? .right : .left
+        let vertical: ControlDirection = y >= 0 ? .up : .down
         let offsetFromHorizontal = min(abs(angle), 180 - abs(angle))
         let offsetFromVertical = 90 - offsetFromHorizontal
         let nearestCardinal = offsetFromHorizontal <= offsetFromVertical ? horizontal : vertical
         let offset = min(offsetFromHorizontal, offsetFromVertical)
-        let diagonal: Set<Direction> = [horizontal, vertical]
+        let diagonal: Set<ControlDirection> = [horizontal, vertical]
 
         var boundary = cardinalHalfWidthDegrees
         if held == [nearestCardinal] {
@@ -173,13 +147,11 @@ public enum ControllerStickMapper {
         return offset <= boundary ? [nearestCardinal] : diagonal
     }
 
-    public static func halfAxisSamples(stick: String, x: Float, y: Float, active: Set<Direction>) -> [Sample] {
+    public static func halfAxisSamples(stick: String, x: Float, y: Float, active: Set<ControlDirection>) -> [Sample] {
         let magnitude = min(1, (x * x + y * y).squareRoot())
-        return Direction.allCases.map { direction in
-            let axis = String(direction.elementSuffix.prefix(1))
-            let sign = String(direction.elementSuffix.suffix(1))
-            return Sample(
-                element: "\(sign)\(stick)\(axis)",
+        return ControlDirection.allCases.map { direction in
+            Sample(
+                element: ControllerElement.halfAxis(stick: stick, direction: direction),
                 value: active.contains(direction) ? magnitude : 0
             )
         }

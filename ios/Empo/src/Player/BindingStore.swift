@@ -5,24 +5,15 @@ import Foundation
 import GameProbe
 
 extension Notification.Name {
-    /// The store posts this after it saves a global or per-game controller map.
     static let bindingsDidChange = Notification.Name("bindingsDidChange")
 
-    /// The app posts this when a touch begins on the embedded SDL game view during play.
     static let gameAreaTouchBegan = Notification.Name("gameAreaTouchBegan")
 }
 
-/// UserDefaults persistence for global binding overrides. Per-game
-/// overrides live in `EmpoState/controls.json` (SPEC section 3, ticket 009).
-///
-/// The stored shape is the manifest's own bindings object, read and
-/// written by `BindingMapCoder`, so a binding means the same thing
-/// here as it does in a file a game ships.
 enum BindingStore {
     static func loadGlobal() -> BindingMap? {
         guard let map = load(key: DefaultsKey.controllerMapGlobal) else { return nil }
-        // One-time rename migration for Empo-owned storage. Quiet
-        // write: a change notification here would re-enter this load.
+        // Write quietly. A change notification here calls this load again.
         let migrated = EmpoActionCatalog.migrated(map)
         if migrated.changed {
             saveQuietly(migrated.map, key: DefaultsKey.controllerMapGlobal)
@@ -35,9 +26,7 @@ enum BindingStore {
     }
 
     static func loadPerGame(container: GameContainer) -> BindingMap? {
-        guard let result = UserControlsFile.load(in: container) else { return nil }
-        guard !result.findings.contains(where: { $0.severity == .error }) else { return nil }
-        return result.manifest?.bindings
+        UserControlsFile.acceptedManifest(in: container)?.bindings
     }
 
     static func savePerGame(container: GameContainer, map: BindingMap) {
@@ -68,9 +57,6 @@ enum BindingStore {
             return nil
         }
         let map = BindingMapCoder.decode(object) { source, issue in
-            // Empo owns this file, so a rejected entry means a hand
-            // edit or an older shape. The manifest log is per game.
-            // This one is global, so it goes to the console.
             NSLog("bindings: dropped \(source) from stored map (\(issue))")
         }
         return map.entries.isEmpty ? nil : map
@@ -87,8 +73,7 @@ enum BindingStore {
         UserDefaults.standard.set(data, forKey: key)
     }
 
-    /// One-time rename migration for the per-game controller section.
-    /// Runs at game selection. Quiet: the caller reloads afterwards.
+    /// This write posts no change notification. The caller reloads after it.
     static func migrateRenamedActions(container: GameContainer) {
         guard let result = UserControlsFile.load(in: container),
             let controller = result.manifest?.bindings
@@ -98,7 +83,6 @@ enum BindingStore {
         _ = UserControlsFile.updateBindings(in: container, bindings: migrated.map)
     }
 
-    /// Decode a legacy per-game controller map from UserDefaults (migration only).
     static func decodeLegacyPerGameMap(gameID: String) -> BindingMap? {
         load(key: DefaultsKey.controllerMap(gameID: gameID))
     }

@@ -3,15 +3,6 @@
 
 import Foundation
 
-/// Rigid collision solver for edit-mode control drags. The dragged
-/// circle cannot enter its neighbors or the edit-chrome rectangles.
-/// They act as walls and the drag slides along their rims. Neighbors
-/// never move. There is no momentum and no physics engine.
-///
-/// Pure geometry in the same Double coordinate style as
-/// `ButtonSeparation`, so it tests on Linux CI. The app layer builds
-/// the obstacle list (its clamping lives there) and maps CGFloat in
-/// and out.
 public enum EditDragSolver {
     public struct Circle: Equatable, Sendable {
         public var x: Double
@@ -52,12 +43,10 @@ public enum EditDragSolver {
         }
     }
 
-    /// Tolerance at the rim: the push-out lands exactly on it and
-    /// float noise must not read as a collision.
+    /// The push-out lands exactly on the rim. This slack stops float
+    /// noise from reading as a collision.
     public static let rimSlack = 0.5
 
-    /// True when a circle at `(x, y)` with `radius` intersects any
-    /// obstacle circle or wall rectangle.
     public static func collides(
         x: Double, y: Double, radius: Double,
         obstacles: [Circle], walls: [Rect]
@@ -74,11 +63,13 @@ public enum EditDragSolver {
         }
     }
 
-    /// Push `desired` out of every obstacle, iterated a few times so
-    /// settling between two obstacles converges. `previous` (the last
-    /// resolved center this drag) keeps the circle on its approach
-    /// side: without it, the pointer crossing an obstacle's center
-    /// pops the circle through to the far side.
+    /// A push out of one obstacle can push into another, so the passes
+    /// repeat. Three passes are enough, because a drag sends many events
+    /// each second, and each one continues from this result.
+    ///
+    /// `previous` keeps the circle on the side it came from. Without it,
+    /// a pointer that crosses the center of an obstacle pops the circle
+    /// through to the far side.
     public static func resolvedCenter(
         desiredX: Double, desiredY: Double,
         previousX: Double?, previousY: Double?,
@@ -95,12 +86,8 @@ public enum EditDragSolver {
                 let distanceSquared = dx * dx + dy * dy
                 guard distanceSquared < minDistance * minDistance else { continue }
                 if let previousX, let previousY {
-                    // The pointer reached or crossed the obstacle's
-                    // center: push out toward the side the drag came
-                    // from, not toward the pointer's side. <= covers
-                    // the pointer sitting exactly ON the center.
-                    // The up-push fallback there would hand the side
-                    // memory a stray direction and let the circle
+                    // `<=` includes a pointer exactly on the center.
+                    // There, the up-push fallback lets the circle
                     // tunnel through.
                     let approachX = previousX - obstacle.x
                     let approachY = previousY - obstacle.y
@@ -113,8 +100,7 @@ public enum EditDragSolver {
                 }
                 let distance = (dx * dx + dy * dy).squareRoot()
                 if distance < 0.001 {
-                    // Dead center: push straight up, any stable
-                    // direction works.
+                    // Any stable direction works here.
                     x = obstacle.x
                     y = obstacle.y - minDistance
                 } else {
@@ -138,9 +124,6 @@ public enum EditDragSolver {
         return (x, y)
     }
 
-    /// Circle-vs-rect push-out. nil when there is no collision.
-    /// Inside the inflated rect, the exit side prefers where the
-    /// drag came from, matching the circle obstacles' side memory.
     static func rectPushOut(
         x: Double, y: Double, radius: Double, wall: Rect,
         previousX: Double?, previousY: Double?

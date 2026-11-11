@@ -4,53 +4,24 @@
 import Foundation
 import GameProbe
 
-/// Launch-time migration from the pre-v0.5 `<uuid>-<slug>` container
-/// directories to title-based directories (`Games/Pokémon Uranium/`
-/// instead of `Games/3F2504E0-...-pokemon-uranium/`).
+/// Renames pre-v0.5 `<uuid>-<slug>` folders to the game's title. It
+/// also renames folders from the mojibake decode era, when
+/// Windows-1252 INI titles read as Shift-JIS (`Pok駑on Empyrean/`).
 ///
-/// The same pass renames title-based folders from the mojibake
-/// decode era, when Windows-1252 INI titles read as Shift-JIS and
-/// named containers like `Pok駑on Empyrean/`. Those folders rename
-/// to the corrected title only when the current name is exactly the
-/// old decoder's rendering of it (`ContainerMigrationPlanner
-/// .mojibakeRenameTarget`), through the same planner, quarantine
-/// policy, and defaults-key transfer as the uuid migration. A
-/// successful rename also re-keys the game's profile-migration
-/// record entry and heals its shared data directory right away.
-/// `DataDirectory.resolve` repeats the heal at game launch for
-/// anything this pass could not fix.
+/// A folder name must be exactly the game's INI title. Some games
+/// derive their data locations from that title, so a copy named
+/// `Testing 2` reads the data of "Testing". When several legacy
+/// imports resolve to one title, one copy keeps the name. The other
+/// copies move whole into `Documents/Duplicate Games/`.
 ///
-/// The invariant after this migration is **one container per
-/// title**. A folder name must be exactly the game's INI title,
-/// because some games derive their data locations from that title,
-/// so a suffixed duplicate like `Testing 2` would still call itself
-/// "Testing" and read the other copy's data. When several legacy
-/// imports resolve to one title, the copy played most recently
-/// (then the most recently added) keeps the name. Every other copy
-/// moves whole and untouched, saves included, into the
-/// Files-visible `Documents/Duplicate Games/`, where the user can
-/// recover saves or re-import. `DuplicateGamesNotice` explains the
-/// move once and lists each copy. The which-copy-wins policy lives
-/// in GameProbe's `ContainerMigrationPlanner`, so the Linux CI
-/// tests exercise it.
+/// The container id is the folder name, so the per-game
+/// UserDefaults keys must move with the rename.
 ///
-/// A rename also changes the container id, since the id IS the
-/// folder name, so the per-game UserDefaults families
-/// (`controlsLayout.<id>`, `controllerMap.<id>`) move with the
-/// winning copy. Everything else per-game (saves, settings,
-/// metadata, logs, controls manifest) lives inside the container
-/// and rides along for free.
-///
-/// Must run before anything enumerates `GameContainer.discover()`
-/// (library scan, save migration, crash tracker), so both singleton
-/// entry points (`GameLibrary.init`, `AppState.init`) call
-/// `migrateLegacyContainersIfNeeded()` first. Idempotent: once no
-/// legacy names remain the scan is a cheap directory listing.
+/// Run this before anything calls `GameContainer.discover()`.
 enum GameContainerMigration {
 
-    /// Where duplicate legacy imports land. A sibling of `Games/`
-    /// so discovery never surfaces them as library entries, and
-    /// non-hidden so the user can reach them in the Files app.
+    /// Outside `Games/`, so discovery skips these copies. Not hidden,
+    /// so the user can open them in the Files app.
     static let duplicatesRootURL: URL = DataDirectory.documentsRootURL
         .appendingPathComponent("Duplicate Games", isDirectory: true)
 
@@ -63,14 +34,9 @@ enum GameContainerMigration {
         migrateLegacyContainers()
     }
 
-    /// App-side context for a planner candidate, keyed by the
-    /// candidate id (the legacy folder name).
     private struct CandidateContext {
         let url: URL
         let legacyID: String
-        /// What the user calls this copy: their custom title when
-        /// set, else the game's title. The duplicate notice lists
-        /// this.
         let displayTitle: String
     }
 
@@ -112,14 +78,10 @@ enum GameContainerMigration {
                 continue
             }
 
-            // Title-based folders from the mojibake decode era
-            // (`Pok駑on Empyrean/`) rename to the corrected title
-            // through the same planner. Their per-game defaults are
-            // keyed by the FULL folder name - that is the container
-            // id for title-based names - so it doubles as the
-            // legacy id here. The scalar check skips the INI read
-            // for the ASCII-named bulk of the library. Mojibake
-            // always contains scalars far above Latin.
+            // For a title-based folder, the full folder name is the
+            // container id, so it is also the legacy id. Mojibake
+            // always has scalars far above Latin, so this check skips
+            // the INI read for ASCII names.
             if folderName.unicodeScalars.contains(where: { $0.value >= 0x0370 }) {
                 let metadata = GameMetadata.load(from: GameContainer(url: url))
                 let title = migrationTitle(forLegacyContainerAt: url, metadata: metadata)
@@ -155,14 +117,10 @@ enum GameContainerMigration {
                 guard let context = contexts[candidate.id] else { continue }
 
                 if titleClaimed {
-                    // Quarantine folders are named for HUMANS, not
-                    // for games: nothing resolves data paths
-                    // through `Duplicate Games/`, and a later
-                    // re-import derives identity from the INI, not
-                    // the folder. So the user's custom title, when
-                    // set, beats the INI title - "Rejuv kirin
-                    // updated" identifies a copy in Files far
-                    // better than "Pokemon Rejuvenation 2".
+                    // No code reads data paths through
+                    // `Duplicate Games/`, and a re-import reads the
+                    // title from the INI. So the user's custom title
+                    // can name the folder.
                     quarantineDuplicate(
                         context,
                         preferredName: GameFolderName.sanitize(context.displayTitle),
@@ -172,39 +130,27 @@ enum GameContainerMigration {
 
                 let destination = GameContainer.rootURL
                     .appendingPathComponent(candidate.preferredName, isDirectory: true)
-                // Copy the per-game UserDefaults families BEFORE the
-                // rename: a crash between the two steps then leaves
-                // both key families present (harmless - the copy is
-                // idempotent and never overwrites), whereas the
-                // reverse order would orphan the old keys forever,
-                // because a renamed folder no longer parses as
-                // legacy and this code never sees it again.
+                // Copy the keys BEFORE the rename. A crash between the
+                // two steps then leaves both key sets, which is
+                // harmless. In the reverse order, the old keys stay
+                // forever: a renamed folder no longer parses as
+                // legacy, so this code never sees it again.
                 let copiedKeys = copyUserDefaultsKeys(
                     fromID: context.legacyID, toID: candidate.preferredName)
-                // The profile-migration record maps container ids
-                // to migrated-layout hashes. Same order and same
-                // reasoning as the defaults keys: copy the entry to
-                // the new id first, drop the old id after the
-                // rename lands. A stranded entry would make the
-                // controls-to-profile migration treat the renamed
-                // game as never migrated and mint a duplicate
+                // Use the same order for the profile-migration record.
+                // A stranded entry makes the profile migration treat
+                // the renamed game as new and create a duplicate
                 // profile.
                 let copiedRecordEntry = copyProfileMigrationRecordEntry(
                     fromID: candidate.id, toID: candidate.preferredName)
                 do {
                     try fm.moveItem(at: context.url, to: destination)
                 } catch {
-                    // Leave the tree under its legacy name and retry
-                    // next launch. Discovery still surfaces it, since
-                    // any directory is a container, so the game stays
-                    // playable with its controls intact. The title
-                    // stays unclaimed so the next-best duplicate can
-                    // take it instead of being quarantined behind a
-                    // rename that never happened. That is why the
-                    // keys copied above must roll back NOW: left in
-                    // place they would block that duplicate's own
-                    // copy (new-id-wins) and donate this copy's
-                    // controls to a different game.
+                    // The folder keeps its legacy name until the next
+                    // launch. The title stays free for the next
+                    // duplicate, so roll back the copied keys now.
+                    // Otherwise they block the key copy of that
+                    // duplicate and give it the controls of this copy.
                     for key in copiedKeys {
                         UserDefaults.standard.removeObject(forKey: key)
                     }
@@ -222,12 +168,8 @@ enum GameContainerMigration {
                 titleClaimed = true
                 removeUserDefaultsKeys(forID: context.legacyID)
                 removeProfileMigrationRecordEntry(forID: candidate.id)
-                // Heal the game's shared data directory now instead
-                // of waiting for its next launch: `resolve` renames
-                // a mojibake-era directory as it walks. Failure is
-                // fine - the resolve at game launch retries, and
-                // the alias matcher keeps the old name reachable
-                // meanwhile.
+                // `resolve` renames a mojibake-era data directory. If
+                // it fails, the resolve at game launch tries again.
                 let moved = GameContainer(url: destination)
                 _ = DataDirectory.resolve(
                     for: moved, core: GameCores.core(forGameAt: moved.gameURL))
@@ -239,27 +181,17 @@ enum GameContainerMigration {
         }
     }
 
-    /// Move a duplicate legacy import - whole, saves included - out
-    /// of the library into `Duplicate Games/`. Nothing is merged or
-    /// deleted. The user resolves duplicates manually in Files. The
-    /// move is recorded so the library can show the one-time
-    /// explanatory alert (`pendingDuplicateNoticeNames`).
     private static func quarantineDuplicate(
         _ context: CandidateContext,
         preferredName: String,
         fm: FileManager
     ) {
-        // Deliberately NOT excluded from backup, unlike `Games/`:
-        // a quarantined copy can hold the user's only copy of its
-        // saves (it never launches, so the launch drain never
-        // reaches it), and the alert promised the copies were
-        // preserved. Small price in quota. Irreplaceable data.
+        // Do not exclude this folder from backup. A quarantined copy
+        // never launches, so it can hold the only copy of its saves.
         try? fm.createDirectory(at: duplicatesRootURL, withIntermediateDirectories: true)
 
-        // Case-insensitive collision check, per `uniqueName`'s
-        // contract: case-variant duplicates would collide when the
-        // user copies `Duplicate Games/` to a case-insensitive
-        // volume.
+        // Case-variant names collide when the user copies
+        // `Duplicate Games/` to a case-insensitive volume.
         let existingLowercased = Set(
             ((try? fm.contentsOfDirectory(atPath: duplicatesRootURL.path)) ?? [])
                 .map { $0.lowercased() }
@@ -271,12 +203,6 @@ enum GameContainerMigration {
         do {
             try fm.moveItem(at: context.url, to: destination)
             recordQuarantine(displayTitle: context.displayTitle, folderName: name)
-            // The quarantined copy's per-game UserDefaults would
-            // never be read again (its id left the library), so
-            // they go now instead of leaking forever. A later
-            // re-import of the copy gets the canonical title and
-            // the canonical keys. Its profile-migration record
-            // entry is dead weight for the same reason.
             removeUserDefaultsKeys(forID: context.legacyID)
             removeProfileMigrationRecordEntry(forID: context.url.lastPathComponent)
             NSLog(
@@ -293,17 +219,10 @@ enum GameContainerMigration {
 
     // MARK: - Duplicate notice
 
-    /// Display entries for `Duplicate Games/` moves the user hasn't
-    /// been told about yet: the user's custom title (or the game's
-    /// title), with the destination folder name appended when it
-    /// differs so the copy is findable in Files. Persisted in
-    /// UserDefaults so a force-quit before the library appears
-    /// doesn't swallow the notice.
     static func pendingDuplicateNoticeNames() -> [String] {
         UserDefaults.standard.stringArray(forKey: DefaultsKey.pendingDuplicateGameNames) ?? []
     }
 
-    /// The user has seen the alert.
     static func clearPendingDuplicateNotice() {
         UserDefaults.standard.removeObject(forKey: DefaultsKey.pendingDuplicateGameNames)
     }
@@ -318,10 +237,6 @@ enum GameContainerMigration {
         UserDefaults.standard.set(names, forKey: DefaultsKey.pendingDuplicateGameNames)
     }
 
-    /// Title for a legacy container, in the same priority the
-    /// import pipeline now uses for naming: the INI title, then the
-    /// import-time base title (JGP manifest name), then the old
-    /// folder slug as a last resort.
     private static func migrationTitle(
         forLegacyContainerAt url: URL,
         metadata: GameMetadata
@@ -338,13 +253,8 @@ enum GameContainerMigration {
             ?? GameFolderName.fallback
     }
 
-    /// Copy the per-game UserDefaults families to the new id,
-    /// returning the keys this call WROTE (so a failed
-    /// rename can roll exactly those back). An existing value
-    /// under the new id wins - it belongs to a same-named game
-    /// that already migrated. The old keys stay until
-    /// `removeUserDefaultsKeys` runs after the rename lands, so a
-    /// game still under its legacy name keeps its controls.
+    /// A value under the new id wins: it belongs to a same-named game
+    /// that migrated before.
     @discardableResult
     private static func copyUserDefaultsKeys(
         fromID oldID: String, toID newID: String
@@ -375,40 +285,42 @@ enum GameContainerMigration {
 
     // MARK: - Profile migration record
 
-    /// `Documents/Profiles/.migration.json` maps container ids to
-    /// the layout content already migrated into profiles
-    /// (`ProfileMigration.decide` consults it). Entries must follow
-    /// a container rename or the migration re-runs under the new
-    /// id. The pin itself lives inside the container
-    /// (`EmpoState/`), so it travels with the rename on its own.
     #if os(iOS)
     private static var profileMigrationRecordURL: URL {
         LayoutProfilesManager.profilesRootURL
             .appendingPathComponent(MigrationRecord.fileName)
     }
 
-    /// Copy the record entry to the new id, returning whether this
-    /// call wrote one (so a failed rename can roll exactly that
-    /// back). An existing entry under the new id wins, mirroring
-    /// `copyUserDefaultsKeys`.
     private static func copyProfileMigrationRecordEntry(
         fromID oldID: String, toID newID: String
     ) -> Bool {
         let url = profileMigrationRecordURL
-        var record = MigrationRecord.load(at: url)
-        guard let entry = record.games[oldID], record.games[newID] == nil else {
-            return false
-        }
+        guard var record = MigrationRecord.load(at: url),
+            let entry = record.games[oldID], record.games[newID] == nil
+        else { return false }
         record.games[newID] = entry
-        record.save(to: url)
-        return true
+        return saveProfileMigrationRecord(record, to: url)
     }
 
     private static func removeProfileMigrationRecordEntry(forID id: String) {
         let url = profileMigrationRecordURL
-        var record = MigrationRecord.load(at: url)
-        guard record.games.removeValue(forKey: id) != nil else { return }
-        record.save(to: url)
+        guard var record = MigrationRecord.load(at: url),
+            record.games.removeValue(forKey: id) != nil
+        else { return }
+        saveProfileMigrationRecord(record, to: url)
+    }
+
+    @discardableResult
+    private static func saveProfileMigrationRecord(_ record: MigrationRecord, to url: URL) -> Bool {
+        do {
+            try record.save(to: url)
+            return true
+        } catch {
+            NSLog(
+                "[GameContainerMigration] Failed to save %@: %@",
+                url.lastPathComponent, error.localizedDescription)
+            return false
+        }
     }
     #else
     // The Mac app has no layout profiles, so it has no record to update.
