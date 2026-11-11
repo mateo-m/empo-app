@@ -146,7 +146,9 @@ final class MkxpSettingsState: CoreSettings {
     private(set) var gameDefaults: MkxpEngineSettings
     /// What the script scan found. It labels the Auto-detect rows.
     private(set) var profile: MkxpProfile
+    #if os(iOS)
     let isPokemonEssentials: Bool
+    #endif
     /// The file in the game's own sound set folder. The picker sets it after an import.
     var gameMidiSoundSet: URL?
     let gameSoundFont: URL?
@@ -160,8 +162,10 @@ final class MkxpSettingsState: CoreSettings {
         self.engine = MkxpEngineSettings.load(from: container.empoStateURL)
         self.gameDefaults = MkxpEngineSettings.gameDefaults(in: container.gameURL)
         self.profile = MkxpProfile.load(for: container)
+        #if os(iOS)
         self.isPokemonEssentials = PokemonEssentialsDetection.detect(
             in: container.gameURL, stateDirectory: container.empoStateURL)
+        #endif
         self.gameMidiSoundSet = MidiSoundSet.game(container).current
         self.gameSoundFont = MkxpGameSoundFont.url(in: container)
     }
