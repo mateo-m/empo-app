@@ -62,7 +62,6 @@ export default defineConfig({
     ],
   },
   deployment: {
-    output: "static",
     site: "https://empo.mateo.sh",
     base: "/",
   },
