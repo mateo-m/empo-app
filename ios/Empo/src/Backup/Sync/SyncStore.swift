@@ -11,19 +11,27 @@ import GameProbe
 @MainActor
 enum SyncStore {
 
+    /// For the changes to `sync.json` alone. A Keychain error is not
+    /// "this device holds no id", so the id in the file stays. A fresh
+    /// id here would split this device's history.
     static func state() throws -> SyncState {
-        let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
-        var state = try SyncState.read(
-            applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
         let deviceActorId: String?
         do {
             deviceActorId = try BackupKeychain.syncActorId()
         } catch {
-            // A Keychain error is not "this device holds no id". A
-            // fresh id here would split this device's history.
             BackupLog.line("SyncStore", "The actor id was not read: \(error)")
-            return state
+            return try SyncState.read(
+                applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
         }
+        return try state(deviceActorId: deviceActorId)
+    }
+
+    /// The pass writes the document as this actor, so it reads the state
+    /// only after the Keychain answers.
+    static func state(deviceActorId: String?) throws -> SyncState {
+        let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
+        var state = try SyncState.read(
+            applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
         let replaced = state.replaceActor(
             unlessTheDeviceHolds: deviceActorId, fresh: { UUID().uuidString })
         if replaced {
@@ -123,8 +131,14 @@ enum SyncStore {
 @MainActor
 final class SyncFileStore: SyncStateStore {
 
+    private let readTheDeviceActorId: @MainActor () throws -> String?
+
+    init(deviceActorId: @escaping @MainActor () throws -> String? = BackupKeychain.syncActorId) {
+        readTheDeviceActorId = deviceActorId
+    }
+
     func state() throws -> SyncState {
-        try SyncStore.state()
+        try SyncStore.state(deviceActorId: try readTheDeviceActorId())
     }
 
     func update(_ change: (inout SyncState) -> Void) throws {
