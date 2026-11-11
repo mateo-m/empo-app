@@ -71,7 +71,9 @@ final class PlusStoreTests: XCTestCase {
         let refunded = expectation(description: "Plus ends")
         watchUntilNotSubscribed(store, refunded)
         try session.refundTransaction(identifier: UInt(transaction.identifier))
-        await fulfillment(of: [refunded], timeout: 10)
+        // On a GitHub-hosted Mac, the refund took 115 seconds once to
+        // reach `Transaction.updates`. On a fast Mac it takes under 1.
+        await fulfillment(of: [refunded], timeout: 300)
     }
 
     private func watchUntilNotSubscribed(_ store: PlusStore, _ done: XCTestExpectation) {
