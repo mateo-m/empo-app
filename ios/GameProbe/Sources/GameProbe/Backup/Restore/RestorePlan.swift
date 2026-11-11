@@ -132,10 +132,9 @@ public enum RestorePlanner {
 
     /// The plan for one snapshot at one scope.
     ///
-    /// - `localFiles`: every file under the roots the snapshot
-    ///   names, displaced copies included. The copies have to be in
-    ///   the list, because a second displacement of one file numbers
-    ///   against the names already there.
+    /// - `localFiles`: the local files the snapshot names. The
+    ///   displaced name in the plan does not see the copies on disk.
+    ///   `RestoreEngine` picks the real name when it writes.
     /// - `localVersionMarker`: the marker of the local `Game/` tree,
     ///   or `nil` where this device holds no tree.
     /// - `stagedBlobHashes`: the blobs already under `restore/`. A
