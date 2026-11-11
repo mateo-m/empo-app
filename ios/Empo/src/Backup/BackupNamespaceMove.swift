@@ -7,18 +7,19 @@ import GameProbe
 @MainActor
 enum BackupNamespaceMove {
 
-    /// After a damaged file, targets that kept their namespace lose their
-    /// rows too, so each one rebuilds its snapshot list.
+    /// Clearing the rows clears the snapshot list too, so each target
+    /// that clears also rebuilds its list.
     private static let waiting = BackupTargetWaitList(
-        fileName: "namespace-clear.json", afterDamage: BackupLedgerRebuild.markEveryTarget)
+        fileName: "namespace-clear.json", afterDamage: BackupLedgerRebuild.mark)
 
     /// `except` is the target whose run made the move. Its engine
     /// cleared its own rows.
     static func move(to namespaceId: String, except: String? = nil) throws {
-        var targets = Set(BackupTargets.load().map(\.id))
+        var targets = Set(try BackupTargets.read().map(\.id))
         if let except { targets.remove(except) }
-        // The list goes first, so a target whose rows do not clear below
-        // still clears before its next run.
+        // The lists go first, so a target whose rows do not clear below
+        // still clears and rebuilds before its next run.
+        try BackupLedgerRebuild.mark(targets)
         try waiting.add(targets)
         try BackupKeychain.adoptNamespaceId(namespaceId)
         guard let store = try? BackupRoot.openStateStore() else { return }

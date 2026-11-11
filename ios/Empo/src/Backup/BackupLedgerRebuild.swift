@@ -8,12 +8,12 @@ enum BackupLedgerRebuild {
 
     private static let waiting = BackupTargetWaitList(fileName: "ledger-rebuild.json")
 
-    static func markEveryTarget() {
-        do {
-            try waiting.add(Set(BackupTargets.load().map(\.id)))
-        } catch {
-            BackupLog.line("BackupLedgerRebuild", "The rebuild was not marked: \(error)")
-        }
+    static func markEveryTarget() throws {
+        try mark(Set(try BackupTargets.read().map(\.id)))
+    }
+
+    static func mark(_ targetIds: Set<String>) throws {
+        try waiting.add(targetIds)
     }
 
     /// Records each manifest of this device on the target. When it

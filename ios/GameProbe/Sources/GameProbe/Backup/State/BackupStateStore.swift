@@ -210,7 +210,7 @@ public final class BackupStateStore {
 
     /// The write-ahead log leaves two files beside the database. A
     /// delete that misses them leaves SQLite reading the old log.
-    private static func removeDatabaseFiles(at url: URL) {
+    public static func removeDatabaseFiles(at url: URL) {
         let manager = FileManager.default
         for suffix in ["", "-wal", "-shm"] {
             let path = url.path + suffix

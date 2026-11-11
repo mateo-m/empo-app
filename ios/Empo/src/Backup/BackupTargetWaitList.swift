@@ -5,15 +5,15 @@ import GameProbe
 /// the backup records. A target can be offline when the step comes up,
 /// so its id stays in the file until its next run does the step.
 ///
-/// A damaged file moves aside and every target waits, so the step must
-/// be safe to do again.
+/// A damaged file makes every target wait, so the step must be safe to
+/// do again.
 @MainActor
 struct BackupTargetWaitList {
 
     let fileURL: URL
-    private let afterDamage: @MainActor () -> Void
+    private let afterDamage: @MainActor (Set<String>) throws -> Void
 
-    init(fileName: String, afterDamage: @escaping @MainActor () -> Void = {}) {
+    init(fileName: String, afterDamage: @escaping @MainActor (Set<String>) throws -> Void = { _ in }) {
         fileURL = BackupRoot.layout.root.appendingPathComponent(fileName)
         self.afterDamage = afterDamage
     }
@@ -23,10 +23,12 @@ struct BackupTargetWaitList {
         do {
             return try JSONDecoder().decode(Set<String>.self, from: data)
         } catch is DecodingError {
-            try BackupRoot.setAside(fileURL)
-            let every = Set(BackupTargets.load().map(\.id))
+            // The damaged file stays until its replacement and the work after it are saved, so a
+            // failure here makes every target wait again at the next read.
+            let every = Set(try BackupTargets.read().map(\.id))
+            try afterDamage(every)
+            try BackupRoot.copyAside(fileURL)
             try write(every)
-            afterDamage()
             return every
         }
     }
