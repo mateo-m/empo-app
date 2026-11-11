@@ -73,8 +73,10 @@ enum LegacyControlsMigration {
             return
         }
 
-        UserDefaults.standard.removeObject(forKey: layoutKey)
-        UserDefaults.standard.removeObject(forKey: mapKey)
+        // The controls file stops the next run, so a key that gave
+        // nothing to move keeps its bytes.
+        if touch != nil { UserDefaults.standard.removeObject(forKey: layoutKey) }
+        if controller != nil { UserDefaults.standard.removeObject(forKey: mapKey) }
     }
 
     /// The legacy blob has no action buttons, so the section leaves the
