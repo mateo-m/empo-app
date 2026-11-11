@@ -122,7 +122,24 @@ final class DamagedBackupSettingsTests: XCTestCase {
         await model.refresh()
 
         XCTAssertTrue(model.items?.contains { $0.descriptor.id == target.id } ?? false)
-        XCTAssertFalse(model.targetsFileIsDamaged)
+        XCTAssertEqual(model.targetsFile, .didNotOpen)
+    }
+
+    func testTheFirstOpenOfTheBackupsScreenSaysWhenTheListDoesNotRead() async throws {
+        let list = layout.targetsFile
+        try? FileManager.default.removeItem(at: list)
+        try FileManager.default.createDirectory(at: list, withIntermediateDirectories: true)
+        let model = BackupsScreenModel(iCloudAvailability: { .ready })
+
+        await model.refresh()
+        XCTAssertNil(model.items)
+        XCTAssertEqual(model.targetsFile, .didNotOpen)
+
+        try FileManager.default.removeItem(at: list)
+        let target = try addATarget()
+        await model.refresh()
+        XCTAssertEqual(model.targetsFile, .read)
+        XCTAssertEqual(model.items?.map(\.descriptor.id), [target.id])
     }
 
     func testTheBackupSheetAsksForTheModeAgainOverADamagedSettingsFile() async throws {

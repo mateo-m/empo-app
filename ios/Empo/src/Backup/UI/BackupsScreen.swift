@@ -20,21 +20,27 @@ struct BackupsScreen: View {
     @State private var setUpAgainFailure: String?
 
     var body: some View {
-        ReadFirst(value: model.items) { items in
-            List {
-                damagedTargetsLine
-                if items.isEmpty {
-                    emptyState
-                    fileSection
-                } else {
-                    statusSection
-                    writerQuestions
-                    splitLine
-                    adoptBanners
-                    locations(items)
-                    optionsSection
-                    fileSection
-                    syncSection
+        Group {
+            if model.items == nil, model.targetsFile == .didNotOpen {
+                List { targetsFileLine }
+            } else {
+                ReadFirst(value: model.items) { items in
+                    List {
+                        targetsFileLine
+                        if items.isEmpty {
+                            emptyState
+                            fileSection
+                        } else {
+                            statusSection
+                            writerQuestions
+                            splitLine
+                            adoptBanners
+                            locations(items)
+                            optionsSection
+                            fileSection
+                            syncSection
+                        }
+                    }
                 }
             }
         }
@@ -220,8 +226,11 @@ struct BackupsScreen: View {
         }
     }
 
-    @ViewBuilder private var damagedTargetsLine: some View {
-        if model.targetsFileIsDamaged {
+    @ViewBuilder private var targetsFileLine: some View {
+        switch model.targetsFile {
+        case .read:
+            EmptyView()
+        case .damaged:
             Section {
                 question(
                     String(localized: "Empo can't read your list of locations."),
@@ -231,8 +240,17 @@ struct BackupsScreen: View {
                 Button("Add locations again") {
                     Task {
                         await model.setAsideTheDamagedTargets()
-                        if !model.targetsFileIsDamaged { sheets.show(.add) }
+                        if model.targetsFile == .read { sheets.show(.add) }
                     }
+                }
+            }
+        case .didNotOpen:
+            Section {
+                question(
+                    String(localized: "Empo can't read your list of locations."),
+                    note: String(localized: "Your backups are still there."))
+                Button("Try again") {
+                    Task { await model.refresh() }
                 }
             }
         }

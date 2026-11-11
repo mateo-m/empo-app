@@ -59,6 +59,12 @@ struct AdoptBannerItem: Identifiable {
 /// `targets.json` and from `state.sqlite`, so opening the screen
 /// makes no request. The namespace list and the adopt banner are the
 /// two places that list a target, and both wait for the user.
+enum TargetsFileRead {
+    case read
+    case damaged
+    case didNotOpen
+}
+
 @MainActor
 @Observable
 final class BackupsScreenModel {
@@ -81,7 +87,7 @@ final class BackupsScreenModel {
     private(set) var writerQuestions: [WriterQuestionItem] = []
     /// The line of 7.11, after a split, until the user closes it.
     private(set) var showsTheSplitLine = false
-    private(set) var targetsFileIsDamaged = false
+    private(set) var targetsFile = TargetsFileRead.read
     private var notificationStatus: UNAuthorizationStatus?
     /// Whether the row above Backup history shows, per 13.19.
     var asksForNotifications: Bool {
@@ -123,14 +129,15 @@ final class BackupsScreenModel {
         let descriptors: [TargetDescriptor]
         do {
             descriptors = try BackupTargets.read()
-            targetsFileIsDamaged = false
+            targetsFile = .read
         } catch is DecodingError {
             BackupLog.line("BackupsScreenModel", "targets.json is damaged")
             descriptors = []
-            targetsFileIsDamaged = true
+            targetsFile = .damaged
         } catch {
             // No rows would show the empty state, which asks for a new location.
             BackupLog.line("BackupsScreenModel", "targets.json was not read, the last rows stay: \(error)")
+            targetsFile = .didNotOpen
             return
         }
         var items: [BackupTargetItem] = []
