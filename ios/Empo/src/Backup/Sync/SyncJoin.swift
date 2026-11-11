@@ -31,25 +31,40 @@ enum SyncJoin {
             of: SyncGroupDiscovery.groups(in: records), joined: state.groupId)
     }
 
-    /// The local document goes only after the join is saved. Two
+    /// The local document moves away before the join is saved. Two
     /// documents that never shared a history give the root a second
     /// `preferences` map, and Automerge answers one of the two, so the
     /// group's keys would read as absent here. The next pass reads
     /// this device's own values and adds the ones the group does not
     /// hold.
     static func join(_ group: DiscoveredSyncGroup) {
-        SyncPass.shared.join {
+        SyncPass.shared.join { switchTheGroup(to: group.groupId) }
+    }
+
+    static func switchTheGroup(to groupId: String) {
+        let movedAside: Bool
+        do {
+            movedAside = try AutomergeDocumentStore.moveAside()
+        } catch {
+            BackupLog.line("SyncJoin", "The old document did not move, so the join waits: \(error)")
+            return
+        }
+        do {
+            try SyncStore.update { $0.join(groupId) }
+        } catch {
+            BackupLog.line("SyncJoin", "The join was not saved: \(error)")
+            guard movedAside else { return }
             do {
-                try SyncStore.update { $0.join(group.groupId) }
+                try AutomergeDocumentStore.moveBack()
             } catch {
-                BackupLog.line("SyncJoin", "The join was not saved: \(error)")
-                return
+                BackupLog.line("SyncJoin", "The old document did not move back: \(error)")
             }
-            do {
-                try AutomergeDocumentStore.delete()
-            } catch {
-                BackupLog.line("SyncJoin", "The old document was not deleted: \(error)")
-            }
+            return
+        }
+        do {
+            try AutomergeDocumentStore.deleteTheMovedDocument()
+        } catch {
+            BackupLog.line("SyncJoin", "The old document was not deleted: \(error)")
         }
     }
 

@@ -16,12 +16,31 @@ final class AutomergeDocumentStore: SyncDocumentStore {
         BackupRoot.layout.syncDocumentFile
     }
 
-    static func delete() throws {
+    /// Where a join keeps the old group's document until the join is
+    /// saved. No pass reads it.
+    private static var movedURL: URL {
+        url.appendingPathExtension("left")
+    }
+
+    /// Answers whether a document was there to move.
+    static func moveAside() throws -> Bool {
+        try deleteTheMovedDocument()
         do {
-            try FileManager.default.removeItem(at: url)
+            try FileManager.default.moveItem(at: url, to: movedURL)
+            return true
         } catch CocoaError.fileNoSuchFile {
-            return
+            return false
         }
+    }
+
+    static func moveBack() throws {
+        try FileManager.default.moveItem(at: movedURL, to: url)
+    }
+
+    static func deleteTheMovedDocument() throws {
+        do {
+            try FileManager.default.removeItem(at: movedURL)
+        } catch CocoaError.fileNoSuchFile {}
     }
 
     /// The file, or `nil` where this device holds none. It throws
