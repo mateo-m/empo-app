@@ -5,7 +5,6 @@ import Foundation
 import GameProbe
 import SwiftUI
 
-/// The RPG Maker XP, VX and VX Ace core (mkxp-z).
 struct MkxpCore: GameCore {
     let framework = "MkxpCore"
     let madeWith = "RPG Maker"
@@ -160,7 +159,7 @@ struct MkxpCore: GameCore {
 
     // MARK: - Launch
 
-    func launch(_ container: GameContainer) {
+    func launch(_ container: GameContainer) -> [CoreSetting] {
         Self.migrateOldSettings(in: container)
         let settings = MkxpSettings.load(from: container.empoStateURL)
         let profile = MkxpProfile.load(for: container)
@@ -170,14 +169,6 @@ struct MkxpCore: GameCore {
             settings.useInGameKeyboard
             ?? PokemonEssentialsDetection.detect(
                 in: container.gameURL, stateDirectory: container.empoStateURL)
-
-        // The core has no native Ruby 3.0 any more. It runs 3.0 games on 3.1.
-        set("rubyVersion", ruby == 30 ? "31" : String(ruby))
-        set("syntaxTransform", modern ? "modern" : "legacy")
-        set("postloadScripts", settings.postloadScriptsEnabled)
-        set("inGameKeyboard", inGameKeyboard)
-        set("joiplayCompat", settings.joiplayCompatEnabled)
-        set("networkEnabled", settings.networkAccessEnabled)
 
         let shared = GameSettings.load(from: container.empoStateURL)
         let overlay = ManagedMkxpConfig.overlayJSONString(
@@ -191,10 +182,19 @@ struct MkxpCore: GameCore {
                 for: container, gameSoundFont: MkxpGameSoundFont.url(in: container)),
             onUnparseableOverlay: { NSLog($0) }
         )
-        set("configOverlay", overlay ?? "")
         if let overlay {
             logConfigOverlay(overlay, container: container)
         }
+        return [
+            // The core has no native Ruby 3.0 any more. It runs 3.0 games on 3.1.
+            CoreSetting(GAMECORE_SETTING_RUBY_VERSION, ruby == 30 ? "31" : String(ruby)),
+            CoreSetting(GAMECORE_SETTING_SYNTAX_TRANSFORM, modern ? "modern" : "legacy"),
+            CoreSetting(GAMECORE_SETTING_POSTLOAD_SCRIPTS, settings.postloadScriptsEnabled),
+            CoreSetting(GAMECORE_SETTING_IN_GAME_KEYBOARD, inGameKeyboard),
+            CoreSetting(GAMECORE_SETTING_JOIPLAY_COMPAT, settings.joiplayCompatEnabled),
+            CoreSetting(GAMECORE_SETTING_NETWORK_ENABLED, settings.networkAccessEnabled),
+            CoreSetting(GAMECORE_SETTING_CONFIG_OVERLAY, overlay ?? ""),
+        ]
     }
 
     private func logConfigOverlay(
@@ -214,14 +214,6 @@ struct MkxpCore: GameCore {
         } else {
             try? line.write(toFile: path, atomically: true, encoding: .utf8)
         }
-    }
-
-    private func set(_ key: String, _ value: String) {
-        gamecore_setSetting(key, value)
-    }
-
-    private func set(_ key: String, _ on: Bool) {
-        gamecore_setSetting(key, on ? "1" : "0")
     }
 
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? {

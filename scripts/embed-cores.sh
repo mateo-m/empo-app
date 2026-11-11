@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-# Copies the game cores that EMPO_CORES names into the app's Frameworks
-# folder. Runs from an Xcode build phase of the iOS app and of the Mac
-# app.
+# Copies the game cores that cores/cores.sh names into the app's
+# Frameworks folder. Runs from an Xcode build phase of the iOS app and of
+# the Mac app.
 #
 # The app links none of the cores. It opens one of them with dlopen when
 # the user picks a game, so a copy phase, not a linked dependency: a
@@ -18,15 +18,13 @@ set -euo pipefail
 TREE="${PROJECT_DIR}/../Dependencies/build-${PLATFORM_NAME}-arm64"
 DEST="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}"
 mkdir -p "$DEST"
-if [ -z "${EMPO_CORES:-}" ]; then
-    echo "error: EMPO_CORES is empty - the app would ship no game core" >&2
-    exit 1
-fi
+# shellcheck source=cores/cores.sh
+. "${PROJECT_DIR}/../../cores/cores.sh"
 for CORE in ${EMPO_CORES}; do
     CORE_SRC="$TREE/$CORE.framework"
     case "$CORE" in
         MkxpCore) HOW="cores/mkxp/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
-        Psdk25Core | Psdk30Core | Psdk32Core | Psdk33Core) HOW="cores/psdk/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
+        Psdk*Core) HOW="cores/psdk/build-framework-ios.sh --sdk ${PLATFORM_NAME}" ;;
         MvmzCore)
             HOW="build the MvmzCore target"
             CORE_SRC="${BUILT_PRODUCTS_DIR}/$CORE.framework"
@@ -55,7 +53,7 @@ done
 # An incremental build keeps the framework folder from the last build,
 # so remove a core that this build does not ship. Older builds shipped
 # PsdkCore.
-for CORE in MkxpCore MvmzCore Psdk25Core Psdk30Core Psdk32Core Psdk33Core PsdkCore; do
+for CORE in $EMPO_ALL_CORES PsdkCore; do
     case " ${EMPO_CORES} " in
         *" $CORE "*) continue ;;
     esac

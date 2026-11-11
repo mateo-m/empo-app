@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-// Process entry.
-//
 // Empo owns UIApplicationMain. The engine is in a core that Empo opens
 // with dlopen when the user picks a game, so SDL's main and its app
 // delegate do not run.
@@ -15,19 +13,7 @@
 
 #import <UIKit/UIKit.h>
 
-#include "EmpoAppCore.h"
-#include "GameCore.h"
-
-static int gArgc;
-static char **gArgv;
-
-int EmpoCoreRunEngine(void) {
-    return gamecore_run_app(gArgc, gArgv);
-}
-
 int main(int argc, char *argv[]) {
-    gArgc = argc;
-    gArgv = argv;
     @autoreleasepool {
         return UIApplicationMain(argc, argv, nil, @"EmpoAppDelegate");
     }

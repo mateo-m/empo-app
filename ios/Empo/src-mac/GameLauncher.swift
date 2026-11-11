@@ -103,8 +103,7 @@ final class GameLauncher {
         logger.onPlayTimeFlushed = { GameLibrary.shared.refreshGameEntry(id: $0) }
         logger.openDebugLog(
             for: game, container: start.container, core: start.core, enabled: AppSettings.shared.debugLogs)
-        CoreSettingsRecorder.settings = []
-        start.core.launch(start.container)
+        let coreSettings = start.core.launch(start.container)
 
         let manifestBindings = Self.loadManifestBindings(of: start.container)
         let launch = PlayerLaunch(
@@ -118,7 +117,7 @@ final class GameLauncher {
             fixedAspectRatio: start.settings.fixedAspectRatio
                 ?? start.core.displayDefaults(for: start.container).fixedAspectRatio
                 ?? GameConfigDefaults.engineFixedAspectRatio,
-            settings: CoreSettingsRecorder.settings,
+            settings: coreSettings,
             debugLogPath: logger.logURL?.path,
             caBundlePath: CABundleStore.effectivePath,
             iconPath: game.artworkPath,
@@ -270,17 +269,4 @@ final class GameLauncher {
         sessions.removeAll()
         return .terminateNow
     }
-}
-
-/// Collects what a core's `launch(_:)` sends with gamecore_setSetting.
-/// Empo Player gives the settings to the core in its own process.
-enum CoreSettingsRecorder {
-    nonisolated(unsafe) static var settings: [PlayerLaunch.Setting] = []
-}
-
-@_cdecl("gamecore_setSetting")
-func recordCoreSetting(_ key: UnsafePointer<CChar>?, _ value: UnsafePointer<CChar>?) {
-    guard let key else { return }
-    CoreSettingsRecorder.settings.append(
-        PlayerLaunch.Setting(key: String(cString: key), value: value.map { String(cString: $0) } ?? ""))
 }
