@@ -31,19 +31,4 @@ struct OAuthTokens: Codable, Equatable, Sendable {
         guard let expiresAt else { return false }
         return now.addingTimeInterval(Self.earlyRefresh) >= expiresAt
     }
-
-    // MARK: - The Keychain
-
-    static func read(targetId: String) -> OAuthTokens? {
-        guard let text = try? BackupKeychain.secret(targetId: targetId) else { return nil }
-        return try? JSONDecoder().decode(OAuthTokens.self, from: Data(text.utf8))
-    }
-
-    func write(targetId: String) throws {
-        let data = try JSONEncoder().encode(self)
-        guard let text = String(data: data, encoding: .utf8) else {
-            throw BackupKeychain.Failure.notUTF8
-        }
-        try BackupKeychain.setSecret(text, targetId: targetId)
-    }
 }

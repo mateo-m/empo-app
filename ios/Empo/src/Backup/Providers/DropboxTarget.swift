@@ -41,7 +41,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
     func put(localFile: URL, path: String) async throws(BackupProviderError) {
         // Before any byte moves, per 8.3. A file over the limit is a
         // permanent refusal and no amount of space makes it fit.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -72,7 +72,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
     func get(path: String, localFile: URL) async throws(BackupProviderError) {
         try await gate.transfer { () async throws(BackupProviderError) in
-            let argument = Self.json(["path": Dropbox.apiPath(for: path)])
+            let argument = try Self.json(["path": Dropbox.apiPath(for: path)])
             var request = try await self.contentRequest(.download, argument: argument)
             // A download sends no body, and Dropbox refuses a content
             // type it did not ask for.
@@ -124,7 +124,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
         var pages: [DropboxListPage] = []
         var request = try apiRequest(.listFolder)
         request.httpBody = Data(
-            Self.json([
+            try Self.json([
                 "path": Dropbox.listFolder(forPrefix: prefix),
                 "recursive": true,
                 "include_deleted": false,
@@ -145,7 +145,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
             guard page.hasMore else { break }
 
             request = try apiRequest(.listFolderContinue)
-            request.httpBody = Data(Self.json(["cursor": page.cursor]).utf8)
+            request.httpBody = Data(try Self.json(["cursor": page.cursor]).utf8)
         }
         return Dropbox.objects(fromPages: pages, prefix: prefix)
     }
@@ -167,7 +167,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
     private func uploadWhole(_ localFile: URL, to path: String) async throws(BackupProviderError) {
         let request = try contentRequest(
-            .upload, argument: Self.json(Self.commit(path: path)))
+            .upload, argument: try Self.json(Self.commit(path: path)))
         let answer = try await upload(
             file: localFile, request: request, path: path)
         guard answer.isSuccess else { throw Self.error(answer) }
@@ -211,7 +211,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
 
             let answer: HTTPAnswer
             if let sessionId {
-                let argument = Self.json([
+                let argument = try Self.json([
                     "cursor": ["session_id": sessionId, "offset": chunk.offset],
                     "close": false,
                 ])
@@ -223,7 +223,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
                 answer = try await upload(
                     file: piece,
                     request: try contentRequest(
-                        .uploadSessionStart, argument: Self.json(["close": false])),
+                        .uploadSessionStart, argument: try Self.json(["close": false])),
                     path: path)
             }
 
@@ -300,7 +300,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
     private func finish(
         sessionId: String, offset: Int64, path: String, scratch: URL
     ) async throws(BackupProviderError) -> HTTPAnswer {
-        let argument = Self.json([
+        let argument = try Self.json([
             "cursor": ["session_id": sessionId, "offset": offset],
             "commit": Self.commit(path: path),
         ])
@@ -328,7 +328,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
     private func deleteOneBatch(_ paths: [String]) async throws(BackupProviderError) {
         var request = try apiRequest(.deleteBatch)
         request.httpBody = Data(
-            Self.json([
+            try Self.json([
                 "entries": paths.map { ["path": Dropbox.apiPath(for: $0)] }
             ]).utf8)
 
@@ -352,7 +352,7 @@ actor DropboxTarget: BackupProvider, AccountReading {
         var left = Self.deleteJobWait
         while left > 0 {
             var request = try apiRequest(.deleteBatchCheck)
-            request.httpBody = Data(Self.json(["async_job_id": job]).utf8)
+            request.httpBody = Data(try Self.json(["async_job_id": job]).utf8)
 
             let answer = try await api(request)
             guard answer.isSuccess else { throw Self.error(answer) }
@@ -420,11 +420,12 @@ actor DropboxTarget: BackupProvider, AccountReading {
             retryAfterHeader: answer.retryAfterHeader)
     }
 
-    private static func json(_ value: Any) -> String {
-        guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
-            let text = String(data: data, encoding: .utf8)
+    private static func json(_ value: Any) throws(BackupProviderError) -> String {
+        guard JSONSerialization.isValidJSONObject(value),
+            let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+            let text = String(bytes: data, encoding: .utf8)
         else {
-            return "{}"
+            throw .rejected(message: String(localized: "Empo couldn't send a request to Dropbox. Try again."))
         }
         return text
     }

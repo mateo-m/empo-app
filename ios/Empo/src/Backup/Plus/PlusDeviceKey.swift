@@ -11,6 +11,8 @@ enum PlusDeviceKey {
         case software(P256.Signing.PrivateKey)
     }
 
+    struct UnreadableKey: Error {}
+
     private static let enclavePrefix = "enclave:"
     private static let softwarePrefix = "software:"
 
@@ -46,6 +48,9 @@ enum PlusDeviceKey {
             {
                 return .software(try P256.Signing.PrivateKey(rawRepresentation: data))
             }
+            // A new key here would cost the device its place in the
+            // account's device list.
+            throw UnreadableKey()
         }
         // The simulator and Macs without a Secure Enclave keep a software
         // key in a Keychain item that does not leave this device.

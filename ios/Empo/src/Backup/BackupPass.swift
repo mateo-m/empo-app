@@ -3,14 +3,6 @@ import GameProbe
 import UIKit
 import os
 
-/// One backup pass: every enabled target, every game the trigger
-/// covers, through the snapshot engine of SPEC 5.
-///
-/// The scheduler of ticket 007 owns when a pass runs and stops it at
-/// every gate. This file owns what a pass carries: it turns the
-/// library into a `BackupRunRequest` and hands it to `SnapshotEngine`,
-/// which does the rest.
-///
 /// A game whose mode is still unanswered is skipped, per 3.5. The
 /// Backups screen asks about every such game before it starts a run.
 @MainActor
@@ -19,16 +11,20 @@ final class BackupPass: BackupRunning {
     static let shared = BackupPass()
 
     private let readThePlus: @MainActor () async -> Void
+    private let openTheProvider: @MainActor (TargetDescriptor) async -> (any BackupProvider)?
 
     init(
-        readThePlus: @escaping @MainActor () async -> Void = {
-            await EmpoPlus.shared.renew()
-            await PlusStore.shared.refresh()
+        readThePlus: @escaping @MainActor () async -> Void = { await EmpoPlus.shared.refresh() },
+        openTheProvider: @escaping @MainActor (TargetDescriptor) async -> (any BackupProvider)? = {
+            await BackupTargets.provider(for: $0)
         }
     ) {
         self.readThePlus = readThePlus
+        self.openTheProvider = openTheProvider
     }
 
+    /// `progress` belongs to a continued-processing task, which must
+    /// report progress or the system expires it.
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult {
@@ -37,11 +33,12 @@ final class BackupPass: BackupRunning {
         guard !Task.isCancelled else { return BackupPassResult() }
         let targets = BackupTargets.writable()
         guard !targets.isEmpty else {
-            log("the pass found no target")
+            BackupLog.debug("BackupPass", "the pass found no target")
             return BackupPassResult(didFinish: true)
         }
 
-        let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
+        guard let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
+        else { return BackupPassResult(didFinish: false) }
         guard !Task.isCancelled else { return BackupPassResult() }
         BackupGameNames.remember(names)
         BackupRunMonitor.shared.runCovers(
@@ -55,16 +52,19 @@ final class BackupPass: BackupRunning {
             // A game wins everything, per 7.6. The session end runs
             // the backbone pass, which takes the rest.
             guard !BackupDeviceConditions.isSessionLive else {
-                log("a game is running, the pass stops before \(descriptor.label)")
+                BackupLog.debug("BackupPass", "a game is running, the pass stops before \(descriptor.label)")
                 BackupRunMonitor.shared.pause = .gameRunning
                 didFinish = false
                 break
             }
-            guard let provider = await BackupTargets.provider(for: descriptor) else {
+            // iCloud Drive can take a long time to open.
+            let opened = await Self.waitUnlessCancelled { await self.openTheProvider(descriptor) }
+            guard !Task.isCancelled else { return BackupPassResult(targets: rows) }
+            guard let provider = opened.flatMap({ $0 }) else {
                 // The gate of 9.1 is closed, or the provider is not
                 // built yet. Neither is a failure the user can clear,
                 // so nothing notifies.
-                log("\(descriptor.label) cannot open in this build")
+                BackupLog.debug("BackupPass", "\(descriptor.label) cannot open in this build")
                 BackupRunMonitor.shared.targetEnds()
                 continue
             }
@@ -116,34 +116,58 @@ final class BackupPass: BackupRunning {
         _ descriptor: TargetDescriptor, provider: some BackupProvider, games: [BackupRunGame],
         trigger: BackupTrigger
     ) async -> BackupRunResult? {
+        guard let deviceId = BackupDevice.id else {
+            BackupLog.line("BackupPass", "\(descriptor.label) waits, the device id is not known")
+            return nil
+        }
         let namespaceId: String
         let store: BackupStateStore
         do {
             namespaceId = try BackupKeychain.namespaceId()
             // One store belongs to the task that opened it, so the
             // engine gets its own.
-            store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            store = try BackupRoot.openStateStore()
         } catch {
-            log("\(descriptor.label) could not open its local state")
+            BackupLog.line("BackupPass", "\(descriptor.label) could not open its local state: \(error)")
             return nil
         }
+        do {
+            try BackupNamespaceMove.clearIfWaiting(targetId: descriptor.id, store: store)
+        } catch {
+            BackupLog.line(
+                "BackupPass", "\(descriptor.label) still holds the rows of the old namespace: \(error)")
+            return nil
+        }
+        do {
+            try await BackupLedgerRebuild.runIfWaiting(
+                descriptor, provider: provider, namespaceId: namespaceId, store: store)
+        } catch {
+            // The run still goes. A short ledger only keeps old
+            // snapshots longer, and the next run tries the rebuild again.
+            BackupLog.line("BackupPass", "\(descriptor.label) ledger rebuild failed: \(error)")
+        }
 
-        let settings = runSettings(label: descriptor.label)
-        var conflicts = settings.conflicts
+        let settings: (writerAnswer: WriterConflicts.Answer?, syncGroup: BackupRunRequest.SyncGroupChoice)
+        do {
+            settings = try runSettings(targetId: descriptor.id, label: descriptor.label)
+        } catch {
+            BackupLog.line("BackupPass", "\(descriptor.label) could not read the writer answers: \(error)")
+            return nil
+        }
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
             descriptor: descriptor,
             namespaceId: namespaceId,
-            deviceId: BackupDevice.id,
+            deviceId: deviceId,
             deviceName: BackupDevice.name,
             deviceModel: BackupDevice.model,
             retentionPreset: BackupSettings.retention,
-            freeSpaceBytes: Self.freeSpaceBytes,
+            freeSpaceBytes: BackupRoot.freeSpaceBytes,
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerAnswer: conflicts?.answer(for: descriptor.id),
+            writerAnswer: settings.writerAnswer,
             syncGroup: settings.syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
@@ -156,64 +180,80 @@ final class BackupPass: BackupRunning {
         BackupRunMonitor.shared.liveRunId = request.runId
         let result = await engine.run(request)
         BackupRunMonitor.shared.liveRunId = nil
-        log(
+        BackupLog.debug(
+            "BackupPass",
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
-        conflicts?.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
-        try? conflicts?.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        do {
+            try Self.recordTheWriterAnswers(
+                targetId: descriptor.id, answerAtStart: settings.writerAnswer, result: result)
+        } catch {
+            BackupLog.line("BackupPass", "\(descriptor.label) writer answers were not saved: \(error)")
+        }
         if result.didSplit {
-            moveTheDevice(to: result.namespaceId, after: descriptor)
+            do {
+                try BackupNamespaceMove.afterSplit(to: result.namespaceId, targetId: descriptor.id)
+                BackupLog.debug(
+                    "BackupPass", "\(descriptor.label) split, the device now writes to \(result.namespaceId)")
+            } catch {
+                BackupLog.line(
+                    "BackupPass",
+                    "\(descriptor.label) split to \(result.namespaceId), but the move did not finish: \(error)"
+                )
+            }
         }
         return result
     }
 
+    /// A damaged answers file moves aside and reads as no answer. A file that does not open throws.
     func runSettings(
-        label: String
-    ) -> (conflicts: WriterConflicts?, syncGroup: BackupRunRequest.SyncGroupChoice) {
-        let conflicts = try? WriterConflicts.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
+        targetId: String, label: String
+    ) throws -> (writerAnswer: WriterConflicts.Answer?, syncGroup: BackupRunRequest.SyncGroupChoice) {
+        let writerAnswer = try BackupRoot.writerConflicts().answer(for: targetId)
         do {
-            return (conflicts, .known(try SyncStore.state().groupId))
+            return (writerAnswer, .known(try SyncStore.state().groupId))
         } catch {
-            log("\(label) could not read the sync settings, so it keeps the recorded group")
-            return (conflicts, .keepRecorded)
+            BackupLog.line(
+                "BackupPass", "\(label) could not read the sync settings, so it keeps the recorded group")
+            return (writerAnswer, .keepRecorded)
         }
     }
 
-    /// The namespace id is one per device, so a split on one target
-    /// moves every target to the new space. The others start from a
-    /// full upload on their next run, like the one that split.
-    private func moveTheDevice(to namespaceId: String, after descriptor: TargetDescriptor) {
-        do {
-            try BackupKeychain.adoptNamespaceId(namespaceId)
-        } catch {
-            log("\(descriptor.label) split to \(namespaceId) but the Keychain kept the old id")
-            return
+    /// The user can answer on the Backups screen while the run uploads,
+    /// and that answer wins over the end of the run.
+    static func recordTheWriterAnswers(
+        targetId: String, answerAtStart: WriterConflicts.Answer?, result: BackupRunResult
+    ) throws {
+        var conflicts = try BackupRoot.writerConflicts()
+        let answerNow = conflicts.answer(for: targetId)
+        // No answer now also covers a file that was damaged during the run.
+        if answerNow == answerAtStart || answerNow == nil {
+            conflicts.runEnded(targetId: targetId, stop: result.stop, didSplit: result.didSplit)
+        } else if result.didSplit {
+            conflicts.showsTheSplitLine = true
         }
-        log("\(descriptor.label) split, the device now writes to \(namespaceId)")
-        guard let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) else { return }
-        defer { store.close() }
-        for other in BackupTargets.load() where other.id != descriptor.id {
-            try? store.clearNamespaceState(targetId: other.id)
-        }
+        try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
-    /// Other callers share the Plus reads, so a pause ends the wait and the reads go on.
-    private static func waitUnlessCancelled(_ work: @escaping @MainActor () async -> Void) async {
-        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
-        let resume: @Sendable () -> Void = { waiter.withLock { $0.take() }?.resume() }
-        await withTaskCancellationHandler {
+    /// Other callers share the Plus reads and the providers, so a pause ends the wait and the work
+    /// goes on. A pause answers `nil`.
+    @discardableResult
+    private static func waitUnlessCancelled<Value: Sendable>(
+        _ work: @escaping @MainActor () async -> Value
+    ) async -> Value? {
+        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Value?, Never>?>(initialState: nil)
+        let resume: @Sendable (Value?) -> Void = { value in
+            waiter.withLock { $0.take() }?.resume(returning: value)
+        }
+        return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 waiter.withLock { $0 = continuation }
-                Task {
-                    await work()
-                    resume()
-                }
-                if Task.isCancelled { resume() }
+                Task { resume(await work()) }
+                if Task.isCancelled { resume(nil) }
             }
         } onCancel: {
-            resume()
+            resume(nil)
         }
     }
 
@@ -224,24 +264,27 @@ final class BackupPass: BackupRunning {
     /// 13.2 name the game they upload.
     private func gamesInScope(
         _ scope: BackupScanScope, targetIds: Set<String>
-    ) async -> (games: [BackupRunGame], names: [String: String]) {
+    ) async -> (games: [BackupRunGame], names: [String: String])? {
         let containers = GameContainer.discover()
         let byKey = Dictionary(
             uniqueKeysWithValues: containers.map {
                 (BackupKeys.gameKey(containerFolderName: $0.folderName), $0)
             })
 
-        var dirty: [DirtyMark] = []
-        var restoring: String?
-        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
-            dirty = (try? store.dirtyGames()) ?? []
-            restoring =
-                (try? RestoreResumeQuestion.unfinishedRecord(
-                    in: store, layout: BackupRoot.layout))?.gameKey
-            store.close()
+        let dirty: [DirtyMark]
+        let restoring: String?
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            dirty = try store.dirtyGames()
+            restoring = try RestoreResumeQuestion.unfinishedRecord(
+                in: store, layout: BackupRoot.layout)?.gameKey
+        } catch {
+            BackupLog.line("BackupPass", "The pass stops, the records were not read: \(error)")
+            return nil
         }
         if let restoring, byKey[restoring] != nil {
-            log("\(restoring) sits out, its restore has not finished")
+            BackupLog.debug("BackupPass", "\(restoring) sits out, its restore has not finished")
         }
         let keys = BackupTriggerPlan.games(
             in: scope, dirty: dirty, library: Array(byKey.keys).sorted(), targetIds: targetIds,
@@ -257,11 +300,19 @@ final class BackupPass: BackupRunning {
             // up in neither place.
             LegacyControlsMigration.run(
                 container: container, keys: GameKey.keys(forGameAt: container.gameURL))
-            let resolution = await GameBackupSets.resolveMode(
-                for: container, targets: thresholds)
-            guard case .mode(let mode) = resolution else {
-                // The ask of 3.5 has no answer yet, so this game
-                // waits for it.
+            let set: GameBackupSetRequest
+            do {
+                guard
+                    case .mode(let mode) = try await GameBackupSets.resolveMode(
+                        for: container, targets: thresholds)
+                else {
+                    // The ask of 3.5 has no answer yet, so this game
+                    // waits for it.
+                    continue
+                }
+                set = try await GameBackupSets.request(for: container, mode: mode)
+            } catch {
+                BackupLog.line("BackupPass", "\(key) sits out, its backup settings did not read: \(error)")
                 continue
             }
             let metadata = GameMetadata.load(from: container)
@@ -271,7 +322,7 @@ final class BackupPass: BackupRunning {
                 BackupRunGame(
                     identity: GameIdentities.identity(for: container),
                     title: name,
-                    set: await GameBackupSets.request(for: container, mode: mode),
+                    set: set,
                     versionMarker: GameIdentities.versionMarker(for: container),
                     lastPlayedAt: metadata.lastPlayed))
         }
@@ -279,14 +330,6 @@ final class BackupPass: BackupRunning {
     }
 
     // MARK: - The device
-
-    /// What the budget of 6.4 may spend. The engine takes it as an
-    /// input, so no rule inside it reads the host.
-    private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.layout.root.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? 0
-    }
 
     /// What the pill says after the run, per 13.2. The target row
     /// names the stop, so the pill uses the same words.
@@ -318,10 +361,5 @@ final class BackupPass: BackupRunning {
             }
         }
         return causes
-    }
-
-    private func log(_ message: String) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("BackupPass", message)
     }
 }

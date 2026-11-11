@@ -33,6 +33,9 @@ final class BackupSheetModel {
     /// `nil` until the files are read. An edit made on an empty
     /// editor would save an empty mark list over the user's marks.
     private(set) var editor: SaveFileEditorModel?
+    /// The game's backup settings are damaged. A new mode choice writes a
+    /// new file, and the editor opens again.
+    private(set) var settingsUnread = false
     private(set) var leftovers = GameLeftovers()
     private(set) var hasATarget = false
     /// The first oversized write this game still owes an answer.
@@ -67,7 +70,7 @@ final class BackupSheetModel {
         hasATarget = !descriptors.isEmpty
         mode = (try? GameBackupIntent.load(from: container.empoStateURL))?.mode
 
-        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
+        let store = try? BackupRoot.openStateStore()
         defer { store?.close() }
         readTheStatus(descriptors, store: store)
         readTheStore(descriptors, store: store)
@@ -85,15 +88,26 @@ final class BackupSheetModel {
     func readTheFiles() async {
         readsOfTheFiles += 1
         let read = readsOfTheFiles
-        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
-        let full = await resolve(.full)
-        let slim = await resolve(.slim)
+        let marks: [String]?
+        do {
+            marks = try GameBackupIntent.load(from: container.empoStateURL).manualMarks
+        } catch {
+            // No editor, so a save from it cannot replace the marks
+            // that the damaged file still holds.
+            BackupLog.line("BackupSheetModel", "The backup settings did not read: \(error)")
+            marks = nil
+        }
+        // A new mode choice over a damaged file starts with no marks, so
+        // the sizes count none.
+        let full = await resolve(.full, marks: marks ?? [])
+        let slim = await resolve(.slim, marks: marks ?? [])
         let leftovers = await Self.leftovers(inside: container.url)
         // A later read started meanwhile and holds newer marks.
         guard read == readsOfTheFiles else { return }
         fullBytes = full.totalSize
         slimBytes = slim.totalSize
-        editor = SaveFileEditorModel.from(slim, manualMarks: intent.manualMarks)
+        editor = marks.map { SaveFileEditorModel.from(slim, manualMarks: $0) }
+        settingsUnread = marks == nil
         self.leftovers = leftovers
     }
 
@@ -110,8 +124,8 @@ final class BackupSheetModel {
         lastSuccessAt = read.lastSuccessAt
     }
 
-    private func resolve(_ mode: BackupMode) async -> GameBackupSet {
-        let request = await GameBackupSets.request(for: container, mode: mode)
+    private func resolve(_ mode: BackupMode, marks: [String]) async -> GameBackupSet {
+        let request = await GameBackupSets.request(for: container, mode: mode, manualMarks: marks)
         return await Task.detached { BackupSetResolver.resolve(request) }.value
     }
 
@@ -128,17 +142,22 @@ final class BackupSheetModel {
     /// Answering here satisfies the ask of 3.5, so the sheet never
     /// fires it.
     func setMode(_ mode: BackupMode) async {
-        guard (try? GameBackupSets.setMode(mode, for: container)) == true else {
-            await load()
-            return
+        do {
+            if try GameBackupSets.setMode(mode, for: container) {
+                BackupScheduler.shared.markDirty(container: container)
+            }
+        } catch {
+            BackupLog.line("BackupSheetModel", "The backup mode was not saved: \(error)")
         }
-        BackupScheduler.shared.markDirty(container: container)
         await load()
     }
 
     func setMarks(_ editor: SaveFileEditorModel) async {
-        if let intent = try? GameBackupIntent.load(from: container.empoStateURL) {
-            try? editor.applied(to: intent).save(to: container.empoStateURL)
+        do {
+            let intent = try GameBackupIntent.load(from: container.empoStateURL)
+            try editor.applied(to: intent).save(to: container.empoStateURL)
+        } catch {
+            BackupLog.line("BackupSheetModel", "The save file marks were not saved: \(error)")
         }
         await load()
     }

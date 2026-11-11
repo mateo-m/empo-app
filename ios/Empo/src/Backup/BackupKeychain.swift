@@ -65,6 +65,22 @@ enum BackupKeychain {
         try setString(secret, account: secretAccount(targetId))
     }
 
+    static func secret<Value: Decodable>(_ type: Value.Type, targetId: String) -> Value? {
+        do {
+            guard let text = try secret(targetId: targetId) else { return nil }
+            return try JSONDecoder().decode(type, from: Data(text.utf8))
+        } catch {
+            BackupLog.line("BackupKeychain", "The secret of \(targetId) was not read: \(error)")
+            return nil
+        }
+    }
+
+    static func setSecret(json value: some Encodable, targetId: String) throws {
+        let data = try JSONEncoder().encode(value)
+        guard let text = String(bytes: data, encoding: .utf8) else { throw Failure.notUTF8 }
+        try setSecret(text, targetId: targetId)
+    }
+
     /// Removing a target removes its secret. The namespace id stays,
     /// because the other targets still write under it.
     static func removeSecret(targetId: String) throws {

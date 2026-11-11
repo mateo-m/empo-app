@@ -30,12 +30,10 @@ protocol AccountReading: Sendable {
 /// AppAuth carries PKCE and the code exchange. Empo hand-rolls the
 /// REST of each provider and nothing else, because an SDK would bring
 /// a second background session beside Empo's own, per 9.2 and 9.3.
-///
-/// One class holds the flow for Dropbox, for Google Drive, and for
-/// any later service. Ticket 010 states the rule plainly: reuse the
-/// shape ticket 009 built, and do not write a second OAuth stack.
 @MainActor
 final class OAuthSignIn {
+
+    struct NoToken: Error {}
 
     static let shared = OAuthSignIn()
 
@@ -188,8 +186,9 @@ final class OAuthSignIn {
         }
         if session === mine { session = nil }
 
-        guard let response = state?.lastTokenResponse, let access = response.accessToken else {
-            return nil
+        guard let state else { return nil }
+        guard let response = state.lastTokenResponse, let access = response.accessToken else {
+            throw NoToken()
         }
         return OAuthTokens(
             accessToken: access,

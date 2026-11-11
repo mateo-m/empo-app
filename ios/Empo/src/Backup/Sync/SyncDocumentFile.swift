@@ -16,23 +16,72 @@ final class AutomergeDocumentStore: SyncDocumentStore {
         BackupRoot.layout.syncDocumentFile
     }
 
-    /// A join drops the local document, per 10.4. Two documents that
-    /// never shared a history give the root a second `preferences`
-    /// map, and Automerge answers one of the two.
-    static func delete() {
-        try? FileManager.default.removeItem(at: url)
+    /// Where a join keeps the old group's document until the join is
+    /// saved. No pass reads it.
+    private static var movedURL: URL {
+        url.appendingPathExtension("left")
+    }
+
+    /// Answers whether a document was there to move.
+    static func moveAside() throws -> Bool {
+        try deleteTheMovedDocument()
+        do {
+            try FileManager.default.moveItem(at: url, to: movedURL)
+            return true
+        } catch CocoaError.fileNoSuchFile {
+            return false
+        }
+    }
+
+    static func moveBack() throws {
+        try FileManager.default.moveItem(at: movedURL, to: url)
+    }
+
+    static func deleteTheMovedDocument() throws {
+        do {
+            try FileManager.default.removeItem(at: movedURL)
+        } catch CocoaError.fileNoSuchFile {}
+    }
+
+    /// The file, or `nil` where this device holds none. It throws
+    /// for every other read error.
+    static func bytes() throws -> Data? {
+        do {
+            return try Data(contentsOf: url)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        }
     }
 
     private var document = Document()
+    /// The read error of the last `load`. `SyncDocumentStore.load`
+    /// cannot throw, and `SyncEngine` reads an empty document as a new
+    /// device. `SyncPass` reads the file before each pass, and `save`
+    /// refuses to write while this is set, so that an empty document
+    /// cannot replace a file that the pass could not read.
+    private var unreadFile: Error?
 
     func load() {
-        guard let bytes = try? Data(contentsOf: Self.url),
-            let opened = try? SyncDocument.open(bytes, actorId: SyncStore.state().actorId)
-        else {
-            document = SyncDocument.make(actorId: SyncStore.newActorId())
+        let bytes: Data
+        do {
+            unreadFile = nil
+            guard let read = try Self.bytes() else {
+                document = SyncDocument.make(actorId: SyncStore.newActorId())
+                return
+            }
+            bytes = read
+        } catch {
+            unreadFile = error
+            BackupLog.line("SyncDocument", "The local document was not read: \(error)")
+            document = Document()
             return
         }
-        document = opened
+        do {
+            document = try SyncDocument.open(bytes, actorId: SyncStore.state().actorId)
+        } catch {
+            BackupLog.line("SyncDocument", "The local document is damaged, so a new one starts: \(error)")
+            document = SyncDocument.make(actorId: SyncStore.newActorId())
+        }
     }
 
     func model() throws -> SyncDocumentModel {
@@ -62,14 +111,24 @@ final class AutomergeDocumentStore: SyncDocumentStore {
     }
 
     func losingControls(profileId: String) -> [[String: JSONValue]] {
-        (try? SyncDocument.losingControls(of: document, profileId: profileId)) ?? []
+        do {
+            return try SyncDocument.losingControls(of: document, profileId: profileId)
+        } catch {
+            BackupLog.line("SyncDocument", "The conflicts of \(profileId) were not read: \(error)")
+            return []
+        }
     }
 
     func resolveControls(profileId: String, keys: [String]) {
-        try? SyncDocument.resolveControls(of: document, profileId: profileId, keys: keys)
+        do {
+            try SyncDocument.resolveControls(of: document, profileId: profileId, keys: keys)
+        } catch {
+            BackupLog.line("SyncDocument", "The conflicts of \(profileId) were not resolved: \(error)")
+        }
     }
 
     func save() throws {
+        if let unreadFile { throw unreadFile }
         try document.save().write(to: Self.url, options: .atomic)
     }
 }

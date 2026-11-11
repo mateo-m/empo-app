@@ -13,9 +13,15 @@ enum UploadStaging {
     /// memory whole.
     private static let readSize = 1024 * 1024
 
-    static func fileSize(at url: URL) -> Int64 {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey])
-        return Int64(values?.fileSize ?? 0)
+    static func fileSize(at url: URL) throws(BackupProviderError) -> Int64 {
+        do {
+            guard let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            return Int64(size)
+        } catch {
+            throw stagingFailure(error)
+        }
     }
 
     /// A directory of this provider's own, for the pieces of one
@@ -27,7 +33,6 @@ enum UploadStaging {
         return url
     }
 
-    /// Copies one byte range of a file into a file of its own.
     static func piece(
         of localFile: URL, offset: Int64, length: Int64, named name: String, in scratch: URL
     ) throws(BackupProviderError) -> URL {
@@ -80,6 +85,10 @@ enum UploadStaging {
     }
 
     private static func stagingFailure(_ error: Error) -> BackupProviderError {
-        .rejected(message: "this device could not stage the upload: \(error.localizedDescription)")
+        BackupLog.line("UploadStaging", "The upload was not staged: \(error)")
+        return .rejected(
+            message: error.isOutOfSpace
+                ? String(localized: "This device is full. Free up space, then try again.")
+                : String(localized: "Empo couldn't prepare the upload on this device. Try again."))
     }
 }

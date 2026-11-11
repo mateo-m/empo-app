@@ -1,12 +1,6 @@
 import Foundation
 import GameProbe
 
-/// The Google Drive target of SPEC 9.3, the second OAuth provider.
-///
-/// Hand-rolled REST over the one background session of 7.3, with the
-/// AppAuth sign-in ticket 009 built. There is one OAuth stack and one
-/// background session in the app, and this file adds neither.
-///
 /// The rules a test can reach live in `GoogleDrive`, inside GameProbe:
 /// the URLs, the queries, the framing, the paging, and the error map.
 /// This file needs an account.
@@ -65,7 +59,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     func put(localFile: URL, path: String) async throws(BackupProviderError) {
         // Before any byte moves, per 8.3. A file over the limit is a
         // permanent refusal and no amount of space makes it fit.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -204,7 +198,11 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
         if let url = GoogleDrive.filesURL(id: id) {
             var delete = URLRequest(url: url)
             delete.httpMethod = "DELETE"
-            _ = try? await api(delete)
+            do {
+                _ = try await api(delete)
+            } catch {
+                BackupLog.line("GoogleDriveTarget", "the empty folder \(id) stays: \(error)")
+            }
         }
         return oldest
     }

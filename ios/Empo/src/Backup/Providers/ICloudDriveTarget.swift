@@ -48,7 +48,7 @@ actor ICloudDriveTarget: BackupProvider {
         // Before any byte moves, per 8.3. iCloud states no number,
         // so this rejects nothing today and stays for the day the
         // spec gives it one.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         let destination = fileURL(forPath: path)
@@ -141,7 +141,11 @@ actor ICloudDriveTarget: BackupProvider {
     /// next pass asks again.
     private func download(_ url: URL) async throws(BackupProviderError) {
         if let reading = await watch.reading(for: url), reading.isDownloaded { return }
-        try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+        do {
+            try FileManager.default.startDownloadingUbiquitousItem(at: url)
+        } catch {
+            throw Self.mapped(error)
+        }
 
         var progress = ICloudDownloadProgress(startedAt: Date())
         while true {

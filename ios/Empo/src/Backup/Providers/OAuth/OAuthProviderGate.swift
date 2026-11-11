@@ -41,13 +41,10 @@ protocol OAuthProviderGate: AnyObject {
 
 extension OAuthProviderGate {
 
-    /// Whether the add flow of 13.7 shows this service at all.
-    var showsInAddFlow: Bool { Self.service != nil }
-
     func cannotOpenLine(for target: TargetDescriptor) -> String? {
         guard target.provider == Self.kind else { return nil }
         if Self.service == nil { return Self.noKeyLine }
-        if OAuthTokenStore.tokens(targetId: target.id) == nil { return Self.noTokenLine }
+        if BackupKeychain.secret(OAuthTokens.self, targetId: target.id) == nil { return Self.noTokenLine }
         return nil
     }
 
@@ -64,7 +61,7 @@ extension OAuthProviderGate {
     func store(for targetId: String) -> OAuthTokenStore? {
         if let existing = stores[targetId] { return existing }
         guard let service = Self.service else { return nil }
-        guard let tokens = OAuthTokenStore.tokens(targetId: targetId) else { return nil }
+        guard let tokens = BackupKeychain.secret(OAuthTokens.self, targetId: targetId) else { return nil }
 
         let store = OAuthTokenStore(
             targetId: targetId,
@@ -99,7 +96,7 @@ extension OAuthProviderGate {
         if let store = stores[targetId] {
             try await store.replace(with: tokens)
         } else {
-            try tokens.write(targetId: targetId)
+            try BackupKeychain.setSecret(json: tokens, targetId: targetId)
             _ = store(for: targetId)
         }
         return true

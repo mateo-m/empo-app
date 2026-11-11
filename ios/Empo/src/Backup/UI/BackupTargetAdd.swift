@@ -24,8 +24,6 @@ enum BackupTargetAdd {
         }
     }
 
-    static let services: [BackupProviderKind] = [.iCloudDrive, .dropbox, .googleDrive, .s3, .webdav]
-
     static func iCloud() async -> Outcome {
         let descriptor = TargetDescriptor(
             id: "icloud-drive",
@@ -94,8 +92,6 @@ enum BackupTargetAdd {
         return await check(descriptor, provider: provider, secretBefore: nil)
     }
 
-    /// `id` is the target that signs in again. A new target takes a
-    /// fresh id.
     /// A sign-in passes the `existing` target, which keeps its id,
     /// its folder, and its backup policy.
     static func s3(form: [String: String], existing: TargetDescriptor? = nil) async -> Outcome {
@@ -115,8 +111,8 @@ enum BackupTargetAdd {
                 id: UUID().uuidString, provider: .s3, label: "", root: form["root"] ?? "")
         descriptor.label = form["label"] ?? bucket.name
         descriptor.accountHint = connection.accountHint
-        let before = try? BackupKeychain.secret(targetId: descriptor.id)
         do {
+            let before = try BackupKeychain.secret(targetId: descriptor.id)
             let provider = try S3Gate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
             return await check(descriptor, provider: provider, secretBefore: before)
@@ -176,8 +172,8 @@ enum BackupTargetAdd {
                 id: UUID().uuidString, provider: .webdav, label: "", root: form["root"] ?? "")
         descriptor.label = form["label"] ?? address.host ?? "WebDAV"
         descriptor.accountHint = connection.accountHint
-        let before = try? BackupKeychain.secret(targetId: descriptor.id)
         do {
+            let before = try BackupKeychain.secret(targetId: descriptor.id)
             let provider = try WebDAVGate.shared.connect(connection, targetId: descriptor.id)
             await LocalNetworkAccess.waitForTheAnswer(to: address)
             return await check(descriptor, provider: provider, secretBefore: before)
@@ -208,12 +204,12 @@ enum BackupTargetAdd {
         var values = ["label": target.label, "root": target.root]
         switch target.provider {
         case .webdav:
-            if let connection = WebDAVConnectionStore.connection(targetId: target.id) {
+            if let connection = BackupKeychain.secret(WebDAVConnection.self, targetId: target.id) {
                 values["address"] = connection.server.address.absoluteString
                 values["username"] = connection.server.username
             }
         case .s3:
-            if let connection = S3ConnectionStore.connection(targetId: target.id) {
+            if let connection = BackupKeychain.secret(S3Connection.self, targetId: target.id) {
                 values["address"] = connection.bucket.address.absoluteString
                 values["bucket"] = connection.bucket.name
                 values["region"] = connection.bucket.region
@@ -240,7 +236,12 @@ enum BackupTargetAdd {
             guard let screen = await OAuthSignIn.screenForTheSheet() else {
                 return .failed(noSignInScreenLine)
             }
-            let before = try? BackupKeychain.secret(targetId: target.id)
+            let before: String?
+            do {
+                before = try BackupKeychain.secret(targetId: target.id)
+            } catch {
+                return .failed(keychainFailedLine)
+            }
             do {
                 let signedIn =
                     target.provider == .dropbox
@@ -274,10 +275,14 @@ enum BackupTargetAdd {
 
     private static func putBack(_ secret: String?, targetId: String) {
         BackupTargets.forget(targetId: targetId)
-        if let secret {
-            try? BackupKeychain.setSecret(secret, targetId: targetId)
-        } else {
-            try? BackupKeychain.removeSecret(targetId: targetId)
+        do {
+            if let secret {
+                try BackupKeychain.setSecret(secret, targetId: targetId)
+            } else {
+                try BackupKeychain.removeSecret(targetId: targetId)
+            }
+        } catch {
+            BackupLog.line("BackupTargetAdd", "The secret of \(targetId) was not put back: \(error)")
         }
     }
 
@@ -301,20 +306,22 @@ enum BackupTargetAdd {
                 }
             }
         }
-        guard
-            let result = try? await BackupTargets.addAfterPermissionCheck(
-                descriptor, provider: provider)
-        else {
+        let result: PermissionCheckResult
+        do {
+            result = try await BackupTargets.addAfterPermissionCheck(descriptor, provider: provider)
+        } catch {
+            BackupLog.line("BackupTargetAdd", "The check of \(descriptor.label) failed: \(error)")
             return .failed(String(localized: "Empo couldn't check this location. Try again."))
         }
-        if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
-            try? store.recordTargetQuota(
-                targetId: descriptor.id, reading: result.quota)
+        do {
+            let store = try BackupRoot.openStateStore()
+            defer { store.close() }
+            try store.recordTargetQuota(targetId: descriptor.id, reading: result.quota)
             if result.allowsAdd {
-                try? store.recordTargetFailure(
-                    targetId: descriptor.id, failure: nil, at: Date())
+                try store.recordTargetFailure(targetId: descriptor.id, failure: nil, at: Date())
             }
-            store.close()
+        } catch {
+            BackupLog.line("BackupTargetAdd", "The check of \(descriptor.label) was not recorded: \(error)")
         }
         return .checked(descriptor, result)
     }

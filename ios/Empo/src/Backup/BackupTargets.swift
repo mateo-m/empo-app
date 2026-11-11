@@ -11,10 +11,33 @@ import GameProbe
 @MainActor
 enum BackupTargets {
 
+    /// A damaged file throws. A caller that read it as "no targets"
+    /// and wrote the list back would delete every target.
+    static func read() throws -> [TargetDescriptor] {
+        guard let data = try SettingsFile.data(at: BackupRoot.layout.targetsFile) else { return [] }
+        return try TargetDescriptorFile.decode(json: data).targets
+    }
+
+    /// For the readers that only show or skip targets. They see no
+    /// target when the file is damaged, and nothing writes.
     static func load() -> [TargetDescriptor] {
-        let file = try? TargetDescriptorFile.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
-        return file?.targets ?? []
+        do {
+            return try read()
+        } catch {
+            BackupLog.line("BackupTargets", "targets.json was not read: \(error)")
+            return []
+        }
+    }
+
+    /// A list that only fails to open stays, because its locations may
+    /// still be good.
+    static func setAsideTheDamagedFile() throws {
+        do {
+            _ = try read()
+            return
+        } catch is DecodingError {}
+        try BackupRoot.setAside(BackupRoot.layout.targetsFile)
+        BackupBadges.shared.invalidate()
     }
 
     /// Restores use `load()`, so they still read from every target.
@@ -30,9 +53,7 @@ enum BackupTargets {
     /// before the pass and wrote it back after would put the old
     /// list back, so every change reads the file again first.
     static func update(_ change: (inout [TargetDescriptor]) -> Void) throws {
-        let stored = try TargetDescriptorFile.read(
-            applicationSupport: BackupRoot.layout.applicationSupport
-        ).targets
+        let stored = try read()
         var targets = stored
         change(&targets)
         guard targets != stored else { return }
@@ -42,7 +63,11 @@ enum BackupTargets {
     }
 
     /// Adds one target, or replaces the one that carries its id.
+    ///
+    /// A location added again still holds the snapshots of this device,
+    /// and the snapshot list starts without them.
     static func add(_ target: TargetDescriptor) throws {
+        try BackupLedgerRebuild.mark([target.id])
         try update { targets in
             if let at = targets.firstIndex(where: { $0.id == target.id }) {
                 targets[at] = target
@@ -103,10 +128,6 @@ enum BackupTargets {
 
     /// Runs the permission check of 8.7 against a provider, then adds
     /// the target when the check allows it.
-    ///
-    /// Ticket 016 renders the sheet. This is the part below it: the
-    /// four steps in order, and the quota answer that sets
-    /// `canQueryQuota` for this target, per 8.3 and 9.7.
     static func addAfterPermissionCheck(
         _ target: TargetDescriptor, provider: some BackupProvider
     ) async throws -> PermissionCheckResult {
@@ -131,9 +152,13 @@ enum BackupTargets {
             guard let reader = await provider(for: target) as? any AccountReading,
                 let account = await reader.account()
             else { continue }
-            try? update { targets in
-                guard let index = targets.firstIndex(where: { $0.id == target.id }) else { return }
-                targets[index].take(account)
+            do {
+                try update { targets in
+                    guard let index = targets.firstIndex(where: { $0.id == target.id }) else { return }
+                    targets[index].take(account)
+                }
+            } catch {
+                BackupLog.line("BackupTargets", "The account of \(target.label) was not saved: \(error)")
             }
         }
     }

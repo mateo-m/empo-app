@@ -9,6 +9,8 @@ struct ResumeQuestionAsk: Identifiable {
 
     enum Side { case backupRun, restore }
 
+    enum Answer { case resume, later, stop }
+
     var side: Side
     var record: BackupIntentRecord
     var gameName: String
@@ -50,14 +52,26 @@ struct ResumeQuestionAsk: Identifiable {
         }
     }
 
-    /// The three labels, in the order 13.18 puts them: resume, later,
-    /// stop.
-    var labels: [String] {
+    func label(_ answer: Answer) -> String {
         switch side {
-        case .backupRun:
-            return BackupResumeQuestion.Action.allCases.map(BackupResumeQuestion.label)
-        case .restore:
-            return RestoreResumeQuestion.Action.allCases.map(RestoreResumeQuestion.label)
+        case .backupRun: return BackupResumeQuestion.label(of: backupAction(answer))
+        case .restore: return RestoreResumeQuestion.label(of: restoreAction(answer))
+        }
+    }
+
+    private func backupAction(_ answer: Answer) -> BackupResumeQuestion.Action {
+        switch answer {
+        case .resume: return .resume
+        case .later: return .later
+        case .stop: return .stop
+        }
+    }
+
+    private func restoreAction(_ answer: Answer) -> RestoreResumeQuestion.Action {
+        switch answer {
+        case .resume: return .resume
+        case .later: return .later
+        case .stop: return .stop
         }
     }
 
@@ -101,15 +115,13 @@ struct ResumeQuestionAsk: Identifiable {
         }
     }
 
-    /// Applies one answer by its place in `labels`.
     @MainActor
-    func answer(_ index: Int) {
+    func answer(_ answer: Answer) {
         switch side {
         case .backupRun:
-            let action = BackupResumeQuestion.Action.allCases[index]
-            BackupScheduler.shared.answerResume(action, gameName: gameName)
+            BackupScheduler.shared.answerResume(backupAction(answer), gameName: gameName)
         case .restore:
-            let action = RestoreResumeQuestion.Action.allCases[index]
+            let action = restoreAction(answer)
             RestoreCoordinator.shared.answerResume(action, record: record)
             guard RestoreResumeQuestion.effect(of: action).startsRestoreNow else { return }
             Task { await RestoreCoordinator.shared.resume(record) }
@@ -136,7 +148,7 @@ struct ResumeQuestionSheet: View {
         StandardSheet(
             title: step == .ask ? ask.title : ask.stopTitle,
             barAction: step == .ask
-                ? SheetBarAction(ask.labels[1]) { answer(1) }
+                ? SheetBarAction(ask.label(.later)) { answer(.later) }
                 : SheetBarAction("Back", symbol: .back) { show(.ask) }
         ) {
             Group {
@@ -144,12 +156,12 @@ struct ResumeQuestionSheet: View {
                 case .ask:
                     SheetBodyText(ask.detail, naming: ask.gameName)
                     VStack(spacing: Spacing.md) {
-                        SheetPrimaryButton(ask.labels[0]) { answer(0) }
-                        SheetQuietButton(ask.labels[2]) { show(.stop) }
+                        SheetPrimaryButton(ask.label(.resume)) { answer(.resume) }
+                        SheetQuietButton(ask.label(.stop)) { show(.stop) }
                     }
                 case .stop:
                     SheetBodyText(ask.stopDetail, naming: ask.gameName)
-                    SheetDestructiveButton(ask.labels[2]) { answer(2) }
+                    SheetDestructiveButton(ask.label(.stop)) { answer(.stop) }
                 }
             }
             .transition(.sheetStep)
@@ -157,7 +169,7 @@ struct ResumeQuestionSheet: View {
         .onAppear { ask.markAsked() }
         .onDisappear {
             guard !answered else { return }
-            ask.answer(1)
+            ask.answer(.later)
         }
     }
 
@@ -165,9 +177,9 @@ struct ResumeQuestionSheet: View {
         withAnimation(Motion.gentle) { step = next }
     }
 
-    private func answer(_ index: Int) {
+    private func answer(_ answer: ResumeQuestionAsk.Answer) {
         answered = true
-        ask.answer(index)
+        ask.answer(answer)
         dismiss()
     }
 }

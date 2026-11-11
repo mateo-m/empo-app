@@ -39,15 +39,17 @@ enum BackupBackgroundTask {
         let work = Task { await body() }
         identifier = application.beginBackgroundTask(withName: name) {
             work.cancel()
-            log("the grant ended after \(seconds(Date().timeIntervalSince(startedAt))) of \(name)")
+            BackupLog.line(
+                "BackupBackgroundTask",
+                "the grant ended after \(seconds(Date().timeIntervalSince(startedAt))) of \(name)")
             application.endBackgroundTask(identifier)
             identifier = .invalid
         }
         guard identifier != .invalid else {
-            // iOS refused the task, which means no grant at all. The
-            // run stays in the foreground and the next trigger takes
+            // iOS refused the task, so it can suspend the app at any
+            // time. The work stops now, and the next trigger takes
             // what is left.
-            log("iOS granted no background task for \(name)")
+            BackupLog.line("BackupBackgroundTask", "iOS granted no background task for \(name)")
             work.cancel()
             return false
         }
@@ -55,12 +57,15 @@ enum BackupBackgroundTask {
         // The number is only real after the task starts. In the
         // foreground, and under a debugger, iOS reports an unlimited
         // grant.
-        log("grant \(seconds(application.backgroundTimeRemaining)) at start of \(name)")
+        BackupLog.line(
+            "BackupBackgroundTask",
+            "grant \(seconds(application.backgroundTimeRemaining)) at start of \(name)")
 
         await work.value
         let finished = !work.isCancelled
         if identifier != .invalid {
-            log("\(name) ended after \(seconds(Date().timeIntervalSince(startedAt)))")
+            BackupLog.line(
+                "BackupBackgroundTask", "\(name) ended after \(seconds(Date().timeIntervalSince(startedAt)))")
             application.endBackgroundTask(identifier)
         }
         return finished
@@ -68,10 +73,5 @@ enum BackupBackgroundTask {
 
     private static func seconds(_ value: TimeInterval) -> String {
         value > 1_000 ? "unlimited" : String(format: "%.1fs", value)
-    }
-
-    /// Always logged, whatever the debug setting says.
-    private static func log(_ message: String) {
-        BackupLog.line("BackupBackgroundTask", message)
     }
 }

@@ -26,7 +26,6 @@ enum PreferenceRestore {
             ? line + " " + PreferenceRollback.confirmation : line
     }
 
-    /// Applies the file a restore just wrote.
     static func applyTheRestoredFile(at date: Date = Date()) -> Bool {
         defer { try? FileManager.default.removeItem(at: restoredFile) }
         guard let data = try? Data(contentsOf: restoredFile),
