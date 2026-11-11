@@ -59,7 +59,17 @@ final class PlusStoreTests: XCTestCase {
         // sees the end at its next refresh.
         await store.refresh()
 
-        XCTAssertFalse(store.isSubscribed)
+        var left: [String] = []
+        for await entitlement in Transaction.currentEntitlements(for: PlusStore.productID) {
+            let transaction = entitlement.unsafePayloadValue
+            left.append(
+                "id \(transaction.id), bought \(transaction.purchaseDate), "
+                    + "ends \(transaction.expirationDate.map { "\($0)" } ?? "never"), "
+                    + "revoked \(transaction.revocationDate.map { "\($0)" } ?? "no")")
+        }
+        XCTAssertFalse(
+            store.isSubscribed,
+            "the ended purchase is id \(ended.id). StoreKit still gives: \(left)")
     }
 
     func testARefundTakesPlusAway() async throws {
