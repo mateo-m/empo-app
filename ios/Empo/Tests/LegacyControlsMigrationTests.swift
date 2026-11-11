@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
-import GameProbe
 import XCTest
 
 @testable import Empo
@@ -42,6 +41,17 @@ final class LegacyControlsMigrationTests: XCTestCase {
         XCTAssertTrue(UserControlsFile.exists(in: container))
         XCTAssertNil(UserDefaults.standard.data(forKey: layoutKey))
         XCTAssertEqual(UserDefaults.standard.data(forKey: mapKey), unreadable)
+    }
+
+    func testAnUnreadableLayoutKeepsItsBytesWhenTheButtonsMove() {
+        UserDefaults.standard.set(unreadable, forKey: layoutKey)
+        UserDefaults.standard.set(Data("{\"a\":\"Enter\"}".utf8), forKey: mapKey)
+
+        LegacyControlsMigration.run(container: container, keys: [])
+
+        XCTAssertTrue(UserControlsFile.exists(in: container))
+        XCTAssertEqual(UserDefaults.standard.data(forKey: layoutKey), unreadable)
+        XCTAssertNil(UserDefaults.standard.data(forKey: mapKey))
     }
 
     func testAMovedLayoutLeavesNoLegacyKey() {

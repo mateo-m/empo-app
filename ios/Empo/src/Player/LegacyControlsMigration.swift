@@ -73,8 +73,8 @@ enum LegacyControlsMigration {
             return
         }
 
-        // The controls file stops the next run, so a key that did not
-        // decode keeps its bytes.
+        // The controls file stops the next run, so a key that gave
+        // nothing to move keeps its bytes.
         if touch != nil { UserDefaults.standard.removeObject(forKey: layoutKey) }
         if controller != nil { UserDefaults.standard.removeObject(forKey: mapKey) }
     }

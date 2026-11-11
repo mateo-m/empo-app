@@ -136,7 +136,8 @@ public enum PreferenceKeys {
     public static let hintDismissedPrefix = "hint.dismissed."
 
     /// The two legacy families of 10.2. A game that the player never
-    /// opened since the migration shipped may still hold one.
+    /// opened since the migration shipped may still hold one, and so
+    /// may a game whose old value did not read.
     public static let controlsLayoutPrefix = "controlsLayout."
     public static let controllerMapPrefix = "controllerMap."
 
