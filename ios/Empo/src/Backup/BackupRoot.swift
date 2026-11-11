@@ -59,10 +59,11 @@ enum BackupRoot {
             caller, "\(file.lastPathComponent) did not read, so it moved to \(aside.lastPathComponent)")
     }
 
-    /// For a file that must stay until its replacement is saved.
+    /// For a file that must stay until its replacement is saved. Each retry copies the same
+    /// damaged file again, so the copy keeps one name and each retry replaces it.
     static func copyAside(_ file: URL, caller: String = #fileID) throws {
-        let aside = asideURL(of: file)
-        try FileManager.default.copyItem(at: file, to: aside)
+        let aside = file.deletingPathExtension().appendingPathExtension("damaged.json")
+        try Data(contentsOf: file).write(to: aside, options: .atomic)
         BackupLog.line(
             caller, "\(file.lastPathComponent) did not read, so it was copied to \(aside.lastPathComponent)")
     }

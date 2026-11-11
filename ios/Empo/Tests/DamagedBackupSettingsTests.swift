@@ -196,6 +196,19 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try damagedCopies(of: list.fileURL), [damaged])
     }
 
+    func testADamagedWaitListKeepsOneCopyOfTheNewestDamage() throws {
+        _ = try addATarget()
+        let list = BackupTargetWaitList(fileName: "damaged-wait-\(UUID().uuidString).json")
+        let newer = Data("[\"cut".utf8)
+
+        try damaged.write(to: list.fileURL)
+        _ = try list.ids()
+        try newer.write(to: list.fileURL)
+        _ = try list.ids()
+
+        XCTAssertEqual(try damagedCopies(of: list.fileURL), [newer])
+    }
+
     func testADamagedWaitListStaysWhileTheLocationListDoesNotRead() throws {
         let list = BackupTargetWaitList(fileName: "damaged-wait-\(UUID().uuidString).json")
         try damaged.write(to: list.fileURL)
@@ -385,7 +398,7 @@ final class DamagedBackupSettingsTests: XCTestCase {
     }
 
     private func damagedCopies(of file: URL) throws -> [Data] {
-        let prefix = file.deletingPathExtension().lastPathComponent + ".damaged-"
+        let prefix = file.deletingPathExtension().lastPathComponent + ".damaged"
         let directory = file.deletingLastPathComponent()
         return try names(in: directory).filter { $0.hasPrefix(prefix) }.sorted().map {
             try Data(contentsOf: directory.appendingPathComponent($0))
