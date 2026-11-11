@@ -517,6 +517,28 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(targets.puts.isEmpty)
     }
 
+    func testACopyWhoseDeviceRecordDoesNotReadLeavesTheOtherCopiesMerged() async throws {
+        let document = FakeDocument()
+        let targets = FakeTargets()
+        targets.descriptors = [target("t1")]
+        targets.held["t1"] = [
+            SyncNamespace(
+                id: "damaged", record: nil,
+                document: RemoteObject(path: "damaged/document", sizeBytes: 10, modifiedAt: stamp)),
+            namespace("other", group: "g1", modifiedAt: stamp),
+        ]
+        targets.bytes["other/document"] = try copyBytes(["theme": .string("light")])
+
+        let state = FakeState(groupId: "g1")
+        let outcome = await engine(
+            document: document, targets: targets, state: state, local: FakeLocalValues()
+        ).run(.now)
+
+        XCTAssertEqual(outcome, .done)
+        XCTAssertEqual(document.saved?.preferences["theme"], .string("light"))
+        XCTAssertEqual(state.value.targets.first?.seenNamespaces.keys.sorted(), ["other"])
+    }
+
     func testProfileIdsThatDoNotSaveStopThePass() async throws {
         let local = FakeLocalValues()
         local.mine.preferences = ["theme": .string("dark")]

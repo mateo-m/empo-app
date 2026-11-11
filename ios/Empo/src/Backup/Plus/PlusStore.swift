@@ -23,6 +23,7 @@ final class PlusStore {
     private var lastRefresh: Task<Void, Never>?
 
     private init() {
+        Task { await refresh() }
         // A renewal, a refund, or a purchase on another device of the
         // same Apple Account arrives here, also while the app is closed.
         Task {

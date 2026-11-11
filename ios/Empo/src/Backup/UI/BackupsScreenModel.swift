@@ -59,6 +59,12 @@ struct AdoptBannerItem: Identifiable {
 /// `targets.json` and from `state.sqlite`, so opening the screen
 /// makes no request. The namespace list and the adopt banner are the
 /// two places that list a target, and both wait for the user.
+enum TargetsFileRead {
+    case read
+    case damaged
+    case didNotOpen
+}
+
 @MainActor
 @Observable
 final class BackupsScreenModel {
@@ -81,6 +87,7 @@ final class BackupsScreenModel {
     private(set) var writerQuestions: [WriterQuestionItem] = []
     /// The line of 7.11, after a split, until the user closes it.
     private(set) var showsTheSplitLine = false
+    private(set) var targetsFile = TargetsFileRead.read
     private var notificationStatus: UNAuthorizationStatus?
     /// Whether the row above Backup history shows, per 13.19.
     var asksForNotifications: Bool {
@@ -119,10 +126,23 @@ final class BackupsScreenModel {
     /// Reads only the files of this device, so a removal shows its result while iCloud or the
     /// notification settings do not answer.
     private func readTheRows(backgroundTransfer: [String: Bool]) {
-        let descriptors = BackupTargets.load()
+        let descriptors: [TargetDescriptor]
+        do {
+            descriptors = try BackupTargets.read()
+            targetsFile = .read
+        } catch is DecodingError {
+            BackupLog.line("BackupsScreenModel", "targets.json is damaged")
+            descriptors = []
+            targetsFile = .damaged
+        } catch {
+            // No rows would show the empty state, which asks for a new location.
+            BackupLog.line("BackupsScreenModel", "targets.json was not read, the last rows stay: \(error)")
+            targetsFile = .didNotOpen
+            return
+        }
         var items: [BackupTargetItem] = []
         var facts: [TargetRowFacts] = []
-        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
+        let store = try? BackupRoot.openStateStore()
         defer { store?.close() }
         let runs = (try? store?.runHistory()) ?? []
 
@@ -153,9 +173,15 @@ final class BackupsScreenModel {
         }
         self.items = items
         self.history = runs
-        let conflicts =
-            (try? WriterConflicts.read(applicationSupport: BackupRoot.layout.applicationSupport))
-            ?? WriterConflicts()
+        // An adopt moves this device to the banner's space, so a banner of a removed location must go.
+        adoptBanners.removeAll { banner in !descriptors.contains { $0.id == banner.targetId } }
+        let conflicts: WriterConflicts
+        do {
+            conflicts = try BackupRoot.writerConflicts()
+        } catch {
+            BackupLog.line("BackupsScreenModel", "The writer answers were not read: \(error)")
+            conflicts = WriterConflicts()
+        }
         writerQuestions = descriptors.compactMap { descriptor in
             conflicts.questions[descriptor.id].map {
                 WriterQuestionItem(
@@ -204,8 +230,14 @@ final class BackupsScreenModel {
         guard !thresholds.isEmpty else { return [] }
         var waiting: [BackupModeAsk] = []
         for container in GameContainer.discover() {
-            let resolution = await GameBackupSets.resolveMode(
-                for: container, targets: thresholds)
+            let resolution: BackupModeResolution
+            do {
+                resolution = try await GameBackupSets.resolveMode(for: container, targets: thresholds)
+            } catch {
+                // The run skips this game too, so nothing waits for the ask.
+                BackupLog.line("BackupsScreenModel", "\(container.folderName) mode did not read: \(error)")
+                continue
+            }
             guard case .ask(let ask) = resolution else { continue }
             waiting.append(
                 BackupModeAsk(
@@ -258,9 +290,22 @@ final class BackupsScreenModel {
     private func change(
         targetId: String, _ edit: (inout TargetDescriptor) -> Void
     ) async {
-        try? BackupTargets.update { targets in
-            guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
-            edit(&targets[index])
+        do {
+            try BackupTargets.update { targets in
+                guard let index = targets.firstIndex(where: { $0.id == targetId }) else { return }
+                edit(&targets[index])
+            }
+        } catch {
+            BackupLog.line("BackupsScreenModel", "the change to \(targetId) was not saved: \(error)")
+        }
+        await refresh()
+    }
+
+    func setAsideTheDamagedTargets() async {
+        do {
+            try BackupTargets.setAsideTheDamagedFile()
+        } catch {
+            BackupLog.line("BackupsScreenModel", "targets.json was not set aside: \(error)")
         }
         await refresh()
     }
@@ -292,7 +337,7 @@ final class BackupsScreenModel {
             }
         }
         do {
-            let store = try BackupStateStore(url: BackupRoot.layout.stateDatabase)
+            let store = try BackupRoot.openStateStore()
             defer { store.close() }
             try store.removeTarget(targetId: targetId)
             do {
@@ -338,8 +383,7 @@ final class BackupsScreenModel {
             let provider = await BackupTargets.provider(for: descriptor)
         else { return [] }
         return try await RestoreScan(provider: provider, descriptor: descriptor).namespaceRows(
-            thisNamespaceId: try? BackupKeychain.namespaceId(),
-            thisDeviceId: UIDevice.current.identifierForVendor?.uuidString)
+            thisNamespaceId: try BackupKeychain.namespaceId(), thisDeviceId: BackupDevice.id)
     }
 
     /// What one namespace holds, per 11.3. The trailing game
@@ -402,8 +446,12 @@ final class BackupsScreenModel {
 
     /// The banner of 13.13, from the namespaces one target holds.
     func readTheAdoptBanners(of targetId: String) async {
-        guard let rows = try? await namespaces(of: targetId),
-            let label = targets.first(where: { $0.id == targetId })?.descriptor.displayName
+        guard let rows = try? await namespaces(of: targetId) else { return }
+        showTheAdoptBanners(rows, of: targetId)
+    }
+
+    func showTheAdoptBanners(_ rows: [BackupNamespaceRow], of targetId: String) {
+        guard let label = targets.first(where: { $0.id == targetId })?.descriptor.displayName
         else { return }
         let banners = rows.filter { $0.isEarlierSpace }.map {
             AdoptBannerItem(targetId: targetId, targetLabel: label, namespaceId: $0.namespaceId)
@@ -411,9 +459,14 @@ final class BackupsScreenModel {
         adoptBanners = adoptBanners.filter { $0.targetId != targetId } + banners
     }
 
-    func answerTheAdoptBanner(_ banner: AdoptBannerItem, adopts: Bool) {
+    func answerTheAdoptBanner(_ banner: AdoptBannerItem, adopts: Bool) async {
         if adopts {
-            try? BackupKeychain.adoptNamespaceId(banner.namespaceId)
+            do {
+                try await BackupNamespaceMove.adopt(banner.namespaceId)
+            } catch {
+                BackupLog.line("BackupsScreenModel", "The adopt was not saved: \(error)")
+                return
+            }
         }
         adoptBanners.removeAll { $0.id == banner.id }
     }
@@ -434,11 +487,13 @@ final class BackupsScreenModel {
     }
 
     private func updateTheConflicts(_ change: (inout WriterConflicts) -> Void) {
-        let applicationSupport = BackupRoot.layout.applicationSupport
-        guard var conflicts = try? WriterConflicts.read(applicationSupport: applicationSupport)
-        else { return }
-        change(&conflicts)
-        try? conflicts.write(applicationSupport: applicationSupport)
+        do {
+            var conflicts = try BackupRoot.writerConflicts()
+            change(&conflicts)
+            try conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        } catch {
+            BackupLog.line("BackupsScreenModel", "The writer answers were not saved: \(error)")
+        }
     }
 
     // MARK: - Notifications, per 13.19

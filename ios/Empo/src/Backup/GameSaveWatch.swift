@@ -30,7 +30,7 @@ final class GameSaveWatch {
     private var joinedPathsByGame: [String: Set<String>] = [:]
 
     /// The paths over the 50 MB limit that wait for an answer, per
-    /// 3.6. Tickets 017 and 018 show the ask.
+    /// 3.6.
     private var pendingAsksByGame: [String: [String]] = [:]
 
     private var session: Session?
@@ -156,17 +156,12 @@ final class GameSaveWatch {
     }
 
     private func apply(_ result: RuntimeWatchResult, forGame containerId: String) {
-        // The Backups screen and the Backup sheet do not exist yet,
-        // so this line is the only place a join shows. Tickets 016
-        // and 018 read the same numbers into the UI.
-        if AppSettings.shared.debugLogs, !result.isEmpty {
-            NSLog(
-                "[GameSaveWatch] %@: %ld joined, %ld to ask, %ld suggested: %@",
-                containerId,
-                result.joined.count,
-                result.asks.count,
-                result.suggestions.count,
-                (result.joined + result.asks).joined(separator: ", "))
+        if !result.isEmpty {
+            BackupLog.debug(
+                "GameSaveWatch",
+                "\(containerId): \(result.joined.count) joined, \(result.asks.count) to ask, "
+                    + "\(result.suggestions.count) suggested: "
+                    + (result.joined + result.asks).joined(separator: ", "))
         }
         if !result.joined.isEmpty {
             joinedPathsByGame[containerId, default: []].formUnion(result.joined)
@@ -206,8 +201,12 @@ final class GameSaveWatch {
     func declineAsk(path: String, container: GameContainer) {
         pendingAsksByGame[container.id]?.removeAll { $0 == path }
         let stateURL = container.empoStateURL
-        guard let held = try? GameBackupIntent.load(from: stateURL) else { return }
-        try? RuntimeWatch.declining(path, in: held).save(to: stateURL)
+        do {
+            let intent = RuntimeWatch.declining(path, in: try GameBackupIntent.load(from: stateURL))
+            try intent.save(to: stateURL)
+        } catch {
+            BackupLog.line("GameSaveWatch", "The declined \(path) was not saved: \(error)")
+        }
     }
 
     // MARK: - The reading

@@ -49,6 +49,52 @@ final class BackupStopTests: XCTestCase {
         XCTAssertTrue(result.targets.isEmpty)
     }
 
+    func testAPausedPassStopsWhileALocationDoesNotOpen() async throws {
+        let files = [
+            BackupRoot.layout.targetsFile,
+            BackupRoot.layout.root.appendingPathComponent("ledger-rebuild.json"),
+        ]
+        let saved = files.map { try? Data(contentsOf: $0) }
+        defer {
+            for (file, data) in zip(files, saved) {
+                if let data {
+                    try? data.write(to: file, options: .atomic)
+                } else {
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+        }
+        try BackupTargets.add(
+            TargetDescriptor(
+                id: "held-open-\(UUID().uuidString)", provider: .iCloudDrive, label: "Test",
+                root: "Empo"))
+        let opening = HeldAnswer<(any BackupProvider)?>()
+        let started = expectation(description: "a location starts to open")
+        started.assertForOverFulfill = false
+        let pass = BackupPass(
+            readThePlus: {},
+            openTheProvider: { _ in
+                started.fulfill()
+                return await opening.value()
+            })
+        let stopped = expectation(description: "the pass stops")
+        let run = Task {
+            let result = await pass.runBackup(
+                scope: .dirtyGames, trigger: .sessionEndOrBackground, progress: nil)
+            stopped.fulfill()
+            return result
+        }
+        await fulfillment(of: [started], timeout: 5)
+        run.cancel()
+
+        await fulfillment(of: [stopped], timeout: 5)
+        opening.answer(nil)
+
+        let result = await run.value
+        XCTAssertFalse(result.didFinish)
+        XCTAssertTrue(result.targets.isEmpty)
+    }
+
     func testACancelledSizeCountStops() async throws {
         let folder = FileManager.default.temporaryDirectory
             .appendingPathComponent("size-count-\(UUID().uuidString)")

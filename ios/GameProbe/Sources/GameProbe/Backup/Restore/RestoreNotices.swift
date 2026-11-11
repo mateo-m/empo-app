@@ -44,8 +44,11 @@ public enum RestoreNotices {
     public static func line(of outcome: RestoreOutcome) -> String {
         switch outcome {
         case .finished(let result):
-            return [screenText("Restored."), partialPathsLine(count: result.partialPathCount)]
-                .compactMap { $0 }.joined(separator: " ")
+            return [
+                partialPathsLine(count: result.partialPathCount),
+                screenText("Open the game to play from this backup."),
+            ]
+            .compactMap { $0 }.joined(separator: " ")
         case .notEnoughSpace(let shortfall):
             let missing = ByteCountFormatter.string(
                 fromByteCount: shortfall.missingBytes, countStyle: .file)

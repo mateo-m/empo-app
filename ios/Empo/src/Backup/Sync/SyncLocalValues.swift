@@ -154,16 +154,32 @@ enum SyncLocalValues {
 
     /// A new descriptor arrives without its secret. Target removal stays
     /// on this device, so this function never deletes a target.
-    private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
-        guard let removed = (try? SyncStore.state()).map({ Set($0.removedTargetIds) }) else { return }
-        try? BackupTargets.update { local in
-            for (id, incoming) in descriptors {
-                guard let index = local.firstIndex(where: { $0.id == id }) else {
-                    if !removed.contains(id) { local.append(incoming) }
-                    continue
+    ///
+    /// The Keychain keeps the namespace id when the app is deleted, so a
+    /// location that sync brings back can hold snapshots of this device.
+    static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
+        let removed: Set<String>
+        do {
+            removed = Set(try SyncStore.state().removedTargetIds)
+        } catch {
+            BackupLog.line(
+                "SyncLocalValues", "The synced locations wait, the sync settings did not read: \(error)")
+            return
+        }
+        do {
+            let known = Set(try BackupTargets.read().map(\.id))
+            try BackupLedgerRebuild.mark(Set(descriptors.keys).subtracting(known).subtracting(removed))
+            try BackupTargets.update { local in
+                for (id, incoming) in descriptors {
+                    guard let index = local.firstIndex(where: { $0.id == id }) else {
+                        if !removed.contains(id) { local.append(incoming) }
+                        continue
+                    }
+                    local[index] = local[index].withSyncedFields(from: incoming)
                 }
-                local[index] = local[index].withSyncedFields(from: incoming)
             }
+        } catch {
+            BackupLog.line("SyncLocalValues", "The synced locations were not saved: \(error)")
         }
     }
 }

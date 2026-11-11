@@ -67,7 +67,7 @@ actor WebDAVTarget: BackupProvider {
         // Before any byte moves, per 8.3. A WebDAV server states no
         // number, so this refuses nothing today. It stays because the
         // engine calls every provider the same way.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -227,17 +227,17 @@ actor WebDAVTarget: BackupProvider {
         }
     }
 
-    /// `PUT` the whole file under the temp name, on the background
-    /// session of 7.3.
     /// Above this size the collections go in before the `PUT`. A
     /// server answers 409 for a missing collection only after it has
     /// read the whole body.
     static let collectionsFirstAbove = 8_000_000
 
+    /// `PUT` the whole file under the temp name, on the background
+    /// session of 7.3.
     private func stage(
         _ localFile: URL, at temporary: String
     ) async throws(BackupProviderError) {
-        let size = (try? localFile.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        let size = try UploadStaging.fileSize(at: localFile)
         let known = WebDAV.ancestorCollections(ofPath: temporary).allSatisfy(knownCollections.contains)
         if size > Self.collectionsFirstAbove, !known {
             try await makeCollections(forPath: temporary)

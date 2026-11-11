@@ -99,6 +99,11 @@ public enum SyncGroupCopy {
     public static let failedLine =
         screenText("Your settings didn't sync the last time Empo tried. Empo tries again when it opens.")
 
+    public static let stoppedLine =
+        screenText("Settings sync stopped because of a problem on this device.")
+
+    public static let setUpAgainLabel = screenText("Set up sync again")
+
     public static let joinBody =
         screenText("Empo keeps your app settings, your controller buttons, and your on-screen control "
         + "layouts the same on these devices. It doesn't copy your saves.")

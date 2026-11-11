@@ -24,6 +24,7 @@ final class DamagedSyncSettingsTests: XCTestCase {
             syncFile, layout.targetsFile, layout.preferenceRollbackFile,
             layout.applicationSupport.appendingPathComponent(WriterConflicts.fileName),
             PreferenceRestore.restoredFile,
+            layout.root.appendingPathComponent("ledger-rebuild.json"),
         ]
         for url in kept {
             saved[url] = .some(try? Data(contentsOf: url))
@@ -96,14 +97,70 @@ final class DamagedSyncSettingsTests: XCTestCase {
         XCTAssertTrue(BackupTargets.load().contains { $0.id == target.id })
     }
 
+    func testARemovedLocationTakesItsAdoptBannerAway() async throws {
+        let target = TargetDescriptor(
+            id: "adopt-banner-\(UUID().uuidString)", provider: .webdav, label: "Test", root: "Empo")
+        try BackupTargets.add(target)
+        let model = BackupsScreenModel(iCloudAvailability: { .signedOut })
+        await model.refresh()
+        model.showTheAdoptBanners(
+            [
+                BackupNamespaceRow(
+                    namespaceId: "earlier-\(UUID().uuidString)", deviceName: "Test", snapshotCount: 1,
+                    gameCount: 1, totalBytes: nil, isEarlierSpace: true)
+            ], of: target.id)
+        XCTAssertEqual(model.adoptBanners.map(\.targetId), [target.id])
+
+        let line = await model.remove(targetId: target.id, deleteBackups: false)
+
+        XCTAssertNil(line)
+        XCTAssertTrue(model.adoptBanners.isEmpty)
+    }
+
+    func testSetUpSyncAgainMovesTheDamagedFileAsideAndStartsTheJoin() async throws {
+        let folder = layout.applicationSupport
+        let before = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+        try BackupTargets.add(
+            TargetDescriptor(
+                id: "set-up-again-\(UUID().uuidString)", provider: .webdav, label: "Test",
+                root: "Empo"))
+        XCTAssertTrue(SyncStore.settingsAreDamaged())
+
+        let ask = try await SyncJoin.setUpAgain()
+
+        let asides = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+            .subtracting(before).filter { $0.hasPrefix("sync.damaged-") }
+        defer {
+            for name in asides {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
+        }
+        XCTAssertEqual(asides.count, 1)
+        XCTAssertEqual(
+            try asides.first.map { try Data(contentsOf: folder.appendingPathComponent($0)) }, damaged)
+        XCTAssertFalse(SyncStore.settingsAreDamaged())
+        XCTAssertFalse(SyncPass.shared.settingsAreDamaged)
+        XCTAssertNotNil(try SyncStore.state().groupId)
+        XCTAssertEqual(ask, SyncJoinAsk.none)
+    }
+
     func testTheRunSettingsKeepTheGroupWhenTheSyncSettingsDoNotRead() throws {
-        try damaged.write(
-            to: layout.applicationSupport.appendingPathComponent(WriterConflicts.fileName))
+        let folder = layout.applicationSupport
+        let before = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+        try damaged.write(to: folder.appendingPathComponent(WriterConflicts.fileName))
 
-        let settings = BackupPass.shared.runSettings(label: "Test")
+        let settings = try BackupPass.shared.runSettings(targetId: "test", label: "Test")
 
-        XCTAssertNil(settings.conflicts)
+        let asides = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path))
+            .subtracting(before).filter { $0.hasPrefix("writer-conflicts.damaged-") }
+        defer {
+            for name in asides {
+                try? FileManager.default.removeItem(at: folder.appendingPathComponent(name))
+            }
+        }
+        XCTAssertNil(settings.writerAnswer)
         XCTAssertEqual(settings.syncGroup, .keepRecorded)
+        XCTAssertEqual(asides.count, 1)
     }
 
     func testARestoreThatDeletesNothingApplies() throws {

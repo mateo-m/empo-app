@@ -52,7 +52,6 @@ struct BackupGameNames {
         return name(of: matched)
     }
 
-    /// The name of one installed game.
     func name(of game: GameIdentity) -> String {
         guard let container = containers.first(where: { $0.folderName == game.folderName })
         else { return game.folderName }
@@ -71,7 +70,6 @@ struct BackupGameNames {
         return Self.name(of: container)
     }
 
-    /// The name of every installed game, by game key.
     func namesByGameKey() -> [String: String] {
         var names = remembered
         for container in containers {

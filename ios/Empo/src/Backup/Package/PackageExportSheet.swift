@@ -8,10 +8,10 @@ enum PackageExportSource {
     case library
 
     @MainActor
-    func plan() async -> PackagePlan {
+    func plan() async throws -> PackagePlan {
         switch self {
-        case .game(let container): return await PackageExport.plan(game: container)
-        case .library: return await PackageExport.libraryPlan()
+        case .game(let container): return try await PackageExport.plan(game: container)
+        case .library: return try await PackageExport.libraryPlan()
         }
     }
 }
@@ -51,7 +51,21 @@ final class PackageExportModel {
         guard case .planning = phase, task == nil else { return }
         task = Task { [weak self] in
             guard let self else { return }
-            let plan = await source.plan()
+            let plan: PackagePlan
+            do {
+                plan = try await source.plan()
+            } catch let unread as PackageExport.SettingsUnread {
+                phase = .failed(
+                    String(
+                        localized:
+                            "Empo couldn't read your backup choices for \(unread.gameName). Open the game's settings, tap Backup, and choose again."
+                    ))
+                return
+            } catch {
+                BackupLog.line("PackageExportModel", "The package plan failed: \(error)")
+                phase = .failed(String(localized: "Empo couldn't make this package. Try again."))
+                return
+            }
             guard !Task.isCancelled else { return }
             guard !plan.streams.isEmpty else {
                 phase = .failed(String(localized: "This device holds nothing to export."))
@@ -67,7 +81,7 @@ final class PackageExportModel {
     private func build(_ plan: PackagePlan) async {
         let localRoot = localRoot
         let device = UIDevice.current.name
-        let freeSpaceBytes = Self.freeSpaceBytes
+        let freeSpaceBytes = BackupRoot.freeSpaceBytes
         do {
             let show: @MainActor @Sendable (PackageBuildProgress) -> Void = { [weak self] value in
                 self?.progress = value
@@ -142,12 +156,6 @@ final class PackageExportModel {
         let total = BackupText.bytes(progress.totalBytes)
         return String(
             localized: "\(progress.fileCount) of \(progress.totalFileCount) files, \(done) of \(total)")
-    }
-
-    private static var freeSpaceBytes: Int64 {
-        let values = try? BackupRoot.layout.root.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey])
-        return values?.volumeAvailableCapacityForImportantUsage ?? 0
     }
 }
 

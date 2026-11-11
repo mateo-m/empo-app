@@ -1,24 +1,27 @@
 import Foundation
 import GameProbe
 
-/// The app-side half of SPEC 3: it hands the pure resolver the paths
-/// only the app knows.
-///
-/// The rules live in `BackupSetResolver`, `BackupThreshold`, and
-/// `RuntimeWatch`, inside GameProbe, where `swift test` reaches them.
-/// This file resolves URLs and nothing else.
 @MainActor
 enum GameBackupSets {
 
     // MARK: - The set
 
-    /// The request for one game, with the shared data directory of
-    /// 4.5, the matching Rescued Saves buckets, the marks of 3.6,
-    /// and the joins this app run saw.
     static func request(
         for container: GameContainer, mode: BackupMode
+    ) async throws -> GameBackupSetRequest {
+        let manualMarks: [String]
+        do {
+            manualMarks = try GameBackupIntent.load(from: container.empoStateURL).manualMarks
+        } catch  where mode == .full {
+            // The full set holds each file, so it needs no marks.
+            manualMarks = []
+        }
+        return await request(for: container, mode: mode, manualMarks: manualMarks)
+    }
+
+    static func request(
+        for container: GameContainer, mode: BackupMode, manualMarks: [String]
     ) async -> GameBackupSetRequest {
-        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
         var buckets: [String: URL] = [:]
         for bucket in RescuedSaves.matchingBuckets(
             in: DataDirectory.rescuedSavesRootURL, folderName: container.folderName)
@@ -33,17 +36,11 @@ enum GameBackupSets {
                 for: container, core: GameCores.core(forGameAt: container.gameURL)),
             documentsRoot: DataDirectory.documentsRootURL,
             rescuedSavesBuckets: buckets,
-            manualMarks: intent.manualMarks,
+            manualMarks: manualMarks,
             runtimeWatchPaths: await GameSaveWatch.shared.joinedPaths(forGame: container.id))
     }
 
-    /// The stream that belongs to no game, per 5.3: the layout
-    /// profiles, the UserDefaults export, and every Rescued Saves
-    /// bucket that matches no installed game.
-    ///
-    /// Ticket 015 writes the UserDefaults export, so the caller
-    /// names the file once it exists.
-    static func libraryRequest(userDefaultsExportFile: URL? = nil) -> LibraryBackupSetRequest {
+    static func libraryRequest(userDefaultsExportFile: URL?) -> LibraryBackupSetRequest {
         let installed = GameContainer.discover().map(\.folderName)
         var matched: Set<String> = []
         for folderName in installed {
@@ -69,28 +66,44 @@ enum GameBackupSets {
 
     // MARK: - The mode
 
-    /// The mode for a game, or the ask of 3.5 that decides it.
-    ///
     /// The tree size uses the same enumerator `GameMetadata.diskSize`
     /// uses, so the number the ask shows is the number the library
     /// card shows.
     static func resolveMode(
         for container: GameContainer, targets: [BackupTargetThreshold]
-    ) async -> BackupModeResolution {
-        let intent = (try? GameBackupIntent.load(from: container.empoStateURL)) ?? GameBackupIntent()
+    ) async throws -> BackupModeResolution {
+        let intent: GameBackupIntent
+        do {
+            intent = try GameBackupIntent.load(from: container.empoStateURL)
+        } catch is DecodingError {
+            // The rule picks full or the ask for a game with no mode, never
+            // slim, so the marks of the damaged file are not needed.
+            BackupLog.line(
+                "GameBackupSets",
+                "\(container.folderName) backup settings are damaged, so the mode is asked again")
+            intent = GameBackupIntent()
+        }
         if let answered = intent.mode { return .mode(answered) }
         let treeSize = await GameMetadata.diskSize(for: container.gameURL)
         return BackupThreshold.resolveMode(
             intent: intent, gameTreeBytes: treeSize, targets: targets)
     }
 
-    /// Writes the mode into `EmpoState/backup.json` and answers
-    /// whether the game became dirty, per 3.9. The caller marks the
-    /// game dirty in `state.sqlite`.
+    /// Answers whether the game became dirty, per 3.9. The caller marks
+    /// the game dirty in `state.sqlite`.
+    ///
+    /// A damaged `backup.json` moves aside and the mode goes into a new
+    /// file, so the ask of 3.5 does not come back at each run.
     @discardableResult
     static func setMode(_ mode: BackupMode, for container: GameContainer) throws -> Bool {
         let stateURL = container.empoStateURL
-        let intent = try GameBackupIntent.load(from: stateURL)
+        let intent: GameBackupIntent
+        do {
+            intent = try GameBackupIntent.load(from: stateURL)
+        } catch is DecodingError {
+            try BackupRoot.setAside(stateURL.appendingPathComponent(GameBackupIntent.fileName))
+            intent = GameBackupIntent()
+        }
         let dirty = BackupModeChange.makesDirty(from: intent.mode, to: mode)
         try BackupModeChange.apply(mode, to: intent).save(to: stateURL)
         return dirty

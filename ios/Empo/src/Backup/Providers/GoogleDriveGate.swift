@@ -1,11 +1,6 @@
 import Foundation
 import GameProbe
 
-/// Which Google Drive targets this build can open, per SPEC 8.8 and
-/// 9.3.
-///
-/// `OAuthProviderGate` holds the rule, which is the one ticket 009
-/// wrote for Dropbox. This states the service.
 @MainActor
 final class GoogleDriveGate: OAuthProviderGate {
 

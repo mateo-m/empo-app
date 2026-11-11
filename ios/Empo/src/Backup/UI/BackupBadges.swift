@@ -55,7 +55,7 @@ final class BackupBadges {
             return
         }
 
-        let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase)
+        let store = try? BackupRoot.openStateStore()
         defer { store?.close() }
         let now = Date()
 

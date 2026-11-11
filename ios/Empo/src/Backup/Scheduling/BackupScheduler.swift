@@ -2,29 +2,15 @@ import Foundation
 import GameProbe
 import UIKit
 
-/// What one backup pass does.
-///
-/// The scheduler owns when a pass runs. It owns nothing about what a
-/// pass does, because that needs a provider and ticket 008 brings the
-/// first one. Until a runner registers, every trigger does its gate
-/// work and stops.
 @MainActor
 protocol BackupRunning: AnyObject {
-    /// Runs one pass.
-    ///
-    /// `progress` belongs to a continued-processing task, which must
-    /// report progress or the system expires it. The pass must check
-    /// `Task.isCancelled` at every file boundary, per 7.6.
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult
 }
 
-/// What a pass reports back to the scheduler.
 struct BackupPassResult: Sendable {
-    /// True when the pass did all the work it planned.
     var didFinish: Bool
-    /// One row for each target the pass touched.
     var targets: [BackupPassTarget]
 
     init(didFinish: Bool = false, targets: [BackupPassTarget] = []) {
@@ -59,8 +45,7 @@ final class BackupScheduler {
 
     private init() {}
 
-    /// What one pass does. Ticket 008 set it to `BackupPass`.
-    var runner: (any BackupRunning)?
+    var runner: any BackupRunning = BackupPass.shared
 
     /// The network cause the stale line carries, per 7.4. It is
     /// `waitingForWiFi` while the switch is off and the device is on
@@ -80,7 +65,13 @@ final class BackupScheduler {
     private var pauses = 0
     private var holds = 0
     private var runAskedDuringHold = false
-    private lazy var store: BackupStateStore? = try? BackupRoot.openStateStore()
+    private(set) var runAfterHold: Task<Void, Never>?
+    private var openedStore: BackupStateStore?
+    /// A failed open tries again at the next use.
+    private var store: BackupStateStore? {
+        if openedStore == nil { openedStore = try? BackupRoot.openStateStore() }
+        return openedStore
+    }
 
     // MARK: - Launch
 
@@ -92,10 +83,9 @@ final class BackupScheduler {
         BackupNetwork.start()
         BackupTransferSession.shared.start()
         ICloudDriveGate.shared.start()
-        runner = BackupPass.shared
         BackupTaskScheduler.scheduleNightly()
         PackageRecord.deleteThePackagesWithoutARecord(localRoot: BackupRoot.layout.root)
-        log("the schedule started")
+        BackupLog.debug("BackupScheduler", "the schedule started")
         // The active notification of this launch fires before the
         // gate opens, so the catch-up wait starts by hand here.
         BackupLaunchGate.shared.whenOpen {
@@ -144,7 +134,7 @@ final class BackupScheduler {
         case .lowPowerMode:
             guard !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         }
-        log("the pause ended, %@ no more", pause.line)
+        BackupLog.debug("BackupScheduler", "the pause ended, \(pause.line) no more")
         Task { await run(trigger: .foreground) }
     }
 
@@ -175,8 +165,14 @@ final class BackupScheduler {
     /// games alone.
     func markDirty(container: GameContainer) {
         let gameKey = BackupKeys.gameKey(containerFolderName: container.folderName)
-        try? store?.markDirty(
-            gameKey: gameKey, targetIds: BackupTargets.load().map(\.id), at: Date())
+        do {
+            try store?.markDirty(
+                gameKey: gameKey, targetIds: BackupTargets.load().map(\.id), at: Date())
+        } catch {
+            // The next foreground pass scans the whole library, so the
+            // game still goes up then.
+            BackupLog.line("BackupScheduler", "\(gameKey) was not marked for backup: \(error)")
+        }
     }
 
     private func runUnderTheGrant(_ trigger: BackupTrigger) async {
@@ -211,7 +207,7 @@ final class BackupScheduler {
         // 7.4. A continued-processing task would show "Starting" for
         // as long as the hold lasts, so the pass runs without one.
         if BackupNetwork.isConstrained {
-            log("manual press in Low Data Mode, the pass runs without a task")
+            BackupLog.debug("BackupScheduler", "manual press in Low Data Mode, the pass runs without a task")
             startManualRun(press, overCellular: overCellular)
             return
         }
@@ -241,7 +237,7 @@ final class BackupScheduler {
     /// checkpoint of 6.5 carries the rest to the next run. The
     /// upload in flight is cancelled too, per 7.5.
     func pauseTheRun() {
-        log("the user paused the run")
+        BackupLog.debug("BackupScheduler", "the user paused the run")
         pauses += 1
         inFlight?.cancel()
         Task { await BackupTransferSession.shared.cancelEveryTransfer() }
@@ -260,41 +256,49 @@ final class BackupScheduler {
         holds -= 1
         if holds == 0, runAskedDuringHold {
             runAskedDuringHold = false
-            Task { await run(trigger: .foreground) }
+            runAfterHold = Task { await run(trigger: .foreground) }
         }
         return result
     }
 
     // MARK: - The resume question of 6.5 and 13.18
 
-    /// The run the process did not survive, or `nil` when the last
-    /// launch left nothing to ask about.
     func pendingResume() -> BackupIntentRecord? {
         guard let store else { return nil }
-        let record = try? store.intent(kind: .interruptedRun)
-        guard BackupResumeQuestion.asks(record) else { return nil }
-        return record
+        do {
+            let record = try store.intent(kind: .interruptedRun)
+            return BackupResumeQuestion.asks(record) ? record : nil
+        } catch {
+            BackupLog.line("BackupScheduler", "The resume record was not read: \(error)")
+            return nil
+        }
     }
 
     /// Marked when the sheet shows. A kill with the sheet open runs no
     /// `onDisappear`, so marking on the answer let the same
     /// interruption ask at the next launch too.
     func markResumeAsked() {
-        try? store?.markIntentAsked(kind: .interruptedRun)
+        do {
+            try store?.markIntentAsked(kind: .interruptedRun)
+        } catch {
+            BackupLog.line("BackupScheduler", "The resume ask was not marked: \(error)")
+        }
     }
 
-    /// Applies one answer to the resume question.
     func answerResume(_ action: BackupResumeQuestion.Action, gameName: String) {
         guard let store else { return }
-        let record = try? store.intent(kind: .interruptedRun)
-
-        let effect = BackupResumeQuestion.effect(of: action)
-        if effect.startsRunNow, let gameKey = record?.gameKey {
-            pressBackUpNow(.game(gameKey: gameKey, gameName: gameName))
+        do {
+            let record = try store.intent(kind: .interruptedRun)
+            let effect = BackupResumeQuestion.effect(of: action)
+            if effect.startsRunNow, let gameKey = record?.gameKey {
+                pressBackUpNow(.game(gameKey: gameKey, gameName: gameName))
+            }
+            guard !effect.keepsRecord else { return }
+            try store.clearIntent(kind: .interruptedRun)
+            if effect.cleansStagingAndOutbox { Self.cleanStagingAndOutbox() }
+        } catch {
+            BackupLog.line("BackupScheduler", "The resume answer was not applied: \(error)")
         }
-        guard !effect.keepsRecord else { return }
-        try? store.clearIntent(kind: .interruptedRun)
-        if effect.cleansStagingAndOutbox { Self.cleanStagingAndOutbox() }
     }
 
     /// Stop backup throws the staged copies and the outbox away. The
@@ -346,15 +350,15 @@ final class BackupScheduler {
         switch ResourcePolicy.stagingGate(conditions) {
         case .pause(let reason):
             BackupRunMonitor.shared.pause = reason
-            log("%@ paused: %@", trigger.rawValue, reason.line)
+            BackupLog.debug("BackupScheduler", "\(trigger.rawValue) paused: \(reason.line)")
             close(progress)
             return false
         case .run:
             BackupRunMonitor.shared.pause = nil
         }
 
-        guard let runner else {
-            log("%@ has no runner yet", trigger.rawValue)
+        guard didStart else {
+            BackupLog.debug("BackupScheduler", "\(trigger.rawValue) came before the start")
             close(progress)
             return false
         }
@@ -367,9 +371,9 @@ final class BackupScheduler {
         networkCause = ResourcePolicy.blockedCause(
             policy: BackupNetwork.policy, isOnCellular: BackupNetwork.isOnCellular)
 
-        log(
-            "%@ runs, network %@",
-            trigger.rawValue, networkCause == nil ? "clear" : BackupNetwork.waitingLine)
+        BackupLog.debug(
+            "BackupScheduler",
+            "\(trigger.rawValue) runs, network \(networkCause == nil ? "clear" : BackupNetwork.waitingLine)")
 
         BackupRunMonitor.shared.runBegins()
         progress?.totalUnitCount = 1
@@ -400,13 +404,6 @@ final class BackupScheduler {
         return result.didFinish
     }
 
-    /// The one line a device check reads. The Backups screen of
-    /// ticket 016 shows the same state on screen.
-    private func log(_ format: String, _ arguments: CVarArg...) {
-        guard AppSettings.shared.debugLogs else { return }
-        BackupLog.line("BackupScheduler", String(format: format, arguments: arguments))
-    }
-
     /// A continued-processing task that stops reporting progress is
     /// expired by the system, so every exit closes it.
     private func close(_ progress: Progress?) {
@@ -424,34 +421,41 @@ final class BackupScheduler {
     /// no task for it. The foreground pass then restarts the work.
     private func countTheRunsThatVanished() {
         Task { [weak self] in
-            let live = await BackupTransferSession.shared.liveTaskPaths()
             // The daemon still carries the run, so the process death
             // cost nothing.
-            guard live.isEmpty else { return }
+            guard await !BackupTransferSession.shared.holdsALiveUpload() else { return }
             self?.closeTheRunsThatVanished()
         }
     }
 
     private func closeTheRunsThatVanished() {
         guard let store else { return }
-        let open = ((try? store.runHistory()) ?? []).filter { $0.end == nil }
-        guard !open.isEmpty else { return }
+        do {
+            let open = try store.runHistory().filter { $0.end == nil }
+            guard !open.isEmpty else { return }
 
-        // One launch counts one interrupted run, however many targets
-        // the run covered.
-        record(.interrupted)
+            // One launch counts one interrupted run, however many
+            // targets the run covered.
+            record(.interrupted)
 
-        // The process died at an unknown time after the start.
-        for var row in open {
-            row.end = BackupRunEnd(
-                outcome: .failed, finishedAt: row.startedAt, detail: Self.interruptedDetail)
-            try? store.recordRun(row)
+            // The process died at an unknown time after the start.
+            for var row in open {
+                row.end = BackupRunEnd(
+                    outcome: .failed, finishedAt: row.startedAt, detail: Self.interruptedDetail)
+                try store.recordRun(row)
+            }
+        } catch {
+            BackupLog.line("BackupScheduler", "The vanished runs were not closed: \(error)")
         }
     }
 
     private func record(_ ending: InterruptedRunEnding) {
-        guard let store, let tally = try? store.interruptedRunTally() else { return }
-        try? store.saveInterruptedRunTally(tally.recording(ending))
+        guard let store else { return }
+        do {
+            try store.saveInterruptedRunTally(store.interruptedRunTally().recording(ending))
+        } catch {
+            BackupLog.line("BackupScheduler", "The interrupted run tally was not saved: \(error)")
+        }
     }
 
     // MARK: - The three notifications

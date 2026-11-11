@@ -69,7 +69,7 @@ actor S3Target: BackupProvider {
     func put(localFile: URL, path: String) async throws(BackupProviderError) {
         // Before any byte moves, per 8.3. A file over the limit is a
         // permanent refusal and no amount of space makes it fit.
-        let size = UploadStaging.fileSize(at: localFile)
+        let size = try UploadStaging.fileSize(at: localFile)
         if let rejection = capabilities.rejection(forFileOfSize: size) { throw rejection }
 
         try await gate.transfer { () async throws(BackupProviderError) in
@@ -258,7 +258,6 @@ actor S3Target: BackupProvider {
         try await commit(record)
     }
 
-    /// The upload to carry on from, or a new one.
     private func openUpload(
         key: String, size: Int64, parts: [S3.Part]
     ) async throws(BackupProviderError) -> S3MultipartUpload {
@@ -318,7 +317,10 @@ actor S3Target: BackupProvider {
         // refuse the upload. The next `CreateMultipartUpload` still
         // works, and the parts of the older one stay until a rule of
         // the bucket clears them.
-        guard answer.isSuccess else { return }
+        guard answer.isSuccess else {
+            BackupLog.line("S3Target", "the list of the open uploads answered \(answer.status)")
+            return
+        }
         for uploadId in S3.abandonedUploadIds(
             fromBody: answer.body, key: key, ownUploadId: ownUploadId, now: Date())
         {
@@ -378,15 +380,19 @@ actor S3Target: BackupProvider {
         await s3MultipartUploads.forget(targetId: targetId, path: key)
     }
 
-    /// One `AbortMultipartUpload`. It reports nothing, because the
-    /// caller is already on its way out with the failure that brought
-    /// it here.
+    /// It throws nothing, because the caller is already on its way out
+    /// with the failure that brought it here.
     private func abort(uploadId: String, key: String) async {
-        guard
-            let request = try? signed(
-                method: "DELETE", key: key, query: S3.uploadQuery(uploadId: uploadId))
-        else { return }
-        _ = try? await BackupAPISession.shared.send(request)
+        do {
+            let answer = try await BackupAPISession.shared.send(
+                try signed(method: "DELETE", key: key, query: S3.uploadQuery(uploadId: uploadId)))
+            guard answer.isSuccess else {
+                BackupLog.line("S3Target", "the abort of \(uploadId) answered \(answer.status)")
+                return
+            }
+        } catch {
+            BackupLog.line("S3Target", "the abort of \(uploadId) failed: \(error)")
+        }
     }
 
     // MARK: - The two ways to sign
@@ -396,8 +402,7 @@ actor S3Target: BackupProvider {
         method: String,
         key: String = "",
         query: [URLQueryItem] = [],
-        body: Data? = nil,
-        headers extra: [String: String] = [:]
+        body: Data? = nil
     ) throws(BackupProviderError) -> URLRequest {
         if let refusal = bucket.refusal { throw refusal }
         guard let url = bucket.url(key: key, query: query), let host = bucket.hostHeader else {
@@ -405,7 +410,7 @@ actor S3Target: BackupProvider {
         }
 
         let payloadHash = body.map { ContentHash.hex(of: $0) } ?? S3SigV4.emptyPayloadHash
-        var headers = extra
+        var headers: [String: String] = [:]
         headers["host"] = host
         if body != nil { headers["Content-Type"] = "application/xml" }
 

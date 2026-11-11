@@ -15,6 +15,7 @@ final class EmpoPlus {
         case server
         /// The account is signed in on the most devices it can have.
         case tooManyDevices
+        case notSaved
     }
 
     static let joinURL = URL(string: "https://www.patreon.com/checkout/empo_app?rid=29989848")!
@@ -26,16 +27,35 @@ final class EmpoPlus {
     private(set) var pass: PlusPass?
     private var renewal: String?
     private var renewing: Task<Bool, Never>?
+    /// The Keychain can refuse a read, for example on a launch before
+    /// the first unlock. `renew` reads it again.
+    private var keychainWasRead = false
 
     private init() {
-        let stored = try? BackupKeychain.plus()
-        renewal = stored?.renewal
-        pass = stored?.pass.flatMap { PlusPass($0, publicKey: Self.publicKey) }
+        readTheKeychain()
+    }
+
+    private func readTheKeychain() {
+        do {
+            let stored = try BackupKeychain.plus()
+            renewal = stored.renewal
+            pass = stored.pass.flatMap { PlusPass($0, publicKey: Self.publicKey) }
+            keychainWasRead = true
+        } catch {
+            BackupLog.line("EmpoPlus", "The Plus sign-in was not read: \(error)")
+        }
     }
 
     var isSignedIn: Bool { renewal != nil }
 
     var hasPlus: Bool { (pass?.grantsPlus(at: .now) ?? false) || PlusStore.shared.isSubscribed }
+
+    /// `hasPlus` is current when this returns.
+    func refresh() async {
+        async let renewed = renew()
+        await PlusStore.shared.refresh()
+        _ = await renewed
+    }
 
     /// With `replace`, the server signs out the other devices of the
     /// account when it is at its device limit.
@@ -74,7 +94,7 @@ final class EmpoPlus {
         }
         // A server from before the sign-in code puts the pass in the link.
         if let pass = value("pass"), let renewal = value("renewal") {
-            guard keep(pass: pass, renewal: renewal) else { throw .server }
+            try keep(pass: pass, renewal: renewal)
             return
         }
         guard let code = value("code") else { throw .server }
@@ -95,15 +115,16 @@ final class EmpoPlus {
         if status == 409 { throw .tooManyDevices }
         guard status == 200,
             let issued = try? JSONDecoder().decode([String: String].self, from: data),
-            let pass = issued["pass"], let renewal = issued["renewal"],
-            keep(pass: pass, renewal: renewal)
+            let pass = issued["pass"], let renewal = issued["renewal"]
         else { throw .server }
+        try keep(pass: pass, renewal: renewal)
     }
 
     /// Returns false when the API did not answer.
     @discardableResult
     func renew(force: Bool = false) async -> Bool {
         if let renewing { return await renewing.value }
+        if !keychainWasRead { readTheKeychain() }
         guard let renewal, force || pass?.needsRenewal(at: .now) ?? true else { return true }
         let task = Task { await self.renew(with: renewal) }
         renewing = task
@@ -119,7 +140,11 @@ final class EmpoPlus {
                 Task { _ = try? await URLSession.shared.data(for: request) }
             }
         }
-        try? BackupKeychain.removePlus()
+        do {
+            try BackupKeychain.removePlus()
+        } catch {
+            BackupLog.line("EmpoPlus", "The Plus sign-in was not removed: \(error)")
+        }
         pass = nil
         renewal = nil
     }
@@ -156,7 +181,11 @@ final class EmpoPlus {
         if status == 401 {
             // Patreon refused the sign-in. The pass stays good until it
             // ends, and the Plus screen asks for a new sign-in.
-            try? BackupKeychain.removePlusRenewal()
+            do {
+                try BackupKeychain.removePlusRenewal()
+            } catch {
+                BackupLog.line("EmpoPlus", "The refused renewal stays in the Keychain: \(error)")
+            }
             self.renewal = nil
             return true
         }
@@ -164,15 +193,19 @@ final class EmpoPlus {
             let issued = try? JSONDecoder().decode([String: String].self, from: data),
             let pass = issued["pass"]
         else { return false }
-        return keep(pass: pass, renewal: renewal)
+        return (try? keep(pass: pass, renewal: renewal)) != nil
     }
 
-    @discardableResult
-    private func keep(pass text: String, renewal: String) -> Bool {
-        guard let pass = PlusPass(text, publicKey: Self.publicKey) else { return false }
-        try? BackupKeychain.setPlus(pass: text, renewal: renewal)
+    private func keep(pass text: String, renewal: String) throws(SignInFailure) {
+        guard let pass = PlusPass(text, publicKey: Self.publicKey) else { throw .server }
+        do {
+            try BackupKeychain.setPlus(pass: text, renewal: renewal)
+        } catch {
+            // A sign-in kept only in memory is gone at the next launch.
+            BackupLog.line("EmpoPlus", "The Plus sign-in was not saved: \(error)")
+            throw .notSaved
+        }
         self.pass = pass
         self.renewal = renewal
-        return true
     }
 }
