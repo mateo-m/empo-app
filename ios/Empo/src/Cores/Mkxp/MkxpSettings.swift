@@ -322,7 +322,6 @@ struct MkxpEngineSection: View {
                 )
             }
 
-            #if os(iOS)
             SettingsToggle(
                 title: "In-game keyboard",
                 isOn: Binding(
@@ -330,9 +329,10 @@ struct MkxpEngineSection: View {
                     set: { state.settings.useInGameKeyboard = $0 }
                 ),
                 description:
-                    "Use the game's own keyboard for names instead of the iOS one. Turn it on for Pokemon Essentials games with custom keys."
+                    "Pick the letters of a name on the game's own keyboard instead of typing them. Turn it on for Pokemon Essentials games with custom keys."
             )
 
+            #if os(iOS)
             TouchMouseToggle(model: model)
             #endif
 
