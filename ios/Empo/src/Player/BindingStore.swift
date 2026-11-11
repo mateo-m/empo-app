@@ -20,7 +20,7 @@ enum BindingStore {
 
     static func loadPerGame(container: GameContainer) -> BindingMap? {
         guard let map = UserControlsFile.acceptedManifest(in: container)?.bindings else { return nil }
-        return migrated(map) { _ = UserControlsFile.updateBindings(in: container, bindings: $0) }
+        return migrated(map) { _ = try? UserControlsFile.updateBindings(in: container, bindings: $0) }
     }
 
     /// The write must not post a change notification, because the
@@ -33,9 +33,9 @@ enum BindingStore {
         return migrated.map
     }
 
-    static func savePerGame(container: GameContainer, map: BindingMap) {
+    static func savePerGame(container: GameContainer, map: BindingMap) throws(UserControlsFile.SaveRefusal) {
         let controller = map.entries.isEmpty ? nil : map
-        _ = UserControlsFile.updateBindings(in: container, bindings: controller)
+        _ = try UserControlsFile.updateBindings(in: container, bindings: controller)
         NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 
@@ -43,8 +43,8 @@ enum BindingStore {
         delete(key: DefaultsKey.controllerMapGlobal)
     }
 
-    static func deletePerGame(container: GameContainer) {
-        _ = UserControlsFile.updateBindings(in: container, bindings: nil)
+    static func deletePerGame(container: GameContainer) throws(UserControlsFile.SaveRefusal) {
+        _ = try UserControlsFile.updateBindings(in: container, bindings: nil)
         NotificationCenter.default.post(name: .bindingsDidChange, object: nil)
     }
 

@@ -16981,6 +16981,180 @@
         }
       }
     },
+    "Couldn't save your buttons. This game's controls file has errors. Fix it in Finder and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels hat Fehler. Korrigiere sie im Finder und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego tiene errores. Corrígelo en el Finder e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu contient des erreurs. Corrige-le dans le Finder et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco ha degli errori. Correggilo nel Finder e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルにエラーがあります。Finderで修正して、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일에 오류가 있어요. Finder에서 고친 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo tem erros. Corrija-o no Finder e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. В файле управления этой игры есть ошибки. Исправьте его в Finder и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件有错误。请在访达中修正，然后再试一次。"
+          }
+        }
+      }
+    },
+    "Couldn't save your buttons. This game's controls file has errors. Fix it in the Files app and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels hat Fehler. Korrigiere sie in der Dateien-App und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego tiene errores. Corrígelo en la app Archivos e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu contient des erreurs. Corrige-le dans l'app Fichiers et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco ha degli errori. Correggilo nell'app File e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルにエラーがあります。“ファイル”Appで修正して、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일에 오류가 있어요. 파일 앱에서 고친 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo tem erros. Corrija-o no app Arquivos e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. В файле управления этой игры есть ошибки. Исправьте его в приложении «Файлы» и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件有错误。请在“文件” App 中修正，然后再试一次。"
+          }
+        }
+      }
+    },
+    "Couldn't save your buttons. This game's controls file needs a newer version of Empo. Update Empo and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels braucht eine neuere Version von Empo. Aktualisiere Empo und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego necesita una versión más reciente de Empo. Actualiza Empo e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu nécessite une version plus récente d'Empo. Mets à jour Empo et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco richiede una versione più recente di Empo. Aggiorna Empo e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルには新しいバージョンのEmpoが必要です。Empoをアップデートして、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일은 최신 버전의 Empo가 필요해요. Empo를 업데이트한 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo precisa de uma versão mais recente do Empo. Atualize o Empo e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. Для файла управления этой игры нужна более новая версия Empo. Обновите Empo и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件需要更新版本的 Empo。请更新 Empo，然后再试一次。"
+          }
+        }
+      }
+    },
     "Couldn't save your layout. Free up some space and try again." : {
       "localizations" : {
         "de" : {
