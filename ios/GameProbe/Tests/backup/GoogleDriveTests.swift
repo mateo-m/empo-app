@@ -67,7 +67,7 @@ final class GoogleDriveTests: XCTestCase {
             reason: "userRateLimitExceeded", message: "Rate Limit Exceeded", code: 403)
         let error = GoogleDrive.error(
             status: 403, failure: GoogleDrive.failure(inBody: body), attempt: 3)
-        XCTAssertEqual(error, .throttled(retryAfter: GoogleDrive.backoffSeconds(attempt: 3)))
+        XCTAssertEqual(error, .throttled(retryAfter: RetryWait.backoffSeconds(attempt: 3)))
     }
 
     func testAMissingObjectDropsItFromTheCache() {
@@ -108,18 +108,28 @@ final class GoogleDriveTests: XCTestCase {
     // MARK: - The truncated backoff of 9.3
 
     func testTheBackoffDoublesAndThenStopsAtTheCeiling() {
-        XCTAssertEqual(GoogleDrive.backoffSeconds(attempt: 1), 1)
-        XCTAssertEqual(GoogleDrive.backoffSeconds(attempt: 2), 2)
-        XCTAssertEqual(GoogleDrive.backoffSeconds(attempt: 3), 4)
-        XCTAssertEqual(GoogleDrive.backoffSeconds(attempt: 7), 64)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 1), 1)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 2), 2)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 3), 4)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 7), 64)
         XCTAssertEqual(
-            GoogleDrive.backoffSeconds(attempt: 40), GoogleDrive.backoffCeilingSeconds)
+            RetryWait.backoffSeconds(attempt: 40), RetryWait.backoffCeilingSeconds)
     }
 
     func testAStatedRetryAfterBeatsTheBackoff() {
-        XCTAssertEqual(GoogleDrive.retryAfterSeconds("30", attempt: 1), 30)
-        XCTAssertEqual(GoogleDrive.retryAfterSeconds(nil, attempt: 4), 8)
-        XCTAssertEqual(GoogleDrive.retryAfterSeconds("nonsense", attempt: 2), 2)
+        XCTAssertEqual(RetryWait.seconds(retryAfter: "30", attempt: 1), 30)
+        XCTAssertEqual(RetryWait.seconds(retryAfter: nil, attempt: 4), 8)
+        XCTAssertEqual(RetryWait.seconds(retryAfter: "nonsense", attempt: 2), 2)
+        XCTAssertEqual(RetryWait.seconds(retryAfter: "inf", attempt: 2), 2)
+    }
+
+    func testAStatedRetryAfterStopsAtTheHeaderCeiling() {
+        XCTAssertEqual(RetryWait.seconds(retryAfter: "1e20", attempt: 1), RetryWait.headerCeilingSeconds)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        XCTAssertEqual(
+            RetryWait.seconds(
+                retryAfter: "Wed, 01 Jan 2600 00:00:00 GMT", attempt: 1, now: now),
+            RetryWait.headerCeilingSeconds)
     }
 
     // MARK: - 2. Which upload path a file takes, per 9.3
@@ -168,7 +178,7 @@ final class GoogleDriveTests: XCTestCase {
     }
 
     func testTheContentRangeNamesTheBytesAndTheWholeSize() {
-        let chunk = GoogleDrive.Chunk(offset: 0, length: 262_144, isLast: false)
+        let chunk = UploadChunk(offset: 0, length: 262_144, isLast: false)
         XCTAssertEqual(
             GoogleDrive.contentRange(of: chunk, fileSize: 1_048_576),
             "bytes 0-262143/1048576")

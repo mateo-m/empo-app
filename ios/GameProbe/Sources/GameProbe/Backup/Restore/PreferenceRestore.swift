@@ -28,7 +28,7 @@ public struct PreferenceUndoFile: Codable, Equatable, Sendable {
     }
 
     public func isExpired(now: Date) -> Bool {
-        now.timeIntervalSince(savedAt) > Double(Self.expiryDays) * 24 * 60 * 60
+        now.timeIntervalSince(savedAt) > Double(Self.expiryDays) * .day
     }
 
     public func jsonData() throws -> Data {

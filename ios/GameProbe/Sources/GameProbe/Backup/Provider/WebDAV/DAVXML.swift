@@ -68,7 +68,7 @@ enum DAVXML {
     /// carries none.
     static func value(_ name: String, in xml: String) -> String? {
         guard let first = blocks(name, in: xml).first else { return nil }
-        return unescape(first).trimmingCharacters(in: .whitespacesAndNewlines)
+        return XMLText.unescape(first).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func int64(_ name: String, in xml: String) -> Int64? {
@@ -150,17 +150,5 @@ enum DAVXML {
             return xml.endIndex
         }
         return range.upperBound
-    }
-
-    /// The five entities XML defines.
-    static func unescape(_ text: String) -> String {
-        guard text.contains("&") else { return text }
-        return
-            text
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&apos;", with: "'")
-            .replacingOccurrences(of: "&amp;", with: "&")
     }
 }

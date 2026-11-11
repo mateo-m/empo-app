@@ -442,7 +442,7 @@ actor GoogleDriveTarget: BackupProvider, AccountReading {
     /// Sends one chunk. It rides the background session, because it
     /// carries a file and it has to survive suspension.
     private func send(
-        chunk: GoogleDrive.Chunk, of piece: URL, sessionURI: String, path: String, fileSize: Int64
+        chunk: UploadChunk, of piece: URL, sessionURI: String, path: String, fileSize: Int64
     ) async throws(BackupProviderError) -> HTTPAnswer {
         guard let url = URL(string: sessionURI) else {
             throw BackupProviderError.rejected(message: "Google Drive sent no session URI")

@@ -74,10 +74,10 @@ final class S3Tests: XCTestCase {
     func testAThrottleWithNoStatedTimeTakesTheTruncatedBackoff() {
         let error = S3.error(
             status: 503, failure: failure(code: "SlowDown"), attempt: 4)
-        XCTAssertEqual(error, .throttled(retryAfter: S3.backoffSeconds(attempt: 4)))
-        XCTAssertEqual(S3.backoffSeconds(attempt: 1), 1)
-        XCTAssertEqual(S3.backoffSeconds(attempt: 4), 8)
-        XCTAssertEqual(S3.backoffSeconds(attempt: 40), S3.backoffCeilingSeconds)
+        XCTAssertEqual(error, .throttled(retryAfter: RetryWait.backoffSeconds(attempt: 4)))
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 1), 1)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 4), 8)
+        XCTAssertEqual(RetryWait.backoffSeconds(attempt: 40), RetryWait.backoffCeilingSeconds)
     }
 
     func testAFullBucketRunsThePruneLadder() {
@@ -306,7 +306,7 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(parts.map(\.eTag), ["\"5f363e0e58a95f06cbe9bbc662c5dfb6\"", "\"two\""])
         let commit = String(decoding: S3.completeBody(parts: parts), as: UTF8.self)
         XCTAssertTrue(commit.contains("<ETag>&quot;5f363e0e58a95f06cbe9bbc662c5dfb6&quot;</ETag>"))
-        XCTAssertEqual(S3XML.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
+        XCTAssertEqual(XMLText.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
     }
 
     func testTheCommitBodyListsThePartsInOrder() {
@@ -338,7 +338,7 @@ final class S3Tests: XCTestCase {
             <Initiated>2026-10-01T10:00:00.000Z</Initiated></Upload>\
             </ListMultipartUploadsResult>
             """.utf8)
-        let now = S3.date(fromTimestamp: "2026-11-05T10:00:00.000Z")!
+        let now = ProviderDate.rfc3339Reader()("2026-11-05T10:00:00.000Z")!
 
         XCTAssertEqual(
             S3.abandonedUploadIds(fromBody: body, key: "Empo/a", ownUploadId: "mine", now: now),

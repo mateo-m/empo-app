@@ -18,9 +18,9 @@ import Foundation
 public enum SweepSchedule {
 
     /// A sweep is due at 7 days per target.
-    public static let dueAfter: TimeInterval = 7 * 86_400
+    public static let dueAfter: TimeInterval = 7 * .day
     /// It is overdue at 30 days.
-    public static let overdueAfter: TimeInterval = 30 * 86_400
+    public static let overdueAfter: TimeInterval = 30 * .day
     /// The usage that forces a sweep on a target that answers a
     /// space query.
     public static let pressureFraction = 0.80

@@ -196,24 +196,6 @@ public enum GoogleDrive {
     /// chunk repeats.
     public static let uploadChunkBytes: Int64 = 64 * chunkAlignmentBytes
 
-    /// One chunk of a resumable upload.
-    public struct Chunk: Equatable, Sendable {
-        public let offset: Int64
-        public let length: Int64
-        /// Whether the session ends after this one. Drive commits the
-        /// file at the end of the last chunk, which is how a
-        /// resumable upload meets 8.2.
-        public let isLast: Bool
-
-        public init(offset: Int64, length: Int64, isLast: Bool) {
-            self.offset = offset
-            self.length = length
-            self.isLast = isLast
-        }
-
-        public var endOffset: Int64 { offset + length }
-    }
-
     /// How one file goes up, per 9.3.
     public enum UploadPlan: Equatable, Sendable {
         /// One multipart request. Drive commits it whole, so it meets
@@ -221,7 +203,7 @@ public enum GoogleDrive {
         case simple
         /// A session URI, then a `PUT` per chunk. The file appears
         /// only when the session ends, so the commit is atomic.
-        case resumable(chunks: [Chunk])
+        case resumable(chunks: [UploadChunk])
     }
 
     public static func uploadPlan(forFileOfSize size: Int64) -> UploadPlan {
@@ -229,28 +211,13 @@ public enum GoogleDrive {
         return .resumable(chunks: chunks(ofFileSize: size, from: 0))
     }
 
-    /// The chunks left for a file of this size, starting at `offset`.
-    ///
-    /// A session that broke resumes from the offset the probe
-    /// reports, so it never starts again from zero. Every chunk but
-    /// the last is a multiple of 256 KB, which is what Drive takes.
-    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [Chunk] {
-        let start = max(0, min(offset, size))
-        guard start < size else { return [] }
-
-        var chunks: [Chunk] = []
-        var cursor = start
-        while cursor < size {
-            let left = size - cursor
-            let length = left <= uploadChunkBytes ? left : uploadChunkBytes
-            cursor += length
-            chunks.append(Chunk(offset: cursor - length, length: length, isLast: cursor >= size))
-        }
-        return chunks
+    /// Every chunk but the last is a multiple of the alignment, which is what Drive takes.
+    public static func chunks(ofFileSize size: Int64, from offset: Int64) -> [UploadChunk] {
+        UploadChunk.plan(fileSize: size, from: offset, chunkBytes: uploadChunkBytes)
     }
 
     /// The `Content-Range` header of one chunk.
-    public static func contentRange(of chunk: Chunk, fileSize: Int64) -> String {
+    public static func contentRange(of chunk: UploadChunk, fileSize: Int64) -> String {
         "bytes \(chunk.offset)-\(chunk.endOffset - 1)/\(fileSize)"
     }
 
@@ -352,29 +319,6 @@ public enum GoogleDrive {
         public static let serverError = 500
     }
 
-    /// The longest wait the truncated backoff of 9.3 ever makes.
-    public static let backoffCeilingSeconds: TimeInterval = 64
-
-    /// The truncated exponential delay of 9.3, for attempt 1, 2, 3,
-    /// and so on. It doubles and then stops at the ceiling.
-    public static func backoffSeconds(attempt: Int) -> TimeInterval {
-        let step = max(1, attempt)
-        guard step < 32 else { return backoffCeilingSeconds }
-        return min(backoffCeilingSeconds, TimeInterval(1 << (step - 1)))
-    }
-
-    /// `Retry-After` in seconds, per 8.6. Drive states it in seconds
-    /// when it states it at all, and the backoff of 9.3 covers the
-    /// rest.
-    public static func retryAfterSeconds(_ header: String?, attempt: Int = 1) -> TimeInterval {
-        guard let header, let seconds = TimeInterval(header.trimmingCharacters(in: .whitespaces)),
-            seconds > 0
-        else {
-            return backoffSeconds(attempt: attempt)
-        }
-        return seconds
-    }
-
     // MARK: - The error map, per 8.4
 
     /// What a Drive failure body carries.
@@ -425,7 +369,7 @@ public enum GoogleDrive {
         case Status.unauthorized:
             return .authExpired
         case Status.tooManyRequests:
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         case Status.forbidden:
             return forbidden(failure, retryAfterHeader: retryAfterHeader, attempt: attempt)
         case Status.notFound, Status.gone:
@@ -448,7 +392,7 @@ public enum GoogleDrive {
         }
         if failure.reason == "authError" { return .authExpired }
         if throttleReasons.contains(failure.reason) {
-            return .throttled(retryAfter: retryAfterSeconds(retryAfterHeader, attempt: attempt))
+            return .throttled(retryAfter: RetryWait.seconds(retryAfter: retryAfterHeader, attempt: attempt))
         }
         return refusal(failure)
     }
@@ -513,53 +457,33 @@ public struct GoogleDriveFilePage: Equatable, Sendable {
 
 extension GoogleDrive {
 
-    /// Drive stamps `modifiedTime` in RFC 3339, with a fraction.
-    public static func date(fromTimestamp text: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: text) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: text)
-    }
-
     /// Reads one `files.list` answer.
     public static func page(fromBody body: Data) -> GoogleDriveFilePage? {
         guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             return nil
         }
         let raw = root["files"] as? [[String: Any]] ?? []
+        let dates = ProviderDate.rfc3339Reader()
         let files = raw.map { file in
             GoogleDriveFile(
                 id: file["id"] as? String ?? "",
                 name: file["name"] as? String ?? "",
                 sizeBytes: int64(file["size"]) ?? 0,
-                modifiedTime: (file["modifiedTime"] as? String).flatMap(date(fromTimestamp:)),
+                modifiedTime: (file["modifiedTime"] as? String).flatMap(dates),
                 mimeType: file["mimeType"] as? String ?? "")
         }
         return GoogleDriveFilePage(
             files: files, nextPageToken: root["nextPageToken"] as? String)
     }
 
-    /// Every object of every page, as `list` reports them, per 8.1.
-    ///
-    /// Drive lists the whole folder and takes no prefix of its own,
-    /// so the prefix filter runs here. The result is sorted, because
-    /// 8.1 states a flat namespace and two callers compare two lists.
+    /// Drive lists the whole folder and takes no prefix of its own, so the prefix filter runs here.
     public static func objects(
         fromPages pages: [GoogleDriveFilePage], prefix: String
     ) -> [RemoteObject] {
-        var found: [RemoteObject] = []
-        for page in pages {
-            for file in page.files where file.isFile {
-                guard file.name.hasPrefix(prefix) else { continue }
-                found.append(
-                    RemoteObject(
-                        path: file.name,
-                        sizeBytes: file.sizeBytes,
-                        modifiedAt: file.modifiedTime))
-            }
+        let files = pages.flatMap(\.files).filter(\.isFile).map {
+            RemoteObject(path: $0.name, sizeBytes: $0.sizeBytes, modifiedAt: $0.modifiedTime)
         }
-        return found.sorted { $0.path < $1.path }
+        return RemoteObject.listing(files, prefix: prefix)
     }
 
     /// The id and the name of every file of every page, which is what

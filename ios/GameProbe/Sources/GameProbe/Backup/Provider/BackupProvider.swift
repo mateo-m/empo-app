@@ -15,6 +15,12 @@ public struct RemoteObject: Equatable, Sendable {
         self.sizeBytes = sizeBytes
         self.modifiedAt = modifiedAt
     }
+
+    /// What `list` answers for one prefix. The list is sorted, because 8.1 states a flat namespace
+    /// and two callers compare two lists.
+    public static func listing(_ objects: [RemoteObject], prefix: String) -> [RemoteObject] {
+        objects.filter { $0.path.hasPrefix(prefix) }.sorted { $0.path < $1.path }
+    }
 }
 
 /// What a space query answers, per SPEC 8.1 and 9.7.

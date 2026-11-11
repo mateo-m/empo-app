@@ -1,15 +1,6 @@
 import Foundation
 import GameProbe
 
-/// An upload record that a later launch may carry on from.
-protocol ResumableUpload: Codable, Sendable {
-    func isUsable(at now: Date, forFileOfSize size: Int64) -> Bool
-}
-
-extension DropboxUploadSession: ResumableUpload {}
-extension GoogleDriveUploadSession: ResumableUpload {}
-extension S3MultipartUpload: ResumableUpload {}
-
 /// Where an upload in flight waits out an app termination, per SPEC
 /// 9.2, 9.3, and 9.4.
 ///
