@@ -6,19 +6,22 @@
 #
 # The repository variable MACOS_RUNNER chooses the Mac. The value is
 # JSON: a label list such as ["self-hosted","macOS"], or one quoted
-# label such as "xcode-27". A bare xcode-27 fails. With no variable,
-# the Mac jobs run on a GitHub-hosted Mac. Every pull request does too,
-# also one from a branch of this repository or from Dependabot. A pull
-# request runs the workflow files of its own branch, so a pull request
-# that edits this file can still choose the self-hosted Mac. Only the
-# repository's approval rule for fork runs stops that for a fork.
+# label such as "xcode-27". A bare xcode-27 fails. It applies only to
+# a run that someone starts by hand. With no variable, that run uses a
+# GitHub-hosted Mac. Every pull request and every push to main uses a
+# GitHub-hosted Mac, also a pull request from a branch of this
+# repository or from Dependabot. A pull request runs the workflow files
+# of its own branch, so a pull request that edits this file can still
+# choose the self-hosted Mac. Only the repository's approval rule for
+# fork runs stops that for a fork.
 #
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
 # next. A job-completed hook on that runner that cleans the checkout
 # must keep them, as the prepare-xcode-project action does.
 # A GitHub-hosted Mac keeps the same folders in the GitHub cache. A pull
-# request reads the cache of its own earlier runs.
+# request reads the cache of its own earlier runs, or else the cache of
+# main. A pull request cannot read the cache of another pull request.
 
 name: CI
 
@@ -48,7 +51,8 @@ concurrency:
 jobs:
   # A docs-only change cannot break the GameProbe tests or an app build,
   # so those jobs skip. A push to main also skips them when a pull
-  # request run already passed on the same source tree.
+  # request run already passed on the same source tree. On a push, the
+  # Mac jobs run all the same, to save the build data of main.
   #
   # The skip MUST be a job-level `if:`, never a workflow-level
   # `paths-ignore`. The ruleset requires the "CI" context. A workflow
@@ -70,8 +74,8 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
-      # JSON for runs-on. A pull request always runs on a GitHub-hosted Mac.
-      mac_runner: ${{ github.event_name != 'pull_request' && vars.MACOS_RUNNER || '"xcode-27"' }}
+      # JSON for runs-on.
+      mac_runner: ${{ github.event_name == 'workflow_dispatch' && vars.MACOS_RUNNER || '"xcode-27"' }}
     steps:
       - name: Classify the changed paths
         id: classify
@@ -361,7 +365,9 @@ jobs:
   # The three Mac jobs run at the same time on GitHub-hosted runners.
   # The self-hosted Macs have two runners, so there one job waits. Each
   # job keeps its build data in the runner's tool cache, which no job
-  # deletes, so the next run of the job builds only what changed.
+  # deletes, so the next run of the job builds only what changed. They
+  # run on each push to main, also when the gate skips the other jobs,
+  # so main saves the build data that the next pull request reads.
   #
   # macOS is the only runner that can run every check: Linux
   # Foundation has no legacy text encodings. EMPO_TESTS_NO_SKIP=1 turns a skip
@@ -370,7 +376,7 @@ jobs:
   swift-packages:
     name: Swift package tests (macOS)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 30
     steps:
@@ -391,7 +397,7 @@ jobs:
   simulator:
     name: Simulator build
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 60
     steps:
@@ -509,7 +515,7 @@ jobs:
   mac:
     name: Mac build
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
     runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
     timeout-minutes: 60
     steps:
