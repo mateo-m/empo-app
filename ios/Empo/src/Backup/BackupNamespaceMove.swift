@@ -18,6 +18,19 @@ enum BackupNamespaceMove {
         try await BackupScheduler.shared.withRunsHeld { Result { try move(to: namespaceId) } }.get()
     }
 
+    /// A failed move keeps the old namespace, while the rows of the
+    /// split target already name the new one. So that target clears
+    /// and rebuilds before its next run.
+    static func afterSplit(to namespaceId: String, targetId: String) throws {
+        do {
+            try move(to: namespaceId, except: targetId)
+        } catch {
+            try BackupLedgerRebuild.mark([targetId])
+            try waiting.add([targetId])
+            throw error
+        }
+    }
+
     /// `except` is the target whose run made the move. Its engine
     /// cleared its own rows.
     static func move(to namespaceId: String, except: String? = nil) throws {

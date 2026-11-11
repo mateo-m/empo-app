@@ -224,6 +224,18 @@ final class DamagedBackupSettingsTests: XCTestCase {
         XCTAssertEqual(try BackupKeychain.namespaceId(), namespaceBefore)
     }
 
+    func testASplitThatDoesNotMoveClearsItsLocationBeforeItsNextRun() throws {
+        let target = try addATarget()
+        try damaged.write(to: layout.targetsFile)
+
+        XCTAssertThrowsError(
+            try BackupNamespaceMove.afterSplit(to: "split-test-\(UUID().uuidString)", targetId: target.id))
+
+        XCTAssertEqual(try BackupKeychain.namespaceId(), namespaceBefore)
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "namespace-clear.json").ids().contains(target.id))
+        XCTAssertTrue(try BackupTargetWaitList(fileName: "ledger-rebuild.json").ids().contains(target.id))
+    }
+
     func testAnAdoptRebuildsTheSnapshotListOfEachLocation() throws {
         let target = try addATarget()
 

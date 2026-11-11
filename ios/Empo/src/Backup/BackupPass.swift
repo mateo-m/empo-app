@@ -193,7 +193,7 @@ final class BackupPass {
         }
         if result.didSplit {
             do {
-                try BackupNamespaceMove.move(to: result.namespaceId, except: descriptor.id)
+                try BackupNamespaceMove.afterSplit(to: result.namespaceId, targetId: descriptor.id)
                 BackupLog.debug(
                     "BackupPass", "\(descriptor.label) split, the device now writes to \(result.namespaceId)")
             } catch {
