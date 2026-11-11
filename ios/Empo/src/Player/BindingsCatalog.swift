@@ -377,10 +377,17 @@ enum BindingsCatalog {
     static func refusalMessage(_ refusal: UserControlsFile.SaveRefusal) -> LocalizedStringResource {
         switch refusal {
         case .fileHasErrors:
+            #if os(macOS)
+            """
+            Couldn't save your buttons. This game's controls file has errors. \
+            Fix it in Finder and try again.
+            """
+            #else
             """
             Couldn't save your buttons. This game's controls file has errors. \
             Fix it in the Files app and try again.
             """
+            #endif
         case .fileNeedsNewerEmpo:
             """
             Couldn't save your buttons. This game's controls file needs a newer \

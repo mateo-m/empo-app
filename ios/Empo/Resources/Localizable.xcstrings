@@ -16865,6 +16865,64 @@
         }
       }
     },
+    "Couldn't save your buttons. This game's controls file has errors. Fix it in Finder and try again." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Tasten konnten nicht gespeichert werden. Die Steuerungsdatei dieses Spiels hat Fehler. Korrigiere sie im Finder und versuch es noch mal."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron guardar tus botones. El archivo de controles de este juego tiene errores. Corrígelo en el Finder e inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer tes boutons. Le fichier de commandes de ce jeu contient des erreurs. Corrige-le dans le Finder et réessaie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare i pulsanti. Il file dei controlli di questo gioco ha degli errori. Correggilo nel Finder e riprova."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ボタンを保存できませんでした。このゲームの操作ファイルにエラーがあります。Finderで修正して、もう一度試してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "버튼을 저장하지 못했어요. 이 게임의 컨트롤 파일에 오류가 있어요. Finder에서 고친 뒤 다시 시도해 주세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível salvar seus botões. O arquivo de controles deste jogo tem erros. Corrija-o no Finder e tente de novo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось сохранить кнопки. В файле управления этой игры есть ошибки. Исправьте его в Finder и попробуйте снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的按键。这个游戏的按键文件有错误。请在访达中修正，然后再试一次。"
+          }
+        }
+      }
+    },
     "Couldn't save your buttons. This game's controls file has errors. Fix it in the Files app and try again." : {
       "localizations" : {
         "de" : {
