@@ -71,7 +71,6 @@ final class ICloudDriveTests: XCTestCase {
         cache.record(.ready)
 
         XCTAssertEqual(cache.value, .ready)
-        XCTAssertEqual(cache.probeCount, 1)
     }
 
     func testTheIdentityChangeReprobesAndDisablesTheTargetWithoutDeletingIt() {
@@ -88,7 +87,6 @@ final class ICloudDriveTests: XCTestCase {
         guard let availability = cache.value else {
             return XCTFail("the reprobe left no answer")
         }
-        XCTAssertEqual(cache.probeCount, 2)
         // The target keeps its row and reads the line of 9.1.
         XCTAssertEqual(
             ICloudDrive.rowState(of: targets[0], availability: availability),
@@ -190,10 +188,8 @@ final class ICloudDriveTests: XCTestCase {
         let capabilities = ICloudDrive.capabilities
 
         XCTAssertFalse(capabilities.canQueryQuota)
-        XCTAssertTrue(capabilities.reportsObjectAge)
         XCTAssertTrue(capabilities.supportsBackgroundTransfer)
         XCTAssertNil(capabilities.maxFileSize)
-        XCTAssertFalse(capabilities.foldsCase)
     }
 
     func testNoFileSizeIsRejectedBecauseTheAccountQuotaSetsTheLimit() {

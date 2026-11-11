@@ -238,7 +238,6 @@ final class GoogleDriveTests: XCTestCase {
 
     func testTheSessionLifetimeIsTheWeekOfNineThree() {
         XCTAssertEqual(GoogleDriveUploadSession.lifetime, 7 * 24 * 60 * 60)
-        XCTAssertEqual(GoogleDrive.uploadSessionLifetime, GoogleDriveUploadSession.lifetime)
     }
 
     // MARK: - 6. Paging returns every object across more than one page
@@ -318,9 +317,7 @@ final class GoogleDriveTests: XCTestCase {
     func testTheCapabilityFlagsReadAsSectionNineStates() {
         let flags = GoogleDrive.capabilities
         XCTAssertTrue(flags.canQueryQuota)
-        XCTAssertTrue(flags.reportsObjectAge)
         XCTAssertTrue(flags.supportsBackgroundTransfer)
-        XCTAssertFalse(flags.foldsCase)
         XCTAssertEqual(flags.maxFileSize, 5 * 1000 * 1000 * 1000 * 1000)
     }
 

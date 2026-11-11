@@ -41,10 +41,8 @@ public enum GoogleDrive {
 
     public static let capabilities = TargetCapabilities(
         canQueryQuota: true,
-        reportsObjectAge: true,
         supportsBackgroundTransfer: true,
-        maxFileSize: GoogleDrive.maxFileSizeBytes,
-        foldsCase: false)
+        maxFileSize: GoogleDrive.maxFileSizeBytes)
 
     /// 5 TB, per 9.3.
     public static let maxFileSizeBytes: Int64 = 5 * 1000 * 1000 * 1000 * 1000
@@ -197,9 +195,6 @@ public enum GoogleDrive {
     /// alignment, and it trades disk against the work one failed
     /// chunk repeats.
     public static let uploadChunkBytes: Int64 = 64 * chunkAlignmentBytes
-
-    /// A session URI expires after one week, per 9.3.
-    public static let uploadSessionLifetime: TimeInterval = 7 * 24 * 60 * 60
 
     /// One chunk of a resumable upload.
     public struct Chunk: Equatable, Sendable {
@@ -356,9 +351,6 @@ public enum GoogleDrive {
         public static let tooManyRequests = 429
         public static let serverError = 500
     }
-
-    /// The wait when Drive throttles and states no time.
-    public static let defaultRetryAfter: TimeInterval = 2
 
     /// The longest wait the truncated backoff of 9.3 ever makes.
     public static let backoffCeilingSeconds: TimeInterval = 64

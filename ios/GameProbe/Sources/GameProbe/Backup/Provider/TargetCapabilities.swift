@@ -1,20 +1,12 @@
 import Foundation
 
-/// The five capability flags of SPEC 8.3.
-///
-/// The engine reads these. It never branches on the provider name.
+/// The capability flags of SPEC 8.3.
 public struct TargetCapabilities: Equatable, Sendable {
 
     /// Whether this target answers a space query. The add-time
     /// permission check of 8.7 sets it per target, not per provider,
     /// because WebDAV answers only on some servers, per 9.7.
     public var canQueryQuota: Bool
-
-    /// Whether `list` reports an object's own modified time. The
-    /// sweep of 5.11 needs it. All five v1 providers report it. A
-    /// later provider that does not gets the manual reclaim action
-    /// of section 13 in place of an automatic sweep.
-    public var reportsObjectAge: Bool
 
     /// Whether the target can hand a transfer to the system. 8.9
     /// covers what a target that cannot does.
@@ -24,13 +16,6 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// server sets the limit and states no number.
     public var maxFileSize: Int64?
 
-    /// Whether the target treats two names that differ only in case
-    /// as one object. True for Dropbox. Every name Empo writes is a
-    /// hex key or a fixed ASCII name, per 5.2, so v1 behavior does
-    /// not change. The flag stops a later feature from assuming the
-    /// opposite.
-    public var foldsCase: Bool
-
     /// Whether `list` gives each object's real size. False for iCloud
     /// Drive: a file that is not on the device has the size of its
     /// placeholder until the metadata query reports the real one.
@@ -38,17 +23,13 @@ public struct TargetCapabilities: Equatable, Sendable {
 
     public init(
         canQueryQuota: Bool = false,
-        reportsObjectAge: Bool = true,
         supportsBackgroundTransfer: Bool = true,
         maxFileSize: Int64? = nil,
-        foldsCase: Bool = false,
         listReportsSize: Bool = true
     ) {
         self.canQueryQuota = canQueryQuota
-        self.reportsObjectAge = reportsObjectAge
         self.supportsBackgroundTransfer = supportsBackgroundTransfer
         self.maxFileSize = maxFileSize
-        self.foldsCase = foldsCase
         self.listReportsSize = listReportsSize
     }
 
@@ -56,10 +37,6 @@ public struct TargetCapabilities: Equatable, Sendable {
     /// 13.6. A row that cannot be filled is absent, and a missing
     /// usage bar would read as a loading failure, so a target that
     /// answers no space query says why.
-    ///
-    /// It lives here and not on one provider, because 9.7 names two
-    /// providers that never answer and two more that answer on some
-    /// servers alone.
     public static let noSpaceQueryLine = screenText("This service doesn't show how much free space is left.")
 
     /// The error a file of this size earns, or `nil` when it fits.

@@ -13,6 +13,10 @@ final class RestorePickerTests: XCTestCase {
 
     private let stamp = Date(timeIntervalSince1970: 1_700_000_000)
 
+    private func rowsInSection(_ rows: [SnapshotRow], of game: GameIdentity) -> [SnapshotRow] {
+        RestorePicker.sections(rows, among: [game]).first { $0.game == game }?.rows ?? []
+    }
+
     private func snapshotId(_ offset: TimeInterval) -> String {
         BackupKeys.snapshotId(date: stamp.addingTimeInterval(offset), suffix: "abcdef")
     }
@@ -90,7 +94,7 @@ final class RestorePickerTests: XCTestCase {
             row(-200, folderName: "Other Game"),
         ]
 
-        let listed = RestorePicker.rows(rows, of: GameIdentity(folderName: "Quest"))
+        let listed = rowsInSection(rows, of: GameIdentity(folderName: "Quest"))
         XCTAssertEqual(listed.map(\.deviceName), ["iPhone", "iPad"])
     }
 
@@ -98,7 +102,7 @@ final class RestorePickerTests: XCTestCase {
         let rows = [row(0, folderName: "Quest Demo")]
         let game = GameIdentity(folderName: "Quest", aliases: ["Quest Demo"])
 
-        XCTAssertEqual(RestorePicker.rows(rows, of: game).count, 1)
+        XCTAssertEqual(rowsInSection(rows, of: game).count, 1)
     }
 
     // MARK: - The namespace list, per 11.3 and 11.11
@@ -294,7 +298,7 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertEqual(store.aliases, ["Quest Demo"])
         let attached = store.identity(forFolderName: "Quest")
         XCTAssertTrue(GameIdentityMatch.matches(snapshot, attached))
-        XCTAssertEqual(RestorePicker.rows([row(0, folderName: "Quest Demo")], of: attached).count, 1)
+        XCTAssertEqual(rowsInSection([row(0, folderName: "Quest Demo")], of: attached).count, 1)
     }
 
     func testASecondAttachOfTheSameSnapshotAsksNothing() {
@@ -331,7 +335,7 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertTrue(
             VersionMarkerSheet.shows(
                 mode: built.mode, scope: .wholeGame,
-                snapshot: built.versionMarker, local: SnapshotManifest.VersionMarker()))
+                markerDiffers: built.versionMarker != SnapshotManifest.VersionMarker()))
     }
 
     // MARK: - The edges, per 11.14
@@ -342,7 +346,7 @@ final class RestorePickerTests: XCTestCase {
         XCTAssertFalse(newer.access.allowsWrite)
         XCTAssertTrue(RestoreNotices.showsNewerEmpoLine(newer.access))
         XCTAssertEqual(
-            RestorePicker.rows([newer], of: GameIdentity(folderName: "Quest")).count, 1)
+            rowsInSection([newer], of: GameIdentity(folderName: "Quest")).count, 1)
     }
 
     func testANamespaceThisEmpoWroteCarriesNoUpdateLine() {

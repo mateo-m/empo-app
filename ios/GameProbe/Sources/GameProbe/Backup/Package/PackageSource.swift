@@ -132,7 +132,7 @@ public actor PackageSource: BackupProvider {
     // MARK: - The six operations of 8.1
 
     public nonisolated var capabilities: TargetCapabilities {
-        TargetCapabilities(canQueryQuota: false, reportsObjectAge: false)
+        TargetCapabilities(canQueryQuota: false)
     }
 
     public func list(prefix: String) async throws(BackupProviderError) -> [RemoteObject] {

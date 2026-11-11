@@ -170,13 +170,6 @@ public enum RestorePicker {
         return .available
     }
 
-    /// The manual door of 11.3: one game's snapshots across every
-    /// configured target and namespace, matched through the ladder
-    /// of 4.2 plus any alias.
-    public static func rows(_ rows: [SnapshotRow], of game: GameIdentity) -> [SnapshotRow] {
-        newestFirst(rows.filter { GameIdentityMatch.matches($0.identity, game) })
-    }
-
     /// The namespace list of 11.3: a whole target, game by game,
     /// with the snapshots that match no installed game in a trailing
     /// section.
