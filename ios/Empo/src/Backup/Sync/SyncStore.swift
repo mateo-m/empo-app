@@ -11,9 +11,9 @@ import GameProbe
 @MainActor
 enum SyncStore {
 
-    static func state() -> SyncState {
+    static func state() throws -> SyncState {
         let url = BackupRoot.layout.applicationSupport.appendingPathComponent(SyncState.fileName)
-        var state = SyncState.read(
+        var state = try SyncState.read(
             applicationSupport: BackupRoot.layout.applicationSupport, actorId: UUID().uuidString)
         let replaced = state.replaceActor(
             unlessTheDeviceHolds: try? BackupKeychain.syncActorId(), fresh: { UUID().uuidString })
@@ -43,19 +43,19 @@ enum SyncStore {
     /// after would put the old group back, so every change reads the
     /// file again first.
     static func update(_ change: (inout SyncState) -> Void) throws {
-        var state = state()
+        var state = try state()
         change(&state)
         try state.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
-    static func identities() -> SyncProfileIdentities {
-        SyncProfileIdentities.read(applicationSupport: BackupRoot.layout.applicationSupport)
+    static func identities() throws -> SyncProfileIdentities {
+        try SyncProfileIdentities.read(applicationSupport: BackupRoot.layout.applicationSupport)
     }
 
     /// Changes the profile identities on the file and not on a copy,
     /// for the same reason `update` does.
     static func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) throws {
-        var identities = identities()
+        var identities = try identities()
         change(&identities)
         try identities.write(applicationSupport: BackupRoot.layout.applicationSupport)
     }
@@ -80,8 +80,8 @@ enum SyncStore {
 @MainActor
 final class SyncFileStore: SyncStateStore {
 
-    func state() -> SyncState {
-        SyncStore.state()
+    func state() throws -> SyncState {
+        try SyncStore.state()
     }
 
     func update(_ change: (inout SyncState) -> Void) throws {

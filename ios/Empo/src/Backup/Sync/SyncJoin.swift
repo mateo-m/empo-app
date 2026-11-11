@@ -12,7 +12,7 @@ enum SyncJoin {
     /// The groups every configured target holds, minus the one this
     /// device already joined.
     static func ask() async -> SyncJoinAsk {
-        let state = SyncStore.state()
+        guard let state = try? SyncStore.state() else { return .none }
         var records: [DeviceRecord] = []
         guard let mine = try? BackupKeychain.namespaceId() else { return .none }
 

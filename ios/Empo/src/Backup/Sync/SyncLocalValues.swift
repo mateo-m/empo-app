@@ -155,7 +155,7 @@ enum SyncLocalValues {
     /// A new descriptor arrives without its secret. Target removal stays
     /// on this device, so this function never deletes a target.
     private static func applyDescriptors(_ descriptors: [String: TargetDescriptor]) {
-        let removed = Set(SyncStore.state().removedTargetIds)
+        guard let removed = (try? SyncStore.state()).map({ Set($0.removedTargetIds) }) else { return }
         try? BackupTargets.update { local in
             for (id, incoming) in descriptors {
                 guard let index = local.firstIndex(where: { $0.id == id }) else {

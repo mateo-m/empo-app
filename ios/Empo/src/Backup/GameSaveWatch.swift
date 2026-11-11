@@ -62,7 +62,7 @@ final class GameSaveWatch {
     /// the launch and not in front of it.
     func beginSession(container: GameContainer) {
         endSession()
-        guard GameBackupIntent.load(from: container.empoStateURL).mode == .slim else {
+        guard (try? GameBackupIntent.load(from: container.empoStateURL))?.mode == .slim else {
             return
         }
         let gameURL = container.gameURL
@@ -132,8 +132,9 @@ final class GameSaveWatch {
         alreadyJoined: Set<String>
     ) -> Pass {
         let after = readTree(at: container.gameURL)
-        let intent = GameBackupIntent.load(from: container.empoStateURL)
-        guard intent.mode == .slim else { return Pass(after: after, result: nil) }
+        guard let intent = try? GameBackupIntent.load(from: container.empoStateURL),
+            intent.mode == .slim
+        else { return Pass(after: after, result: nil) }
 
         let written = RuntimeWatch.writtenPaths(before: before, after: after, since: since)
         let files = written.compactMap { path -> BackupSetResolver.WalkedFile? in
@@ -205,9 +206,8 @@ final class GameSaveWatch {
     func declineAsk(path: String, container: GameContainer) {
         pendingAsksByGame[container.id]?.removeAll { $0 == path }
         let stateURL = container.empoStateURL
-        let intent = RuntimeWatch.declining(
-            path, in: GameBackupIntent.load(from: stateURL))
-        try? intent.save(to: stateURL)
+        guard let held = try? GameBackupIntent.load(from: stateURL) else { return }
+        try? RuntimeWatch.declining(path, in: held).save(to: stateURL)
     }
 
     // MARK: - The reading

@@ -1,6 +1,7 @@
 import Foundation
 import GameProbe
 import UIKit
+import os
 
 /// One backup pass: every enabled target, every game the trigger
 /// covers, through the snapshot engine of SPEC 5.
@@ -17,13 +18,23 @@ final class BackupPass: BackupRunning {
 
     static let shared = BackupPass()
 
-    private init() {}
+    private let readThePlus: @MainActor () async -> Void
+
+    init(
+        readThePlus: @escaping @MainActor () async -> Void = {
+            await EmpoPlus.shared.renew()
+            await PlusStore.shared.refresh()
+        }
+    ) {
+        self.readThePlus = readThePlus
+    }
 
     func runBackup(
         scope: BackupScanScope, trigger: BackupTrigger, progress: Progress?
     ) async -> BackupPassResult {
-        await EmpoPlus.shared.renew()
-        await PlusStore.shared.refresh()
+        // The Patreon server can take a minute to answer, and a removal waits for the pause.
+        await Self.waitUnlessCancelled(readThePlus)
+        guard !Task.isCancelled else { return BackupPassResult() }
         let targets = BackupTargets.writable()
         guard !targets.isEmpty else {
             log("the pass found no target")
@@ -31,6 +42,7 @@ final class BackupPass: BackupRunning {
         }
 
         let (games, names) = await gamesInScope(scope, targetIds: Set(targets.map(\.id)))
+        guard !Task.isCancelled else { return BackupPassResult() }
         BackupGameNames.remember(names)
         BackupRunMonitor.shared.runCovers(
             names: names, progress: progress, targetCount: targets.count)
@@ -116,8 +128,8 @@ final class BackupPass: BackupRunning {
             return nil
         }
 
-        var conflicts = WriterConflicts.read(
-            applicationSupport: BackupRoot.layout.applicationSupport)
+        let settings = runSettings(label: descriptor.label)
+        var conflicts = settings.conflicts
         let request = BackupRunRequest(
             runId: UUID().uuidString,
             trigger: trigger,
@@ -131,8 +143,8 @@ final class BackupPass: BackupRunning {
             preferences: GameBackupSets.libraryRequest(
                 userDefaultsExportFile: DevicePreferences.writeTheExportFile()),
             games: games,
-            writerAnswer: conflicts.answer(for: descriptor.id),
-            syncGroupId: SyncStore.state().groupId)
+            writerAnswer: conflicts?.answer(for: descriptor.id),
+            syncGroup: settings.syncGroup)
 
         // The engine takes the store over. `SQLiteDatabase` closes
         // its handle when the last reference goes, so nothing here
@@ -148,12 +160,25 @@ final class BackupPass: BackupRunning {
             "\(descriptor.label): \(result.outcome), \(result.uploadedBytes) bytes, "
                 + "\(result.streams.count) streams"
                 + (result.stop.map { ", stop \($0)" } ?? ""))
-        conflicts.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
-        try? conflicts.write(applicationSupport: BackupRoot.layout.applicationSupport)
+        conflicts?.runEnded(targetId: descriptor.id, stop: result.stop, didSplit: result.didSplit)
+        try? conflicts?.write(applicationSupport: BackupRoot.layout.applicationSupport)
         if result.didSplit {
             moveTheDevice(to: result.namespaceId, after: descriptor)
         }
         return result
+    }
+
+    func runSettings(
+        label: String
+    ) -> (conflicts: WriterConflicts?, syncGroup: BackupRunRequest.SyncGroupChoice) {
+        let conflicts = try? WriterConflicts.read(
+            applicationSupport: BackupRoot.layout.applicationSupport)
+        do {
+            return (conflicts, .known(try SyncStore.state().groupId))
+        } catch {
+            log("\(label) could not read the sync settings, so it keeps the recorded group")
+            return (conflicts, .keepRecorded)
+        }
     }
 
     /// The namespace id is one per device, so a split on one target
@@ -171,6 +196,24 @@ final class BackupPass: BackupRunning {
         defer { store.close() }
         for other in BackupTargets.load() where other.id != descriptor.id {
             try? store.clearNamespaceState(targetId: other.id)
+        }
+    }
+
+    /// Other callers share the Plus reads, so a pause ends the wait and the reads go on.
+    private static func waitUnlessCancelled(_ work: @escaping @MainActor () async -> Void) async {
+        let waiter = OSAllocatedUnfairLock<CheckedContinuation<Void, Never>?>(initialState: nil)
+        let resume: @Sendable () -> Void = { waiter.withLock { $0.take() }?.resume() }
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                waiter.withLock { $0 = continuation }
+                Task {
+                    await work()
+                    resume()
+                }
+                if Task.isCancelled { resume() }
+            }
+        } onCancel: {
+            resume()
         }
     }
 
@@ -192,7 +235,9 @@ final class BackupPass: BackupRunning {
         var restoring: String?
         if let store = try? BackupStateStore(url: BackupRoot.layout.stateDatabase) {
             dirty = (try? store.dirtyGames()) ?? []
-            restoring = (try? store.intent(kind: .interruptedRestore))?.gameKey
+            restoring =
+                (try? RestoreResumeQuestion.unfinishedRecord(
+                    in: store, layout: BackupRoot.layout))?.gameKey
             store.close()
         }
         if let restoring, byKey[restoring] != nil {
@@ -205,7 +250,7 @@ final class BackupPass: BackupRunning {
         let thresholds = BackupTargets.thresholds()
         var games: [BackupRunGame] = []
         var names: [String: String] = [:]
-        for key in keys {
+        for key in keys where !Task.isCancelled {
             guard let container = byKey[key] else { continue }
             // The legacy per-game keys have to leave UserDefaults
             // before the run stages `EmpoState/`, or the layout goes

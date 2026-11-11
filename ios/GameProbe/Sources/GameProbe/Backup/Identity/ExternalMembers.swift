@@ -41,12 +41,6 @@ public enum ExternalMembers {
     }
 
     public static func staysInSharedData(_ path: String) -> Bool {
-        guard (try? PackageValidation.checkThePath(path)) != nil else { return false }
-        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
-        return parts.count > 1 && parts[0] == sharedRootName
-            && !parts.contains { $0.isEmpty || $0 == "." }
+        RelativePath.staysUnderItsRoot(path) && path.hasPrefix(sharedRootName + "/")
     }
-
-    // MARK: - A path that moved
-
 }

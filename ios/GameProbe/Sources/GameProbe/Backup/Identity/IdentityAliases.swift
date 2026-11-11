@@ -107,17 +107,10 @@ public struct IdentityAliases: Equatable, Sendable {
 
     // MARK: - The file
 
-    /// Reads `EmpoState/identity_aliases.json`. A missing or
-    /// unreadable file gives the empty store, the way
-    /// `GameBackupIntent.load` does.
-    public static func load(from stateDirectory: URL) -> IdentityAliases {
-        let url = stateDirectory.appendingPathComponent(fileName)
-        guard let data = try? Data(contentsOf: url),
-            let store = try? decode(json: data)
-        else {
-            return IdentityAliases()
-        }
-        return store
+    public static func load(from stateDirectory: URL) throws -> IdentityAliases {
+        guard let data = try SettingsFile.data(at: stateDirectory.appendingPathComponent(fileName))
+        else { return IdentityAliases() }
+        return try decode(json: data)
     }
 
     /// Writes `EmpoState/identity_aliases.json`, and makes

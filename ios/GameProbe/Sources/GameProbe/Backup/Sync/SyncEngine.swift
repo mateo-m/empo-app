@@ -70,7 +70,13 @@ public final class SyncEngine {
     // MARK: - One pass
 
     public func run(_ trigger: SyncTrigger) async -> Outcome {
-        guard let groupId = state.state().groupId else { return .nothingToDo }
+        let current: SyncState
+        do {
+            current = try state.state()
+        } catch {
+            return .failed("the sync state could not be read: \(error)")
+        }
+        guard let groupId = current.groupId else { return .nothingToDo }
         let enabled = targets.enabled()
         guard !enabled.isEmpty else { return .nothingToDo }
 
@@ -97,19 +103,40 @@ public final class SyncEngine {
             // A lost document takes its history with it. What this
             // device read and confirmed belongs to that history, as on
             // a join, so the pass reads every copy again.
-            updateState("the progress of the lost history") { $0.targets = [] }
+            do {
+                try state.update { $0.targets = [] }
+            } catch {
+                return .failed("the progress of the lost history was not cleared: \(error)")
+            }
         }
         var mine = SyncDocumentModel()
-        updateIdentities { mine = local.read(identities: &$0) }
+        if let failure = updateIdentities({ mine = local.read(identities: &$0) }) {
+            return failure
+        }
         if case .afterALocalChange = trigger, mine == lastLocalValues { return .noLocalNews }
-        let removed = state.state().removedPreferenceKeys
-        let removedBindings = state.state().heldBindingIds.filter {
+        // Order: the restore saves this list, the pass saves the document, then it clears the list. An
+        // entry the held document lacks already went out, so it leaves the list before the merge can
+        // bring the key back. A new document keeps all.
+        let removed =
+            isNew
+            ? current.removedPreferenceKeys
+            : current.removedPreferenceKeys.filter { held.preferences[$0] != nil }
+        let wentOut = current.removedPreferenceKeys.filter { !removed.contains($0) }
+        if !wentOut.isEmpty {
+            do {
+                try state.update { $0.removedPreferenceKeys.removeAll { wentOut.contains($0) } }
+            } catch {
+                return .failed("the removals that already went out were not cleared: \(error)")
+            }
+        }
+        let removedBindings = current.heldBindingIds.filter {
             mine.controllerBindings[$0] == nil
         }
         if publishes, !isNew {
             do {
-                try document.write(held.overlaid(
-                    with: mine, removingPreferences: removed, removingBindings: removedBindings))
+                try document.write(
+                    held.overlaid(
+                        with: mine, removingPreferences: removed, removingBindings: removedBindings))
             } catch {
                 return .failed("the local change could not be written: \(error)")
             }
@@ -131,9 +158,10 @@ public final class SyncEngine {
         if isNew, let fetched = try? document.model(),
             !SyncCopyValidation.readsButDoesNotPublish(fetched)
         {
-            try? document.write(fetched.overlaid(
-                with: mine, removingPreferences: removed, removingBindings: removedBindings,
-                keepsTheirs: true))
+            try? document.write(
+                fetched.overlaid(
+                    with: mine, removingPreferences: removed, removingBindings: removedBindings,
+                    keepsTheirs: true))
         }
 
         guard let merged = try? document.model() else {
@@ -142,13 +170,17 @@ public final class SyncEngine {
         // A change made during the downloads, such as a settings
         // restore, is not in `mine`, and the apply would undo it.
         var latest = SyncDocumentModel()
-        updateIdentities { latest = local.read(identities: &$0) }
+        if let failure = updateIdentities({ latest = local.read(identities: &$0) }) {
+            return failure
+        }
         guard latest == mine else { return .runAgain }
         // A build that may not write leaves a removal out of the
         // document, so the apply drops it here.
         let applied = merged.removing(
             preferences: removed, bindings: removedBindings, absentFrom: mine)
-        updateIdentities { local.apply(applied, identities: &$0) }
+        if let failure = updateIdentities({ local.apply(applied, identities: &$0) }) {
+            return failure
+        }
 
         guard publishes, !SyncCopyValidation.readsButDoesNotPublish(merged) else {
             return .failed("this build reads the document but does not write it")
@@ -161,7 +193,9 @@ public final class SyncEngine {
         // Only a saved pass counts as read. A pass that stops before
         // the save reads the same copies and local values again.
         var after = SyncDocumentModel()
-        updateIdentities { after = local.read(identities: &$0) }
+        if let failure = updateIdentities({ after = local.read(identities: &$0) }) {
+            return failure
+        }
         lastLocalValues = after
         updateState("the bindings this device holds") {
             $0.heldBindingIds = after.controllerBindings.keys.sorted()
@@ -175,13 +209,15 @@ public final class SyncEngine {
                 }
             }
         }
-        if !removed.isEmpty {
-            try? state.update { $0.removedPreferenceKeys.removeAll { removed.contains($0) } }
+        if !current.removedPreferenceKeys.isEmpty {
+            updateState("the removed preferences") {
+                $0.removedPreferenceKeys.removeAll { current.removedPreferenceKeys.contains($0) }
+            }
         }
 
         // A join that landed during this pass left the group this
         // pass read. Nothing of it goes to the new group.
-        guard state.state().groupId == groupId else { return .runAgain }
+        guard (try? state.state())?.groupId == groupId else { return .runAgain }
         await publish(groupId: groupId, to: enabled)
         return .done
     }
@@ -193,15 +229,22 @@ public final class SyncEngine {
     ) async -> (seen: [SeenCopy], isComplete: Bool) {
         var seen: [SeenCopy] = []
         var isComplete = true
-        guard let namespaces = await targets.namespaces(of: descriptor) else { return ([], false) }
+        guard let namespaces = await targets.namespaces(of: descriptor),
+            let held = try? state.state()
+        else { return ([], false) }
         let progress =
-            state.state().progress(ofTarget: descriptor.id)
-            ?? SyncTargetProgress(targetId: descriptor.id)
+            held.progress(ofTarget: descriptor.id) ?? SyncTargetProgress(targetId: descriptor.id)
 
         for namespace in namespaces where namespace.id != namespaceId {
+            // A copy whose device record did not read may be one of
+            // this group.
+            guard let record = namespace.record else {
+                if namespace.document != nil { isComplete = false }
+                continue
+            }
             // A copy of another group belongs to another person, per
             // 10.4, so the pass never reads it.
-            guard namespace.record?.syncGroupId == groupId, let object = namespace.document,
+            guard record.syncGroupId == groupId, let object = namespace.document,
                 progress.readsAgain(namespaceId: namespace.id, copy: object)
             else { continue }
             guard let bytes = await targets.read(object.path, from: descriptor) else {
@@ -212,6 +255,7 @@ public final class SyncEngine {
 
             if case .failure(let rejection) = document.merge(bytes) {
                 note("\(namespace.id) changed nothing: \(rejection)")
+                isComplete = false
                 continue
             }
             rebuildConflicts(
@@ -266,9 +310,16 @@ public final class SyncEngine {
 
     private func publish(groupId: String, to enabled: [TargetDescriptor]) async {
         let heads = document.heads()
+        let held: SyncState
+        do {
+            held = try state.state()
+        } catch {
+            note("the sync state does not read, so no copy goes out on this pass")
+            return
+        }
         let needed = Set(
             SyncReplication.targetsNeedingACopy(
-                enabled: enabled.map(\.id), progress: state.state().targets, heads: heads))
+                enabled: enabled.map(\.id), progress: held.targets, heads: heads))
         guard !needed.isEmpty else { return }
 
         // A target is a mailbox, so the copies go out together.
@@ -293,7 +344,10 @@ public final class SyncEngine {
             note("\(descriptor.label) took no copy: \(reason)")
             return false
         }
-        await writeTheDeviceRecord(groupId: groupId, paths: paths, target: descriptor)
+        guard await writeTheDeviceRecord(groupId: groupId, paths: paths, target: descriptor) else {
+            note("\(descriptor.label) took no device record")
+            return false
+        }
         return true
     }
 
@@ -302,7 +356,7 @@ public final class SyncEngine {
     /// device of the same person finds no group to join.
     private func writeTheDeviceRecord(
         groupId: String, paths: BackupNamespacePaths, target: TargetDescriptor
-    ) async {
+    ) async -> Bool {
         let date = now()
         let known = await targets.read(paths.deviceFile, from: target)
             .flatMap { try? DeviceRecord.decode(json: $0) }
@@ -310,8 +364,8 @@ public final class SyncEngine {
         if known == nil { record.lastWriteAt = date }
         record.syncGroupId = groupId
         record.syncUpdatedAt = date
-        guard let data = try? record.jsonData() else { return }
-        _ = await targets.write(data, to: paths.deviceFile, on: target)
+        guard let data = try? record.jsonData() else { return false }
+        return await targets.write(data, to: paths.deviceFile, on: target)
     }
 
     // MARK: - The state files
@@ -324,11 +378,14 @@ public final class SyncEngine {
         }
     }
 
-    private func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) {
+    /// An id that does not save is made again on the next read, so
+    /// the pass stops.
+    private func updateIdentities(_ change: (inout SyncProfileIdentities) -> Void) -> Outcome? {
         do {
             try state.updateIdentities(change)
+            return nil
         } catch {
-            note("the profile identities were not saved: \(error)")
+            return .failed("the profile identities were not saved: \(error)")
         }
     }
 }

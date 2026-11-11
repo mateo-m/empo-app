@@ -86,14 +86,12 @@ public struct SyncProfileIdentities: Codable, Equatable, Sendable {
         return try encoder.encode(self)
     }
 
-    public static func read(applicationSupport: URL) -> SyncProfileIdentities {
-        let url = applicationSupport.appendingPathComponent(fileName)
+    public static func read(applicationSupport: URL) throws -> SyncProfileIdentities {
+        guard let data = try SettingsFile.data(at: applicationSupport.appendingPathComponent(fileName))
+        else { return SyncProfileIdentities() }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .millisecondsSince1970
-        guard let data = try? Data(contentsOf: url),
-            let file = try? decoder.decode(SyncProfileIdentities.self, from: data)
-        else { return SyncProfileIdentities() }
-        return file
+        return try decoder.decode(SyncProfileIdentities.self, from: data)
     }
 
     public func write(applicationSupport: URL) throws {

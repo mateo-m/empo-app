@@ -14,11 +14,14 @@ import Foundation
 /// 1. Read the manifest and plan against the local tree.
 /// 2. Refuse on the space check of 11.8, before any write.
 /// 3. Write the intent record of 6.5, before the first byte lands.
-/// 4. Stage each blob under `restore/<hash>` and write its file.
-/// 5. Drop from a replaced tree only what proven coverage allows.
-/// 6. Clear the intent record.
+/// 4. Stage and check each blob under `restore/<hash>`, then write
+///    the files.
+/// 5. Write the finished mark under `restore/`, or clear the intent
+///    record when the mark does not write.
+/// 6. Drop from a replaced tree only what proven coverage allows.
+/// 7. Clear the intent record, then the mark.
 ///
-/// A restore that stops between steps 3 and 6 leaves the record and
+/// A restore that stops between steps 3 and 5 leaves the record and
 /// the staged blobs, so the next launch asks once and a resume skips
 /// the blobs it already has.
 ///
@@ -52,15 +55,13 @@ public actor RestoreEngine {
         let paths = BackupNamespacePaths(
             root: request.root, namespaceId: request.namespaceId)
 
-        var fanOutWidth = FormatDescriptor.version1FanOutWidth
-        if let data = try? await fetch(paths.formatFile),
-            let descriptor = try? FormatDescriptor.decode(json: data)
-        {
-            fanOutWidth = descriptor.fanOutWidth
-        }
-
+        let fanOutWidth: Int
         let manifest: SnapshotManifest
         do {
+            fanOutWidth =
+                try await fetch(paths.formatFile)
+                .map { try FormatDescriptor.decode(json: $0).fanOutWidth }
+                ?? FormatDescriptor.version1FanOutWidth
             let path = paths.manifestPath(
                 stream: request.stream, snapshotId: request.snapshotId)
             guard let data = try await fetch(path),
@@ -75,16 +76,22 @@ public actor RestoreEngine {
         // The manifest comes from the storage service. A path that
         // leaves its root, or names the root itself, would write
         // outside the game.
-        guard manifest.entries.allSatisfy({ Self.staysUnderItsRoot($0.path) }),
+        guard manifest.entries.allSatisfy({ RelativePath.staysUnderItsRoot($0.path) }),
             manifest.sharedDataDirectory.map(ExternalMembers.staysInSharedData) ?? true
         else {
             return .failed(RestoreNotices.unreadableLine)
         }
 
+        let tree = request.choice == .replaceTheTree ? request.gameTreeURL : nil
+        let replaced = tree.flatMap { treeAside(of: $0, resumingInto: request.movedAsideTree) }
+        // A resume finds the tree already aside, and the game may have
+        // written new saves into the half-restored `Game/` since the
+        // stop. The plan must see them, so the writes move them aside.
+        let movesTheTree = replaced.map { !fm.fileExists(atPath: $0.path) } ?? false
         let plan = RestorePlanner.plan(
             manifest: manifest,
             scope: request.choice.scope,
-            localFiles: request.plannedLocalFiles,
+            localFiles: movesTheTree ? request.localFilesOutsideTheTree : request.localFiles,
             localVersionMarker: request.localVersionMarker,
             stagedBlobHashes: stagedBlobHashes())
 
@@ -96,7 +103,7 @@ public actor RestoreEngine {
 
         return await write(
             plan, manifest: manifest, request: request, paths: paths,
-            fanOutWidth: fanOutWidth)
+            fanOutWidth: fanOutWidth, tree: movesTheTree ? tree : nil, replaced: replaced)
     }
 
     // MARK: - The writes
@@ -106,29 +113,65 @@ public actor RestoreEngine {
         manifest: SnapshotManifest,
         request: RestoreRequest,
         paths: BackupNamespacePaths,
-        fanOutWidth: Int
+        fanOutWidth: Int,
+        tree: URL?,
+        replaced: URL?
     ) async -> RestoreOutcome {
         let gameKey = request.stream == .preferences ? nil : request.stream.key
         var result = RestoreResult(partialPathCount: plan.partialPaths.count)
-        let tree = request.choice == .replaceTheTree ? request.gameTreeURL : nil
-        let replaced = tree.flatMap { treeAside(of: $0, resumingInto: request.movedAsideTree) }
 
-        // The record goes in before the first byte lands and before
-        // `Game/` moves, so a process that dies mid-restore leaves one
-        // that names the moved tree, per 6.5.
-        let saved =
-            (try? store.saveIntent(
+        // Without the record, a process that dies mid-restore leaves a
+        // silent mix of old and restored files, per 6.5.
+        let layout = BackupRootLayout(root: localRoot)
+        let resumes: Bool
+        do {
+            let earlier = try RestoreResumeQuestion.unfinishedRecord(
+                in: store, layout: layout, fm: fm)
+            resumes =
+                earlier?.targetId == request.targetId && earlier?.gameKey == gameKey
+                && earlier?.snapshotId == request.snapshotId
+            // The mark is still there only when the record of a finished
+            // restore did not clear. A new record would leave that one unmarked.
+            guard !fm.fileExists(atPath: layout.finishedRestoreMark.path) else {
+                return .failed(RestoreNotices.recordsUnavailableLine)
+            }
+            try store.saveIntent(
                 RestoreResumeQuestion.record(
                     targetId: request.targetId,
                     gameKey: gameKey,
                     snapshotId: request.snapshotId,
                     choice: request.choice,
                     movedAsideTree: replaced?.lastPathComponent,
-                    at: now))) != nil
+                    at: now))
+        } catch {
+            return .failed(RestoreNotices.recordsUnavailableLine)
+        }
 
-        if let tree, let replaced, !fm.fileExists(atPath: replaced.path) {
-            guard saved, (try? fm.moveItem(at: tree, to: replaced)) != nil else {
+        var staged: Set<String> = []
+        for step in plan.steps where step.action != .unchanged && !staged.contains(step.entry.hash) {
+            guard !Task.isCancelled else { return .stopped(.gameLaunched, result) }
+            do {
+                try await stageBlob(step.entry, paths: paths, fanOutWidth: fanOutWidth)
+                staged.insert(step.entry.hash)
+            } catch BackupProviderError.rejected(let message) {
+                if !resumes {
+                    try? store.clearIntent(kind: .interruptedRestore)
+                    clearStagedBlobs()
+                }
+                return .failed(message)
+            } catch let stop as RestoreStopReason {
+                return .stopped(stop, result)
+            } catch {
+                return .stopped(Task.isCancelled ? .gameLaunched : .targetFailed, result)
+            }
+        }
+
+        // A cancel during the last download lets that download finish.
+        guard !Task.isCancelled else { return .stopped(.gameLaunched, result) }
+        if let tree, let replaced {
+            guard (try? fm.moveItem(at: tree, to: replaced)) != nil else {
                 try? store.clearIntent(kind: .interruptedRestore)
+                clearStagedBlobs()
                 return .failed(
                     screenText("Empo couldn't move the current game files aside. Nothing changed."))
             }
@@ -146,7 +189,7 @@ public actor RestoreEngine {
                 continue
             }
             do {
-                try await write(step, request: request, paths: paths, fanOutWidth: fanOutWidth)
+                try write(step, request: request)
             } catch let stop as RestoreStopReason {
                 return .stopped(stop, result)
             } catch {
@@ -157,53 +200,44 @@ public actor RestoreEngine {
             if case .writeAfterDisplacing = step.action { result.displacedFileCount += 1 }
         }
 
+        // The mark goes down before the cleanup and before the record
+        // clears, so a stop after the last file never asks to resume.
+        try? fm.createDirectory(at: layout.restore, withIntermediateDirectories: true)
+        let marked = (try? Data().write(to: layout.finishedRestoreMark)) != nil
+        guard marked || (try? store.clearIntent(kind: .interruptedRestore)) != nil else {
+            return .failed(RestoreNotices.recordsUnavailableLine)
+        }
+
         if let replaced {
             let decision = dropFromTheReplacedTree(
                 replaced, mode: request.mode, snapshot: manifest)
             result.droppedFromReplacedTree = decision.drop.count
             result.replacedTreeKeptBytes = decision.keptBytes
-            if decision.clearsItself {
-                // The whole tree was provably covered, so it clears
-                // itself and leaves nothing for the user to sweep
-                // up, per 11.12.
-                try? fm.removeItem(at: replaced)
+            if removeIfEmpty(replaced) {
                 result.replacedTreeName = nil
             }
         }
 
-        try? store.clearIntent(kind: .interruptedRestore)
+        if marked, (try? store.clearIntent(kind: .interruptedRestore)) != nil {
+            try? fm.removeItem(at: layout.finishedRestoreMark)
+        }
         clearStagedBlobs()
         return .finished(result)
     }
 
-    /// Stages one blob and writes its file.
-    ///
     /// The local file moves aside first, and the restored file takes
-    /// the real name, per 11.1. Nothing is deleted.
-    private func write(
-        _ step: RestoreStep,
-        request: RestoreRequest,
-        paths: BackupNamespacePaths,
-        fanOutWidth: Int
-    ) async throws {
+    /// the real name, per 11.1.
+    private func write(_ step: RestoreStep, request: RestoreRequest) throws {
         let entry = step.entry
+        let staged = BackupRootLayout(root: localRoot).restoreBlob(hash: entry.hash)
         guard let destination = request.destination.url(of: entry) else {
             throw RestoreStopReason.targetFailed
         }
-        let staged = try await stageBlob(entry, paths: paths, fanOutWidth: fanOutWidth)
-        // A download can finish after the cancel of 7.6. The game may
-        // already run, so the file stays as it is.
-        guard !Task.isCancelled else { throw RestoreStopReason.gameLaunched }
-
-        if case .writeAfterDisplacing(let displacedPath) = step.action,
-            let displaced = request.destination.url(root: entry.root, path: displacedPath)
-        {
-            try fm.moveItem(at: destination, to: displaced)
+        if (try? fm.attributesOfItem(atPath: destination.path)) != nil {
+            try fm.moveItem(at: destination, to: displacedURL(of: destination))
         }
-
         try fm.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? fm.removeItem(at: destination)
 
         switch entry.compression {
         case .stored:
@@ -231,10 +265,10 @@ public actor RestoreEngine {
     /// its name is thrown away and fetched again.
     private func stageBlob(
         _ entry: SnapshotManifest.Entry, paths: BackupNamespacePaths, fanOutWidth: Int
-    ) async throws -> URL {
+    ) async throws {
         let staged = BackupRootLayout(root: localRoot).restoreBlob(hash: entry.hash)
         if fm.fileExists(atPath: staged.path) {
-            if verify(staged, entry: entry) { return staged }
+            if verify(staged, entry: entry) { return }
             try? fm.removeItem(at: staged)
         }
 
@@ -245,6 +279,7 @@ public actor RestoreEngine {
             try await provider.get(path: path, localFile: staged)
         } catch {
             try? fm.removeItem(at: staged)
+            if case .rejected = error { throw error }
             // The cancel of 7.6 usually lands while the download is
             // in flight, and the session reports it as a transport
             // error. The cancel flag says what really happened.
@@ -254,7 +289,15 @@ public actor RestoreEngine {
             try? fm.removeItem(at: staged)
             throw RestoreStopReason.targetFailed
         }
-        return staged
+    }
+
+    /// `attributesOfItem` also sees a link whose target is gone, which `fileExists` does not.
+    private func displacedURL(of destination: URL) -> URL {
+        let folder = destination.deletingLastPathComponent()
+        return folder.appendingPathComponent(
+            DisplacedCopy.nextFileName(for: destination.lastPathComponent) {
+                (try? fm.attributesOfItem(atPath: folder.appendingPathComponent($0).path)) != nil
+            })
     }
 
     /// Whether a staged file holds the entry's bytes.
@@ -314,6 +357,22 @@ public actor RestoreEngine {
         return decision
     }
 
+    /// A link, or a file the walk could not list or hash, keeps its
+    /// folder, per 11.12.
+    private func removeIfEmpty(_ folder: URL) -> Bool {
+        guard let names = try? fm.contentsOfDirectory(atPath: folder.path) else { return false }
+        var left = names.count
+        for name in names {
+            let child = folder.appendingPathComponent(name)
+            let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            if values?.isDirectory == true, values?.isSymbolicLink != true, removeIfEmpty(child) {
+                left -= 1
+            }
+        }
+        guard left == 0 else { return false }
+        return (try? fm.removeItem(at: folder)) != nil
+    }
+
     // MARK: - Staged blobs
 
     /// The blobs already under `restore/`. A cancel keeps them, so
@@ -330,7 +389,7 @@ public actor RestoreEngine {
     private func clearStagedBlobs() {
         let directory = BackupRootLayout(root: localRoot).restore
         for name in (try? fm.contentsOfDirectory(atPath: directory.path)) ?? []
-        where !name.hasPrefix(Self.scratchPrefix) {
+        where !name.hasPrefix(Self.scratchPrefix) && name != BackupRootLayout.finishedRestoreMarkName {
             try? fm.removeItem(at: directory.appendingPathComponent(name))
         }
     }
@@ -353,9 +412,8 @@ public actor RestoreEngine {
             if error == .notFound { return nil }
             throw error
         }
-        let data = try? Data(contentsOf: scratch)
-        try? fm.removeItem(at: scratch)
-        return data
+        defer { try? fm.removeItem(at: scratch) }
+        return try Data(contentsOf: scratch)
     }
 
     private static func stop(of error: BackupProviderError) -> RestoreStopReason {
@@ -365,12 +423,6 @@ public actor RestoreEngine {
         case .authExpired, .throttled, .offline, .serverError, .permissionDenied, .notFound, .rejected:
             return .targetFailed
         }
-    }
-
-    private static func staysUnderItsRoot(_ path: String) -> Bool {
-        guard (try? PackageValidation.checkThePath(path)) != nil else { return false }
-        return !path.split(separator: "/", omittingEmptySubsequences: false)
-            .contains { $0.isEmpty || $0 == "." }
     }
 
     private static func line(of error: Error) -> String {

@@ -30,7 +30,9 @@ enum BackupTargets {
     /// before the pass and wrote it back after would put the old
     /// list back, so every change reads the file again first.
     static func update(_ change: (inout [TargetDescriptor]) -> Void) throws {
-        let stored = load()
+        let stored = try TargetDescriptorFile.read(
+            applicationSupport: BackupRoot.layout.applicationSupport
+        ).targets
         var targets = stored
         change(&targets)
         guard targets != stored else { return }
@@ -48,7 +50,13 @@ enum BackupTargets {
                 targets.append(target)
             }
         }
-        try SyncStore.update { $0.keep(targetId: target.id) }
+        do {
+            try SyncStore.update { $0.keep(targetId: target.id) }
+        } catch {
+            // The target is saved. Only sync stays stopped while its settings do not read.
+            BackupLog.line(
+                "BackupTargets", "the sync settings do not read, so \(target.id) is not kept for sync")
+        }
         SyncJoin.startAGroup()
     }
 
