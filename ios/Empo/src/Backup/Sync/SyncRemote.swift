@@ -26,8 +26,9 @@ enum SyncRemote {
         try await provider.put(localFile: file, path: path)
     }
 
-    /// `nil` where the target did not answer the listing, or where a
-    /// `device.json` that it holds could not be read.
+    /// `nil` where the target did not answer the listing. A
+    /// `device.json` that does not read or decode gives its namespace
+    /// a `nil` record, so one damaged device does not hide the others.
     static func namespaces(
         root: String, provider: some BackupProvider
     ) async -> [SyncNamespace]? {
@@ -61,7 +62,7 @@ enum SyncRemote {
                     .map { try DeviceRecord.decode(json: $0) }
             } catch {
                 BackupLog.line("SyncRemote", "\(paths.deviceFile) was not read: \(error)")
-                return nil
+                record = nil
             }
             out.append(SyncNamespace(id: id, record: record, document: documents[id]))
         }
