@@ -73,10 +73,8 @@ enum LegacyControlsMigration {
             return
         }
 
-        // An old copy that does not read stays. It is the only copy of
-        // what the player set, and the controls file does not hold it.
-        if touch != nil { UserDefaults.standard.removeObject(forKey: layoutKey) }
-        if controller != nil { UserDefaults.standard.removeObject(forKey: mapKey) }
+        UserDefaults.standard.removeObject(forKey: layoutKey)
+        UserDefaults.standard.removeObject(forKey: mapKey)
     }
 
     /// The legacy blob has no action buttons, so the section leaves the
