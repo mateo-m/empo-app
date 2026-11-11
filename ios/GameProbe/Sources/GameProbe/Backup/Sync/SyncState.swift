@@ -141,10 +141,7 @@ public struct SyncState: Codable, Equatable, Sendable {
     // MARK: - The file
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     /// The saved state, or a fresh one with a new actor identity.
@@ -153,9 +150,7 @@ public struct SyncState: Codable, Equatable, Sendable {
     ) throws -> SyncState {
         guard let data = try SettingsFile.data(at: applicationSupport.appendingPathComponent(fileName))
         else { return SyncState(actorId: actorId()) }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(SyncState.self, from: data)
+        return try BackupJSON.decoder().decode(SyncState.self, from: data)
     }
 
     public func write(applicationSupport: URL) throws {

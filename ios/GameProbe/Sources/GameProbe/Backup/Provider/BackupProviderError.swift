@@ -1,47 +1,5 @@
 import Foundation
 
-/// What one provider error does to the target, per SPEC 8.4.
-///
-/// One error kind has one effect. The effect lives on the error and
-/// not in each provider, so a provider cannot invent a new one.
-///
-/// Nothing here notifies. Section 7.11 decides which failures reach
-/// the user.
-public enum TargetEffect: Equatable, Sendable {
-    /// The target enters needs-sign-in. Runs stop.
-    case needsSignIn
-    /// The prune ladder of 5.14 runs. If it frees too little, the
-    /// target is blocked.
-    case runPruneLadder
-    /// Wait for the stated time and keep the run.
-    case waitAndKeepRun(seconds: TimeInterval)
-    /// Silent. Retry on the next pass.
-    case retryOnNextPass
-    /// The target is blocked. A re-sign-in does not fix a revoked
-    /// scope.
-    case blocked
-    /// The local cache drops the object. The next run uploads it
-    /// again.
-    case dropFromCache
-    /// Permanent. The message shows on the target screen word for
-    /// word. The run stops.
-    case stopAndShow(message: String)
-
-    /// Whether the run stops now.
-    ///
-    /// `runPruneLadder` is false because the ladder decides. A prune
-    /// that frees enough keeps the run, and one that does not blocks
-    /// the target, per 5.14.
-    public var stopsTheRun: Bool {
-        switch self {
-        case .needsSignIn, .blocked, .stopAndShow:
-            return true
-        case .runPruneLadder, .waitAndKeepRun, .retryOnNextPass, .dropFromCache:
-            return false
-        }
-    }
-}
-
 /// The seven error kinds of SPEC 8.4. Every provider maps its own
 /// failures onto these, and the engine sees no other kind.
 public enum BackupProviderError: Error, Equatable, Sendable {
@@ -75,23 +33,29 @@ public enum BackupProviderError: Error, Equatable, Sendable {
         return .rejected(message: screenText("%@ refused the request. It said: “%@”", who, said))
     }
 
-    /// The one effect of 8.4.
-    public var effect: TargetEffect {
+    /// The run stop of 8.4, or `nil` for `permissionDenied`, because only the run knows which
+    /// service to name in that line. The engine runs the prune ladder of 5.14 before it stops on
+    /// `outOfSpace`.
+    public var runStop: BackupRunStop? {
         switch self {
         case .authExpired:
             return .needsSignIn
-        case .outOfSpace:
-            return .runPruneLadder
-        case .throttled(let retryAfter):
-            return .waitAndKeepRun(seconds: retryAfter)
-        case .offline, .serverError:
-            return .retryOnNextPass
         case .permissionDenied:
-            return .blocked
-        case .notFound:
-            return .dropFromCache
+            return nil
         case .rejected(let message):
-            return .stopAndShow(message: message)
+            return .rejected(message: message)
+        case .offline:
+            return .offline
+        case .serverError(let status):
+            return .serverError(status: status)
+        case .throttled(let retryAfter):
+            return .throttled(retryAfter: retryAfter)
+        case .outOfSpace:
+            return .full(reason: QuotaCheck.prunedAndStillFullLine)
+        case .notFound:
+            return .rejected(
+                message: screenText(
+                    "A backup file is missing from this location. Back up again to replace it."))
         }
     }
 }

@@ -156,7 +156,7 @@ final class PermissionCheckTests: XCTestCase {
 
         let result = await run(on: target)
 
-        XCTAssertEqual(result.failure?.effect, .stopAndShow(message: "the bucket is read-only"))
+        XCTAssertEqual(result.failure?.runStop, .rejected(message: "the bucket is read-only"))
     }
 
     // MARK: - The probe path

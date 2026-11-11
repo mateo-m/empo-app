@@ -35,7 +35,7 @@ final class BackupHistoryTests: XCTestCase {
             .throttled(retryAfter: 30), .gameStarted, .paused,
         ]
         for stop in stops {
-            let line = SnapshotEngine.detail(of: stop)
+            let line = stop.historyLine
             XCTAssertTrue(line.first?.isUppercase ?? false, line)
             XCTAssertTrue(line.hasSuffix("."), line)
             XCTAssertFalse(line.contains("route"), line)

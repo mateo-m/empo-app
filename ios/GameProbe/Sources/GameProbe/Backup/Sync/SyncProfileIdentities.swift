@@ -80,18 +80,13 @@ public struct SyncProfileIdentities: Codable, Equatable, Sendable {
     // MARK: - The file
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func read(applicationSupport: URL) throws -> SyncProfileIdentities {
         guard let data = try SettingsFile.data(at: applicationSupport.appendingPathComponent(fileName))
         else { return SyncProfileIdentities() }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(SyncProfileIdentities.self, from: data)
+        return try BackupJSON.decoder().decode(SyncProfileIdentities.self, from: data)
     }
 
     public func write(applicationSupport: URL) throws {

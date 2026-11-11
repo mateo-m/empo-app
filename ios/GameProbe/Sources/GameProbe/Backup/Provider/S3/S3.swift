@@ -434,16 +434,20 @@ public enum S3 {
     /// Whether a failed upload has to abort what it started.
     ///
     /// An abandoned multipart upload leaves parts on the service and
-    /// parts cost money, per 9.4. A failure that stops the run is
-    /// permanent, so nothing later would ever finish that upload and
-    /// the parts would sit there. A throttle or an offline device is
-    /// not permanent, and the next pass carries on from the same id,
-    /// so those keep their parts.
+    /// parts cost money, per 9.4. After a permanent failure nothing
+    /// later would ever finish that upload, so the parts would sit
+    /// there. After a throttle or an offline device the next pass
+    /// carries on from the same id, so those keep their parts.
     ///
     /// `outOfSpace` keeps them too: the prune ladder of 5.14 runs and
     /// the retry that follows uses the parts already there.
     public static func abortsMultipart(after error: BackupProviderError) -> Bool {
-        error.effect.stopsTheRun
+        switch error {
+        case .authExpired, .permissionDenied, .rejected:
+            return true
+        case .outOfSpace, .throttled, .offline, .serverError, .notFound:
+            return false
+        }
     }
 
     /// Whether the service dropped the multipart upload, so the

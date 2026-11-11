@@ -72,16 +72,11 @@ public struct PackageManifest: Codable, Equatable, Sendable {
     // MARK: - The JSON codec
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes, .prettyPrinted]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func decode(json data: Data) throws -> PackageManifest {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(PackageManifest.self, from: data)
+        try BackupJSON.decoder().decode(PackageManifest.self, from: data)
     }
 }
 

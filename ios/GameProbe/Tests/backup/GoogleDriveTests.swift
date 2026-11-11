@@ -31,7 +31,7 @@ final class GoogleDriveTests: XCTestCase {
             code: 403)
         let error = GoogleDrive.error(status: 403, failure: GoogleDrive.failure(inBody: body))
         XCTAssertEqual(error, .outOfSpace)
-        XCTAssertEqual(error.effect, .runPruneLadder)
+        XCTAssertEqual(error.runStop, .full(reason: QuotaCheck.prunedAndStillFullLine))
     }
 
     func testARevokedScopeBlocksTheTarget() {
@@ -40,13 +40,13 @@ final class GoogleDriveTests: XCTestCase {
         let error = GoogleDrive.error(status: 403, failure: GoogleDrive.failure(inBody: body))
         XCTAssertEqual(error, .permissionDenied)
         // A re-sign-in does not fix a revoked scope, per 8.4.
-        XCTAssertEqual(error.effect, .blocked)
+        XCTAssertNil(error.runStop)
     }
 
     func testAnInvalidTokenAsksForASignIn() {
         let error = GoogleDrive.error(status: 401)
         XCTAssertEqual(error, .authExpired)
-        XCTAssertEqual(error.effect, .needsSignIn)
+        XCTAssertEqual(error.runStop, .needsSignIn)
     }
 
     func testATokenErrorInAFourOhThreeAlsoAsksForASignIn() {
@@ -59,7 +59,7 @@ final class GoogleDriveTests: XCTestCase {
     func testTooManyRequestsCarriesTheStatedWait() {
         let error = GoogleDrive.error(status: 429, retryAfterHeader: "17")
         XCTAssertEqual(error, .throttled(retryAfter: 17))
-        XCTAssertEqual(error.effect, .waitAndKeepRun(seconds: 17))
+        XCTAssertEqual(error.runStop, .throttled(retryAfter: 17))
     }
 
     func testARateLimitInAFourOhThreeThrottles() {
@@ -73,13 +73,16 @@ final class GoogleDriveTests: XCTestCase {
     func testAMissingObjectDropsItFromTheCache() {
         let error = GoogleDrive.error(status: 404)
         XCTAssertEqual(error, .notFound)
-        XCTAssertEqual(error.effect, .dropFromCache)
+        XCTAssertEqual(
+            error.runStop,
+            .rejected(
+                message: "A backup file is missing from this location. Back up again to replace it."))
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
         XCTAssertEqual(GoogleDrive.error(status: 500), .serverError(status: 500))
         XCTAssertEqual(GoogleDrive.error(status: 503), .serverError(status: 503))
-        XCTAssertEqual(GoogleDrive.error(status: 500).effect, .retryOnNextPass)
+        XCTAssertEqual(GoogleDrive.error(status: 500).runStop, .serverError(status: 500))
     }
 
     func testAnUnknownReasonReachesTheUserWordForWord() {

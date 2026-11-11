@@ -35,14 +35,14 @@ final class S3Tests: XCTestCase {
                 code: "SignatureDoesNotMatch",
                 message: "The request signature we calculated does not match."))
         XCTAssertEqual(error, .authExpired)
-        XCTAssertEqual(error.effect, .needsSignIn)
+        XCTAssertEqual(error.runStop, .needsSignIn)
     }
 
     func testADeniedCallBlocksTheTarget() {
         let error = S3.error(
             status: 403, failure: failure(code: "AccessDenied", message: "Access Denied"))
         XCTAssertEqual(error, .permissionDenied)
-        XCTAssertEqual(error.effect, .blocked)
+        XCTAssertNil(error.runStop)
     }
 
     func testAKeyTheServiceDoesNotKnowAsksForANewOne() {
@@ -51,7 +51,7 @@ final class S3Tests: XCTestCase {
             failure: failure(
                 code: "InvalidAccessKeyId", message: "The access key does not exist."))
         XCTAssertEqual(error, .authExpired)
-        XCTAssertEqual(error.effect, .needsSignIn)
+        XCTAssertEqual(error.runStop, .needsSignIn)
     }
 
     func testAMissingKeyDropsItFromTheCache() {
@@ -59,7 +59,10 @@ final class S3Tests: XCTestCase {
             status: 404,
             failure: failure(code: "NoSuchKey", message: "The specified key does not exist."))
         XCTAssertEqual(error, .notFound)
-        XCTAssertEqual(error.effect, .dropFromCache)
+        XCTAssertEqual(
+            error.runStop,
+            .rejected(
+                message: "A backup file is missing from this location. Back up again to replace it."))
     }
 
     func testSlowDownThrottles() {
@@ -68,7 +71,7 @@ final class S3Tests: XCTestCase {
             failure: failure(code: "SlowDown", message: "Please reduce your request rate."),
             retryAfterHeader: "9")
         XCTAssertEqual(error, .throttled(retryAfter: 9))
-        XCTAssertEqual(error.effect, .waitAndKeepRun(seconds: 9))
+        XCTAssertEqual(error.runStop, .throttled(retryAfter: 9))
     }
 
     func testAThrottleWithNoStatedTimeTakesTheTruncatedBackoff() {
@@ -85,7 +88,7 @@ final class S3Tests: XCTestCase {
             status: 403,
             failure: failure(code: "QuotaExceeded", message: "The bucket is over its quota."))
         XCTAssertEqual(error, .outOfSpace)
-        XCTAssertEqual(error.effect, .runPruneLadder)
+        XCTAssertEqual(error.runStop, .full(reason: QuotaCheck.prunedAndStillFullLine))
     }
 
     func testAServiceWithNoRoomLeftRunsThePruneLadder() {
@@ -104,13 +107,13 @@ final class S3Tests: XCTestCase {
             error,
             .rejected(
                 message: "The bucket refused the request. It said: “The specified bucket does not exist.”"))
-        XCTAssertTrue(error.effect.stopsTheRun)
+        XCTAssertTrue(S3.abortsMultipart(after: error))
     }
 
     func testAServerErrorRetriesOnTheNextPass() {
         XCTAssertEqual(S3.error(status: 500), .serverError(status: 500))
         XCTAssertEqual(S3.error(status: 502), .serverError(status: 502))
-        XCTAssertEqual(S3.error(status: 500).effect, .retryOnNextPass)
+        XCTAssertEqual(S3.error(status: 500).runStop, .serverError(status: 500))
     }
 
     func testAnUnknownCodeReachesTheUserWordForWord() {
@@ -402,7 +405,8 @@ final class S3Tests: XCTestCase {
             name: "my-saves", usesPathStyle: true)
         XCTAssertEqual(
             bucket.refusal, .rejected(message: TransportSecurity.plainAddressMessage))
-        XCTAssertEqual(bucket.refusal?.effect.stopsTheRun, true)
+        XCTAssertEqual(
+            bucket.refusal?.runStop, .rejected(message: TransportSecurity.plainAddressMessage))
     }
 
     func testAnHTTPSAddressWithABucketAndARegionPasses() {
@@ -431,7 +435,7 @@ final class S3Tests: XCTestCase {
             .rejected(
                 message: "The certificate for this server is invalid. "
                     + TransportSecurity.systemTrustMessage))
-        XCTAssertEqual(error?.effect.stopsTheRun, true)
+        XCTAssertEqual(error.map(S3.abortsMultipart(after:)), true)
         XCTAssertTrue(TransportSecurity.systemTrustMessage.contains("self-signed"))
     }
 

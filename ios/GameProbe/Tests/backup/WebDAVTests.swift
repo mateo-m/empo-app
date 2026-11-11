@@ -245,17 +245,20 @@ final class WebDAVTests: XCTestCase {
 
     func testEachWebDAVStatusMapsToItsErrorKind() {
         XCTAssertEqual(WebDAV.error(status: 401), .authExpired)
-        XCTAssertEqual(WebDAV.error(status: 401).effect, .needsSignIn)
+        XCTAssertEqual(WebDAV.error(status: 401).runStop, .needsSignIn)
 
         XCTAssertEqual(WebDAV.error(status: 403), .permissionDenied)
         // A re-sign-in does not add a right, per 8.4.
-        XCTAssertEqual(WebDAV.error(status: 403).effect, .blocked)
+        XCTAssertNil(WebDAV.error(status: 403).runStop)
 
         XCTAssertEqual(WebDAV.error(status: 404), .notFound)
-        XCTAssertEqual(WebDAV.error(status: 404).effect, .dropFromCache)
+        XCTAssertEqual(
+            WebDAV.error(status: 404).runStop,
+            .rejected(
+                message: "A backup file is missing from this location. Back up again to replace it."))
 
         XCTAssertEqual(WebDAV.error(status: 507), .outOfSpace)
-        XCTAssertEqual(WebDAV.error(status: 507).effect, .runPruneLadder)
+        XCTAssertEqual(WebDAV.error(status: 507).runStop, .full(reason: QuotaCheck.prunedAndStillFullLine))
 
         guard case .rejected(let message) = WebDAV.error(status: 423) else {
             return XCTFail("423 is a refusal the user has to read")
@@ -274,13 +277,15 @@ final class WebDAVTests: XCTestCase {
         XCTAssertEqual(
             error,
             .rejected(message: "The server refused the request. It said: “The resource is locked”"))
-        XCTAssertTrue(error.effect.stopsTheRun)
+        XCTAssertEqual(
+            error.runStop,
+            .rejected(message: "The server refused the request. It said: “The resource is locked”"))
     }
 
     func testAServerThatAsksForAWaitKeepsTheRun() {
         let error = WebDAV.error(status: 503, retryAfterHeader: "30")
         XCTAssertEqual(error, .throttled(retryAfter: 30))
-        XCTAssertEqual(error.effect, .waitAndKeepRun(seconds: 30))
+        XCTAssertEqual(error.runStop, .throttled(retryAfter: 30))
 
         // A server that states no time gets the truncated backoff.
         XCTAssertEqual(WebDAV.error(status: 429, attempt: 3), .throttled(retryAfter: 4))
@@ -303,7 +308,7 @@ final class WebDAVTests: XCTestCase {
 
     func testAServerThatIsUpButUnwellRetriesOnTheNextPass() {
         XCTAssertEqual(WebDAV.error(status: 500), .serverError(status: 500))
-        XCTAssertEqual(WebDAV.error(status: 500).effect, .retryOnNextPass)
+        XCTAssertEqual(WebDAV.error(status: 500).runStop, .serverError(status: 500))
     }
 
     // MARK: - The temp name and the MOVE, per tests 5 and 6

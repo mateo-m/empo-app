@@ -41,6 +41,9 @@ final class OAuthRefreshTests: XCTestCase {
         let error = OAuthRefresh.error(
             kind: .dropbox, status: 400, body: body("invalid_request"), retryAfterHeader: nil)
         XCTAssertNotEqual(error, .authExpired)
-        XCTAssertEqual(error.effect.stopsTheRun, true)
+        XCTAssertEqual(
+            error.runStop,
+            .rejected(
+                message: "Dropbox refused the request. It said: “refresh token is invalid or revoked”"))
     }
 }

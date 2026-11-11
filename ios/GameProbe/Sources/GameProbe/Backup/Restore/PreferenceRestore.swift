@@ -32,16 +32,11 @@ public struct PreferenceUndoFile: Codable, Equatable, Sendable {
     }
 
     public func jsonData() throws -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .prettyPrinted, .withoutEscapingSlashes]
-        encoder.dateEncodingStrategy = .millisecondsSince1970
-        return try encoder.encode(self)
+        try BackupJSON.encoder().encode(self)
     }
 
     public static func decode(json data: Data) throws -> PreferenceUndoFile {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .millisecondsSince1970
-        return try decoder.decode(PreferenceUndoFile.self, from: data)
+        try BackupJSON.decoder().decode(PreferenceUndoFile.self, from: data)
     }
 
     public static func read(applicationSupport: URL) -> PreferenceUndoFile? {
