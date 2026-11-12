@@ -209,7 +209,8 @@ if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
     fail "Info.plist version $VERSION != expected $EXPECTED_VERSION"
 fi
 
-HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
+# The same length as the "Generate Git Info" step in ios/Empo/project.yml.
+HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD)
 
 # The Release optimiser folds the whole line into one string, so the
 # dirty marker arrives on the commit line and not on a line of its own.

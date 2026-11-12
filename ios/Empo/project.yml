@@ -234,7 +234,10 @@ targets:
           - $(PROJECT_DIR)/src/App/GitInfo.generated.swift
         script: |
           REPO="${PROJECT_DIR}/../.."
-          COMMIT=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          # scripts/audit-ipa.sh reads the "commit: <id>" line with strings.
+          # Swift keeps a string of 15 bytes or less inside the code, not
+          # as text, so a 7-character id hides the line. Keep the id long.
+          COMMIT=$(git -C "$REPO" rev-parse --short=12 HEAD 2>/dev/null || echo "unknown")
           if git -C "$REPO" diff --quiet HEAD 2>/dev/null; then DIRTY="false"; else DIRTY="true"; fi
           BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
           DEFAULT_BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo "main")
