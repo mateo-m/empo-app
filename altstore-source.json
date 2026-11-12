@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.11.1",
+          "buildVersion": "850",
+          "date": "2026-11-12",
+          "localizedDescription": "New\n• Send game and server errors to Sentry\n\nFixed\n• Close the state bugs in the player, library, saves, and backups\n• A controller button save keeps a controls file that Empo cannot read\n• Stop restore, package, and sync paths from losing saves and settings\n• Stop app backup paths from losing saves, settings, and sign-ins\n• Show the in-game keyboard toggle on the Mac\n• Keep an old setting that the controls import cannot read\n• Find a file in another case with the path cache off\n• A save that fails half way in Pokémon Insurgence\n• A name screen without a letter grid uses typing mode\n• Keep the last save when a save stops half way\n• Hide the temp file from Dir objects and drop it when a thread stops\n\nOther changes\n• Update the core pin to v17\n• Make GameCore.h the only core contract and generate the rest\n• One limits table, one layout model, and one profile chain\n• One layout conversion, one key window owner, and no global game keys\n• Delete unused flags, constants, and test-only functions\n• Share one copy of each provider helper\n• Share the JSON setup, the error map, and the stop lines\n• Write a 12-character commit id so the release check can read it",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.11.1/Empo-ios.ipa",
+          "size": 101586739,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.11.0",
           "buildVersion": "828",
           "date": "2026-11-07",
