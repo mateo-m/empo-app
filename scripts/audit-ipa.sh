@@ -213,10 +213,9 @@ HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD)
 
 # The Release optimiser folds the whole line into one string, so the
 # dirty marker arrives on the commit line and not on a line of its own.
-# Read the line first, then test it. A grep that finds nothing inside a
-# command substitution fails the assignment, and set -e would end the
-# script with no word about why.
-GIT_LINE=$(grep -m1 -E '^commit: ' < <(strings "$BIN") || true)
+# awk reads to the end. A reader that stops at the first match makes
+# strings fail with "failed to flush output".
+GIT_LINE=$(strings "$BIN" | awk '/^commit: / && !found++')
 [[ -n "$GIT_LINE" ]] || fail "embedded GitInfo commit not found in binary"
 [[ "$GIT_LINE" != *"(dirty)"* ]] ||
     fail "binary embeds a dirty GitInfo marker ($GIT_LINE)"
