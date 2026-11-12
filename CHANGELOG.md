@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.11.1 - 2026-11-12
+
+### Bug Fixes
+
+- Close the state bugs in the player, library, saves, and backups (#254) ([`df0c3fa`](https://github.com/mateo-m/empo-app/commit/df0c3fa3626491e9a903e99209bbca25b010560a))
+- A controller button save keeps a controls file that Empo cannot read (#270) ([`dee9087`](https://github.com/mateo-m/empo-app/commit/dee90872791f12a14eeba5a289c95ca4d9c1a2e7))
+- Stop restore, package, and sync paths from losing saves and settings (#256) ([`2343861`](https://github.com/mateo-m/empo-app/commit/2343861a85b105e17e7a053d1bcfdaaf7659e557))
+- Stop app backup paths from losing saves, settings, and sign-ins (#261) ([`ddf264d`](https://github.com/mateo-m/empo-app/commit/ddf264d01c6a33aa8ea2f96f833a8da2e2fee93b))
+- Show the in-game keyboard toggle on the Mac (#271) ([`5064665`](https://github.com/mateo-m/empo-app/commit/506466550ac862c05892987e0f9cf6eb5d4a4490))
+- Keep an old setting that the controls import cannot read (#272) ([`507fb15`](https://github.com/mateo-m/empo-app/commit/507fb1519fb9cef312b4466c76b7ef405a8d1d30))
+- Find a file in another case with the path cache off (mateo-m/mkxp-z-apple-mobile#74) ([`0f9b62d`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/0f9b62d634b088580eb426814f1f85edfef38287))
+- A save that fails half way in Pokémon Insurgence (mateo-m/mkxp-z-apple-mobile#73) ([`62b418b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/62b418b2dd24ee39612b2c925e387ff7b128d244))
+- A save that fails half way in Pokémon Insurgence (mateo-m/mkxp-z-apple-mobile#73) ([`8c923c3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8c923c3e52d283a0e026d120d78c1d0538440a13))
+- A name screen without a letter grid uses typing mode (mateo-m/mkxp-z-apple-mobile#75) ([`6facf0b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/6facf0b41363bb7da91ea72a752de5b84e2743d7))
+- Keep the last save when a save stops half way (mateo-m/mkxp-z-apple-mobile#76) ([`8b83c58`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8b83c5899a1308178478a9962613f1d421502228))
+- Hide the temp file from Dir objects and drop it when a thread stops (mateo-m/mkxp-z-apple-mobile#77) ([`d26bd02`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d26bd02c22a06a453a593840d596ca72a0877cbd))
+
+### Features
+
+- Send game and server errors to Sentry (#266) ([`e7a54c6`](https://github.com/mateo-m/empo-app/commit/e7a54c6d5d28f990bd3c68aa7faacce301799518))
+
+### Other
+
+- Update the core pin to v17 (#276) ([`54f0113`](https://github.com/mateo-m/empo-app/commit/54f011359914c93b0c42501fbe0d7727aa196175))
+
+### Refactor
+
+- Make GameCore.h the only core contract and generate the rest (#267) ([`c8a72fb`](https://github.com/mateo-m/empo-app/commit/c8a72fb5203bb71e765314c23b258704d86efcf2))
+- One limits table, one layout model, and one profile chain (#268) ([`a748e05`](https://github.com/mateo-m/empo-app/commit/a748e059e8bf56710f5b7e5190fcfccf47b84fa0))
+- One layout conversion, one key window owner, and no global game keys (#269) ([`7a3d5d9`](https://github.com/mateo-m/empo-app/commit/7a3d5d920296e68d5cca8e77467222d347ab2d2d))
+- Delete unused flags, constants, and test-only functions (#257) ([`281b076`](https://github.com/mateo-m/empo-app/commit/281b0763dbdcd6f84d854431adbe6e98b3b99038))
+- Share one copy of each provider helper (#258) ([`578e5c3`](https://github.com/mateo-m/empo-app/commit/578e5c3d2d9da6dbf3ce1918957b187121631dae))
+- Share the JSON setup, the error map, and the stop lines (#259) ([`a36e719`](https://github.com/mateo-m/empo-app/commit/a36e719220b38be1068eb3629521c13c95bfd570))
+
+### Release
+
+- Write a 12-character commit id so the release check can read it (#277) ([`3b9c33f`](https://github.com/mateo-m/empo-app/commit/3b9c33fb4abf5d8c8e8a492b970f699b316bd6cf))
+
 ## 0.11.0 - 2026-11-07
 
 ### Bug Fixes
