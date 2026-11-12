@@ -1,5 +1,5 @@
 # The engine release from github.com/mateo-m/mkxp-z-apple-mobile that
 # cores/mkxp/fetch.sh downloads. The release notes give the sha256.
-MKXP_CORE_VERSION=v15
-MKXP_CORE_SHA256=5e465bd13f36f35d4381fa1e78a8fb49ff651a545fc8a9dd9cc6ff84e3fa92ea
+MKXP_CORE_VERSION=v17
+MKXP_CORE_SHA256=6e6a77f36e8d7e58e658b5c12d15c9aae3722feb69d731b5a7f9463207ae9809
 MKXP_CORE_ASSET=mkxp-z-ios.tar.gz
