@@ -209,7 +209,7 @@ if [[ -n "$EXPECTED_VERSION" && "$VERSION" != "$EXPECTED_VERSION" ]]; then
     fail "Info.plist version $VERSION != expected $EXPECTED_VERSION"
 fi
 
-HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse --short HEAD)
+HEAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD)
 
 # The Release optimiser folds the whole line into one string, so the
 # dirty marker arrives on the commit line and not on a line of its own.
@@ -224,8 +224,8 @@ GIT_LINE=$(grep -m1 -E '^commit: ' < <(strings "$BIN") || true)
 require_update_check "$BIN"
 
 EMBEDDED_COMMIT=$(awk '{print $2}' <<<"$GIT_LINE")
-[[ "$EMBEDDED_COMMIT" == "$HEAD_COMMIT" ]] ||
-    fail "embedded commit $EMBEDDED_COMMIT != HEAD $HEAD_COMMIT"
+[[ ${#EMBEDDED_COMMIT} -ge 12 && "$HEAD_COMMIT" == "$EMBEDDED_COMMIT"* ]] ||
+    fail "embedded commit $EMBEDDED_COMMIT is not HEAD $HEAD_COMMIT"
 
 SIZE=$(stat -f%z "$BIN")
 # The app binary is the launcher alone now, a few MB. The engines sit in

@@ -234,7 +234,10 @@ targets:
           - $(PROJECT_DIR)/src/App/GitInfo.generated.swift
         script: |
           REPO="${PROJECT_DIR}/../.."
-          COMMIT=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+          # scripts/audit-ipa.sh reads the "commit: <id>" line with strings.
+          # Swift keeps a string of 15 bytes or less inside the code, not
+          # as text, so a 7-character id hides the line. Keep the id long.
+          COMMIT=$(git -C "$REPO" rev-parse --short=12 HEAD 2>/dev/null || echo "unknown")
           if git -C "$REPO" diff --quiet HEAD 2>/dev/null; then DIRTY="false"; else DIRTY="true"; fi
           BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
           DEFAULT_BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||' || echo "main")
@@ -474,7 +477,7 @@ targets:
         DEFINES_MODULE: NO # yamllint disable-line rule:truthy
         VERSIONING_SYSTEM: ""
         # "Embed the cores" signs the copy inside the app.
-        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_ALLOWED: "NO"
   EmpoMac:
     # The Mac app. It shares the library, the importer and the game
     # cores' detection code with the iOS app. Its window, menus and
@@ -731,7 +734,7 @@ targets:
         DEFINES_MODULE: NO # yamllint disable-line rule:truthy
         VERSIONING_SYSTEM: ""
         # "Embed the cores" signs the copy inside the app.
-        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_ALLOWED: "NO"
   EmpoTests:
     type: bundle.unit-test
     platform: iOS
@@ -746,7 +749,7 @@ targets:
       base:
         TEST_TARGET_NAME: Empo
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
-        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_ALLOWED: "NO"
   EmpoMacTests:
     type: bundle.unit-test
     platform: macOS
@@ -761,7 +764,7 @@ targets:
         TEST_TARGET_NAME: EmpoMac
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Empo.app/Contents/MacOS/Empo
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.mac-tests
-        GENERATE_INFOPLIST_FILE: YES
+        GENERATE_INFOPLIST_FILE: "YES"
         SWIFT_OBJC_BRIDGING_HEADER: $(PROJECT_DIR)/src-player/SDLControllers.h
         HEADER_SEARCH_PATHS: *sdlHeaders
         CODE_SIGN_IDENTITY: "-"
