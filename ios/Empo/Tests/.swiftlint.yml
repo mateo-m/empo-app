@@ -1,6 +1,5 @@
 # A test stops at a missing value, and that failure is the result.
 disabled_rules:
-  - force_cast
   - force_try
   - force_unwrapping
   - implicitly_unwrapped_optional
