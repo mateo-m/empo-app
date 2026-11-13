@@ -57,7 +57,11 @@ opt_in_rules:
 
 force_cast: error
 force_try: error
-force_unwrapping: error
+# A fixed address always parses. An image name can be missing from the
+# asset catalog, so `UIImage(named: "name")!` stays an error.
+force_unwrapping:
+  severity: error
+  ignored_literal_argument_functions: ["URL(string:)"]
 implicitly_unwrapped_optional: error
 
 # Suppress rules that report on existing code idioms we want to
