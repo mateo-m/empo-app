@@ -36,7 +36,7 @@ private class AppRootViewController: UIViewController {
         // Set clear + isOpaque=false so the SDL/ANGLE window under
         // AppWindow can show through during gameplay (PlayerView is
         // mostly clear).
-        let hosted = hostingController.view!
+        let hosted: UIView = hostingController.view
         hosted.backgroundColor = .clear
         hosted.isOpaque = false
         hosted.layer.isOpaque = false
@@ -50,7 +50,7 @@ private class AppRootViewController: UIViewController {
         super.viewDidLayoutSubviews()
         // SwiftUI can reintroduce an opaque hosting background after
         // hierarchy updates. Keep the pass-through contract intact.
-        let hosted = hostingController.view!
+        let hosted: UIView = hostingController.view
         if hosted.backgroundColor != .clear || hosted.isOpaque {
             hosted.backgroundColor = .clear
             hosted.isOpaque = false

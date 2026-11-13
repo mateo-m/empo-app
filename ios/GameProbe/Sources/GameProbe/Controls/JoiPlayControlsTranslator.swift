@@ -162,7 +162,8 @@ public enum JoiPlayControlsTranslator {
         var clusterSizes = sizes
         let clusterIndexes = slots.indices.filter { slots[$0].cluster == .bottomRightArc }
         let cornerIndexes = slots.indices.filter { slots[$0].cluster != .bottomRightArc }
-        let anchorIndex = clusterIndexes.first { row(slots[$0]) == 0 && col(slots[$0]) == 0 }!
+        guard let anchorIndex = clusterIndexes.first(where: { row(slots[$0]) == 0 && col(slots[$0]) == 0 })
+        else { return [] }
         let maxClusterRow = clusterIndexes.map { row(slots[$0]) }.max() ?? 0
         let maxClusterCol = clusterIndexes.map { col(slots[$0]) }.max() ?? 0
 
@@ -179,15 +180,18 @@ public enum JoiPlayControlsTranslator {
             clusterPitch = maxClusterSize + TranslatorLayout.cellGap
             let cSize = clusterSizes[anchorIndex]
             clusterAnchorX =
-                width - metrics.trailingInset(isLandscape: isLandscape) - TranslatorLayout.edgeMargin - cSize * 0.5
+                width - metrics.trailingInset(isLandscape: isLandscape) - TranslatorLayout.edgeMargin - cSize
+                * 0.5
             clusterAnchorYValue = clusterAnchorY(cSize: cSize)
 
             let spanY = Double(maxClusterRow) * clusterPitch + maxClusterSize
             let spanX = Double(maxClusterCol) * clusterPitch + maxClusterSize
-            let topClusterEdge = clusterAnchorYValue - Double(maxClusterRow) * clusterPitch - maxClusterSize * 0.5
+            let topClusterEdge =
+                clusterAnchorYValue - Double(maxClusterRow) * clusterPitch - maxClusterSize * 0.5
             let topCornerBottom =
                 topInset + TranslatorLayout.edgeMargin + cornerIndexes.reduce(0) { max($0, clusterSizes[$1]) }
-            let usableHeight = metrics.usableHeight(isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
+            let usableHeight = metrics.usableHeight(
+                isLandscape: isLandscape, edgeMargin: TranslatorLayout.edgeMargin)
 
             let fits =
                 spanY <= usableHeight
@@ -230,7 +234,8 @@ public enum JoiPlayControlsTranslator {
                 )
             case .topRight:
                 point = (
-                    width - metrics.trailingInset(isLandscape: isLandscape) - TranslatorLayout.edgeMargin - size * 0.5,
+                    width - metrics.trailingInset(isLandscape: isLandscape) - TranslatorLayout.edgeMargin
+                        - size * 0.5,
                     topInset + TranslatorLayout.edgeMargin + size * 0.5
                 )
             }

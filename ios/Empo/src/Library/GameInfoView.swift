@@ -32,11 +32,8 @@ struct GameInfoView: View {
     private let madeWith: String?
     private let coreName: String?
 
-    init(game: GameEntry) {
+    init(game: GameEntry, container: GameContainer) {
         self.game = game
-        // GameInfoView is only shown for ready entries that have a
-        // committed container on disk.
-        let container = game.container!
         let meta = GameMetadata.load(from: container)
         _metadata = State(initialValue: meta)
         _editingTitle = State(initialValue: meta.customTitle ?? "")

@@ -14,9 +14,9 @@ struct GameSettingsView: View {
 
     @State private var model: GameSettingsModel
 
-    init(game: GameEntry) {
+    init(game: GameEntry, container: GameContainer) {
         self.game = game
-        _model = State(initialValue: GameSettingsModel(game: game))
+        _model = State(initialValue: GameSettingsModel(game: game, container: container))
     }
 
     private var restartHint: Hint? {
@@ -101,9 +101,9 @@ struct GameSettingsView: View {
             .task {
                 // The row shows the status line alone, so it
                 // reads no size and walks no directory.
-                let model = BackupSheetModel(container: game.container!, gameName: game.title)
-                model.refresh()
-                backupModel = model
+                let backup = BackupSheetModel(container: model.container, gameName: game.title)
+                backup.refresh()
+                backupModel = backup
             }
             .onChange(of: BackupRunMonitor.shared.isRunning) { _, running in
                 if !running { backupModel?.refresh() }

@@ -20,12 +20,9 @@ swift-format ios/GameProbe/Sources/GameProbe/Backup/Screen/RestoreLeftovers.swif
 swift-format ios/GameProbe/Sources/GameProbe/Backup/Screen/TargetRemovalRules.swift
 swift-format ios/GameProbe/Sources/GameProbe/Backup/Sync/SyncEngine.swift
 swift-format ios/GameProbe/Sources/GameProbe/Backup/Sync/SyncGroup.swift
-swift-format ios/GameProbe/Sources/GameProbe/Controls/AndroidKeycodeTable.swift
 swift-format ios/GameProbe/Sources/GameProbe/Controls/ControllerStateReducer.swift
-swift-format ios/GameProbe/Sources/GameProbe/Controls/JoiPlayControlsTranslator.swift
 swift-format ios/GameProbe/Sources/GameProbe/Controls/KeyCodePickerGroups.swift
 swift-format ios/GameProbe/Sources/GameProbe/GameTreeUpdate.swift
-swift-format ios/GameProbe/Sources/GameProbe/PsdkGame.swift
 swift-format ios/GameProbe/Tests/ConcatenatedSaveRecoveryTests.swift
 swift-format ios/GameProbe/Tests/DataLooseTextTests.swift
 swift-format ios/GameProbe/Tests/GameScriptProfileTests.swift

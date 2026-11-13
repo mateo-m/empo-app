@@ -507,7 +507,7 @@ enum ArchiveExtractor {
                 while let range = chunk.range(of: signature, in: lower..<chunk.endIndex) {
                     let absolute = chunkStart + UInt64(range.lowerBound - chunk.startIndex)
                     if validate(absolute) {
-                        if hit == nil || absolute < hit!.offset {
+                        if hit.map({ absolute < $0.offset }) ?? true {
                             hit = (absolute, backend(absolute))
                         }
                         return
