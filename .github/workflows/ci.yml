@@ -146,8 +146,9 @@ jobs:
           printf 'changed files:\n%s\n' "$FILES"
           # The release job writes altstore-source.json to main. No test
           # or build reads it, and the lint job checks its format.
+          # Only the Docs workflow builds pages/, landing/ and theme.css.
           CODE=$(printf '%s\n' "$FILES" |
-            grep -Ev '\.mdx?$|^docs/media/|^public/|^blume\.config\.ts$|^altstore-source\.json$') || CODE_STATUS=$?
+            grep -Ev '\.mdx?$|^docs/media/|^public/|^pages/|^landing/|^theme\.css$|^blume\.config\.ts$|^altstore-source\.json$') || CODE_STATUS=$?
           # grep exits 1 when nothing matches, which is an answer here,
           # not a failure. A status above 1 IS a failure, and its empty
           # output would otherwise read as "no code touched".
@@ -157,7 +158,7 @@ jobs:
           if [ -n "$CODE" ]; then
             full_gate "the diff touches code: running every job"
           fi
-          skip_gate "the diff is documentation only: skipping the test and app jobs"
+          skip_gate "the diff is documentation and site files only: skipping the test and app jobs"
 
   # One job for every lint check, so a run starts one runner for them,
   # not six. Each check step runs when an earlier one failed, so one
