@@ -243,7 +243,13 @@ jobs:
 
       - name: SwiftLint
         if: ${{ !cancelled() }}
-        run: scripts/lint-files.sh swiftlint | xargs -r swiftlint lint --strict --reporter github-actions-logging
+        run: |
+          scripts/lint-files.sh swiftlint | xargs -r swiftlint lint --strict --reporter github-actions-logging
+          # A file on the skip list gets only the rules that stop a crash.
+          sed -n 's/^swiftlint //p' scripts/lint-pending.txt |
+            xargs -r swiftlint lint --strict --reporter github-actions-logging \
+              --only-rule force_cast --only-rule force_try \
+              --only-rule force_unwrapping --only-rule implicitly_unwrapped_optional
 
       - name: clang-format check
         if: ${{ !cancelled() }}
