@@ -195,12 +195,12 @@ jobs:
           curl -fsSL --retry 3 -o shfmt \
             https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64
           curl -fsSL --retry 3 -o swiftlint.zip \
-            https://github.com/realm/SwiftLint/releases/download/0.63.2/swiftlint_linux_amd64.zip
+            https://github.com/realm/SwiftLint/releases/download/0.65.0/swiftlint_linux_amd64.zip
           curl -fsSL --retry 3 -o actionlint.tar.gz \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
           sha256sum --check --strict <<'SUMS'
           fb096c5d1ac6beabbdbaa2874d025badb03ee07929f0c9ff67563ce8c75398b1  shfmt
-          dd1017cfd20a1457f264590bcb5875a6ee06cd75b9a9d4f77cd43a552499143b  swiftlint.zip
+          79306a34e5c7cc55a220cd108cbb861dcad5f10138dcdf261e2624ae8b0a486b  swiftlint.zip
           8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz
           SUMS
           unzip -q swiftlint.zip swiftlint && rm swiftlint.zip
