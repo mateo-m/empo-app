@@ -1465,10 +1465,14 @@ private struct LibrarySheetPresentation: ViewModifier {
                 }
             }
             .sheet(item: $gameForSettings) { game in
-                GameSettingsView(game: game)
+                if let container = game.container {
+                    GameSettingsView(game: game, container: container)
+                }
             }
             .sheet(item: $gameForInfo) { game in
-                GameInfoView(game: game)
+                if let container = game.container {
+                    GameInfoView(game: game, container: container)
+                }
             }
             .sheet(isPresented: $showSortSheet) {
                 LibrarySortSheet(isPresented: $showSortSheet)

@@ -46,10 +46,8 @@ final class GameSettingsModel {
     var resolvedScreen: ScreenResolution.Result?
     #endif
 
-    init(game: GameEntry) {
+    init(game: GameEntry, container: GameContainer) {
         self.game = game
-        // The sheet opens only for an entry with a container on disk.
-        let container = game.container!
         self.container = container
         ManagedMkxpConfig.migrateDisplaySettingsIfNeeded(stateDirectory: container.empoStateURL)
         let settings = GameSettings.load(from: container.empoStateURL)

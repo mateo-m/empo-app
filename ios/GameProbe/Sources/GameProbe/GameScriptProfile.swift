@@ -234,7 +234,8 @@ public enum GameScriptProfile {
                 else { continue }
                 let digits = nsName.substring(with: m.range(at: 1))
                 guard digits.count == 3,
-                    let major = Int(String(digits.first!)),
+                    let first = digits.first,
+                    let major = Int(String(first)),
                     let minor = Int(String(digits[digits.index(after: digits.startIndex)]))
                 else {
                     continue

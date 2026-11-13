@@ -43,11 +43,6 @@ disabled_rules:
   - opening_brace
   - closure_parameter_position
 
-  # Force casts / unwraps come up in iOS bridge code. Rely on
-  # code review instead of a blanket lint failure.
-  - force_cast
-  - force_try
-
 opt_in_rules:
   - empty_count
   - empty_string
@@ -57,6 +52,13 @@ opt_in_rules:
   - contains_over_first_not_nil
   - redundant_nil_coalescing
   - toggle_bool
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+
+force_cast: error
+force_try: error
+force_unwrapping: error
+implicitly_unwrapped_optional: error
 
 # Suppress rules that report on existing code idioms we want to
 # keep. These can be re-enabled selectively after a focused

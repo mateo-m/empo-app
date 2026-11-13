@@ -115,15 +115,19 @@ extension PsdkGame {
     // from. Each string in the bytecode has a length byte in front, and
     // that byte is often a letter, so a pattern that starts at any name
     // turns graphics/x into Ugraphics/x.
-    private static let pathPattern = try! NSRegularExpression(
-        pattern: #"(?:graphics|audio|Fonts|plugins|pokemonsdk)(?:/[A-Za-z0-9_.-]+)+\.[a-z]{2,4}(?![A-Za-z0-9_])"#)
+    private static let pathPattern = try? NSRegularExpression(
+        pattern:
+            #"(?:graphics|audio|Fonts|plugins|pokemonsdk)(?:/[A-Za-z0-9_.-]+)+\.[a-z]{2,4}(?![A-Za-z0-9_])"#)
 
     // Latin-1 maps each byte to one character. The pattern matches only
     // printable ASCII, so a match never runs into the binary between two
     // strings.
     private static func pathLiterals(in scripts: Data) -> Set<String> {
-        guard let text = String(data: scripts, encoding: .isoLatin1) as NSString? else { return [] }
-        let matches = pathPattern.matches(in: text as String, range: NSRange(location: 0, length: text.length))
+        guard let pathPattern, let text = String(data: scripts, encoding: .isoLatin1) as NSString? else {
+            return []
+        }
+        let matches = pathPattern.matches(
+            in: text as String, range: NSRange(location: 0, length: text.length))
         return Set(matches.map { text.substring(with: $0.range) })
     }
 

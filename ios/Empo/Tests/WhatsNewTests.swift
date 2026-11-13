@@ -25,6 +25,10 @@ final class WhatsNewTests: XCTestCase {
         XCTAssertTrue(WhatsNew.items(after: WhatsNew.version).isEmpty)
     }
 
+    func testTheReleasesOfTheAppLoad() {
+        XCTAssertFalse(WhatsNew.releases.isEmpty)
+    }
+
     func testEveryReleaseHasItsOwnVersion() {
         let versions = WhatsNew.releases.map(\.version)
 

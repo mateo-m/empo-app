@@ -520,7 +520,7 @@ public enum RubyScriptGrammarSniffer {
                 if !inline.isEmpty && closes(text) { inline.removeAll() }
                 let own = guards.filter { (start..<end).contains($0.range.location) }.map { match in
                     Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
-                        ?? (line[Range(match.range, in: line)!].contains("respond_to")
+                        ?? ((line as NSString).substring(with: match.range).contains("respond_to")
                             ? .receiver("self") : .all)
                 }
                 let covers = blocks.map(\.cover) + inline + own

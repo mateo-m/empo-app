@@ -166,13 +166,11 @@ enum UpdateChecker {
         guard
             let lastChecked = defaults.object(forKey: DefaultsKey.lastCheckedAt) as? Date,
             Date().timeIntervalSince(lastChecked) < recheckInterval,
-            let latest = defaults.string(forKey: DefaultsKey.lastKnownLatestVersion)
+            let latest = defaults.string(forKey: DefaultsKey.lastKnownLatestVersion),
+            let url = URL(string: "https://github.com/\(owner)/\(repo)/releases/latest")
         else {
             return nil
         }
-        let url = URL(
-            string: "https://github.com/\(owner)/\(repo)/releases/latest"
-        )!
         return verdict(currentVersion: AppInfo.version, latestVersion: latest, releaseURL: url)
     }
 

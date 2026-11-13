@@ -181,11 +181,11 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
             let ch = Character(scalar)
             switch ch {
             case "a"..."z":
-                return Int32(GAMECORE_SCANCODE_A) + Int32(c) - Int32(Character("a").asciiValue!)
+                return Int32(GAMECORE_SCANCODE_A) + Int32(c) - Int32(UInt8(ascii: "a"))
             case "A"..."Z":
-                return Int32(GAMECORE_SCANCODE_A) + Int32(c) - Int32(Character("A").asciiValue!)
+                return Int32(GAMECORE_SCANCODE_A) + Int32(c) - Int32(UInt8(ascii: "A"))
             case "1"..."9":
-                return Int32(GAMECORE_SCANCODE_1) + Int32(c) - Int32(Character("1").asciiValue!)
+                return Int32(GAMECORE_SCANCODE_1) + Int32(c) - Int32(UInt8(ascii: "1"))
             case "0": return Int32(GAMECORE_SCANCODE_0)
             case " ": return Int32(GAMECORE_SCANCODE_SPACE)
             case "\n": return Int32(GAMECORE_SCANCODE_RETURN)

@@ -45,8 +45,8 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private var context: UnsafeMutableRawPointer { Unmanaged.passUnretained(self).toOpaque() }
 
-    private static func delegate(_ context: UnsafeMutableRawPointer?) -> PlayerAppDelegate {
-        Unmanaged<PlayerAppDelegate>.fromOpaque(context!).takeUnretainedValue()
+    private static func delegate(_ context: UnsafeMutableRawPointer?) -> PlayerAppDelegate? {
+        context.map { Unmanaged<PlayerAppDelegate>.fromOpaque($0).takeUnretainedValue() }
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -152,14 +152,14 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         gamecore_setEngineTerminatedCallback(
             { context in
                 DispatchQueue.main.async {
-                    MainActor.assumeIsolated { PlayerAppDelegate.delegate(context).engineTerminated() }
+                    MainActor.assumeIsolated { PlayerAppDelegate.delegate(context)?.engineTerminated() }
                 }
             }, context)
         gamecore_setGameRectChangedCallback(
             { _, _, width, height, context in
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated {
-                        PlayerAppDelegate.delegate(context).gameRectChanged(width: width, height: height)
+                        PlayerAppDelegate.delegate(context)?.gameRectChanged(width: width, height: height)
                     }
                 }
             }, context)
@@ -167,14 +167,14 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
             { message, context in
                 let text = message.map { String(cString: $0) }
                 DispatchQueue.main.async {
-                    MainActor.assumeIsolated { PlayerAppDelegate.delegate(context).showError(text) }
+                    MainActor.assumeIsolated { PlayerAppDelegate.delegate(context)?.showError(text) }
                 }
             }, context)
         gamecore_setInfoMessageCallback(
             { message, context in
                 let text = message.map { String(cString: $0) } ?? ""
                 DispatchQueue.main.async {
-                    MainActor.assumeIsolated { PlayerAppDelegate.delegate(context).showInfo(text) }
+                    MainActor.assumeIsolated { PlayerAppDelegate.delegate(context)?.showInfo(text) }
                 }
             }, context)
     }

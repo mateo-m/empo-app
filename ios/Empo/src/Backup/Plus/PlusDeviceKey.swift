@@ -12,6 +12,7 @@ enum PlusDeviceKey {
     }
 
     struct UnreadableKey: Error {}
+    struct NoAccessControl: Error {}
 
     private static let enclavePrefix = "enclave:"
     private static let softwarePrefix = "software:"
@@ -58,8 +59,10 @@ enum PlusDeviceKey {
         let stored: String
         if SecureEnclave.isAvailable {
             // Background backups renew the pass while the device is locked.
-            let access = SecAccessControlCreateWithFlags(
-                nil, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, .privateKeyUsage, nil)!
+            guard
+                let access = SecAccessControlCreateWithFlags(
+                    nil, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly, .privateKeyUsage, nil)
+            else { throw NoAccessControl() }
             let privateKey = try SecureEnclave.P256.Signing.PrivateKey(accessControl: access)
             key = .enclave(privateKey)
             stored = enclavePrefix + privateKey.dataRepresentation.base64EncodedString()

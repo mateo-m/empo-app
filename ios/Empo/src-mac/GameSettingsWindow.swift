@@ -9,8 +9,10 @@ struct GameSettingsWindow: View {
     let gameID: String
 
     var body: some View {
-        if let game = GameLibrary.shared.games.first(where: { $0.id == gameID && $0.status == .ready }) {
-            GameSettingsForm(game: game)
+        if let game = GameLibrary.shared.games.first(where: { $0.id == gameID && $0.status == .ready }),
+            let container = game.container
+        {
+            GameSettingsForm(game: game, container: container)
                 .id(game.viewIdentity)
         } else {
             ContentUnavailableView(
@@ -27,9 +29,9 @@ private struct GameSettingsForm: View {
     let game: GameEntry
     @State private var model: GameSettingsModel
 
-    init(game: GameEntry) {
+    init(game: GameEntry, container: GameContainer) {
         self.game = game
-        _model = State(initialValue: GameSettingsModel(game: game))
+        _model = State(initialValue: GameSettingsModel(game: game, container: container))
     }
 
     var body: some View {

@@ -104,9 +104,9 @@ struct RescuedRubyError: Equatable {
     let message: String
 
     private static let className = #"((?:[A-Z]\w*::)*[A-Z]\w*)"#
-    private static let inspected = try! NSRegularExpression(
+    private static let inspected = try? NSRegularExpression(
         pattern: #"\A#<"# + className + #": (.*)>\z"#, options: .dotMatchesLineSeparators)
-    private static let array = try! NSRegularExpression(
+    private static let array = try? NSRegularExpression(
         pattern: #"\A\["# + className + #", "((?:[^"\\]|\\.)*)""#)
 
     /// An object's address changes on each run, so it stays out.
@@ -125,8 +125,8 @@ struct RescuedRubyError: Equatable {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let range = NSRange(text.startIndex..., in: text)
         guard
-            let match = Self.inspected.firstMatch(in: text, range: range)
-                ?? Self.array.firstMatch(in: text, range: range),
+            let match = Self.inspected?.firstMatch(in: text, range: range)
+                ?? Self.array?.firstMatch(in: text, range: range),
             let classRange = Range(match.range(at: 1), in: text),
             let messageRange = Range(match.range(at: 2), in: text)
         else { return nil }

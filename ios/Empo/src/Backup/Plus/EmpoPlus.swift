@@ -21,8 +21,10 @@ final class EmpoPlus {
     static let joinURL = URL(string: "https://www.patreon.com/checkout/empo_app?rid=29989848")!
     private static let api = URL(string: "https://api.empo.mateo.sh")!
     private static let callbackScheme = "empo"
-    private static let publicKey = Data(
-        base64Encoded: "/Y4z9rhhNjRsPdXBEnhucGbDQDAuyMUupgqaPA+qTrA=")!
+    private static let publicKey = Data([
+        0xfd, 0x8e, 0x33, 0xf6, 0xb8, 0x61, 0x36, 0x34, 0x6c, 0x3d, 0xd5, 0xc1, 0x12, 0x78, 0x6e, 0x70,
+        0x66, 0xc3, 0x40, 0x30, 0x2e, 0xc8, 0xc5, 0x2e, 0xa6, 0x0a, 0x9a, 0x3c, 0x0f, 0xaa, 0x4e, 0xb0,
+    ])
 
     private(set) var pass: PlusPass?
     private var renewal: String?
@@ -62,18 +64,16 @@ final class EmpoPlus {
     func signIn(using session: WebAuthenticationSession, replace: Bool = false) async throws(SignInFailure) {
         let state = UUID().uuidString
         guard let device = try? PlusDeviceKey.publicKey() else { throw .server }
-        var start = URLComponents(
-            url: Self.api.appending(path: "patreon/start"), resolvingAgainstBaseURL: false)!
-        start.queryItems = [
+        let start = Self.api.appending(path: "patreon/start").appending(queryItems: [
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "device", value: device),
             URLQueryItem(name: "replace", value: replace ? "true" : "false"),
-        ]
+        ])
 
         let callback: URL
         do {
             callback = try await session.authenticate(
-                using: start.url!, callback: .customScheme(Self.callbackScheme),
+                using: start, callback: .customScheme(Self.callbackScheme),
                 additionalHeaderFields: [:])
         } catch ASWebAuthenticationSessionError.canceledLogin {
             throw .cancelled

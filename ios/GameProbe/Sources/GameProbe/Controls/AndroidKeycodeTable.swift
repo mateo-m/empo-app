@@ -19,7 +19,7 @@ public enum AndroidKeycodeTable {
     private static let mapping: [Int: String] = {
         var table: [Int: String] = [:]
 
-        for digit in 0 ... 9 {
+        for digit in 0...9 {
             table[7 + digit] = "Digit\(digit)"
         }
 
@@ -29,8 +29,7 @@ public enum AndroidKeycodeTable {
         table[22] = "ArrowRight"
         table[23] = "Enter"
 
-        for offset in 0 ... 25 {
-            let letter = Character(UnicodeScalar(65 + offset)!)
+        for (offset, letter) in "ABCDEFGHIJKLMNOPQRSTUVWXYZ".enumerated() {
             table[29 + offset] = "Key\(letter)"
         }
 
@@ -69,13 +68,13 @@ public enum AndroidKeycodeTable {
         table[123] = "End"
         table[124] = "Insert"
 
-        for functionKey in 1 ... 12 {
+        for functionKey in 1...12 {
             table[130 + functionKey] = "F\(functionKey)"
         }
 
         table[143] = "NumLock"
 
-        for digit in 0 ... 9 {
+        for digit in 0...9 {
             table[144 + digit] = "Numpad\(digit)"
         }
 

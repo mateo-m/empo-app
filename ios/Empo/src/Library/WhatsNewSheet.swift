@@ -10,8 +10,12 @@ import SwiftUI
 /// Set `"plus": true` on an item about Plus. Its title gets a Plus pill.
 enum WhatsNew {
     static let releases: [WhatsNewRelease] = {
-        let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json")!
-        return try! JSONDecoder().decode([WhatsNewRelease].self, from: Data(contentsOf: url))
+        guard
+            let url = Bundle.main.url(forResource: "WhatsNew", withExtension: "json"),
+            let data = try? Data(contentsOf: url),
+            let releases = try? JSONDecoder().decode([WhatsNewRelease].self, from: data)
+        else { return [] }
+        return releases
     }()
 
     static let version = releases.map(\.version).max() ?? 0
