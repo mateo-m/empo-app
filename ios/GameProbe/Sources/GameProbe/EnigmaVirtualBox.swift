@@ -222,7 +222,7 @@ public struct EnigmaVirtualBox {
         for index in 0..<sectionCount {
             let base = index * 40
             let nameBytes = table.subdata(in: base..<(base + 8)).prefix { $0 != 0 }
-            guard String(decoding: nameBytes, as: UTF8.self) == packedSectionName else {
+            guard String(bytes: nameBytes, encoding: .utf8) == packedSectionName else {
                 continue
             }
             let rawSize = Int(table.uint32(at: base + 16))

@@ -149,7 +149,7 @@ final class ScreenRegionTests: XCTestCase {
 
         let rewritten = try XCTUnwrap(
             ScreenRegionFile.serialize(portrait: result.portrait, landscape: result.landscape))
-        XCTAssertFalse(String(decoding: rewritten, as: UTF8.self).contains("zoom"))
+        XCTAssertFalse(try XCTUnwrap(String(bytes: rewritten, encoding: .utf8)).contains("zoom"))
     }
 
     func testParseRejectsBooleanAndStringNumbers() {
@@ -191,7 +191,8 @@ final class ScreenRegionTests: XCTestCase {
         let serialized = try XCTUnwrap(
             ScreenRegionFile.serialize(
                 portrait: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1)), landscape: nil))
-        XCTAssertFalse(String(decoding: serialized, as: UTF8.self).contains("overlay"))
+        XCTAssertFalse(
+            try XCTUnwrap(String(bytes: serialized, encoding: .utf8)).contains("overlay"))
     }
 
     func testOverlayFlagPerOrientationThroughTheStore() throws {
@@ -317,7 +318,7 @@ final class ScreenRegionTests: XCTestCase {
             ScreenRegionFile.serialize(
                 portrait: .region(ScreenRegion(x: 0.123456, y: 0, w: 0.876544, h: 1)),
                 landscape: nil))
-        let text = String(decoding: serialized, as: UTF8.self)
+        let text = try XCTUnwrap(String(bytes: serialized, encoding: .utf8))
         XCTAssertTrue(text.contains("0.1235"), text)
         XCTAssertTrue(text.contains("0.8765"), text)
     }
@@ -326,7 +327,7 @@ final class ScreenRegionTests: XCTestCase {
         let serialized = try XCTUnwrap(
             ScreenRegionFile.serialize(
                 portrait: nil, landscape: .region(ScreenRegion(x: 0, y: 0, w: 1, h: 1))))
-        let text = String(decoding: serialized, as: UTF8.self)
+        let text = try XCTUnwrap(String(bytes: serialized, encoding: .utf8))
         XCTAssertFalse(text.contains("portrait"))
         XCTAssertTrue(text.contains("landscape"))
     }

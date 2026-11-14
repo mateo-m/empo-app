@@ -63,6 +63,10 @@ force_unwrapping:
   severity: error
   ignored_literal_argument_functions: ["URL(string:)"]
 implicitly_unwrapped_optional: error
+# A `CodingKeys` enum is in its type, and a result type can have a
+# type of its own, such as `LoadOutcome.Note`.
+nesting:
+  type_level: 2
 
 # Suppress rules that report on existing code idioms we want to
 # keep. These can be re-enabled selectively after a focused

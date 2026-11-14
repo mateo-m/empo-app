@@ -669,12 +669,16 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
 
-        try """
-        { "version": 1, "controller": { "a": "Enter" } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
-        try """
-        { "version": 1, "controller": { "b": "Escape" } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "b": "Escape" } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .empo)
@@ -691,9 +695,11 @@ final class ControlsManifestLoaderTests: XCTestCase {
 
         try Data(contentsOf: fixtureURL("v002-missing-version.json5")).write(
             to: empoDir.appendingPathComponent("controls.json"))
-        try """
-        { "version": 1, "controller": { "a": "Enter" } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.result.location, .empo)
@@ -706,9 +712,11 @@ final class ControlsManifestLoaderTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try """
-        { "touch": { "portrait": { "buttons": [] } } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "touch": { "portrait": { "buttons": [] } } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)
         XCTAssertEqual(outcome?.notes, [.rootUnclaimedNoVersion])

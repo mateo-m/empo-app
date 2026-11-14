@@ -240,7 +240,7 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
     func testNonObjectJSONIgnored() {
         let translation = KirinControlsTranslator.translate(
-            data: "[1,2,3]".data(using: .utf8)!, metrics: .reference)
+            data: Data("[1,2,3]".utf8), metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertFalse(translation.notes.isEmpty)
     }
@@ -319,9 +319,11 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
-        try """
-        { "version": 1, "controller": { "a": "Enter" } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -335,9 +337,11 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try """
-        { "version": 1, "controller": { "b": "Escape" } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "b": "Escape" } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -351,9 +355,11 @@ final class KirinControlsTranslatorTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try """
-        { "touch": { "portrait": { "buttons": [] } } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "touch": { "portrait": { "buttons": [] } } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -369,9 +375,11 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
-        try """
-        { "version": true, "touch": { "portrait": { "buttons": [] } } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": true, "touch": { "portrait": { "buttons": [] } } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 
@@ -401,12 +409,16 @@ final class KirinControlsTranslatorTests: XCTestCase {
 
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
-        try """
-        { "version": 1, "controller": { "a": "Enter" } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
-        try """
-        { "version": 1, "controller": { "b": "Escape" } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "b": "Escape" } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
 

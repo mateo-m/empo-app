@@ -162,21 +162,21 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
     func testEmptyObjectIgnored() {
         let translation = JoiPlayControlsTranslator.translate(
-            data: "{}".data(using: .utf8)!, metrics: .reference)
+            data: Data("{}".utf8), metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("no JoiPlay keys") })
     }
 
     func testUnknownKeysIgnored() {
         let translation = JoiPlayControlsTranslator.translate(
-            data: #"{"foo": 1}"#.data(using: .utf8)!, metrics: .reference)
+            data: Data(#"{"foo": 1}"#.utf8), metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertTrue(translation.notes.contains { $0.contains("no JoiPlay keys") })
     }
 
     func testNonObjectJSONIgnored() {
         let translation = JoiPlayControlsTranslator.translate(
-            data: "[1,2]".data(using: .utf8)!, metrics: .reference)
+            data: Data("[1,2]".utf8), metrics: .reference)
         XCTAssertNil(translation.manifest)
         XCTAssertFalse(translation.notes.isEmpty)
     }
@@ -264,9 +264,11 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
-        try """
-        { "version": 1, "controller": { "a": "Enter" } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
         try joiplayJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(JoiPlayControlsTranslator.fileName))
 
@@ -279,9 +281,11 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try """
-        { "version": 1, "controller": { "b": "Escape" } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "b": "Escape" } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
         try joiplayJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(JoiPlayControlsTranslator.fileName))
 
@@ -294,9 +298,11 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try """
-        { "touch": { "portrait": { "buttons": [] } } }
-        """.data(using: .utf8)!.write(to: dir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "touch": { "portrait": { "buttons": [] } } }
+            """.utf8
+        ).write(to: dir.appendingPathComponent("controls.json"))
         try joiplayJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(JoiPlayControlsTranslator.fileName))
 
@@ -311,9 +317,11 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
-        try """
-        { "version": true, "touch": { "portrait": { "buttons": [] } } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": true, "touch": { "portrait": { "buttons": [] } } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
         try joiplayJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(JoiPlayControlsTranslator.fileName))
 
@@ -327,9 +335,11 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try """
-        { "version": 2, "rightGrid": { "slots": [29] } }
-        """.data(using: .utf8)!.write(
+        try Data(
+            """
+            { "version": 2, "rightGrid": { "slots": [29] } }
+            """.utf8
+        ).write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
         try joiplayJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(JoiPlayControlsTranslator.fileName))
@@ -345,9 +355,11 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
 
         let empoDir = dir.appendingPathComponent("empo")
         try FileManager.default.createDirectory(at: empoDir, withIntermediateDirectories: true)
-        try """
-        { "version": 1, "controller": { "a": "Enter" } }
-        """.data(using: .utf8)!.write(to: empoDir.appendingPathComponent("controls.json"))
+        try Data(
+            """
+            { "version": 1, "controller": { "a": "Enter" } }
+            """.utf8
+        ).write(to: empoDir.appendingPathComponent("controls.json"))
         try kirinJSON().data(using: .utf8)!.write(
             to: dir.appendingPathComponent(KirinControlsTranslator.fileName))
         try joiplayJSON().data(using: .utf8)!.write(
@@ -362,7 +374,7 @@ final class JoiPlayControlsTranslatorTests: XCTestCase {
         let dir = try makeTemporaryGameRoot()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        try #"{"cKeyCode": 999}"#.data(using: .utf8)!.write(
+        try Data(#"{"cKeyCode": 999}"#.utf8).write(
             to: dir.appendingPathComponent(JoiPlayControlsTranslator.fileName))
 
         let outcome = ControlsManifestLoader.load(gameRoot: dir)

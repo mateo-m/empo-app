@@ -59,8 +59,8 @@ final class UniqueFileNameTests: XCTestCase {
         let taken: Set<String> = ["Game.rxdata", "Game.rxdata.bak-2"]
         let name = UniqueFileName.firstAvailable(
             preferring: "Game.rxdata",
-            numbered: { "Game.rxdata.bak-\($0)" }
-        ) { taken.contains($0) }
+            numbered: { "Game.rxdata.bak-\($0)" },
+            isTaken: { taken.contains($0) })
         XCTAssertEqual(name, "Game.rxdata.bak-3")
     }
 
@@ -85,11 +85,11 @@ final class UniqueFileNameTests: XCTestCase {
         var probes = 0
         let name = UniqueFileName.firstAvailable(
             preferring: "Game.rxdata",
-            numbered: { "custom-\($0).sav" }
-        ) { _ in
-            probes += 1
-            return true
-        }
+            numbered: { "custom-\($0).sav" },
+            isTaken: { _ in
+                probes += 1
+                return true
+            })
         XCTAssertEqual(probes, 999)
         XCTAssertTrue(name.hasSuffix("-Game.rxdata"))
         XCTAssertFalse(name.contains("custom-"))
