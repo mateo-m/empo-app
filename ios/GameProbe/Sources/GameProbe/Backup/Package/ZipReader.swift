@@ -99,8 +99,8 @@ public final class ZipReader {
             let fields = try read(at: cursor + 46, count: nameLength + extraLength)
             guard fields.count == nameLength + extraLength else { throw Failure.truncated }
 
-            // A name in a different text encoding gets U+FFFD for each
-            // byte that is not UTF-8.
+            // A name in a different text encoding gets U+FFFD in place of
+            // the bytes that are not UTF-8.
             // swiftlint:disable:next optional_data_string_conversion
             let name = String(decoding: fields.prefix(nameLength), as: UTF8.self)
             let method = head.u16(10)
