@@ -62,7 +62,8 @@ final class GameBackupIntentTests: XCTestCase {
         // The version field is there so the mode scalar can become a
         // per-target map later, per 3.8. A build that predates that
         // change must give the file back whole.
-        let future = """
+        let future = Data(
+            """
             {
               "version": 99,
               "mode": {"target-a": "slim", "target-b": "full"},
@@ -71,7 +72,7 @@ final class GameBackupIntentTests: XCTestCase {
               "retentionOverride": {"preset": "deep"},
               "pinnedSnapshots": ["20260501T010203Z-abc123"]
             }
-            """.data(using: .utf8)!
+            """.utf8)
 
         let intent = try GameBackupIntent.decode(json: future)
         let written = try object(intent.jsonData())
@@ -82,9 +83,10 @@ final class GameBackupIntentTests: XCTestCase {
     }
 
     func testSettingTheModeOnAFutureFileKeepsTheOtherFields() throws {
-        let future = """
+        let future = Data(
+            """
             {"version": 99, "mode": {"target-a": "slim"}, "futureFlag": true}
-            """.data(using: .utf8)!
+            """.utf8)
 
         var intent = try GameBackupIntent.decode(json: future)
         intent.mode = .full
@@ -96,7 +98,7 @@ final class GameBackupIntentTests: XCTestCase {
     }
 
     func testAFileWithNoVersionReadsAsThisVersion() throws {
-        let data = #"{"mode": "slim"}"#.data(using: .utf8)!
+        let data = Data(#"{"mode": "slim"}"#.utf8)
 
         let intent = try GameBackupIntent.decode(json: data)
 
@@ -105,7 +107,7 @@ final class GameBackupIntentTests: XCTestCase {
     }
 
     func testAnUnknownModeLabelReadsAsNoMode() throws {
-        let data = #"{"version": 1, "mode": "archival"}"#.data(using: .utf8)!
+        let data = Data(#"{"version": 1, "mode": "archival"}"#.utf8)
 
         XCTAssertNil(try GameBackupIntent.decode(json: data).mode)
     }

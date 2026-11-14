@@ -87,7 +87,7 @@ final class SnapshotManifestTests: XCTestCase {
                     hash: ContentHash.hex(ofUTF8: "Game.ini"),
                     compression: .zlib)
             ])
-        let text = String(decoding: try manifest.jsonData(), as: UTF8.self)
+        let text = try XCTUnwrap(String(bytes: manifest.jsonData(), encoding: .utf8))
 
         XCTAssertFalse(text.contains("chunks"))
         XCTAssertFalse(text.contains("detectionSource"))
@@ -153,8 +153,8 @@ final class SnapshotManifestTests: XCTestCase {
     }
 
     func testAnUnknownRootIsRejectedAndNamesThePath() throws {
-        var text = String(
-            decoding: try BackupFixtures.data("manifest-v1.json"), as: UTF8.self)
+        var text = try XCTUnwrap(
+            String(bytes: BackupFixtures.data("manifest-v1.json"), encoding: .utf8))
         text = text.replacingOccurrences(of: "\"shared-data\"", with: "\"pack-file\"")
 
         XCTAssertThrowsError(try SnapshotManifest.decode(json: Data(text.utf8))) { error in
@@ -165,8 +165,8 @@ final class SnapshotManifestTests: XCTestCase {
     }
 
     func testAnUnknownDetectionSourceIsRejectedAndNamesThePath() throws {
-        var text = String(
-            decoding: try BackupFixtures.data("manifest-v1.json"), as: UTF8.self)
+        var text = try XCTUnwrap(
+            String(bytes: BackupFixtures.data("manifest-v1.json"), encoding: .utf8))
         text = text.replacingOccurrences(of: "\"runtime-watch\"", with: "\"guesswork\"")
 
         XCTAssertThrowsError(try SnapshotManifest.decode(json: Data(text.utf8))) { error in
@@ -178,8 +178,8 @@ final class SnapshotManifestTests: XCTestCase {
     }
 
     func testAHashThatIsNotAContentHashIsRejected() throws {
-        var text = String(
-            decoding: try BackupFixtures.data("manifest-v1.json"), as: UTF8.self)
+        var text = try XCTUnwrap(
+            String(bytes: BackupFixtures.data("manifest-v1.json"), encoding: .utf8))
         text = text.replacingOccurrences(
             of: "938f7934f3328f54e648bd5812473be574ace4c4501e2e0c1a81e67fca77e2f8",
             with: "../../../Documents/Save01.rvdata2")

@@ -69,7 +69,7 @@ final class EnigmaVirtualBoxTests: XCTestCase {
             0xFE, 0x67, 0xC0, 0x00,
         ])
         XCTAssertEqual(
-            String(decoding: try APLib.decompress(packed), as: UTF8.self),
+            String(bytes: try APLib.decompress(packed), encoding: .utf8),
             "The quick brown fox jumps over the lazy dog")
     }
 

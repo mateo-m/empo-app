@@ -82,12 +82,7 @@ public struct ControllerStateReducer: Sendable {
         for element: String,
         perController: [String: [String: Bool]]
     ) -> Bool {
-        for state in perController.values {
-            if state[element] == true {
-                return true
-            }
-        }
-        return false
+        perController.values.contains { $0[element] == true }
     }
 }
 

@@ -297,7 +297,7 @@ final class S3Tests: XCTestCase {
         XCTAssertEqual(parts.map(\.eTag), ["\"one\"", "\"two\""])
     }
 
-    func testAResumedRunReadsTheETagAGoServiceWritesWithNumericQuotes() {
+    func testAResumedRunReadsTheETagAGoServiceWritesWithNumericQuotes() throws {
         // MinIO answers ListParts with `&#34;` for the quotes.
         let body = Data(
             """
@@ -307,7 +307,7 @@ final class S3Tests: XCTestCase {
             """.utf8)
         let parts = S3.completedParts(fromBody: body)
         XCTAssertEqual(parts.map(\.eTag), ["\"5f363e0e58a95f06cbe9bbc662c5dfb6\"", "\"two\""])
-        let commit = String(decoding: S3.completeBody(parts: parts), as: UTF8.self)
+        let commit = try XCTUnwrap(String(bytes: S3.completeBody(parts: parts), encoding: .utf8))
         XCTAssertTrue(commit.contains("<ETag>&quot;5f363e0e58a95f06cbe9bbc662c5dfb6&quot;</ETag>"))
         XCTAssertEqual(XMLText.unescape("a &amp; b &lt; c &#65;&#x42; &bogus; &"), "a & b < c AB &bogus; &")
     }

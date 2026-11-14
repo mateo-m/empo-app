@@ -276,6 +276,8 @@ final class TransferGateTests: XCTestCase {
         // target that throttles once would otherwise run at three.
         await clock.setProbe {
             let task = Task { try? await gate.transfer { _ = await probe.next() } }
+            // `count` is a number of calls. The probe is not a collection.
+            // swiftlint:disable:next empty_count
             for _ in 0..<10_000 where await probe.count == 0 { await Task.yield() }
             task.cancel()
         }
