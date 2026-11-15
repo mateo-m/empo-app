@@ -493,7 +493,7 @@ public enum RubyScriptGrammarSniffer {
     /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?)(?![^#;]*(?:\|\||\bor\b))(?!\s*\)?\s*[=!]=)"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+)(?![^#;]*(?:\|\||\bor\b))(?!\s*\)?\s*[=!]=)"#
     )
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.

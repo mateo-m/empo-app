@@ -813,6 +813,7 @@ final class GameScriptProfileTests: XCTestCase {
             "s.force_encoding('UTF-8')\n  case to\n  when 1; x\nend if vxace?\n",
             "def f(s)\n  s.force_encoding('UTF-8')\n  whenever = [1].each do |v|\n    v\n  end if vxace?\nend\n",
             "if vxace? == false\n  s.force_encoding('UTF-8')\nend\n",
+            "if vxace?() != true\n  s.force_encoding('UTF-8')\nend\n",
         ] {
             try source.write(to: scripts.appendingPathComponent("Text.rb"), atomically: true, encoding: .utf8)
             XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31, source)
