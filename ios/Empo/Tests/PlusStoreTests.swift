@@ -78,21 +78,15 @@ final class PlusStoreTests: XCTestCase {
         try await store.purchase()
         let transaction = try XCTUnwrap(session.allTransactions().first)
 
-        let refunded = expectation(description: "Plus ends")
-        watchUntilNotSubscribed(store, refunded)
         try session.refundTransaction(identifier: UInt(transaction.identifier))
-        // On a GitHub-hosted Mac, the refund took 115 seconds once to
-        // reach `Transaction.updates`. On a fast Mac it takes under 1.
-        await fulfillment(of: [refunded], timeout: 300)
-    }
-
-    private func watchUntilNotSubscribed(_ store: PlusStore, _ done: XCTestExpectation) {
-        withObservationTracking {
-            _ = store.isSubscribed
-        } onChange: {
-            Task { @MainActor in
-                if store.isSubscribed { self.watchUntilNotSubscribed(store, done) } else { done.fulfill() }
-            }
+        // `refundTransaction` returns before StoreKit shows the refund. On
+        // a GitHub-hosted Mac, StoreKit sometimes sends no
+        // `Transaction.updates` for the first refund of a run.
+        let deadline = ContinuousClock.now + .seconds(30)
+        while store.isSubscribed {
+            guard ContinuousClock.now < deadline else { return XCTFail("Plus stays 30 s after a refund") }
+            try await Task.sleep(for: .milliseconds(100))
+            await store.refresh()
         }
     }
 }
