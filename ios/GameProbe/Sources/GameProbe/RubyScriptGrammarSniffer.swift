@@ -84,7 +84,7 @@ public enum RubyScriptGrammarSniffer {
         // Scripts file next to it is a small bootstrap, not the
         // live source, so the sniffer must not classify it.
         if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
-            return classifyExtrasAlone(extras) == .modern ? .modern : .inconclusive
+            return classifyExtrasAlone(extras)
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /

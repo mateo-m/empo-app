@@ -312,6 +312,31 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: true))
     }
 
+    func testBlockDefaultInAConfigScriptBesideAPackedArchiveRulesOutRuby18() throws {
+        let dir = try packedGame(plugins: ["x = 1\n"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nLibrary=RGSS104E.dll\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try "{\"preloadScript\": \"Correction.rb\"}".write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try "list.each do |hwnd = 0|\nend\n".write(
+            to: dir.appendingPathComponent("Correction.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testRuby19PluginCallsBesideAPackedArchiveKeepModernScripts() throws {
+        let dir = try packedGame(plugins: ["s.force_encoding('UTF-8')\n"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("x64-msvcrt-ruby310.dll"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: false))
+    }
+
     func testBlockDefaultOverTwoLinesRoutesToRuby31Legacy() throws {
         for source in [
             "list.each do |first,\n  hwnd = 0|\nend\n", "list.each { |hwnd =\n  0| hwnd }\n", "list.each do\n  |hwnd = 0|\nend\n",

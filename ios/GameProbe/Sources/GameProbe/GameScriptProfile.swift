@@ -170,8 +170,12 @@ public enum GameScriptProfile {
         switch grammar {
         case .modern:
             return true
-        case .legacy, .mixed:
+        case .legacy:
             return false
+        case .mixed:
+            // Beside a packed archive, only plugin or mkxp.json scripts give
+            // mixed. The core scripts stay unread, so packaging decides.
+            return packedScripts
         case .inconclusive:
             return runtime.embedsRuby3 || packedScripts
         }
