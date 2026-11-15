@@ -75,65 +75,23 @@ final class PlusStoreTests: XCTestCase {
     func testARefundTakesPlusAway() async throws {
         let store = PlusStore.shared
         await store.loadProduct()
-        let listener = Task { @MainActor in
-            for await update in Transaction.updates {
-                let t = update.unsafePayloadValue
-                self.probe("test listener: id \(t.id) revoked \(t.revocationDate != nil)")
-            }
-        }
-        defer { listener.cancel() }
-        var failures = 0
-        for cycle in 0..<4 {
-            if cycle > 0 {
-                session.clearTransactions()
-                await store.refresh()
-            }
-            try await store.purchase()
-            let transaction = try XCTUnwrap(session.allTransactions().first)
-            probe("cycle \(cycle): bought id \(transaction.identifier), store \(store.isSubscribed)")
-            probeZero = .now
-            try session.refundTransaction(identifier: UInt(transaction.identifier))
-            probe("cycle \(cycle): refundTransaction returned")
-            var lastSeen = ""
-            var storeEnded = false
-            for _ in 0..<30 {
-                var seen: [String] = []
-                for await e in Transaction.currentEntitlements(for: PlusStore.productID) {
-                    let t = e.unsafePayloadValue
-                    seen.append("id \(t.id) revoked \(t.revocationDate != nil)")
-                }
-                let now = "entitlements \(seen), store \(store.isSubscribed)"
-                if now != lastSeen { probe("cycle \(cycle): \(now)") }
-                lastSeen = now
-                if !store.isSubscribed {
-                    storeEnded = true
-                    break
-                }
-                try await Task.sleep(for: .seconds(1))
-            }
-            if !storeEnded {
-                failures += 1
-                await store.refresh()
-                probe("cycle \(cycle): no end in 30 s, after a direct refresh: store \(store.isSubscribed)")
-            }
-        }
-        XCTAssertEqual(failures, 0)
-    }
+        try await store.purchase()
+        let transaction = try XCTUnwrap(session.allTransactions().first)
 
-    private var probeZero = ContinuousClock.now
-
-    private func probe(_ line: String) {
-        let t = (ContinuousClock.now - probeZero).components
-        NSLog("REFUNDPROBE +%.2fs %@", Double(t.seconds) + Double(t.attoseconds) / 1e18, line)
-    }
-
-    private func watchUntilNotSubscribed(_ store: PlusStore, _ done: XCTestExpectation) {
-        withObservationTracking {
-            _ = store.isSubscribed
-        } onChange: {
-            Task { @MainActor in
-                if store.isSubscribed { self.watchUntilNotSubscribed(store, done) } else { done.fulfill() }
+        try session.refundTransaction(identifier: UInt(transaction.identifier))
+        // `refundTransaction` returns before StoreKit shows the refund. On
+        // a GitHub-hosted Mac, StoreKit sometimes sends no
+        // `Transaction.updates` for the first refund of a run.
+        let deadline = ContinuousClock.now + .seconds(30)
+        while try await Transaction.latest(for: PlusStore.productID)?.payloadValue.revocationDate == nil {
+            guard ContinuousClock.now < deadline else {
+                return XCTFail("StoreKit shows no refund after 30 s")
             }
+            try await Task.sleep(for: .milliseconds(100))
         }
+        await store.refresh()
+
+        XCTAssertFalse(store.isSubscribed)
+        XCTAssertFalse(EmpoPlus.shared.hasPlus)
     }
 }
