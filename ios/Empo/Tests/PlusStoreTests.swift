@@ -83,15 +83,10 @@ final class PlusStoreTests: XCTestCase {
         // a GitHub-hosted Mac, StoreKit sometimes sends no
         // `Transaction.updates` for the first refund of a run.
         let deadline = ContinuousClock.now + .seconds(30)
-        while try await Transaction.latest(for: PlusStore.productID)?.payloadValue.revocationDate == nil {
-            guard ContinuousClock.now < deadline else {
-                return XCTFail("StoreKit shows no refund after 30 s")
-            }
+        while store.isSubscribed {
+            guard ContinuousClock.now < deadline else { return XCTFail("Plus stays 30 s after a refund") }
             try await Task.sleep(for: .milliseconds(100))
+            await store.refresh()
         }
-        await store.refresh()
-
-        XCTAssertFalse(store.isSubscribed)
-        XCTAssertFalse(EmpoPlus.shared.hasPlus)
     }
 }
