@@ -485,16 +485,19 @@ public enum RubyScriptGrammarSniffer {
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
-    /// its body on 1.8. So does a comparison of the check itself, such as
-    /// `vxace? == false`. Group 1 is the receiver of `respond_to?`.
+    /// its body on 1.8. So does a comparison such as `vxace? == false`.
+    /// Group 1 is the receiver of `respond_to?`.
     /// Zeus81's `vxace?` is false only on RPG Maker XP's own Ruby 1.8.1.
     /// On Empo's 1.8.8 it is true and a 1.9 call under it raises, but
     /// Pokemon Xenoverse ships these scripts and runs on Ruby 1.8.7 in
     /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+)(?![^#;]*(?:\|\||\bor\b))(?!\s*\)?\s*[=!]=)"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+(?!\s*[=!]=))(?![^#;]*(?:\|\||\bor\b))"#
     )
+
+    private static let branchBlockStart = try? NSRegularExpression(
+        pattern: #";\s*(?:begin|case|if|unless|while|until)\b|\bdo\b"#)
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
     private static let heredocStart = try? NSRegularExpression(
@@ -534,6 +537,10 @@ public enum RubyScriptGrammarSniffer {
                 ?? ((line as NSString).substring(with: match.range).contains("respond_to")
                     ? .receiver("self") : .all)
         }
+        // `when 2; begin` opens a block of its own, so the search stops there.
+        func branchOpensNoBlock(_ text: String) -> Bool {
+            branchBlockStart?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) == nil
+        }
         func indent(of line: String) -> Int { line.prefix { $0 == " " || $0 == "\t" }.count }
         func closes(_ text: String) -> Bool {
             ["end", "else", "elsif"].contains { text.hasPrefix($0) }
@@ -558,7 +565,8 @@ public enum RubyScriptGrammarSniffer {
                         candidate.code[$0] && !candidate.units[$0].isWhitespace && candidate.units[$0] != "#"
                     }
                     && indent(of: candidate.text) <= indent(of: line)
-                    && !["when", "else", "elsif", "rescue", "ensure"].contains { startsDirective(text, $0) }
+                    && !(["when", "else", "elsif", "rescue", "ensure"].contains { startsDirective(text, $0) }
+                        && branchOpensNoBlock(text))
             }
             guard let opener, indent(of: lines[opener].text) == indent(of: line),
                 ["case", "begin"].contains(where: {
