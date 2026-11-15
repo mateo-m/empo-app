@@ -295,8 +295,27 @@ final class GameScriptProfileTests: XCTestCase {
         }
     }
 
+    func testBlockDefaultInAConfigScriptOutranksABundledRuby18DLL() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("msvcrt-ruby187.dll"))
+        try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "{\"preloadScript\": \"Correction.rb\"}".write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try "list.each do |hwnd = 0|\nend\n".write(
+            to: dir.appendingPathComponent("Correction.rb"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: true))
+    }
+
     func testBlockDefaultOverTwoLinesRoutesToRuby31Legacy() throws {
-        for source in ["list.each do |first,\n  hwnd = 0|\nend\n", "list.each { |hwnd =\n  0| hwnd }\n"] {
+        for source in [
+            "list.each do |first,\n  hwnd = 0|\nend\n", "list.each { |hwnd =\n  0| hwnd }\n", "list.each do\n  |hwnd = 0|\nend\n",
+        ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(

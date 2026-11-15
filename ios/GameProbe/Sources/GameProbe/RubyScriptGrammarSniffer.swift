@@ -379,7 +379,7 @@ public enum RubyScriptGrammarSniffer {
     /// A block parameter with a default value (1.9+), as in
     /// `do |hwnd = 0|`. Ruby 1.8 stops with a SyntaxError on it.
     private static let blockParameterDefault = try? NSRegularExpression(
-        pattern: #"(?:\bdo|\{)[ \t]*\|[^|]*\b\w+\s*=(?![=~>])[^|]*\|"#)
+        pattern: #"(?:\bdo|\{)\s*\|[^|]*\b\w+\s*=(?![=~>])[^|]*\|"#)
 
     private static func startsFrozen(_ script: String) -> Bool {
         for line in script.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {

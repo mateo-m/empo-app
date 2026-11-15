@@ -131,7 +131,6 @@ public enum GameScriptProfile {
         // Ruby 1.8 and 1.9 cannot parse modern grammar, so modern
         // source outranks a bundled 1.8 or 1.9 DLL.
         if grammar == .modern { return 31 }
-        if let bundledRuby = runtime.dispatchVersion { return bundledRuby }
 
         let archiveRuby: Int? =
             switch topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
@@ -146,7 +145,8 @@ public enum GameScriptProfile {
             default: nil
             }
         let ruby =
-            (grammar == .inconclusive ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
+            runtime.dispatchVersion
+            ?? (grammar == .inconclusive ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
             ?? archiveRuby ?? libraryRuby ?? 31
         // Ruby 1.8 has neither the methods nor the grammar of mixed source.
         return grammar == .mixed && ruby == 18 ? 31 : ruby
