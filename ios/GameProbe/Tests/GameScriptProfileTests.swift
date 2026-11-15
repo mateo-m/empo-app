@@ -739,6 +739,9 @@ final class GameScriptProfileTests: XCTestCase {
         EOS
         note = %q(use .force_encoding)
         rate = total % (Encoding::UTF_8 rescue 1) if defined? Encoding
+        if defined?(Encoding) && mode == :utf8
+          s = s.force_encoding('UTF-8')
+        end
 
         """.write(
             to: scripts.appendingPathComponent("Util.rb"), atomically: true, encoding: .utf8)
@@ -778,6 +781,7 @@ final class GameScriptProfileTests: XCTestCase {
             def self.encode(str, from, to, dchar=nil, dflag=nil)
               case to
               when 20127; str.force_encoding('US-ASCII')
+              # UTF-8
               when 65001; str.force_encoding('UTF-8')
               when    -1; str.force_encoding('UTF-16LE')
               end if vxace?

@@ -485,15 +485,15 @@ public enum RubyScriptGrammarSniffer {
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
-    /// its body on 1.8. So does a comparison such as `== false`. Group 1
-    /// is the receiver of `respond_to?`.
+    /// its body on 1.8. So does a comparison of the check itself, such as
+    /// `vxace? == false`. Group 1 is the receiver of `respond_to?`.
     /// Zeus81's `vxace?` is false only on RPG Maker XP's own Ruby 1.8.1.
     /// On Empo's 1.8.8 it is true and a 1.9 call under it raises, but
     /// Pokemon Xenoverse ships these scripts and runs on Ruby 1.8.7 in
     /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?)(?![^#;]*(?:\|\||\bor\b|[=!]=))"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?)(?![^#;]*(?:\|\||\bor\b))(?!\s*\)?\s*[=!]=)"#
     )
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
@@ -553,7 +553,10 @@ public enum RubyScriptGrammarSniffer {
             guard !covers.isEmpty else { continue }
             let opener = lines[..<number].lastIndex { candidate in
                 let text = candidate.text.trimmingCharacters(in: .whitespaces)
-                return candidate.kind == .code && !text.isEmpty
+                return candidate.kind == .code
+                    && candidate.units.indices.contains {
+                        candidate.code[$0] && !candidate.units[$0].isWhitespace && candidate.units[$0] != "#"
+                    }
                     && indent(of: candidate.text) <= indent(of: line)
                     && !["when", "else", "elsif", "rescue", "ensure"].contains { startsDirective(text, $0) }
             }
