@@ -486,9 +486,11 @@ public enum RubyScriptGrammarSniffer {
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
     /// its body on 1.8. Group 1 is the receiver of `respond_to?`.
+    /// Zeus81's scripts call 1.9 methods only under `vxace?`, their
+    /// RPG Maker VX Ace check, so they also run on XP (Pokemon Xenoverse).
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?)(?![^#;]*(?:\|\||\bor\b))"#
     )
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
@@ -520,21 +522,52 @@ public enum RubyScriptGrammarSniffer {
             let receiver = String(units[start..<call.location])
             return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
         }
+        func codeMatches(_ regex: NSRegularExpression, in scanned: ScannedLine) -> [NSTextCheckingResult] {
+            regex.matches(in: scanned.text, range: NSRange(scanned.text.startIndex..., in: scanned.text))
+                .filter { scanned.code[$0.range.location] }
+        }
+        func cover(of match: NSTextCheckingResult, in line: String) -> Cover {
+            Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
+                ?? ((line as NSString).substring(with: match.range).contains("respond_to")
+                    ? .receiver("self") : .all)
+        }
+        func indent(of line: String) -> Int { line.prefix { $0 == " " || $0 == "\t" }.count }
+        func closes(_ text: String) -> Bool {
+            ["end", "else", "elsif"].contains { text.hasPrefix($0) }
+        }
+        let lines = scanLines(source)
+        // In `case ... end if vxace?`, the guard on the end line covers the
+        // block from the line at the same indent that opens it.
+        var endGuards = [[Cover]](repeating: [], count: lines.count)
+        for (number, scanned) in lines.enumerated() where scanned.kind == .code {
+            let line = scanned.text
+            let covers = codeMatches(ruby19Guard, in: scanned)
+                .filter {
+                    (line as NSString).substring(to: $0.range.location).trimmingCharacters(in: .whitespaces)
+                        == "end"
+                }
+                .map { cover(of: $0, in: line) }
+            guard !covers.isEmpty else { continue }
+            let opener = lines[..<number].lastIndex { candidate in
+                let text = candidate.text.trimmingCharacters(in: .whitespaces)
+                return candidate.kind == .code && !text.isEmpty
+                    && indent(of: candidate.text) <= indent(of: line)
+                    && !["when", "else", "elsif", "rescue", "ensure"].contains { text.hasPrefix($0) }
+            }
+            guard let opener, indent(of: lines[opener].text) == indent(of: line) else { continue }
+            for inside in opener..<number { endGuards[inside] += covers }
+        }
         var blocks: [(indent: Int, cover: Cover)] = []
-        for scanned in scanLines(source) {
+        for (number, scanned) in lines.enumerated() {
             let line = scanned.text
             let units = scanned.units
-            let code = scanned.code
-            let range = NSRange(line.startIndex..., in: line)
-            func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
-                regex.matches(in: line, range: range).filter { code[$0.range.location] }
-            }
+            let outer = blocks.map(\.cover) + endGuards[number]
             switch scanned.kind {
             case .skipped:
                 continue
             case .heredocBody:
-                if codeMatches(ruby19Call).contains(where: {
-                    !covered($0.range, in: units, by: blocks.map(\.cover))
+                if codeMatches(ruby19Call, in: scanned).contains(where: {
+                    !covered($0.range, in: units, by: outer)
                 }) {
                     return true
                 }
@@ -543,34 +576,29 @@ public enum RubyScriptGrammarSniffer {
                 break
             }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let indent = line.prefix { $0 == " " || $0 == "\t" }.count
-            func closes(_ text: String) -> Bool {
-                ["end", "else", "elsif"].contains { text.hasPrefix($0) }
-            }
-            if let last = blocks.last, indent == last.indent && closes(trimmed) {
+            let lineIndent = indent(of: line)
+            if let last = blocks.last, lineIndent == last.indent && closes(trimmed) {
                 blocks.removeLast()
             }
-            let guards = codeMatches(ruby19Guard)
-            let calls = codeMatches(ruby19Call)
+            let guards = codeMatches(ruby19Guard, in: scanned)
+            let calls = codeMatches(ruby19Call, in: scanned)
             var inline: [Cover] = []
             var start = 0
-            let ends = units.indices.filter { units[$0] == ";" && code[$0] } + [units.count]
-            for (number, end) in ends.enumerated() {
+            let ends = units.indices.filter { units[$0] == ";" && scanned.code[$0] } + [units.count]
+            for (segment, end) in ends.enumerated() {
                 defer { start = end + 1 }
                 let text = String(units[start..<end]).trimmingCharacters(in: .whitespaces)
                 if !inline.isEmpty && closes(text) { inline.removeAll() }
-                let own = guards.filter { (start..<end).contains($0.range.location) }.map { match in
-                    Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
-                        ?? ((line as NSString).substring(with: match.range).contains("respond_to")
-                            ? .receiver("self") : .all)
+                let own = guards.filter { (start..<end).contains($0.range.location) }.map {
+                    cover(of: $0, in: line)
                 }
-                let covers = blocks.map(\.cover) + inline + own
+                let covers = blocks.map(\.cover) + endGuards[number] + inline + own
                 let open = calls.filter { (start..<end).contains($0.range.location) }
                 if open.contains(where: { !covered($0.range, in: units, by: covers) }) { return true }
                 let opensBlock = text.hasPrefix("if ") || text.hasPrefix("elsif ")
                 guard opensBlock && !text.hasSuffix("end"), !own.isEmpty else { continue }
-                if number == ends.count - 1 {
-                    blocks += own.map { (indent, $0) }
+                if segment == ends.count - 1 {
+                    blocks += own.map { (lineIndent, $0) }
                 } else {
                     inline += own
                 }
