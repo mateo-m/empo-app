@@ -81,7 +81,9 @@ public enum GameScriptProfile {
         let (grammar, core) = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
         let runtime = BundledRubyRuntime.scan(gameDirectory: gameDirectory, fm: fm)
         let ruby: Ruby
-        switch detectRubyVersion(gameDirectory: gameDirectory, grammar: grammar, runtime: runtime, fm: fm) {
+        switch detectRubyVersion(
+            gameDirectory: gameDirectory, grammar: grammar, core: core, runtime: runtime, fm: fm)
+        {
         case 18: ruby = .ruby18
         case 19: ruby = .ruby19
         default:
@@ -124,6 +126,7 @@ public enum GameScriptProfile {
     private static func detectRubyVersion(
         gameDirectory: URL,
         grammar: RubyScriptGrammarSniffer.Result,
+        core: RubyScriptGrammarSniffer.CoreScripts,
         runtime: BundledRubyRuntime,
         fm: FileManager
     ) -> Int {
@@ -145,7 +148,8 @@ public enum GameScriptProfile {
             }
         let ruby =
             runtime.dispatchVersion
-            ?? (grammar == .inconclusive ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
+            ?? (grammar == .inconclusive || core == .packed
+                ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
             ?? archiveRuby ?? libraryRuby ?? 31
         // Ruby 1.8 has neither the methods nor the grammar of mixed source.
         return grammar == .mixed && ruby == 18 ? 31 : ruby

@@ -337,6 +337,33 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: false))
     }
 
+    func testRuby19PluginCallsBesideAPackedArchiveIgnoreItsVXAceScriptsFile() throws {
+        let dir = try packedGame(plugins: ["s.force_encoding('UTF-8')\n"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.moveItem(
+            at: dir.appendingPathComponent("Data/Scripts.rxdata"),
+            to: dir.appendingPathComponent("Data/Scripts.rvdata2"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testRuby19CallsOutrankABundledRuby18DLL() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("msvcrt-ruby187.dll"))
+        try compiledScripts(["x = 1\n", "s.force_encoding('UTF-8')\n"])
+            .write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true))
+    }
+
     func testRuby19PluginCallsBesideAnEncryptedCoreKeepTheRuby3RuntimeChoice() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
