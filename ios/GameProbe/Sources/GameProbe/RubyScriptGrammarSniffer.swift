@@ -194,7 +194,7 @@ public enum RubyScriptGrammarSniffer {
     static func locateConfigScripts(in gameDirectory: URL, besides looseURLs: [URL], fm: FileManager) -> [URL]
     {
         guard let config = ManagedMkxpConfig.loadBaseDict(from: gameDirectory) else { return [] }
-        let loosePaths = Set(looseURLs.map { $0.resolvingSymlinksInPath().path })
+        var seenPaths = Set(looseURLs.map { $0.resolvingSymlinksInPath().path })
         return ["preloadScript", "postloadScript"]
             .flatMap { key -> [String] in
                 switch config[key] {
@@ -205,7 +205,7 @@ public enum RubyScriptGrammarSniffer {
             }
             .map { gameDirectory.appendingPathComponent($0) }
             .filter {
-                fm.fileExists(atPath: $0.path) && !loosePaths.contains($0.resolvingSymlinksInPath().path)
+                fm.fileExists(atPath: $0.path) && seenPaths.insert($0.resolvingSymlinksInPath().path).inserted
             }
     }
 
@@ -385,8 +385,10 @@ public enum RubyScriptGrammarSniffer {
 
     /// A block parameter with a default value (1.9+), as in
     /// `do |hwnd = 0|`. Ruby 1.8 stops with a SyntaxError on it.
+    /// `codeOnly` keeps the `#` of a comment, so a comment can sit
+    /// between `do` and the `|`.
     private static let blockParameterDefault = try? NSRegularExpression(
-        pattern: #"(?:\bdo|\{)\s*\|[^|]*\b\w+\s*=(?![=~>])[^|]*\|"#)
+        pattern: #"(?:\bdo|\{)[\s#]*\|[^|]*\b\w+\s*=(?![=~>])[^|]*\|"#)
 
     private static func startsFrozen(_ script: String) -> Bool {
         for line in script.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {

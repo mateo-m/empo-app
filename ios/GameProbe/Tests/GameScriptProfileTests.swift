@@ -372,6 +372,7 @@ final class GameScriptProfileTests: XCTestCase {
     func testBlockDefaultOverTwoLinesRoutesToRuby31Legacy() throws {
         for source in [
             "list.each do |first,\n  hwnd = 0|\nend\n", "list.each { |hwnd =\n  0| hwnd }\n", "list.each do\n  |hwnd = 0|\nend\n",
+            "list.each do # one window\n  |hwnd = 0|\nend\n",
         ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
@@ -396,6 +397,21 @@ final class GameScriptProfileTests: XCTestCase {
         try "a = b&.c\nh.except(:k)\n".write(
             to: scripts.appendingPathComponent("Fix.rb"), atomically: true, encoding: .utf8)
         try "{\"preloadScript\": [\"Scripts/Fix.rb\"]}".write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+    }
+
+    func testAConfigScriptListedTwiceCountsOnce() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Scripts.rxdata"))
+        try "a = b&.c\nh.except(:k)\n".write(
+            to: dir.appendingPathComponent("Fix.rb"), atomically: true, encoding: .utf8)
+        try "{\"preloadScript\": [\"Fix.rb\"], \"postloadScript\": \"./Fix.rb\"}".write(
             to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
