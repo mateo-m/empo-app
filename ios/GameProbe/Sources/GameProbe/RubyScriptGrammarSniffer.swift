@@ -485,11 +485,19 @@ public enum RubyScriptGrammarSniffer {
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
-    /// its body on 1.8. Group 1 is the receiver of `respond_to?`.
+    /// its body on 1.8. So does a comparison such as `vxace? == false`.
+    /// Group 1 is the receiver of `respond_to?`.
+    /// Zeus81's `vxace?` is false only on RPG Maker XP's own Ruby 1.8.1.
+    /// On Empo's 1.8.8 it is true and a 1.9 call under it raises, but
+    /// Pokemon Xenoverse ships these scripts and runs on Ruby 1.8.7 in
+    /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b)(?![^#;]*(?:\|\||\bor\b))"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+(?![\s)]*[=!]=))(?![^#;]*(?:\|\||\bor\b))"#
     )
+
+    private static let branchBlockStart = try? NSRegularExpression(
+        pattern: #";\s*(?:begin|case|if|unless|while|until)\b|\bdo\b"#)
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
     private static let heredocStart = try? NSRegularExpression(
@@ -520,21 +528,63 @@ public enum RubyScriptGrammarSniffer {
             let receiver = String(units[start..<call.location])
             return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
         }
+        func codeMatches(_ regex: NSRegularExpression, in scanned: ScannedLine) -> [NSTextCheckingResult] {
+            regex.matches(in: scanned.text, range: NSRange(scanned.text.startIndex..., in: scanned.text))
+                .filter { scanned.code[$0.range.location] }
+        }
+        func cover(of match: NSTextCheckingResult, in line: String) -> Cover {
+            Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
+                ?? ((line as NSString).substring(with: match.range).contains("respond_to")
+                    ? .receiver("self") : .all)
+        }
+        // `when 2; begin` opens a block of its own, so the search stops there.
+        func branchOpensNoBlock(_ text: String) -> Bool {
+            branchBlockStart?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) == nil
+        }
+        func indent(of line: String) -> Int { line.prefix { $0 == " " || $0 == "\t" }.count }
+        func closes(_ text: String) -> Bool {
+            ["end", "else", "elsif"].contains { text.hasPrefix($0) }
+        }
+        let lines = scanLines(source)
+        // In `case ... end if vxace?`, the guard on the end line covers the
+        // `case` or `begin` block at the same indent.
+        var endGuards = [[Cover]](repeating: [], count: lines.count)
+        for (number, scanned) in lines.enumerated() where scanned.kind == .code {
+            let line = scanned.text
+            let covers = codeMatches(ruby19Guard, in: scanned)
+                .filter {
+                    (line as NSString).substring(to: $0.range.location).trimmingCharacters(in: .whitespaces)
+                        == "end"
+                }
+                .map { cover(of: $0, in: line) }
+            guard !covers.isEmpty else { continue }
+            let opener = lines[..<number].lastIndex { candidate in
+                let text = candidate.text.trimmingCharacters(in: .whitespaces)
+                return candidate.kind == .code
+                    && candidate.units.indices.contains {
+                        candidate.code[$0] && !candidate.units[$0].isWhitespace && candidate.units[$0] != "#"
+                    }
+                    && indent(of: candidate.text) <= indent(of: line)
+                    && !(["when", "else", "elsif", "rescue", "ensure"].contains { startsDirective(text, $0) }
+                        && branchOpensNoBlock(text))
+            }
+            guard let opener, indent(of: lines[opener].text) == indent(of: line),
+                ["case", "begin"].contains(where: {
+                    startsDirective(String(withoutIndent(lines[opener].text)), $0)
+                })
+            else { continue }
+            for inside in opener..<number { endGuards[inside] += covers }
+        }
         var blocks: [(indent: Int, cover: Cover)] = []
-        for scanned in scanLines(source) {
+        for (number, scanned) in lines.enumerated() {
             let line = scanned.text
             let units = scanned.units
-            let code = scanned.code
-            let range = NSRange(line.startIndex..., in: line)
-            func codeMatches(_ regex: NSRegularExpression) -> [NSTextCheckingResult] {
-                regex.matches(in: line, range: range).filter { code[$0.range.location] }
-            }
             switch scanned.kind {
             case .skipped:
                 continue
             case .heredocBody:
-                if codeMatches(ruby19Call).contains(where: {
-                    !covered($0.range, in: units, by: blocks.map(\.cover))
+                if codeMatches(ruby19Call, in: scanned).contains(where: {
+                    !covered($0.range, in: units, by: blocks.map(\.cover) + endGuards[number])
                 }) {
                     return true
                 }
@@ -543,34 +593,29 @@ public enum RubyScriptGrammarSniffer {
                 break
             }
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            let indent = line.prefix { $0 == " " || $0 == "\t" }.count
-            func closes(_ text: String) -> Bool {
-                ["end", "else", "elsif"].contains { text.hasPrefix($0) }
-            }
-            if let last = blocks.last, indent == last.indent && closes(trimmed) {
+            let lineIndent = indent(of: line)
+            if let last = blocks.last, lineIndent == last.indent && closes(trimmed) {
                 blocks.removeLast()
             }
-            let guards = codeMatches(ruby19Guard)
-            let calls = codeMatches(ruby19Call)
+            let guards = codeMatches(ruby19Guard, in: scanned)
+            let calls = codeMatches(ruby19Call, in: scanned)
             var inline: [Cover] = []
             var start = 0
-            let ends = units.indices.filter { units[$0] == ";" && code[$0] } + [units.count]
-            for (number, end) in ends.enumerated() {
+            let ends = units.indices.filter { units[$0] == ";" && scanned.code[$0] } + [units.count]
+            for (segment, end) in ends.enumerated() {
                 defer { start = end + 1 }
                 let text = String(units[start..<end]).trimmingCharacters(in: .whitespaces)
                 if !inline.isEmpty && closes(text) { inline.removeAll() }
-                let own = guards.filter { (start..<end).contains($0.range.location) }.map { match in
-                    Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
-                        ?? ((line as NSString).substring(with: match.range).contains("respond_to")
-                            ? .receiver("self") : .all)
+                let own = guards.filter { (start..<end).contains($0.range.location) }.map {
+                    cover(of: $0, in: line)
                 }
-                let covers = blocks.map(\.cover) + inline + own
+                let covers = blocks.map(\.cover) + endGuards[number] + inline + own
                 let open = calls.filter { (start..<end).contains($0.range.location) }
                 if open.contains(where: { !covered($0.range, in: units, by: covers) }) { return true }
                 let opensBlock = text.hasPrefix("if ") || text.hasPrefix("elsif ")
                 guard opensBlock && !text.hasSuffix("end"), !own.isEmpty else { continue }
-                if number == ends.count - 1 {
-                    blocks += own.map { (indent, $0) }
+                if segment == ends.count - 1 {
+                    blocks += own.map { (lineIndent, $0) }
                 } else {
                     inline += own
                 }

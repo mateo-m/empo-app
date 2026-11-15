@@ -739,6 +739,15 @@ final class GameScriptProfileTests: XCTestCase {
         EOS
         note = %q(use .force_encoding)
         rate = total % (Encoding::UTF_8 rescue 1) if defined? Encoding
+        if defined?(Encoding) && mode == :utf8
+          s = s.force_encoding('UTF-8')
+        end
+        if defined?(Encoding) != nil
+          s = s.force_encoding('UTF-8')
+        end
+        if s.respond_to?(:force_encoding) == true
+          s = s.force_encoding('UTF-8')
+        end
 
         """.write(
             to: scripts.appendingPathComponent("Util.rb"), atomically: true, encoding: .utf8)
@@ -746,6 +755,78 @@ final class GameScriptProfileTests: XCTestCase {
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
         XCTAssertEqual(profile.grammar, .legacy)
         XCTAssertEqual(profile.ruby.code, 18)
+    }
+
+    /// Sentry EMPO-APP-V: Pokemon Xenoverse ships Zeus81's Bitmap Export
+    /// and Video Player, which call 1.9 methods only when `vxace?`.
+    func testRuby19CallsUnderTheVXAceCheckStayOnRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Data/Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nLibrary=RGSS102E.dll\nScripts=Data\\Scripts.rxdata\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        def xp?() false end; alias vx? xp?; alias vxace? xp?
+        RUBY_VERSION == '1.8.1' ? defined?(Hangup) ?
+        def xp?() true  end : def vx?() true  end : def vxace?() true  end
+          def _dump(level)
+            get_data_ptr do |data|
+              dump = Marshal.dump([width, height, Zlib::Deflate.deflate(data, 9)])
+              dump.force_encoding('UTF-8') if vxace?
+              dump
+            end
+          end
+
+        """.write(
+            to: scripts.appendingPathComponent("247_BitmapExporter.rb"), atomically: true, encoding: .utf8)
+        try """
+            def self.encode(str, from, to, dchar=nil, dflag=nil)
+              case to
+              when 20127; str.force_encoding('US-ASCII')
+              # UTF-8
+              when 65001; str.force_encoding('UTF-8')
+              when    -1; str.force_encoding('UTF-16LE')
+              end if vxace?
+              str
+            end
+
+        """.replacingOccurrences(of: "\n", with: "\r\n").write(
+            to: scripts.appendingPathComponent("238_ZeusVideoPlayer.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.ruby, .ruby18)
+    }
+
+    func testRuby19CallsInABlockThatEndsWithAnotherConditionRouteToRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        for source in [
+            "case to\nwhen 1; s.force_encoding('UTF-8')\nend if s\n",
+            "begin\n  s.force_encoding('UTF-8')\nend unless vxace?\n",
+            "def encode(s)\n  s.force_encoding('UTF-8')\n    end if vxace?\n",
+            "s.force_encoding('UTF-8')\n  case to\n  when 1; x\nend if vxace?\n",
+            "def f(s)\n  s.force_encoding('UTF-8')\n  whenever = [1].each do |v|\n    v\n  end if vxace?\nend\n",
+            "if vxace? == false\n  s.force_encoding('UTF-8')\nend\n",
+            "if vxace?() != true\n  s.force_encoding('UTF-8')\nend\n",
+            "s.force_encoding('UTF-8') if (vxace?) == false\n",
+            "if (vxace?()) != true\n  s.force_encoding('UTF-8')\nend\n",
+            "case mode\nwhen 1; s.force_encoding('UTF-8')\nwhen 2; begin\n  work\nend if vxace?\nend\n",
+        ] {
+            try source.write(to: scripts.appendingPathComponent("Text.rb"), atomically: true, encoding: .utf8)
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31, source)
+        }
     }
 
     func testRuby19CallOnTheEndLineOfABlockCommentStaysOnRuby18() throws {
