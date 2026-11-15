@@ -52,15 +52,21 @@ public enum RubyScriptGrammarSniffer {
         case inconclusive
     }
 
+    enum CoreScripts: Equatable, Sendable {
+        case read
+        /// A `Data/*.fpk` archive holds them, so the sniffer skipped them.
+        case packed
+        case unread
+    }
+
     /// Sniffs a game directory. The sniffer reads loose `.rb`
     /// files first. The mkxp-z runtime loads those on top of the
     /// compiled Scripts.rxdata, so they are the live source for
     /// forks that ship both. The sniffer then falls back to the
     /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file, unless a
     /// packed script archive makes that file a stale bootstrap.
-    /// It runs the grammar classifier on those scripts. `packedCore`
-    /// is true when a packed archive kept the sniffer from the core.
-    static func sniff(gameDirectory: URL) -> (result: Result, packedCore: Bool) {
+    /// It runs the grammar classifier on those scripts.
+    static func sniff(gameDirectory: URL) -> (result: Result, core: CoreScripts) {
         let fm = FileManager.default
 
         // Loose .rb files take priority. Forks like Pokemon Reborn
@@ -75,7 +81,7 @@ public enum RubyScriptGrammarSniffer {
         if !looseURLs.isEmpty {
             let scripts = readLooseScripts(urls: looseURLs)
             if !scripts.isEmpty {
-                return (classify(scripts: scripts + extras), false)
+                return (classify(scripts: scripts + extras), .read)
             }
         }
 
@@ -85,7 +91,7 @@ public enum RubyScriptGrammarSniffer {
         // Scripts file next to it is a small bootstrap, not the
         // live source, so the sniffer must not classify it.
         if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
-            return (classifyExtrasAlone(extras), true)
+            return (classifyExtrasAlone(extras), .packed)
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
@@ -94,9 +100,9 @@ public enum RubyScriptGrammarSniffer {
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
             let scripts = decodeScripts(at: url)
         else {
-            return (classifyExtrasAlone(extras), false)
+            return (classifyExtrasAlone(extras), .unread)
         }
-        return (classify(scripts: scripts + extras), false)
+        return (classify(scripts: scripts + extras), .read)
     }
 
     /// Without the core scripts, legacy-looking plugin or config script

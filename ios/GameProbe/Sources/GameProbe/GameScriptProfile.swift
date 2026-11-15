@@ -78,7 +78,7 @@ public enum GameScriptProfile {
     /// syntax-transform hints.
     public static func analyze(gameDirectory: URL) -> Result {
         let fm = FileManager.default
-        let (grammar, packedCore) = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
+        let (grammar, core) = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
         let runtime = BundledRubyRuntime.scan(gameDirectory: gameDirectory, fm: fm)
         let ruby: Ruby
         switch detectRubyVersion(gameDirectory: gameDirectory, grammar: grammar, runtime: runtime, fm: fm) {
@@ -88,7 +88,7 @@ public enum GameScriptProfile {
             let modern = detectModernRubyScripts(
                 grammar: grammar,
                 runtime: runtime,
-                packedCore: packedCore
+                core: core
             )
             ruby = .ruby31(convertLegacy: !modern)
         }
@@ -164,19 +164,19 @@ public enum GameScriptProfile {
     private static func detectModernRubyScripts(
         grammar: RubyScriptGrammarSniffer.Result,
         runtime: BundledRubyRuntime,
-        packedCore: Bool
+        core: RubyScriptGrammarSniffer.CoreScripts
     ) -> Bool {
         switch grammar {
         case .modern:
             return true
         case .legacy:
             return false
-        case .mixed:
-            // With a packed core, only plugin or mkxp.json scripts give
-            // mixed. The sniffer did not read the core, so packaging decides.
-            return packedCore
-        case .inconclusive:
-            return runtime.embedsRuby3 || packedCore
+        case .mixed where core == .read:
+            return false
+        case .mixed, .inconclusive:
+            // Without the core, mixed comes from plugin or mkxp.json scripts
+            // alone. It rules out Ruby 1.8, but packaging picks the transform.
+            return runtime.embedsRuby3 || core == .packed
         }
     }
 

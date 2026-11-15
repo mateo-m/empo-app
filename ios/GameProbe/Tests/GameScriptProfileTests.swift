@@ -337,6 +337,24 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: false))
     }
 
+    func testRuby19PluginCallsBesideAnEncryptedCoreKeepTheRuby3RuntimeChoice() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Game.rgssad"))
+        try Data("stub ruby 3.1.0p0 (2021-12-25) [x64-mingw32]".utf8)
+            .write(to: dir.appendingPathComponent("x64-msvcrt-ruby310.dll"))
+        try pluginScripts(["s.force_encoding('UTF-8')\n"])
+            .write(to: dir.appendingPathComponent("Data/PluginScripts.rxdata"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
     func testMixedLooseScriptsBesideAPackedArchiveKeepTheLegacyTransform() throws {
         let dir = try packedGame(plugins: ["x = 1\n"])
         defer { try? FileManager.default.removeItem(at: dir) }
