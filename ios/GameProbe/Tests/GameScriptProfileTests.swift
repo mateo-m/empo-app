@@ -820,6 +820,8 @@ final class GameScriptProfileTests: XCTestCase {
             "def f(s)\n  s.force_encoding('UTF-8')\n  whenever = [1].each do |v|\n    v\n  end if vxace?\nend\n",
             "if vxace? == false\n  s.force_encoding('UTF-8')\nend\n",
             "if vxace?() != true\n  s.force_encoding('UTF-8')\nend\n",
+            "s.force_encoding('UTF-8') if (vxace?) == false\n",
+            "if (vxace?()) != true\n  s.force_encoding('UTF-8')\nend\n",
             "case mode\nwhen 1; s.force_encoding('UTF-8')\nwhen 2; begin\n  work\nend if vxace?\nend\n",
         ] {
             try source.write(to: scripts.appendingPathComponent("Text.rb"), atomically: true, encoding: .utf8)
