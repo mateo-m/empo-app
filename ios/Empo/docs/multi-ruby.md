@@ -60,7 +60,7 @@ The app does not know these keys. Only `MkxpCore` sends them, and `mkxp_setSetti
 
 ### Detection
 
-`ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` decides which Ruby runs a game (one directory walk). The result is `GameScriptProfile.Ruby`: `ruby18`, `ruby19`, or `ruby31(convertLegacy:)`. Only Ruby 3.1 has a syntax transform, so only Ruby 3.1 has a legacy or modern mode. Modern grammar from step 2 always gives Ruby 3.1, because Ruby 1.8 and 1.9 cannot parse it. Mixed source from step 2 never runs on Ruby 1.8: a result of 18 from any step becomes 31 with the legacy transform. Beside a `Data/*.fpk` archive, the `.fpk` archive turns the legacy transform off, because the sniffer cannot read the core scripts. Otherwise the first decisive signal of this decision tree wins:
+`ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` decides which Ruby runs a game (one directory walk). The result is `GameScriptProfile.Ruby`: `ruby18`, `ruby19`, or `ruby31(convertLegacy:)`. Only Ruby 3.1 has a syntax transform, so only Ruby 3.1 has a legacy or modern mode. Modern grammar from step 2 always gives Ruby 3.1, because Ruby 1.8 and 1.9 cannot parse it. Mixed source from step 2 never runs on Ruby 1.8: a result of 18 from any step becomes 31 with the legacy transform. When a `Data/*.fpk` archive holds the core scripts and no loose `.rb` files replace them, the sniffer cannot read the core, so the archive turns the legacy transform off. Otherwise the first decisive signal of this decision tree wins:
 
 1. **Bundled `*-rubyXYZ.dll`** at the project root: `x64-msvcrt-ruby310.dll`, `msvcrt-ruby187.dll`, `ruby193.dll`, etc. The three-digit suffix decodes:
    - `1, 8` → 18

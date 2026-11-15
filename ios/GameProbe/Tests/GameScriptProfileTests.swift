@@ -337,6 +337,20 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: false))
     }
 
+    func testMixedLooseScriptsBesideAPackedArchiveKeepTheLegacyTransform() throws {
+        let dir = try packedGame(plugins: ["x = 1\n"])
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        try "case x\nwhen 1: y\nend\ns.force_encoding('UTF-8')\n".write(
+            to: scripts.appendingPathComponent("Main.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true))
+    }
+
     func testBlockDefaultOverTwoLinesRoutesToRuby31Legacy() throws {
         for source in [
             "list.each do |first,\n  hwnd = 0|\nend\n", "list.each { |hwnd =\n  0| hwnd }\n", "list.each do\n  |hwnd = 0|\nend\n",

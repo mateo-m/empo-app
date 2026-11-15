@@ -78,7 +78,7 @@ public enum GameScriptProfile {
     /// syntax-transform hints.
     public static func analyze(gameDirectory: URL) -> Result {
         let fm = FileManager.default
-        let grammar = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
+        let (grammar, packedCore) = RubyScriptGrammarSniffer.sniff(gameDirectory: gameDirectory)
         let runtime = BundledRubyRuntime.scan(gameDirectory: gameDirectory, fm: fm)
         let ruby: Ruby
         switch detectRubyVersion(gameDirectory: gameDirectory, grammar: grammar, runtime: runtime, fm: fm) {
@@ -88,8 +88,7 @@ public enum GameScriptProfile {
             let modern = detectModernRubyScripts(
                 grammar: grammar,
                 runtime: runtime,
-                packedScripts: RubyScriptGrammarSniffer.hasPackedScriptArchive(
-                    in: gameDirectory, fm: fm)
+                packedCore: packedCore
             )
             ruby = .ruby31(convertLegacy: !modern)
         }
@@ -165,7 +164,7 @@ public enum GameScriptProfile {
     private static func detectModernRubyScripts(
         grammar: RubyScriptGrammarSniffer.Result,
         runtime: BundledRubyRuntime,
-        packedScripts: Bool
+        packedCore: Bool
     ) -> Bool {
         switch grammar {
         case .modern:
@@ -173,11 +172,11 @@ public enum GameScriptProfile {
         case .legacy:
             return false
         case .mixed:
-            // Beside a packed archive, only plugin or mkxp.json scripts give
-            // mixed. The core scripts stay unread, so packaging decides.
-            return packedScripts
+            // With a packed core, only plugin or mkxp.json scripts give
+            // mixed. The sniffer did not read the core, so packaging decides.
+            return packedCore
         case .inconclusive:
-            return runtime.embedsRuby3 || packedScripts
+            return runtime.embedsRuby3 || packedCore
         }
     }
 

@@ -58,8 +58,9 @@ public enum RubyScriptGrammarSniffer {
     /// forks that ship both. The sniffer then falls back to the
     /// compiled `Scripts.{rxdata,rvdata,rvdata2}` file, unless a
     /// packed script archive makes that file a stale bootstrap.
-    /// It runs the grammar classifier on those scripts.
-    static func sniff(gameDirectory: URL) -> Result {
+    /// It runs the grammar classifier on those scripts. `packedCore`
+    /// is true when a packed archive kept the sniffer from the core.
+    static func sniff(gameDirectory: URL) -> (result: Result, packedCore: Bool) {
         let fm = FileManager.default
 
         // Loose .rb files take priority. Forks like Pokemon Reborn
@@ -74,7 +75,7 @@ public enum RubyScriptGrammarSniffer {
         if !looseURLs.isEmpty {
             let scripts = readLooseScripts(urls: looseURLs)
             if !scripts.isEmpty {
-                return classify(scripts: scripts + extras)
+                return (classify(scripts: scripts + extras), false)
             }
         }
 
@@ -84,7 +85,7 @@ public enum RubyScriptGrammarSniffer {
         // Scripts file next to it is a small bootstrap, not the
         // live source, so the sniffer must not classify it.
         if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
-            return classifyExtrasAlone(extras)
+            return (classifyExtrasAlone(extras), true)
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
@@ -93,9 +94,9 @@ public enum RubyScriptGrammarSniffer {
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
             let scripts = decodeScripts(at: url)
         else {
-            return classifyExtrasAlone(extras)
+            return (classifyExtrasAlone(extras), false)
         }
-        return classify(scripts: scripts + extras)
+        return (classify(scripts: scripts + extras), false)
     }
 
     /// Without the core scripts, legacy-looking plugin or config script
@@ -121,7 +122,7 @@ public enum RubyScriptGrammarSniffer {
 
     /// True when `Data/` holds a packed script archive. Vanilla
     /// RPG Maker never uses `.fpk`.
-    static func hasPackedScriptArchive(in gameDirectory: URL, fm: FileManager) -> Bool {
+    private static func hasPackedScriptArchive(in gameDirectory: URL, fm: FileManager) -> Bool {
         let dataDir = gameDirectory.appendingPathComponent("Data")
         return !dataDir.directoryEntries(matchingExtensions: ["fpk"], fm: fm).isEmpty
     }
