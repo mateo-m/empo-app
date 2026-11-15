@@ -595,7 +595,7 @@ public enum ManagedMkxpConfig {
         JSON5LiteParser.parseObject(raw)
     }
 
-    private static func loadBaseDict(from gameDirectory: URL) -> [String: Any]? {
+    static func loadBaseDict(from gameDirectory: URL) -> [String: Any]? {
         let devURL = devConfigURL(in: gameDirectory)
         guard FileManager.default.fileExists(atPath: devURL.path),
             let raw = try? String(contentsOf: devURL, encoding: .utf8),

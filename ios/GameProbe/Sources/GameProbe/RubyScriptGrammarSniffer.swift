@@ -37,7 +37,8 @@ public enum RubyScriptGrammarSniffer {
         case legacy
 
         /// Legacy grammar that also calls Ruby 1.9+ methods, such as
-        /// `force_encoding`. Ruby 1.8 lacks the methods, and plain
+        /// `force_encoding`, or has a 1.9 block parameter default.
+        /// Ruby 1.8 lacks the methods and the grammar, and plain
         /// Ruby 3.1 rejects the grammar, so only Ruby 3.1 with the
         /// legacy syntax transform runs it (Vinemon Sauce Edition).
         case mixed
@@ -66,12 +67,14 @@ public enum RubyScriptGrammarSniffer {
         // Forks like Pokemon Infinite Fusion ship loose scripts
         // next to a stale compiled Scripts.rxdata. The loose files
         // are the live runtime. The .rxdata is a leftover.
-        let plugins = decodePluginScripts(in: gameDirectory) ?? []
+        let extras =
+            (decodePluginScripts(in: gameDirectory) ?? [])
+            + readLooseScripts(urls: locateConfigScripts(in: gameDirectory, fm: fm))
         let looseURLs = locateLooseScripts(in: gameDirectory, fm: fm)
         if !looseURLs.isEmpty {
             let scripts = readLooseScripts(urls: looseURLs)
             if !scripts.isEmpty {
-                return classify(scripts: scripts + plugins)
+                return classify(scripts: scripts + extras)
             }
         }
 
@@ -81,7 +84,7 @@ public enum RubyScriptGrammarSniffer {
         // Scripts file next to it is a small bootstrap, not the
         // live source, so the sniffer must not classify it.
         if hasPackedScriptArchive(in: gameDirectory, fm: fm) {
-            return classifyPluginsAlone(plugins)
+            return classifyExtrasAlone(extras)
         }
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
@@ -90,15 +93,16 @@ public enum RubyScriptGrammarSniffer {
         guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
             let scripts = decodeScripts(at: url)
         else {
-            return classifyPluginsAlone(plugins)
+            return classifyExtrasAlone(extras)
         }
-        return classify(scripts: scripts + plugins)
+        return classify(scripts: scripts + extras)
     }
 
-    /// Without the core scripts, only modern plugin code is a sure
-    /// signal. Legacy-looking plugins say nothing about the core.
-    private static func classifyPluginsAlone(_ plugins: [String]) -> Result {
-        plugins.isEmpty || classify(scripts: plugins) != .modern ? .inconclusive : .modern
+    /// Without the core scripts, only modern plugin or config script
+    /// code is a sure signal. Legacy-looking code says nothing about
+    /// the core.
+    private static func classifyExtrasAlone(_ extras: [String]) -> Result {
+        extras.isEmpty || classify(scripts: extras) != .modern ? .inconclusive : .modern
     }
 
     // MARK: - File location
@@ -174,6 +178,23 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         return found
+    }
+
+    /// The files that the game's `mkxp.json` names in `preloadScript`
+    /// and `postloadScript`, as one string or an array. The engine
+    /// runs them before and after the Scripts file, from any folder.
+    static func locateConfigScripts(in gameDirectory: URL, fm: FileManager) -> [URL] {
+        guard let config = ManagedMkxpConfig.loadBaseDict(from: gameDirectory) else { return [] }
+        return ["preloadScript", "postloadScript"]
+            .flatMap { key -> [String] in
+                switch config[key] {
+                case let name as String: [name]
+                case let names as [Any]: names.compactMap { $0 as? String }
+                default: []
+                }
+            }
+            .map { gameDirectory.appendingPathComponent($0) }
+            .filter { fm.fileExists(atPath: $0.path) }
     }
 
     /// Reads up to `maxLooseFiles` `.rb` files.
@@ -346,8 +367,14 @@ public enum RubyScriptGrammarSniffer {
             hits += regex.numberOfMatches(in: code, range: range)
         }
         if hits >= modernThreshold { return .modern }
+        if blockParameterDefault?.firstMatch(in: code, range: range) != nil { return .mixed }
         return scripts.contains(where: callsRuby19Methods) ? .mixed : .legacy
     }
+
+    /// A block parameter with a default value (1.9+), as in
+    /// `do |hwnd = 0|`. Ruby 1.8 stops with a SyntaxError on it.
+    private static let blockParameterDefault = try? NSRegularExpression(
+        pattern: #"(?:\bdo|\{)[ \t]*\|[^|\n]*\b\w+[ \t]*=(?![=~>])[^|\n]*\|"#)
 
     private static func startsFrozen(_ script: String) -> Bool {
         for line in script.split(separator: "\n", omittingEmptySubsequences: false).map(String.init) {

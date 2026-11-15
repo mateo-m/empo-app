@@ -43,9 +43,12 @@ public enum GameScriptProfile {
         /// Modern grammar outranks a bundled Ruby 1.8 or 1.9 DLL, and
         /// only a Ruby 3.1 game has a syntax transform.
         case oneRubyChoice = "one-ruby-choice"
+        /// The scan also reads the scripts that `mkxp.json` names, and a
+        /// block parameter default reads as Ruby 1.9 grammar.
+        case configScripts = "config-scripts"
     }
 
-    public static let currentSchema: Schema = .oneRubyChoice
+    public static let currentSchema: Schema = .configScripts
 
     /// The Ruby that runs the game. Only Ruby 3.1 has the syntax
     /// transform, so only Ruby 3.1 has a legacy or modern mode.
@@ -112,6 +115,8 @@ public enum GameScriptProfile {
             extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
             + files(in: "Data", named: scripts + ["PluginScripts.rxdata"], extensions: ["fpk"])
             + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
+            + files(in: "", named: ["mkxp.json"], extensions: [])
+            + RubyScriptGrammarSniffer.locateConfigScripts(in: gameDirectory, fm: fm)
     }
 
     // MARK: - Ruby version (formerly RubyVersionDetection)

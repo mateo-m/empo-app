@@ -65,14 +65,16 @@ final class GameScriptProfileTests: XCTestCase {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? fm.removeItem(at: dir) }
-        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/PluginScripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb"]
-        let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Data/Game.ini", "Data/x.dll", "a.fpk", "Graphics/Titles/t.png"]
+        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/PluginScripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb", "mkxp.json", "Fix/Early.rb", "Late.rb"]
+        let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Data/Game.ini", "Data/x.dll", "a.fpk", "Graphics/Titles/t.png", "preload.rb"]
         let files = read + unread
         for file in files {
             let url = dir.appendingPathComponent(file)
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data().write(to: url)
         }
+        try "{\"preloadScript\": [\"Fix/Early.rb\", \"Missing.rb\"], \"postloadScript\": \"Late.rb\"}".write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
 
         let inputs = Set(GameScriptProfile.inputFiles(gameDirectory: dir).map { $0.resolvingSymlinksInPath().path })
         let paths = files.map { dir.appendingPathComponent($0).resolvingSymlinksInPath().path }
@@ -242,6 +244,53 @@ final class GameScriptProfileTests: XCTestCase {
             to: scripts.appendingPathComponent("Window_Base.rb"), atomically: true, encoding: .utf8)
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 19)
+    }
+
+    /// Sentry EMPO-APP-10: a Pokemon Z copy with an extra `Correction.rb`
+    /// that only the game's `mkxp.json` names.
+    func testBlockDefaultInAConfigPreloadScriptRoutesToRuby31Legacy() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nLibrary=RGSS104E.dll\nScripts=Data\\Scripts.rxdata\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try compiledScripts(["class Game_System\n  def initialize\n  end\nend\n"])
+            .write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "{\n  \"preloadScript\": [\"Correction.rb\"],\n  // \"postloadScript\": \"Late.rb\",\n}\n".write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try """
+            begin
+              miniffi.define_singleton_method(:getWindowRect) do |hwnd = 0|
+                [0, 0, 640, 480]
+              end
+            rescue => e
+            end
+
+            """.write(to: dir.appendingPathComponent("Correction.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true))
+    }
+
+    func testBlockParametersWithoutADefaultStayOnRuby18() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts([
+            "list.each { |a| a = 1 }\nlist.each do |a, b| b == a end\nlist.each { |a| a |= 1 }\n",
+            "list.select { |a| a != 0 || a <= 2 }\n# list.each do |a = 0| end\nputs \"{ |a = 0| }\"\n",
+        ]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.ruby, .ruby18)
     }
 
     func testRuby19CallInsideStringInsertRoutesToRuby31() throws {
