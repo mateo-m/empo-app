@@ -110,13 +110,14 @@ public enum GameScriptProfile {
                     names.contains($0.lastPathComponent) || extensions.contains($0.pathExtension.lowercased())
                 }
         }
+        let looseScripts = RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
         return files(
             in: "", named: ["Game.ini"] + scripts,
             extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
             + files(in: "Data", named: scripts + ["PluginScripts.rxdata"], extensions: ["fpk"])
-            + RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
+            + looseScripts
             + files(in: "", named: ["mkxp.json"], extensions: [])
-            + RubyScriptGrammarSniffer.locateConfigScripts(in: gameDirectory, fm: fm)
+            + RubyScriptGrammarSniffer.locateConfigScripts(in: gameDirectory, besides: looseScripts, fm: fm)
     }
 
     // MARK: - Ruby version (formerly RubyVersionDetection)
@@ -129,43 +130,26 @@ public enum GameScriptProfile {
     ) -> Int {
         // Ruby 1.8 and 1.9 cannot parse modern grammar, so modern
         // source outranks a bundled 1.8 or 1.9 DLL.
-        if grammar != .modern, let bundledRuby = runtime.dispatchVersion {
-            return bundledRuby
-        }
+        if grammar == .modern { return 31 }
+        if let bundledRuby = runtime.dispatchVersion { return bundledRuby }
 
-        switch grammar {
-        case .modern:
-            return 31
-        case .legacy:
-            if let scriptVer = rubyVersionFromScriptExtension(
-                at: gameDirectory, fm: fm
-            ) {
-                return scriptVer
+        let archiveRuby: Int? =
+            switch topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
+            case "rgssad", "rgss2a": 18
+            case "rgss3a": 19
+            default: nil
             }
-        case .mixed:
-            let scriptVer = rubyVersionFromScriptExtension(at: gameDirectory, fm: fm)
-            return scriptVer == 19 ? 19 : 31
-        case .inconclusive:
-            break
-        }
-
-        if let archiveExt = topLevelRgssArchiveExtension(at: gameDirectory, fm: fm) {
-            switch archiveExt {
-            case "rgssad", "rgss2a": return 18
-            case "rgss3a": return 19
-            default: break
+        let libraryRuby: Int? =
+            switch rgssLibraryMajor(at: gameDirectory, fm: fm) {
+            case 1, 2: 18
+            case 3: 19
+            default: nil
             }
-        }
-
-        if let libraryRGSS = rgssLibraryMajor(at: gameDirectory, fm: fm) {
-            switch libraryRGSS {
-            case 1, 2: return 18
-            case 3: return 19
-            default: break
-            }
-        }
-
-        return 31
+        let ruby =
+            (grammar == .inconclusive ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
+            ?? archiveRuby ?? libraryRuby ?? 31
+        // Ruby 1.8 has neither the methods nor the grammar of mixed source.
+        return grammar == .mixed && ruby == 18 ? 31 : ruby
     }
 
     // MARK: - Modern Ruby scripts (formerly GameSettings)

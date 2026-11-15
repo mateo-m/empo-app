@@ -276,6 +276,55 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true))
     }
 
+    func testBlockDefaultInAConfigScriptBesideAnEncryptedCoreRulesOutRuby18() throws {
+        for (archive, ruby) in [("Game.rgssad", GameScriptProfile.Ruby.ruby31(convertLegacy: true)), ("Game.rgss3a", .ruby19)] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try Data().write(to: dir.appendingPathComponent(archive))
+            try "{\"preloadScript\": \"Correction.rb\"}".write(
+                to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+            try "list.each do |hwnd = 0|\nend\n".write(
+                to: dir.appendingPathComponent("Correction.rb"), atomically: true, encoding: .utf8)
+
+            let profile = GameScriptProfile.analyze(gameDirectory: dir)
+            XCTAssertEqual(profile.grammar, .mixed, archive)
+            XCTAssertEqual(profile.ruby, ruby, archive)
+        }
+    }
+
+    func testBlockDefaultOverTwoLinesRoutesToRuby31Legacy() throws {
+        for source in ["list.each do |first,\n  hwnd = 0|\nend\n", "list.each { |hwnd =\n  0| hwnd }\n"] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(
+                at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try compiledScripts([source]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby31(convertLegacy: true), source)
+        }
+    }
+
+    func testAConfigScriptInALooseScriptFolderCountsOnce() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        let scripts = dir.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Scripts.rxdata"))
+        try "a = b&.c\nh.except(:k)\n".write(
+            to: scripts.appendingPathComponent("Fix.rb"), atomically: true, encoding: .utf8)
+        try "{\"preloadScript\": [\"Scripts/Fix.rb\"]}".write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+    }
+
     func testBlockParametersWithoutADefaultStayOnRuby18() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
