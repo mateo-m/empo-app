@@ -51,10 +51,47 @@ enum ErrorReports {
     typealias Game = (title: String, log: URL)
 
     static func gameError(_ message: String, game: Game?) {
-        let firstLine = String(message.prefix { $0 != "\n" })
-        // Group by the first line, so that "File Data/Map150.rxdata not
-        // found" and "Map151" land in one issue.
-        send(message, level: .error, fingerprint: ["error", firstLine], game: game)
+        send(message, level: .error, fingerprint: gameErrorFingerprint(message), game: game)
+    }
+
+    private nonisolated static let exceptionLine = try? NSRegularExpression(
+        pattern: #"\A[^:]+: ("# + RescuedRubyError.classNamePattern + #")\z"#)
+
+    /// A line such as "Exception: Errno::ENOENT" or "Excepción: TypeError".
+    private nonisolated static func isExceptionLine(_ line: Substring) -> Bool {
+        let line = String(line)
+        guard
+            let match = exceptionLine?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
+            let className = Range(match.range(at: 1), in: line)
+        else { return false }
+        return RescuedRubyError.isErrorClass(line[className])
+    }
+
+    /// Pokémon Essentials writes header lines such as "Game version: 1.2.1"
+    /// before the "Exception: TypeError" line, the message line, and the
+    /// backtrace. An error in a map event script has a second pair of
+    /// lines in the message of a RuntimeError.
+    nonisolated static func gameErrorFingerprint(_ message: String) -> [String] {
+        // Swift reads "\r\n" as one Character, which is not "\n".
+        let lines = message.split(whereSeparator: \.isNewline)
+        guard var index = lines.firstIndex(where: isExceptionLine), index + 1 < lines.endIndex else {
+            // The engine's line "Script 'rpg_vxace' line 960: Errno::ENOENT
+            // occurred." comes before the message, so "Audio/SE/Cursor1"
+            // and "Ice1" land in one issue.
+            return ["error", lines.first.map(String.init) ?? ""]
+        }
+        // Not the last pair: `raise RuntimeError` gives the line
+        // "Message: RuntimeError".
+        while index + 3 < lines.endIndex, isExceptionLine(lines[index + 2]) { index += 2 }
+        let frame = lines[(index + 2)...].first {
+            $0.range(of: #":[0-9]+:in `"#, options: .regularExpression) != nil
+        }
+        // The script numbers change between versions of a game, and an
+        // object's address changes on each run.
+        let error = [lines[index], lines[index + 1], frame].compactMap(\.self)
+            .joined(separator: "\n")
+            .replacingOccurrences(of: "0x[0-9a-f]+|[0-9]+", with: "0", options: .regularExpression)
+        return ["error", error]
     }
 
     /// Many games rescue a script error and show it with `p`, for
@@ -103,11 +140,15 @@ struct RescuedRubyError: Equatable {
     let className: String
     let message: String
 
-    private static let className = #"((?:[A-Z]\w*::)*[A-Z]\w*)"#
+    static let classNamePattern = #"(?:[A-Z]\w*::)*[A-Z]\w*"#
     private static let inspected = try? NSRegularExpression(
-        pattern: #"\A#<"# + className + #": (.*)>\z"#, options: .dotMatchesLineSeparators)
+        pattern: #"\A#<("# + classNamePattern + #"): (.*)>\z"#, options: .dotMatchesLineSeparators)
     private static let array = try? NSRegularExpression(
-        pattern: #"\A\["# + className + #", "((?:[^"\\]|\\.)*)""#)
+        pattern: #"\A\[("# + classNamePattern + #"), "((?:[^"\\]|\\.)*)""#)
+
+    static func isErrorClass(_ name: some StringProtocol) -> Bool {
+        name.hasSuffix("Error") || name.hasSuffix("Exception") || name.hasPrefix("Errno::")
+    }
 
     /// An object's address changes on each run, so it stays out.
     var fingerprint: [String] {
@@ -131,10 +172,7 @@ struct RescuedRubyError: Equatable {
             let messageRange = Range(match.range(at: 2), in: text)
         else { return nil }
         let className = String(text[classRange])
-        guard
-            className.hasSuffix("Error") || className.hasSuffix("Exception")
-                || className.hasPrefix("Errno::")
-        else { return nil }
+        guard Self.isErrorClass(className) else { return nil }
         self.className = className
         message = String(text[messageRange])
     }
