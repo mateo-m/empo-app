@@ -46,8 +46,8 @@ public enum GameScriptProfile {
         /// The scan also reads the scripts that `mkxp.json` names, and a
         /// block parameter default reads as Ruby 1.9 grammar.
         case configScripts = "config-scripts"
-        /// A 1.9 call under Zeus81's `vxace?` check, or in a block whose
-        /// `end` line has a 1.9 check, does not count.
+        /// A 1.9 call under Zeus81's `vxace?` check, or in a `case` or
+        /// `begin` block whose `end` line has a 1.9 check, does not count.
         case vxAceGuard = "vx-ace-guard"
     }
 

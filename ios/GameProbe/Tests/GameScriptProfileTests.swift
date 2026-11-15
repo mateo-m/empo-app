@@ -784,7 +784,7 @@ final class GameScriptProfileTests: XCTestCase {
               str
             end
 
-        """.write(
+        """.replacingOccurrences(of: "\n", with: "\r\n").write(
             to: scripts.appendingPathComponent("238_ZeusVideoPlayer.rb"), atomically: true, encoding: .utf8)
 
         let profile = GameScriptProfile.analyze(gameDirectory: dir)
@@ -806,6 +806,9 @@ final class GameScriptProfileTests: XCTestCase {
             "case to\nwhen 1; s.force_encoding('UTF-8')\nend if s\n",
             "begin\n  s.force_encoding('UTF-8')\nend unless vxace?\n",
             "def encode(s)\n  s.force_encoding('UTF-8')\n    end if vxace?\n",
+            "s.force_encoding('UTF-8')\n  case to\n  when 1; x\nend if vxace?\n",
+            "def f(s)\n  s.force_encoding('UTF-8')\n  whenever = [1].each do |v|\n    v\n  end if vxace?\nend\n",
+            "if vxace? == false\n  s.force_encoding('UTF-8')\nend\n",
         ] {
             try source.write(to: scripts.appendingPathComponent("Text.rb"), atomically: true, encoding: .utf8)
             XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby.code, 31, source)

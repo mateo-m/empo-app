@@ -485,12 +485,15 @@ public enum RubyScriptGrammarSniffer {
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
-    /// its body on 1.8. Group 1 is the receiver of `respond_to?`.
-    /// Zeus81's scripts call 1.9 methods only under `vxace?`, their
-    /// RPG Maker VX Ace check, so they also run on XP (Pokemon Xenoverse).
+    /// its body on 1.8. So does a comparison such as `== false`. Group 1
+    /// is the receiver of `respond_to?`.
+    /// Zeus81's `vxace?` is false only on RPG Maker XP's own Ruby 1.8.1.
+    /// On Empo's 1.8.8 it is true and a 1.9 call under it raises, but
+    /// Pokemon Xenoverse ships these scripts and runs on Ruby 1.8.7 in
+    /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?)(?![^#;]*(?:\|\||\bor\b))"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?)(?![^#;]*(?:\|\||\bor\b|[=!]=))"#
     )
 
     /// A `<<` right after a value, as in `i<<x` or `(1<<n)`, is a shift.
@@ -537,7 +540,7 @@ public enum RubyScriptGrammarSniffer {
         }
         let lines = scanLines(source)
         // In `case ... end if vxace?`, the guard on the end line covers the
-        // block from the line at the same indent that opens it.
+        // `case` or `begin` block at the same indent.
         var endGuards = [[Cover]](repeating: [], count: lines.count)
         for (number, scanned) in lines.enumerated() where scanned.kind == .code {
             let line = scanned.text
@@ -552,22 +555,25 @@ public enum RubyScriptGrammarSniffer {
                 let text = candidate.text.trimmingCharacters(in: .whitespaces)
                 return candidate.kind == .code && !text.isEmpty
                     && indent(of: candidate.text) <= indent(of: line)
-                    && !["when", "else", "elsif", "rescue", "ensure"].contains { text.hasPrefix($0) }
+                    && !["when", "else", "elsif", "rescue", "ensure"].contains { startsDirective(text, $0) }
             }
-            guard let opener, indent(of: lines[opener].text) == indent(of: line) else { continue }
+            guard let opener, indent(of: lines[opener].text) == indent(of: line),
+                ["case", "begin"].contains(where: {
+                    startsDirective(String(withoutIndent(lines[opener].text)), $0)
+                })
+            else { continue }
             for inside in opener..<number { endGuards[inside] += covers }
         }
         var blocks: [(indent: Int, cover: Cover)] = []
         for (number, scanned) in lines.enumerated() {
             let line = scanned.text
             let units = scanned.units
-            let outer = blocks.map(\.cover) + endGuards[number]
             switch scanned.kind {
             case .skipped:
                 continue
             case .heredocBody:
                 if codeMatches(ruby19Call, in: scanned).contains(where: {
-                    !covered($0.range, in: units, by: outer)
+                    !covered($0.range, in: units, by: blocks.map(\.cover) + endGuards[number])
                 }) {
                     return true
                 }
