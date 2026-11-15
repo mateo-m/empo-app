@@ -60,7 +60,7 @@ The app does not know these keys. Only `MkxpCore` sends them, and `mkxp_setSetti
 
 ### Detection
 
-`ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` decides which Ruby runs a game (one directory walk). The result is `GameScriptProfile.Ruby`: `ruby18`, `ruby19`, or `ruby31(convertLegacy:)`. Only Ruby 3.1 has a syntax transform, so only Ruby 3.1 has a legacy or modern mode. Modern grammar from step 2 always gives Ruby 3.1, because Ruby 1.8 and 1.9 cannot parse it. Otherwise the first decisive signal of this decision tree wins:
+`ios/GameProbe/Sources/GameProbe/GameScriptProfile.swift` decides which Ruby runs a game (one directory walk). The result is `GameScriptProfile.Ruby`: `ruby18`, `ruby19`, or `ruby31(convertLegacy:)`. Only Ruby 3.1 has a syntax transform, so only Ruby 3.1 has a legacy or modern mode. Modern grammar from step 2 always gives Ruby 3.1, because Ruby 1.8 and 1.9 cannot parse it. Mixed source from step 2 never runs on Ruby 1.8: a result of 18 from any step becomes 31. The legacy transform is on, unless the sniffer could not read the core scripts. Then the packaging picks the transform, as for an inconclusive result. Otherwise the first decisive signal of this decision tree wins:
 
 1. **Bundled `*-rubyXYZ.dll`** at the project root: `x64-msvcrt-ruby310.dll`, `msvcrt-ruby187.dll`, `ruby193.dll`, etc. The three-digit suffix decodes:
    - `1, 8` → 18
@@ -71,7 +71,7 @@ The app does not know these keys. Only `MkxpCore` sends them, and `mkxp_setSetti
 
    When a game bundles multiple DLLs, the highest version wins. Modern PE forks ship the mkxp-z runtime, which links against `x64-msvcrt-ruby310.dll`. Their `Game.ini` `Library=` field stays at the vestigial `RGSS104E.dll`, but the actual runtime is the bundled DLL. This signal is the strongest practical evidence of the Ruby version the developer tested against.
 
-2. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. The sniffer decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) give **31**. Legacy source that calls `force_encoding` or `Encoding::` without a `respond_to?` or `defined?` check gives **31** with the legacy transform, unless the data file is `.rvdata2` (19). Other legacy source uses the data file extension as a prior. An inconclusive result (encrypted archive, or scripts packed in `Data/*.fpk`) falls through.
+2. **Script grammar sniff** via `RubyScriptGrammarSniffer.swift`. The sniffer decodes `Scripts.{rxdata,rvdata,rvdata2}` (Marshal + zlib) and reads loose `.rb` files. It also reads the files that the game's `mkxp.json` names in `preloadScript` and `postloadScript`, because the engine runs them with the game scripts. Modern Ruby 3.x tokens (`&.`, pattern-match `case ... in`, endless `def`, numbered block params, kwarg shorthand, `Hash#except`, `Array#filter_map`) give **31**. Legacy source that has a block parameter with a default value (`do |hwnd = 0|`), or that calls `force_encoding` or `Encoding::` without a `respond_to?` or `defined?` check, gives **31** with the legacy transform, unless step 1, the data file extension (not read when the scripts are packed in `Data/*.fpk`), step 3, or step 4 gives 19 (`.rvdata2`, `.rgss3a`, or an RGSS3 `Library=`). Other legacy source uses the data file extension as a prior. When the sniffer cannot read the core scripts, modern or mixed plugin and `mkxp.json` script code still decides. An inconclusive result (encrypted archive, or scripts packed in `Data/*.fpk`) falls through.
 
 3. **RGSS archive at project root**: `.rgssad` → 18, `.rgss2a` → 18, `.rgss3a` → 19. This signal applies when scripts live inside the encrypted archive and the sniffer cannot reach them.
 
@@ -99,13 +99,14 @@ enum Schema: String {
     case codeOnlyTokens = "code-only-tokens"  // modern tokens count only in code, not in comments or strings
     case shiftNotHeredoc = "shift-not-heredoc"  // a `<<` with no end line after it is a shift
     case pluginScripts = "plugin-scripts"  // the scan also reads Data/PluginScripts.rxdata
-    case oneRubyChoice = "one-ruby-choice"  // current: modern grammar outranks a 1.8 or 1.9 DLL
+    case oneRubyChoice = "one-ruby-choice"  // modern grammar outranks a 1.8 or 1.9 DLL
+    case configScripts = "config-scripts"  // current: the scan also reads the mkxp.json scripts, a block parameter default is 1.9
 }
 
-static let currentSchema: Schema = .oneRubyChoice
+static let currentSchema: Schema = .configScripts
 ```
 
-`MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file that the scan reads (`GameScriptProfile.inputFiles`): `Game.ini`, the libraries, and the RGSS archives in the game folder, the `Scripts` file in the game folder or in `Data/`, `Data/PluginScripts.rxdata`, the `.fpk` archives in `Data/`, and the `.rb` files in the loose script folders. Saves are not in it, so a save does not start a new scan. `MkxpProfile.load(for:)` scans again when the schema or the digest is different. The import and the settings reset always scan again, because an archive keeps the dates of its files. `GameScriptProfile` is the only entry point.
+`MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file that the scan reads (`GameScriptProfile.inputFiles`): `Game.ini`, the libraries, and the RGSS archives in the game folder, the `Scripts` file in the game folder or in `Data/`, `Data/PluginScripts.rxdata`, the `.fpk` archives in `Data/`, the `.rb` files in the loose script folders, `mkxp.json`, and the scripts that it names. Saves are not in it, so a save does not start a new scan. `MkxpProfile.load(for:)` scans again when the schema or the digest is different. The import and the settings reset always scan again, because an archive keeps the dates of its files. `GameScriptProfile` is the only entry point.
 
 ## Per-version compile
 
