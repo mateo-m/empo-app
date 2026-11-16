@@ -360,11 +360,16 @@ class AppState {
     /// running after the alert closes. Call this before the core
     /// resumes, so a crash right after the alert still leaves a mark.
     func restoreCrashMarker() {
-        guard phase == .loading || phase == .playing,
-            shownError == nil, infoMessage == nil, !engineHung,
+        guard phase == .loading || phase == .playing, !alertHoldsGame, !engineHung,
             let container = selectedGame?.container
         else { return }
         session.restoreCrashMarker(for: container)
+    }
+
+    /// The game waits while this is true. A player who closes Empo then
+    /// must not get a crash report on the next launch.
+    private var alertHoldsGame: Bool {
+        (shownError != nil || infoMessage != nil) && session.openedCore?.waitsForAlerts == true
     }
 
     /// Runs on `UIApplication.didEnterBackgroundNotification`.
@@ -477,19 +482,16 @@ extension AppState: EngineSessionCoordinatorDelegate {
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
         sessionShowedError = true
-        // The core blocks the game until the alert closes. A player who
-        // closes Empo with it open must not get a crash report on the
-        // next launch.
-        clearCrashMarker()
         ErrorReports.gameError(message, game: reportedGame)
         shownError = ShownError(message: message)
+        if alertHoldsGame { clearCrashMarker() }
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
         session.note("Message shown: \(message)")
         ErrorReports.gameMessage(message, game: reportedGame)
-        clearCrashMarker()
         infoMessage = message
+        if alertHoldsGame { clearCrashMarker() }
     }
 
     func coordinatorEngineDidPause(snapshot: UIImage?) {

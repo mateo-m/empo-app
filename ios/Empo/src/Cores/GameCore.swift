@@ -27,6 +27,10 @@ protocol GameCore {
     /// all of its state. Then any number of games, on any core, can run
     /// after it in the app, with nothing left from this one.
     var canKillSession: Bool { get }
+    /// True when the game stops while an error or a message alert shows,
+    /// until `gamecore_signalErrorDismissed` or
+    /// `gamecore_signalInfoDismissed`.
+    var waitsForAlerts: Bool { get }
     /// The four keys of the builtin button grid, in grid order.
     func defaultKeys(forGameAt root: URL) -> [GameKey]
 
@@ -80,6 +84,7 @@ extension GameCore {
     var supportsCheats: Bool { false }
     var gamesName: String { madeWith }
     var canKillSession: Bool { false }
+    var waitsForAlerts: Bool { false }
     func defaultKeys(forGameAt root: URL) -> [GameKey] { GameKey.standard }
     func archiveEntryUse(_ entry: ArchiveEntry) -> ArchiveEntryUse { .skip }
     func validateMarkedRoot(marker: String) throws {}
