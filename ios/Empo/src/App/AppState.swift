@@ -300,6 +300,12 @@ class AppState {
             pm.pauseSnapshot = snapshot
             pm.pausedGame = selectedGame
         }
+        // A close from the app switcher can come with no background
+        // event, and the library tells the user to close Empo there to
+        // leave a paused Ruby game.
+        if let container = selectedGame?.container {
+            session.clearCrashMarker(for: container)
+        }
     }
 
     /// We delay the phase change so the hero zoom animation plays
@@ -315,6 +321,9 @@ class AppState {
         guard pm.pausedGame != nil else { return }
         pm.pausedGame = nil
         pm.snapshotCanFade = false
+        if let container = selectedGame?.container {
+            session.restoreCrashMarker(for: container)
+        }
         session.requestResume()
         session.resumeSessionTiming(for: activeSessionGame)
 
