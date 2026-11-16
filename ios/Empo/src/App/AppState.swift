@@ -174,6 +174,15 @@ class AppState {
         session.runner == .gameProcess
     }
 
+    /// True when the RGSS thread did not ack a termination request in
+    /// time. Ruby is then in an unrecoverable state. The single-thread
+    /// engine architecture cannot respawn the VM in place, so the only
+    /// way out is for the user to close and reopen the app manually.
+    /// We do not call `exit()`, per App Store guideline 2.5.1.
+    var engineHung: Bool {
+        EmpoCoreIsOpen() != 0 && gamecore_isEngineHung() != 0
+    }
+
     func cancelLoading() {
         guard canEndStuckGame, phase == .loading else { return }
         session.note("The player stopped the loading.")
@@ -342,17 +351,25 @@ class AppState {
         }
     }
 
-    /// Removes the crash marker when a healthy session goes to the
-    /// background. The foreground path re-creates it, so we still
-    /// detect a later crash after resume.
-    func clearCrashMarkerForBackground() {
+    func clearCrashMarker() {
         guard let container = selectedGame?.container else { return }
         session.clearCrashMarker(for: container)
     }
 
-    func restoreCrashMarkerForForeground() {
-        guard let container = selectedGame?.container else { return }
+    /// A Pokémon Essentials game prints a caught error and keeps
+    /// running after the alert closes. Call this before the core
+    /// resumes, so a crash right after the alert still leaves a mark.
+    func restoreCrashMarker() {
+        guard phase == .loading || phase == .playing || resumeTask != nil, !alertHoldsGame, !engineHung,
+            let container = selectedGame?.container
+        else { return }
         session.restoreCrashMarker(for: container)
+    }
+
+    /// The game waits while this is true. A player who closes Empo then
+    /// must not get a crash report on the next launch.
+    private var alertHoldsGame: Bool {
+        (shownError != nil || infoMessage != nil) && session.openedCore?.waitsForAlerts == true
     }
 
     /// Runs on `UIApplication.didEnterBackgroundNotification`.
@@ -467,12 +484,14 @@ extension AppState: EngineSessionCoordinatorDelegate {
         sessionShowedError = true
         ErrorReports.gameError(message, game: reportedGame)
         shownError = ShownError(message: message)
+        if alertHoldsGame { clearCrashMarker() }
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
         session.note("Message shown: \(message)")
         ErrorReports.gameMessage(message, game: reportedGame)
         infoMessage = message
+        if alertHoldsGame { clearCrashMarker() }
     }
 
     func coordinatorEngineDidPause(snapshot: UIImage?) {

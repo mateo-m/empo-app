@@ -178,7 +178,7 @@ struct RootView: View {
                 }
             }
         } message: {
-            if engineHung {
+            if appState.engineHung {
                 Text(
                     appState.canEndStuckGame
                         ? "It stopped responding and will close. Progress you haven't saved will be lost."
@@ -219,7 +219,7 @@ struct RootView: View {
                 // engineReady false, so the marker persists and the
                 // alert still fires.
                 if appState.engineReady {
-                    appState.clearCrashMarkerForBackground()
+                    appState.clearCrashMarker()
                 }
             }
             // Persist play time when the app backgrounds, so a
@@ -235,7 +235,7 @@ struct RootView: View {
                 engineState.resumeFromBackground()
                 // Re-create the crash marker, so the next launch still
                 // detects a crash after resume.
-                appState.restoreCrashMarkerForForeground()
+                appState.restoreCrashMarker()
             }
             appState.resumeSessionTimingAfterBackground()
         }
@@ -257,12 +257,12 @@ struct RootView: View {
 
     private var errorAlertTitle: Text {
         if appState.shownError?.gameDidNotStart == true { return Text("Can't start the game") }
-        guard engineHung || appState.phase != nil else { return Text("Last session ended early") }
+        guard appState.engineHung || appState.phase != nil else { return Text("Last session ended early") }
         return appState.canEndStuckGame ? Text("The game stopped") : Text("Restart Empo")
     }
 
     private func closeErrorAlert() {
-        let hung = engineHung
+        let hung = appState.engineHung
         dismissErrorAlert()
         if hung { appState.endStuckGame() }
     }
@@ -276,8 +276,9 @@ struct RootView: View {
 
     /// Unblocks a core that waits for the error alert to close.
     private func dismissErrorAlert() {
-        if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
         appState.shownError = nil
+        appState.restoreCrashMarker()
+        if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
     }
 
     private var showInfoAlert: Binding<Bool> {
@@ -300,17 +301,9 @@ struct RootView: View {
     /// Unblocks the core that waits for the info alert to close.
     /// The game resumes right where it called `msgbox`.
     private func dismissInfoAlert() {
-        if EmpoCoreIsOpen() != 0 { gamecore_signalInfoDismissed() }
         appState.infoMessage = nil
-    }
-
-    /// True when the RGSS thread did not ack a termination request in
-    /// time. Ruby is then in an unrecoverable state. The single-thread
-    /// engine architecture cannot respawn the VM in place, so the only
-    /// way out is for the user to close and reopen the app manually.
-    /// We do not call `exit()`, per App Store guideline 2.5.1.
-    private var engineHung: Bool {
-        EmpoCoreIsOpen() != 0 && gamecore_isEngineHung() != 0
+        appState.restoreCrashMarker()
+        if EmpoCoreIsOpen() != 0 { gamecore_signalInfoDismissed() }
     }
 
     /// Wait (up to `scanGraceDuration`) for the initial library scan.
