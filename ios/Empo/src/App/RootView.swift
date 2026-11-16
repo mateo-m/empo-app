@@ -212,16 +212,32 @@ struct RootView: View {
             _ in
             if appState.phase == .playing {
                 engineState.requestBackgroundPause()
+                // If the engine rendered at least one frame, this was a
+                // healthy session. Remove the crash marker, so a
+                // force-kill from the app switcher does not trigger a
+                // false crash alert. Black-screen crashes leave
+                // engineReady false, so the marker persists and the
+                // alert still fires.
+                if appState.engineReady {
+                    appState.clearCrashMarkerForBackground()
+                }
             }
-            appState.sessionDidEnterBackground()
+            // Persist play time when the app backgrounds, so a
+            // force-kill from the switcher does not lose the session.
+            // No-op when the timer already flushed (e.g. the user
+            // paused to the library).
+            appState.flushSessionPlayTimeForBackground()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) {
             _ in
             Task { await EmpoPlus.shared.refresh() }
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
+                // Re-create the crash marker, so the next launch still
+                // detects a crash after resume.
+                appState.restoreCrashMarkerForForeground()
             }
-            appState.sessionWillEnterForeground()
+            appState.resumeSessionTimingAfterBackground()
         }
         .onChange(of: appState.shownError) { _, error in
             if error != nil {
