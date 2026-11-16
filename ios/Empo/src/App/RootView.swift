@@ -276,8 +276,10 @@ struct RootView: View {
 
     /// Unblocks a core that waits for the error alert to close.
     private func dismissErrorAlert() {
+        let hung = engineHung
         if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
         appState.shownError = nil
+        if !hung { appState.restoreCrashMarkerAfterError() }
     }
 
     private var showInfoAlert: Binding<Bool> {

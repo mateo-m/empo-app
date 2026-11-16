@@ -351,8 +351,15 @@ class AppState {
     }
 
     func restoreCrashMarkerForForeground() {
-        guard let container = selectedGame?.container else { return }
+        guard shownError == nil, let container = selectedGame?.container else { return }
         session.restoreCrashMarker(for: container)
+    }
+
+    /// A Pokémon Essentials game prints a caught error and keeps
+    /// running after the alert closes.
+    func restoreCrashMarkerAfterError() {
+        guard phase == .loading || phase == .playing else { return }
+        restoreCrashMarkerForForeground()
     }
 
     /// Runs on `UIApplication.didEnterBackgroundNotification`.
@@ -465,6 +472,12 @@ extension AppState: EngineSessionCoordinatorDelegate {
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
         sessionShowedError = true
+        // The core waits until the alert closes, so the game cannot
+        // crash while it shows. A player who closes Empo then gets no
+        // crash report on the next launch.
+        if let container = selectedGame?.container {
+            session.clearCrashMarker(for: container)
+        }
         ErrorReports.gameError(message, game: reportedGame)
         shownError = ShownError(message: message)
     }
