@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.11.2 - 2026-11-16
+
+### Bug Fixes
+
+- Read the scripts that mkxp.json names for the ruby choice (#282) ([`feaf64f`](https://github.com/mateo-m/empo-app/commit/feaf64fce826646aeb2028cd8d8214b2554962a6))
+- Group game errors by the line that names the error (#284) ([`1eb60bd`](https://github.com/mateo-m/empo-app/commit/1eb60bdc46f3b363411c63577e87d3d4c22799fc))
+- Skip ruby 1.9 calls under the zeus81 vxace check (#285) ([`f36f1ca`](https://github.com/mateo-m/empo-app/commit/f36f1ca680b5e14ab79bea512fb0320f4e417cf2))
+- Close Get Items when the Pokemon game has no player yet (mateo-m/mkxp-z-apple-mobile#78) ([`4a1fd4e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4a1fd4e778ee87ff2c26cf0a0e7d88cd8b9bf643))
+- Give the screen size, window rect, work area and command line that full-screen scripts read (mateo-m/mkxp-z-apple-mobile#79) ([`86b4171`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/86b4171f24338ec9fdc4a0f8ec80e8ff3dea7bca))
+- Answer the A and W names of the work area and command line calls (mateo-m/mkxp-z-apple-mobile#82) ([`e3e5fe0`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e3e5fe0fbceb41e7030c31083350feae859d7fd5))
+- End a Ruby 1.8 open path at its first NUL, like RGSS1 (mateo-m/mkxp-z-apple-mobile#80) ([`688478b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/688478b94aeb14afd5a59f214079d37b0233bb76))
+- Stop the lazy sweep from freeing a clone and what it holds (mateo-m/mkxp-z-apple-mobile#81) ([`d6d327c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d6d327c1195ec288a0a18b2d0aaa4dc17c6d35cd))
+- Open the audio device only while the app is in the foreground (mateo-m/mkxp-z-apple-mobile#83) ([`360395d`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/360395dd5a278075a4147377b1421127b416e31f))
+- Write the Pokemon Essentials marker on Ruby 1.8 (mateo-m/mkxp-z-apple-mobile#85) ([`90479d8`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/90479d8903c658b88d346209be433a20f8cb6818))
+- Raise for Dir.chdir(nil) and Dir.chdir(""), like RGSS (mateo-m/mkxp-z-apple-mobile#84) ([`be09143`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/be09143451436c1dbd47b64ea5be1e852ccf2611))
+- Wait for iOS to allow sound before the game starts (mateo-m/mkxp-z-apple-mobile#87) ([`18a4fbc`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/18a4fbc0dec66124f8095e44fa7b0c62fcd096aa))
+- Report the RPG Maker RUBY_VERSION on Ruby 1.8 and 1.9 (mateo-m/mkxp-z-apple-mobile#88) ([`782592e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/782592e327241a68e9b110e2c50d016e35387822))
+- Write the Windows file for Bitmap#save_to_file (mateo-m/mkxp-z-apple-mobile#90) ([`76b129b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/76b129b36ffd420bc011fe37e39e72476fa888e5))
+- Find files and folders whatever the case of their names (mateo-m/mkxp-z-apple-mobile#91) ([`95fe94b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/95fe94b809aa10e9a0c4a80bfeed5d7ab32c1c57))
+
+### Chores
+
+- Block force unwraps, force tries and force casts (#280) ([`ae94f94`](https://github.com/mateo-m/empo-app/commit/ae94f94550dd71fa7994a55cdfbe73178fdd8aa1))
+- Fix the SwiftLint findings of the skipped files (#281) ([`eb4738f`](https://github.com/mateo-m/empo-app/commit/eb4738f13a45ac3e79729a07acc1222f90553b9a))
+
+### Other
+
+- Update the core and ANGLE pins (#286) ([`8ccc6f4`](https://github.com/mateo-m/empo-app/commit/8ccc6f47935d95e1da712dbcaf695773ee07ba72))
+
 ## 0.11.1 - 2026-11-12
 
 ### Bug Fixes
