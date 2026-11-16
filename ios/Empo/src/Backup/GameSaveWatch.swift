@@ -81,7 +81,7 @@ final class GameSaveWatch {
     /// when it crashes, or when the user closes the app from the app
     /// switcher, per `docs/multi-session.md`. The last one gives no
     /// callback, so the watch reads at every point where it can lose
-    /// the chance. `AppState.flushSessionPlayTimeForBackground`
+    /// the chance. `AppState.sessionDidEnterBackground`
     /// keeps play time the same way.
     ///
     /// Repeat calls are safe. A path that already joined is in the

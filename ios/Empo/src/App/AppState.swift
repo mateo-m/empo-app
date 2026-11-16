@@ -333,34 +333,29 @@ class AppState {
         }
     }
 
-    /// Removes the crash marker when a healthy session goes to the
-    /// background. The foreground path re-creates it, so we still
-    /// detect a later crash after resume.
-    func clearCrashMarkerForBackground() {
-        guard let container = selectedGame?.container else { return }
-        session.clearCrashMarker(for: container)
-    }
-
-    func restoreCrashMarkerForForeground() {
-        guard let container = selectedGame?.container else { return }
-        session.restoreCrashMarker(for: container)
-    }
-
-    /// Runs on `UIApplication.didEnterBackgroundNotification`.
-    /// Flushes wall-clock play time for any live session (in-game
-    /// or paused-to-library). Metadata then survives a force-quit.
-    func flushSessionPlayTimeForBackground() {
+    /// Runs on `UIApplication.didEnterBackgroundNotification`. From
+    /// here on, the user can close Empo from the app switcher, and no
+    /// callback follows.
+    func sessionDidEnterBackground() {
+        // A game that drew a frame is healthy, also when it is paused in
+        // the library. A game that drew none keeps its mark, so a black
+        // screen that the user closes still counts as a crash.
+        if engineReady, let container = selectedGame?.container {
+            session.clearCrashMarker(for: container)
+        }
         guard activeSessionGame != nil else { return }
+        // The play time and the save reading of SPEC 3.6 must survive
+        // that close.
         session.recordSessionPlayTime()
-        // Same reason as the play time: the user can close Empo from
-        // the app switcher, and no callback follows. A save the game
-        // wrote before that must still join the set of SPEC 3.6.
         GameSaveWatch.shared.takeReading()
     }
 
-    /// Restarts the session timer after the app returns from the
-    /// background. A paused game has no timer.
-    func resumeSessionTimingAfterBackground() {
+    /// Runs on `UIApplication.willEnterForegroundNotification`. A
+    /// paused game has no timer.
+    func sessionWillEnterForeground() {
+        if engineReady, let container = selectedGame?.container {
+            session.restoreCrashMarker(for: container)
+        }
         guard PauseManager.shared.pausedGame == nil else { return }
         session.resumeSessionTiming(for: selectedGame)
     }
