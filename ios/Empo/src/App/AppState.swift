@@ -360,7 +360,7 @@ class AppState {
     /// running after the alert closes. Call this before the core
     /// resumes, so a crash right after the alert still leaves a mark.
     func restoreCrashMarker() {
-        guard phase == .loading || phase == .playing, !alertHoldsGame, !engineHung,
+        guard phase == .loading || phase == .playing || resumeTask != nil, !alertHoldsGame, !engineHung,
             let container = selectedGame?.container
         else { return }
         session.restoreCrashMarker(for: container)
