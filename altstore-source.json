@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.11.2",
+          "buildVersion": "861",
+          "date": "2026-11-16",
+          "localizedDescription": "Fixed\n• Read the scripts that mkxp.json names for the ruby choice\n• Group game errors by the line that names the error\n• Skip ruby 1.9 calls under the zeus81 vxace check\n• Close Get Items when the Pokemon game has no player yet\n• Give the screen size, window rect, work area and command line that full-screen scripts read\n• Answer the A and W names of the work area and command line calls\n• End a Ruby 1.8 open path at its first NUL, like RGSS1\n• Stop the lazy sweep from freeing a clone and what it holds\n• Open the audio device only while the app is in the foreground\n• Write the Pokemon Essentials marker on Ruby 1.8\n• Raise for Dir.chdir(nil) and Dir.chdir(\"\"), like RGSS\n• Wait for iOS to allow sound before the game starts\n• Report the RPG Maker RUBY_VERSION on Ruby 1.8 and 1.9\n• Write the Windows file for Bitmap#save_to_file\n• Find files and folders whatever the case of their names\n\nOther changes\n• Block force unwraps, force tries and force casts\n• Fix the SwiftLint findings of the skipped files\n• Update the core and ANGLE pins",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.11.2/Empo-ios.ipa",
+          "size": 101598509,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.11.1",
           "buildVersion": "850",
           "date": "2026-11-12",
