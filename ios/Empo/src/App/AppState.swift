@@ -302,8 +302,7 @@ class AppState {
         }
         // A close from the app switcher can come with no background
         // event, and the library tells the user to close Empo there to
-        // leave a paused Ruby game. So the mark goes at the pause and
-        // comes back at the resume.
+        // leave a paused Ruby game.
         if let container = selectedGame?.container {
             session.clearCrashMarker(for: container)
         }
