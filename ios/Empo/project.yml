@@ -19,7 +19,7 @@ packages:
   # targets, so `automerge-repo-swift` stays out.
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa.git
-    revision: 2f64c77f77514acd01780d1aac86ae75b7fccd04 # 9.31.0
+    revision: 4e1e4ba9ce329f91ad6bfb63bab6da576a3f348c # 9.32.0
   Automerge:
     url: https://github.com/automerge/automerge-swift.git
     revision: aa45d17ac92cef2b8ded63b47e65a28dc85e3418 # 0.7.2

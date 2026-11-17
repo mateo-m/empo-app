@@ -2,7 +2,7 @@ Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
 Empo Plus.
 
-Last update: 10 November 2026.
+Last update: 17 November 2026.
 
 ## What Empo collects
 
@@ -18,6 +18,11 @@ report to Sentry, the service that collects these reports for me. A report holds
 - The version of Empo, and details of the device: its model, its iOS or macOS version,
   its language and time zone, its screen size, its memory, its battery level,
   its temperature state, its network type, and whether it is jailbroken.
+
+When Empo itself crashes, iOS or macOS gives Empo a crash report at a later
+launch, and Empo sends it to Sentry too. It holds the type of the crash, the
+list of the functions that ran in Empo at that time, the version of Empo, and
+details of the device.
 
 A report holds no save files, no name, and no account. Sentry sees the IP
 address that a report comes from, and Empo does not ask Sentry to store it.

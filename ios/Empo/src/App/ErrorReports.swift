@@ -30,6 +30,9 @@ enum ErrorReports {
                 // sigsegv). A second crash handler would report those
                 // as crashes.
                 options.enableCrashHandler = false
+                // iOS and macOS record the crash outside the app's signal
+                // handlers, and give it to the app at a later launch.
+                options.experimental.metrickit.enabledDiagnosticReports = [.crash]
                 options.enableAppHangTracking = false
                 options.enableAutoSessionTracking = false
                 options.enableAutoBreadcrumbTracking = false
