@@ -15,6 +15,8 @@
 #                                commits it makes, and the role of its
 #                                owner lets them go to main.
 #   DISCORD_RELEASE_WEBHOOK_URL  The channel for release posts.
+#   SENTRY_AUTH_TOKEN            A Sentry organization token. It uploads
+#                                the debug symbols of each release.
 
 name: Release
 
@@ -180,6 +182,25 @@ jobs:
         with:
           name: Empo-mac
           path: ${{ steps.build.outputs.dmg_path }}
+
+      # Without the debug symbols, Sentry shows a crash in the app as
+      # memory addresses, not as function names.
+      - name: Upload debug symbols to Sentry
+        if: inputs.mode != 'dry-run'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_CLI_SHA256: 2d1b118fa46960ba5e8e0cca9a6e197366905776a0ddc5a89c7d05a3908b77db
+          IOS_PRODUCTS: build/Release-iphoneos
+          MAC_PRODUCTS: build/mac-release/DerivedData/Build/Products/Release
+        run: |
+          # sentry-cli passes when it finds no files.
+          ls -d "$IOS_PRODUCTS/Empo.app.dSYM" "$MAC_PRODUCTS/Empo.app.dSYM"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sentry-cli" \
+            https://github.com/getsentry/sentry-cli/releases/download/3.8.2/sentry-cli-Darwin-universal
+          echo "$SENTRY_CLI_SHA256  $RUNNER_TEMP/sentry-cli" | shasum -a 256 --check --strict
+          chmod +x "$RUNNER_TEMP/sentry-cli"
+          "$RUNNER_TEMP/sentry-cli" debug-files upload --org mateosh-qm --project empo-app \
+            --type dsym --wait "$IOS_PRODUCTS" "$MAC_PRODUCTS"
 
   tag:
     name: Create the tag
