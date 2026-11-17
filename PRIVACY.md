@@ -15,12 +15,14 @@ report to Sentry, the service that collects these reports for me. A report holds
 - The name of the game, and the end of the game's log for that play session,
   when **Debug logs** is on. The log holds what the game engine wrote, such as
   the names of the game's files that it opened and the error details.
-- When Empo itself crashes, the crash report that iOS or macOS gives to Empo,
-  often a day later. It holds the type of the crash and the list of the
-  functions that ran in Empo at that time.
 - The version of Empo, and details of the device: its model, its iOS or macOS version,
   its language and time zone, its screen size, its memory, its battery level,
   its temperature state, its network type, and whether it is jailbroken.
+
+When Empo itself crashes, iOS or macOS gives Empo a crash report at a later
+launch, and Empo sends it to Sentry too. It holds the type of the crash, the
+list of the functions that ran in Empo at that time, the version of Empo, and
+details of the device.
 
 A report holds no save files, no name, and no account. Sentry sees the IP
 address that a report comes from, and Empo does not ask Sentry to store it.
