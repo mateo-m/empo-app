@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.11.3",
+          "buildVersion": "870",
+          "date": "2026-11-17",
+          "localizedDescription": "New\n• Send the iOS crash reports of Empo to Sentry\n\nFixed\n• Remove the crash mark while a game is paused in the library\n• Remove the crash mark while a game error shows\n• Read the cheat menu key through the native input\n• An empty path names no file or folder\n\nOther changes\n• Name the native key read in the cheat key comment\n• Update the core and ANGLE pins",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.11.3/Empo-ios.ipa",
+          "size": 101653499,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.11.2",
           "buildVersion": "861",
           "date": "2026-11-16",
