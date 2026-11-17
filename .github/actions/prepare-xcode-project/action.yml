@@ -90,6 +90,18 @@ runs:
       if: inputs.build-data != ''
       shell: bash
       run: |
+        # Xcode does not compile the Swift module of a binary package
+        # again when the package version changes, so the build reads the
+        # old API. New pins start from empty build data.
+        shopt -s nullglob
+        PINS="$(sed -n '/^packages:/,/^[a-zA-Z]/p' ios/Empo/project.yml |
+          cat - ios/*/Package.swift ios/*/Package.resolved | shasum | cut -d ' ' -f 1)"
+        if [ "$(cat "$DERIVED_DATA/package-pins" 2>/dev/null)" != "$PINS" ]; then
+          echo "The package pins changed, so the build starts from empty build data"
+          rm -rf "$DERIVED_DATA"
+          mkdir -p "$DERIVED_DATA"
+          echo "$PINS" > "$DERIVED_DATA/package-pins"
+        fi
         # The objects stay. The app is put together again, so a file or
         # core that a change removes cannot stay in it.
         rm -rf "$DERIVED_DATA/Build/Products"
