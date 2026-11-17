@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.3 - 2026-11-17
+
+### Bug Fixes
+
+- Remove the crash mark while a game is paused in the library (#287) ([`9dcc223`](https://github.com/mateo-m/empo-app/commit/9dcc22321a8f9a67a3f5501f8672d714c917a04a))
+- Remove the crash mark while a game error shows (#289) ([`e6da44f`](https://github.com/mateo-m/empo-app/commit/e6da44f40871ba5b13ca879cce436cf5e597d66d))
+- Read the cheat menu key through the native input (mateo-m/mkxp-z-apple-mobile#92) ([`f6957df`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/f6957df53c074f8d33e91159461b89e76daa863e))
+- An empty path names no file or folder (mateo-m/mkxp-z-apple-mobile#93) ([`ed4f295`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/ed4f295785e3c6b8b09ca845ec50bd3e18acb977))
+
+### Documentation
+
+- Name the native key read in the cheat key comment (#288) ([`1a56242`](https://github.com/mateo-m/empo-app/commit/1a56242f493560796dadd853aa287872e953a5b8))
+
+### Features
+
+- Send the iOS crash reports of Empo to Sentry (#290) ([`60d444c`](https://github.com/mateo-m/empo-app/commit/60d444c58c46f1316956a58255adc91ec87cdb30))
+
+### Other
+
+- Update the core and ANGLE pins (#293) ([`a08a2ce`](https://github.com/mateo-m/empo-app/commit/a08a2cebaa014d7a77bf11f890873c2b786c94c0))
+
 ## 0.11.2 - 2026-11-16
 
 ### Bug Fixes
