@@ -53,13 +53,20 @@ enum ErrorReports {
         return event
     }
 
+    private nonisolated static let executables: Set<String> = ["Empo", "GameProcess"]
+
     /// LiveContainer runs other apps inside its own app, so MetricKit
-    /// gives Empo their crash reports too. The main thread of a crash
-    /// of Empo always runs in Empo's executable.
+    /// gives Empo their crash reports too. A crash of Empo has one of
+    /// Empo's executables in its call stacks. MetricKit can leave out
+    /// the name of a binary, and such a report can be Empo's.
     private nonisolated static func isOtherAppCrash(_ event: Event) -> Bool {
-        guard event.exceptions?.first?.mechanism?.type == "MXCrashDiagnostic" else { return false }
-        let executable = Bundle.main.executableURL?.lastPathComponent
-        return event.debugMeta?.contains { $0.codeFile == executable } != true
+        guard
+            event.exceptions?.first?.mechanism?.type == "MXCrashDiagnostic",
+            let images = event.debugMeta, !images.isEmpty
+        else { return false }
+        return images.allSatisfy { image in
+            image.codeFile.map { !executables.contains($0) } ?? false
+        }
     }
 
     /// The game's title and its session log. Nil when debug logs are off.

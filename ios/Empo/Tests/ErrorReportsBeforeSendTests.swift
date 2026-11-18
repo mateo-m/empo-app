@@ -11,7 +11,7 @@ final class ErrorReportsBeforeSendTests: XCTestCase {
     /// The event that the Sentry SDK makes from a MetricKit crash
     /// report (SentryMXManager.captureEvent): one image for each binary
     /// in the call stacks.
-    private func metricKitCrash(binaries: [String]) -> Event {
+    private func metricKitCrash(binaries: [String?]) -> Event {
         let event = Event(level: .error)
         let mechanism = Mechanism(type: "MXCrashDiagnostic")
         mechanism.handled = false
@@ -29,10 +29,6 @@ final class ErrorReportsBeforeSendTests: XCTestCase {
         return event
     }
 
-    private var empoExecutable: String {
-        Bundle.main.executableURL?.lastPathComponent ?? ""
-    }
-
     // EMPO-APP-3D: LiveContainer ran Bloons TD 5 HD, and Empo sent its
     // crash as an Empo crash.
     func testDropsTheCrashOfAnotherAppInLiveContainer() {
@@ -44,15 +40,29 @@ final class ErrorReportsBeforeSendTests: XCTestCase {
     }
 
     func testKeepsACrashOfEmpo() {
-        let event = metricKitCrash(binaries: ["MkxpCore", "UIKitCore", empoExecutable, "dyld"])
+        let event = metricKitCrash(binaries: ["MkxpCore", "UIKitCore", "Empo", "dyld"])
         XCTAssertNotNil(ErrorReports.beforeSend(event))
     }
 
     func testKeepsACrashOfEmpoInLiveContainer() {
         let event = metricKitCrash(binaries: [
-            "MkxpCore", "UIKitCore", empoExecutable, "LiveContainerShared", "dyld",
+            "MkxpCore", "UIKitCore", "Empo", "LiveContainerShared", "dyld",
         ])
         XCTAssertNotNil(ErrorReports.beforeSend(event))
+    }
+
+    func testKeepsACrashOfTheGameProcess() {
+        let event = metricKitCrash(binaries: ["MkxpCore", "GameProcess", "dyld"])
+        XCTAssertNotNil(ErrorReports.beforeSend(event))
+    }
+
+    func testKeepsACrashWithAnUnnamedBinary() {
+        let event = metricKitCrash(binaries: [nil, "UIKitCore", "LiveContainerShared", "dyld"])
+        XCTAssertNotNil(ErrorReports.beforeSend(event))
+    }
+
+    func testKeepsACrashWithNoBinaries() {
+        XCTAssertNotNil(ErrorReports.beforeSend(metricKitCrash(binaries: [])))
     }
 
     func testKeepsAGameError() {
