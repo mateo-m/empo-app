@@ -58,15 +58,14 @@ enum ErrorReports {
     /// LiveContainer runs other apps inside its own app, so MetricKit
     /// gives Empo their crash reports too. A crash of Empo has one of
     /// Empo's executables in its call stacks. MetricKit can leave out
-    /// the name of a binary, and such a report can be Empo's.
+    /// the name of a binary, and such a report can be Empo's. The SDK
+    /// puts a binary that has no UUID in the frames but not in the images.
     private nonisolated static func isOtherAppCrash(_ event: Event) -> Bool {
-        guard
-            event.exceptions?.first?.mechanism?.type == "MXCrashDiagnostic",
-            let images = event.debugMeta, !images.isEmpty
-        else { return false }
-        return images.allSatisfy { image in
-            image.codeFile.map { !executables.contains($0) } ?? false
-        }
+        guard event.exceptions?.first?.mechanism?.type == "MXCrashDiagnostic" else { return false }
+        let frames = (event.threads ?? []).flatMap { $0.stacktrace?.frames ?? [] }
+        let binaries = (event.debugMeta ?? []).map(\.codeFile) + frames.map(\.package)
+        return !binaries.isEmpty
+            && binaries.allSatisfy { binary in binary.map { !executables.contains($0) } ?? false }
     }
 
     /// The game's title and its session log. Nil when debug logs are off.

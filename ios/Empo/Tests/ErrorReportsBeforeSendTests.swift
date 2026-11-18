@@ -9,9 +9,9 @@ import XCTest
 final class ErrorReportsBeforeSendTests: XCTestCase {
 
     /// The event that the Sentry SDK makes from a MetricKit crash
-    /// report (SentryMXManager.captureEvent): one image for each binary
-    /// in the call stacks.
-    private func metricKitCrash(binaries: [String?]) -> Event {
+    /// report (SentryMXManager.captureEvent): one frame for each binary
+    /// in the call stack, and one image for each binary that has a UUID.
+    private func metricKitCrash(binaries: [String?], binariesWithoutUUID: [String?] = []) -> Event {
         let event = Event(level: .error)
         let mechanism = Mechanism(type: "MXCrashDiagnostic")
         mechanism.handled = false
@@ -26,6 +26,16 @@ final class ErrorReportsBeforeSendTests: XCTestCase {
             image.codeFile = binary
             return image
         }
+        let thread = SentryThread(threadId: 0)
+        thread.crashed = true
+        thread.stacktrace = SentryStacktrace(
+            frames: (binaries + binariesWithoutUUID).map { binary in
+                let frame = Frame()
+                frame.package = binary
+                return frame
+            },
+            registers: [:])
+        event.threads = [thread]
         return event
     }
 
@@ -58,6 +68,18 @@ final class ErrorReportsBeforeSendTests: XCTestCase {
 
     func testKeepsACrashWithAnUnnamedBinary() {
         let event = metricKitCrash(binaries: [nil, "UIKitCore", "LiveContainerShared", "dyld"])
+        XCTAssertNotNil(ErrorReports.beforeSend(event))
+    }
+
+    func testKeepsACrashOfEmpoWithoutAUUID() {
+        let event = metricKitCrash(
+            binaries: ["UIKitCore", "LiveContainerShared", "dyld"], binariesWithoutUUID: ["Empo"])
+        XCTAssertNotNil(ErrorReports.beforeSend(event))
+    }
+
+    func testKeepsACrashWithAnUnnamedBinaryWithoutAUUID() {
+        let event = metricKitCrash(
+            binaries: ["UIKitCore", "LiveContainerShared", "dyld"], binariesWithoutUUID: [nil])
         XCTAssertNotNil(ErrorReports.beforeSend(event))
     }
 
