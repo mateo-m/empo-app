@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.4 - 2026-11-18
+
+### Bug Fixes
+
+- Drop the crash reports of other apps in LiveContainer (#295) ([`c81060d`](https://github.com/mateo-m/empo-app/commit/c81060de19836d16690bab7cdd8756c5135954a8))
+- Title game errors by the error and its message (#296) ([`074c889`](https://github.com/mateo-m/empo-app/commit/074c889392fa361f46801fbe18d808bdb3c73432))
+
 ## 0.11.3 - 2026-11-17
 
 ### Bug Fixes
