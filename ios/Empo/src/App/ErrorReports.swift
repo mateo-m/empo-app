@@ -72,7 +72,9 @@ enum ErrorReports {
     typealias Game = (title: String, log: URL)
 
     static func gameError(_ message: String, game: Game?) {
-        send(message, level: .error, fingerprint: gameErrorFingerprint(message), game: game)
+        send(
+            message, level: .error, fingerprint: gameErrorFingerprint(message),
+            exception: gameErrorException(message), game: game)
     }
 
     private nonisolated static let exceptionLine = try? NSRegularExpression(
@@ -93,17 +95,13 @@ enum ErrorReports {
     /// backtrace. An error in a map event script has a second pair of
     /// lines in the message of a RuntimeError.
     nonisolated static func gameErrorFingerprint(_ message: String) -> [String] {
-        // Swift reads "\r\n" as one Character, which is not "\n".
-        let lines = message.split(whereSeparator: \.isNewline)
-        guard var index = lines.firstIndex(where: isExceptionLine), index + 1 < lines.endIndex else {
+        let lines = lines(of: message)
+        guard let index = errorLineIndex(in: lines) else {
             // The engine's line "Script 'rpg_vxace' line 960: Errno::ENOENT
             // occurred." comes before the message, so "Audio/SE/Cursor1"
             // and "Ice1" land in one issue.
             return ["error", lines.first.map(String.init) ?? ""]
         }
-        // Not the last pair: `raise RuntimeError` gives the line
-        // "Message: RuntimeError".
-        while index + 3 < lines.endIndex, isExceptionLine(lines[index + 2]) { index += 2 }
         let frame = lines[(index + 2)...].first {
             $0.range(of: #":[0-9]+:in `"#, options: .regularExpression) != nil
         }
@@ -113,6 +111,38 @@ enum ErrorReports {
             .joined(separator: "\n")
             .replacingOccurrences(of: "0x[0-9a-f]+|[0-9]+", with: "0", options: .regularExpression)
         return ["error", error]
+    }
+
+    /// Sentry titles an event with a message by its first line, which
+    /// is a header line such as "Game version: 1.2.1". An event with an
+    /// exception gets the title "TypeError: can't convert Float into String".
+    nonisolated static func gameErrorException(_ message: String) -> Exception? {
+        let lines = lines(of: message)
+        guard let index = errorLineIndex(in: lines),
+            let type = lines[index].split(separator: ": ", maxSplits: 1, omittingEmptySubsequences: false)
+                .last,
+            let value = lines[index + 1].split(
+                separator: ": ", maxSplits: 1, omittingEmptySubsequences: false
+            ).last
+        else { return nil }
+        return Exception(value: String(value), type: String(type))
+    }
+
+    // Swift reads "\r\n" as one Character, which is not "\n".
+    private nonisolated static func lines(of message: String) -> [Substring] {
+        message.split(whereSeparator: \.isNewline)
+    }
+
+    /// The index of the last "Exception: TypeError" line that a message
+    /// line follows.
+    private nonisolated static func errorLineIndex(in lines: [Substring]) -> Int? {
+        guard var index = lines.firstIndex(where: isExceptionLine), index + 1 < lines.endIndex else {
+            return nil
+        }
+        // Not the last pair: `raise RuntimeError` gives the line
+        // "Message: RuntimeError".
+        while index + 3 < lines.endIndex, isExceptionLine(lines[index + 2]) { index += 2 }
+        return index
     }
 
     /// Many games rescue a script error and show it with `p`, for
@@ -129,12 +159,13 @@ enum ErrorReports {
     }
 
     private static func send(
-        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?
+        _ message: String, level: SentryLevel, fingerprint: [String], exception: Exception? = nil, game: Game?
     ) {
         guard SentrySDK.isEnabled else { return }
         let event = Event(level: level)
         event.message = SentryMessage(formatted: message)
         event.fingerprint = fingerprint
+        event.exceptions = exception.map { [$0] }
         let log = game.flatMap { logTail(of: $0.log) }
         SentrySDK.capture(event: event) { scope in
             if let game {

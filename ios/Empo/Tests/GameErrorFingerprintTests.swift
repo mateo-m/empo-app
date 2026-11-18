@@ -109,4 +109,24 @@ final class GameErrorFingerprintTests: XCTestCase {
             ErrorReports.gameErrorFingerprint(cursor),
             ["error", "Script 'rpg_vxace' line 960: Errno::ENOENT occurred."])
     }
+
+    func testTheErrorAndItsMessageNameTheTitle() {
+        let titles = [vitroMart(version: "1.2.1"), solarEclipse, pokemonZTypeErrorScript10].map {
+            ErrorReports.gameErrorException($0).map { "\($0.type ?? ""): \($0.value ?? "")" }
+        }
+        XCTAssertEqual(
+            titles,
+            [
+                "NoMethodError: undefined method `money' for nil:NilClass",
+                "RuntimeError: Unknown ID DOUBLE TEAM.",
+                "TypeError: 010:Game_System:71:in `+': can't convert Array into String",
+            ])
+    }
+
+    func testTheEngineErrorLineKeepsTheTitle() {
+        XCTAssertNil(
+            ErrorReports.gameErrorException(
+                "Script 'rpg_vxace' line 960: Errno::ENOENT occurred.\n\nNo such file or directory - Audio/SE/Cursor1"
+            ))
+    }
 }
