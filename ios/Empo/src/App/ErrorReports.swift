@@ -72,20 +72,23 @@ enum ErrorReports {
     typealias Game = (title: String, log: URL)
 
     static func gameError(_ message: String, game: Game?) {
-        send(message, level: .error, fingerprint: gameErrorFingerprint(message), game: game)
+        let report = gameErrorTitle(message).map { "\($0)\n\n\(message)" } ?? message
+        send(report, level: .error, fingerprint: gameErrorFingerprint(message), game: game)
     }
 
     private nonisolated static let exceptionLine = try? NSRegularExpression(
         pattern: #"\A[^:]+: ("# + RescuedRubyError.classNamePattern + #")\z"#)
 
-    /// A line such as "Exception: Errno::ENOENT" or "Excepción: TypeError".
-    private nonisolated static func isExceptionLine(_ line: Substring) -> Bool {
+    /// "Errno::ENOENT" for a line such as "Exception: Errno::ENOENT" or
+    /// "Excepción: Errno::ENOENT".
+    private nonisolated static func exceptionClass(of line: Substring) -> String? {
         let line = String(line)
         guard
             let match = exceptionLine?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-            let className = Range(match.range(at: 1), in: line)
-        else { return false }
-        return RescuedRubyError.isErrorClass(line[className])
+            let className = Range(match.range(at: 1), in: line),
+            RescuedRubyError.isErrorClass(line[className])
+        else { return nil }
+        return String(line[className])
     }
 
     /// Pokémon Essentials writes header lines such as "Game version: 1.2.1"
@@ -93,17 +96,13 @@ enum ErrorReports {
     /// backtrace. An error in a map event script has a second pair of
     /// lines in the message of a RuntimeError.
     nonisolated static func gameErrorFingerprint(_ message: String) -> [String] {
-        // Swift reads "\r\n" as one Character, which is not "\n".
-        let lines = message.split(whereSeparator: \.isNewline)
-        guard var index = lines.firstIndex(where: isExceptionLine), index + 1 < lines.endIndex else {
+        let lines = lines(of: message)
+        guard let index = errorLineIndex(in: lines) else {
             // The engine's line "Script 'rpg_vxace' line 960: Errno::ENOENT
             // occurred." comes before the message, so "Audio/SE/Cursor1"
             // and "Ice1" land in one issue.
             return ["error", lines.first.map(String.init) ?? ""]
         }
-        // Not the last pair: `raise RuntimeError` gives the line
-        // "Message: RuntimeError".
-        while index + 3 < lines.endIndex, isExceptionLine(lines[index + 2]) { index += 2 }
         let frame = lines[(index + 2)...].first {
             $0.range(of: #":[0-9]+:in `"#, options: .regularExpression) != nil
         }
@@ -113,6 +112,38 @@ enum ErrorReports {
             .joined(separator: "\n")
             .replacingOccurrences(of: "0x[0-9a-f]+|[0-9]+", with: "0", options: .regularExpression)
         return ["error", error]
+    }
+
+    /// Sentry titles a message event by its first line, which is a header
+    /// line such as "Game version: 1.2.1". An exception would give the
+    /// title, but the SDK then attaches the stacks of Empo's threads.
+    nonisolated static func gameErrorTitle(_ message: String) -> String? {
+        let lines = lines(of: message)
+        guard let index = errorLineIndex(in: lines), let type = exceptionClass(of: lines[index]) else {
+            return nil
+        }
+        let line = lines[index + 1]
+        let text = line.range(of: ": ").map { line[$0.upperBound...] } ?? ""
+        return text.isEmpty ? type : "\(type): \(text)"
+    }
+
+    // Swift reads "\r\n" as one Character, which is not "\n".
+    private nonisolated static func lines(of message: String) -> [Substring] {
+        message.split(whereSeparator: \.isNewline)
+    }
+
+    /// The index of the last "Exception: TypeError" line that a message
+    /// line follows.
+    private nonisolated static func errorLineIndex(in lines: [Substring]) -> Int? {
+        guard var index = lines.firstIndex(where: { exceptionClass(of: $0) != nil }),
+            index + 1 < lines.endIndex
+        else {
+            return nil
+        }
+        // Not the last pair: `raise RuntimeError` gives the line
+        // "Message: RuntimeError".
+        while index + 3 < lines.endIndex, exceptionClass(of: lines[index + 2]) != nil { index += 2 }
+        return index
     }
 
     /// Many games rescue a script error and show it with `p`, for
