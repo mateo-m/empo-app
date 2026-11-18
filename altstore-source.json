@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.11.4",
+          "buildVersion": "874",
+          "date": "2026-11-18",
+          "localizedDescription": "Fixed\n• Drop the crash reports of other apps in LiveContainer\n• Title game errors by the error and its message",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.11.4/Empo-ios.ipa",
+          "size": 101656602,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.11.3",
           "buildVersion": "870",
           "date": "2026-11-17",
