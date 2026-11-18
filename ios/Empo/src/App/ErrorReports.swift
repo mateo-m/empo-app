@@ -37,17 +37,35 @@ enum ErrorReports {
                 options.enableAutoSessionTracking = false
                 options.enableAutoBreadcrumbTracking = false
                 options.enableSwizzling = false
-                // Both stay the same for each install: the SDK sets the
-                // user to an install ID when no user is set.
-                options.beforeSend = { @Sendable event in
-                    event.user = nil
-                    event.context?["app"]?["device_app_hash"] = nil
-                    return event
-                }
+                options.beforeSend = beforeSend
             }
         } else if SentrySDK.isEnabled {
             SentrySDK.close()
         }
+    }
+
+    nonisolated static func beforeSend(_ event: Event) -> Event? {
+        guard !isOtherAppCrash(event) else { return nil }
+        // Both stay the same for each install: the SDK sets the user to
+        // an install ID when no user is set.
+        event.user = nil
+        event.context?["app"]?["device_app_hash"] = nil
+        return event
+    }
+
+    private nonisolated static let executables: Set<String> = ["Empo", "GameProcess"]
+
+    /// LiveContainer runs other apps inside its own app, so MetricKit
+    /// gives Empo their crash reports too. A crash of Empo has one of
+    /// Empo's executables in its call stacks. MetricKit can leave out
+    /// the name of a binary, and such a report can be Empo's. The SDK
+    /// puts a binary that has no UUID in the frames but not in the images.
+    private nonisolated static func isOtherAppCrash(_ event: Event) -> Bool {
+        guard event.exceptions?.first?.mechanism?.type == "MXCrashDiagnostic" else { return false }
+        let frames = (event.threads ?? []).flatMap { $0.stacktrace?.frames ?? [] }
+        let binaries = (event.debugMeta ?? []).map(\.codeFile) + frames.map(\.package)
+        return !binaries.isEmpty
+            && binaries.allSatisfy { binary in binary.map { !executables.contains($0) } ?? false }
     }
 
     /// The game's title and its session log. Nil when debug logs are off.
