@@ -37,17 +37,29 @@ enum ErrorReports {
                 options.enableAutoSessionTracking = false
                 options.enableAutoBreadcrumbTracking = false
                 options.enableSwizzling = false
-                // Both stay the same for each install: the SDK sets the
-                // user to an install ID when no user is set.
-                options.beforeSend = { @Sendable event in
-                    event.user = nil
-                    event.context?["app"]?["device_app_hash"] = nil
-                    return event
-                }
+                options.beforeSend = beforeSend
             }
         } else if SentrySDK.isEnabled {
             SentrySDK.close()
         }
+    }
+
+    nonisolated static func beforeSend(_ event: Event) -> Event? {
+        guard !isOtherAppCrash(event) else { return nil }
+        // Both stay the same for each install: the SDK sets the user to
+        // an install ID when no user is set.
+        event.user = nil
+        event.context?["app"]?["device_app_hash"] = nil
+        return event
+    }
+
+    /// LiveContainer runs other apps inside its own app, so MetricKit
+    /// gives Empo their crash reports too. The main thread of a crash
+    /// of Empo always runs in Empo's executable.
+    private nonisolated static func isOtherAppCrash(_ event: Event) -> Bool {
+        guard event.exceptions?.first?.mechanism?.type == "MXCrashDiagnostic" else { return false }
+        let executable = Bundle.main.executableURL?.lastPathComponent
+        return event.debugMeta?.contains { $0.codeFile == executable } != true
     }
 
     /// The game's title and its session log. Nil when debug logs are off.
