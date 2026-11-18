@@ -72,22 +72,23 @@ enum ErrorReports {
     typealias Game = (title: String, log: URL)
 
     static func gameError(_ message: String, game: Game?) {
-        send(
-            message, level: .error, fingerprint: gameErrorFingerprint(message),
-            exception: gameErrorException(message), game: game)
+        let report = gameErrorTitle(message).map { "\($0)\n\n\(message)" } ?? message
+        send(report, level: .error, fingerprint: gameErrorFingerprint(message), game: game)
     }
 
     private nonisolated static let exceptionLine = try? NSRegularExpression(
         pattern: #"\A[^:]+: ("# + RescuedRubyError.classNamePattern + #")\z"#)
 
-    /// A line such as "Exception: Errno::ENOENT" or "Excepción: TypeError".
-    private nonisolated static func isExceptionLine(_ line: Substring) -> Bool {
+    /// "Errno::ENOENT" for a line such as "Exception: Errno::ENOENT" or
+    /// "Excepción: Errno::ENOENT".
+    private nonisolated static func exceptionClass(of line: Substring) -> String? {
         let line = String(line)
         guard
             let match = exceptionLine?.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)),
-            let className = Range(match.range(at: 1), in: line)
-        else { return false }
-        return RescuedRubyError.isErrorClass(line[className])
+            let className = Range(match.range(at: 1), in: line),
+            RescuedRubyError.isErrorClass(line[className])
+        else { return nil }
+        return String(line[className])
     }
 
     /// Pokémon Essentials writes header lines such as "Game version: 1.2.1"
@@ -113,19 +114,17 @@ enum ErrorReports {
         return ["error", error]
     }
 
-    /// Sentry titles an event with a message by its first line, which
-    /// is a header line such as "Game version: 1.2.1". An event with an
-    /// exception gets the title "TypeError: can't convert Float into String".
-    nonisolated static func gameErrorException(_ message: String) -> Exception? {
+    /// Sentry titles a message event by its first line, which is a header
+    /// line such as "Game version: 1.2.1". An exception would give the
+    /// title, but the SDK then attaches the stacks of Empo's threads.
+    nonisolated static func gameErrorTitle(_ message: String) -> String? {
         let lines = lines(of: message)
-        guard let index = errorLineIndex(in: lines),
-            let type = lines[index].split(separator: ": ", maxSplits: 1, omittingEmptySubsequences: false)
-                .last,
-            let value = lines[index + 1].split(
-                separator: ": ", maxSplits: 1, omittingEmptySubsequences: false
-            ).last
-        else { return nil }
-        return Exception(value: String(value), type: String(type))
+        guard let index = errorLineIndex(in: lines), let type = exceptionClass(of: lines[index]) else {
+            return nil
+        }
+        let line = lines[index + 1]
+        let text = line.range(of: ": ").map { line[$0.upperBound...] } ?? ""
+        return text.isEmpty ? type : "\(type): \(text)"
     }
 
     // Swift reads "\r\n" as one Character, which is not "\n".
@@ -136,12 +135,14 @@ enum ErrorReports {
     /// The index of the last "Exception: TypeError" line that a message
     /// line follows.
     private nonisolated static func errorLineIndex(in lines: [Substring]) -> Int? {
-        guard var index = lines.firstIndex(where: isExceptionLine), index + 1 < lines.endIndex else {
+        guard var index = lines.firstIndex(where: { exceptionClass(of: $0) != nil }),
+            index + 1 < lines.endIndex
+        else {
             return nil
         }
         // Not the last pair: `raise RuntimeError` gives the line
         // "Message: RuntimeError".
-        while index + 3 < lines.endIndex, isExceptionLine(lines[index + 2]) { index += 2 }
+        while index + 3 < lines.endIndex, exceptionClass(of: lines[index + 2]) != nil { index += 2 }
         return index
     }
 
@@ -159,13 +160,12 @@ enum ErrorReports {
     }
 
     private static func send(
-        _ message: String, level: SentryLevel, fingerprint: [String], exception: Exception? = nil, game: Game?
+        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?
     ) {
         guard SentrySDK.isEnabled else { return }
         let event = Event(level: level)
         event.message = SentryMessage(formatted: message)
         event.fingerprint = fingerprint
-        event.exceptions = exception.map { [$0] }
         let log = game.flatMap { logTail(of: $0.log) }
         SentrySDK.capture(event: event) { scope in
             if let game {

@@ -111,21 +111,25 @@ final class GameErrorFingerprintTests: XCTestCase {
     }
 
     func testTheErrorAndItsMessageNameTheTitle() {
-        let titles = [vitroMart(version: "1.2.1"), solarEclipse, pokemonZTypeErrorScript10].map {
-            ErrorReports.gameErrorException($0).map { "\($0.type ?? ""): \($0.value ?? "")" }
-        }
         XCTAssertEqual(
-            titles,
+            [vitroMart(version: "1.2.1"), vitroFloatEvent18, solarEclipse, pokemonZTypeErrorScript10].map(
+                ErrorReports.gameErrorTitle),
             [
                 "NoMethodError: undefined method `money' for nil:NilClass",
+                "TypeError: 012:Game_System:182:in `+': can't convert Float into String",
                 "RuntimeError: Unknown ID DOUBLE TEAM.",
                 "TypeError: 010:Game_System:71:in `+': can't convert Array into String",
             ])
     }
 
+    func testAnErrorWithNoMessageNamesOnlyTheError() {
+        XCTAssertEqual(
+            ErrorReports.gameErrorTitle("Exception: RangeError\r\nMessage: \r\n\r\nBacktrace:"), "RangeError")
+    }
+
     func testTheEngineErrorLineKeepsTheTitle() {
         XCTAssertNil(
-            ErrorReports.gameErrorException(
+            ErrorReports.gameErrorTitle(
                 "Script 'rpg_vxace' line 960: Errno::ENOENT occurred.\n\nNo such file or directory - Audio/SE/Cursor1"
             ))
     }
