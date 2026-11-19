@@ -82,12 +82,13 @@ enum ErrorReports {
     static func saveRepaired(_ detail: String, game: Game?, saveLoad: SaveLoad?) {
         let fault = saveRepairFault(detail)
         send(
-            "The engine repaired a save: \(fault)\n\n\(detail)", level: .warning,
-            fingerprint: ["save-repaired", fault], game: game, saveLoad: saveLoad)
+            "The engine repaired a save: \(fault)", level: .warning, fingerprint: ["save-repaired", fault],
+            game: game, saveLoad: saveLoad)
     }
 
-    /// The file name goes, so that the saves of all players group as one
-    /// issue for each fault.
+    /// The file name goes: a report holds file names only in the log that
+    /// Debug logs adds, and the saves of all players group as one issue
+    /// for each fault.
     nonisolated static func saveRepairFault(_ detail: String) -> String {
         detail.range(of: ": ").map { String(detail[$0.upperBound...]) } ?? detail
     }
