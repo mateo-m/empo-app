@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.11.5",
+          "buildVersion": "882",
+          "date": "2026-11-19",
+          "localizedDescription": "New\n• Report save repairs and tag game errors that follow a save load\n\nFixed\n• Do not count a pause as a frame in Graphics.average_frame_rate\n• Stop the engine clock while a pause, a game dialog, or a pause request is open\n• Repair sound names that the old Ruby 1.8 sweep broke in saves\n• Repair broken sound names before a save\n\nOther changes\n• Update the core and ANGLE pins",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.11.5/Empo-ios.ipa",
+          "size": 101670547,
+          "minOSVersion": "26.0"
+        },
+        {
           "version": "0.11.4",
           "buildVersion": "874",
           "date": "2026-11-18",
