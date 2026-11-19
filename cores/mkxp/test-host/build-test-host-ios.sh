@@ -22,7 +22,7 @@ DEPS="$ROOT/ios/Dependencies"
 
 SDK=iphonesimulator
 ARCH=arm64
-MIN_OS=26.0
+MIN_OS=17.0
 OUT="$ROOT/build/mkxp-core"
 
 while [ "$#" -gt 0 ]; do

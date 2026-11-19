@@ -4,8 +4,6 @@
 import SwiftUI
 
 extension View {
-    /// Before iOS 18, the view is not a zoom source and the player
-    /// opens with the standard push.
     @ViewBuilder
     func zoomTransitionSource(
         id: some Hashable, in namespace: Namespace.ID, cornerRadius: CGFloat

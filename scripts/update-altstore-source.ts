@@ -7,7 +7,7 @@
 //
 // Usage:
 //   bun scripts/update-altstore-source.ts \
-//     --version 0.1.1 --build 42 --min-os-version 26.0 \
+//     --version 0.1.1 --build 42 --min-os-version 17.0 \
 //     --size 14985878 --date 2026-05-07 \
 //     --download-url https://github.com/mateo-m/empo-app/releases/download/v0.1.1/Empo-ios.ipa \
 //     [--description "What changed in this release."]

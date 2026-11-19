@@ -23,7 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>MinimumOSVersion</key>
-	<string>26.0</string>
+	<string>17.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
