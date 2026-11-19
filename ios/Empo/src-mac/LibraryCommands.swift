@@ -41,9 +41,12 @@ struct LibraryCommands: Commands {
             Divider()
             let deletable = window?.selectedGame.flatMap { window?.canDelete($0) == true ? $0 : nil }
             Button("Delete Game…") {
-                // In a text field, Command-Delete deletes the text before
-                // the caret. A click on the menu item still deletes the game.
-                if NSApp.currentEvent?.type == .keyDown, NSApp.keyWindow?.firstResponder is NSText {
+                // The menu takes Command-Delete before a focused text
+                // field gets it, so hand the key back to the field.
+                if let event = NSApp.currentEvent, event.type == .keyDown,
+                    event.charactersIgnoringModifiers == String(KeyEquivalent.delete.character),
+                    NSApp.keyWindow?.firstResponder is NSText
+                {
                     NSApp.sendAction(#selector(NSResponder.deleteToBeginningOfLine(_:)), to: nil, from: nil)
                 } else if let deletable {
                     window?.requestDelete(deletable)
