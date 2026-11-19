@@ -73,8 +73,7 @@ final class EmpoPlus {
         let callback: URL
         do {
             callback = try await session.authenticate(
-                using: start, callback: .customScheme(Self.callbackScheme),
-                additionalHeaderFields: [:])
+                using: start, callbackURLScheme: Self.callbackScheme)
         } catch ASWebAuthenticationSessionError.canceledLogin {
             throw .cancelled
         } catch {

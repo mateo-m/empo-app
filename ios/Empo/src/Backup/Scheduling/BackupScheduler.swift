@@ -208,13 +208,28 @@ final class BackupScheduler {
         // as long as the hold lasts, so the pass runs without one.
         if BackupNetwork.isConstrained {
             BackupLog.debug("BackupScheduler", "manual press in Low Data Mode, the pass runs without a task")
-            startManualRun(press, overCellular: overCellular)
+            runManualWithoutTask(press, overCellular: overCellular)
             return
         }
         guard !BackupTaskScheduler.submitManual(press, overCellular: overCellular) else { return }
-        // The system refused the task, so the pass runs in the
-        // foreground and hands its uploads to the background session.
-        startManualRun(press, overCellular: overCellular)
+        // The system refused the task, or has none before iOS 26, so
+        // the pass runs in the foreground and hands its uploads to the
+        // background session.
+        runManualWithoutTask(press, overCellular: overCellular)
+    }
+
+    private func runManualWithoutTask(_ press: ManualBackupPress, overCellular: Bool) {
+        if #available(iOS 26.0, *) {
+            startManualRun(press, overCellular: overCellular)
+            return
+        }
+        // Before iOS 26, the short extra time after the user leaves
+        // the app is the only time the pass gets in the background.
+        Task {
+            await BackupBackgroundTask.run(named: "backup.manual") {
+                await BackupScheduler.shared.run(trigger: .manual, press: press, overCellular: overCellular)
+            }
+        }
     }
 
     /// Every manual pass starts here, under the system task or

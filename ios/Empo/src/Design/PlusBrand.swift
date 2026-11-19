@@ -12,9 +12,13 @@ struct PlusBadge: View {
 
 /// Give the view that holds the text `.plusShine()` for the light.
 /// Not for a button title: orange on an orange button cannot be read.
-let plusWord = Text(verbatim: "Plus").fontWeight(.bold).foregroundStyle(.brand)
-    .customAttribute(PlusMark())
+let plusWord: Text = {
+    let word = Text(verbatim: "Plus").fontWeight(.bold).foregroundStyle(.brand)
+    guard #available(iOS 18.0, macOS 15.0, *) else { return word }
+    return word.customAttribute(PlusMark())
+}()
 
+@available(iOS 18.0, macOS 15.0, *)
 private struct PlusMark: TextAttribute {}
 
 extension View {
@@ -34,8 +38,10 @@ private struct PlusShine: ViewModifier {
         Group {
             if let shape {
                 content.modifier(PlusGlint(phase: phase, shape: shape))
-            } else {
+            } else if #available(iOS 18.0, macOS 15.0, *) {
                 content.textRenderer(PlusShineRenderer(phase: phase))
+            } else {
+                content
             }
         }
         .onAppear {
@@ -71,6 +77,7 @@ private enum PlusBand {
     }
 }
 
+@available(iOS 18.0, macOS 15.0, *)
 private struct PlusShineRenderer: TextRenderer, Animatable {
     var phase: Double
 

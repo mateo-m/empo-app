@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import AppKit
 import SwiftUI
 
 struct LibraryCommands: Commands {
     @FocusedValue(\.libraryWindow) private var window
-    @FocusedValue(\.isSearchingLibrary) private var isSearchingLibrary
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -41,10 +41,21 @@ struct LibraryCommands: Commands {
             Divider()
             let deletable = window?.selectedGame.flatMap { window?.canDelete($0) == true ? $0 : nil }
             Button("Delete Game…") {
-                if let deletable { window?.requestDelete(deletable) }
+                // On macOS 14 the menu takes Command-Delete before a
+                // focused text field gets it, so hand the key back to the
+                // field. `KeyEquivalent.delete` is U+0008, but the Delete
+                // key sends U+007F.
+                if let event = NSApp.currentEvent, event.type == .keyDown,
+                    event.charactersIgnoringModifiers == String(UnicodeScalar(UInt8(NSDeleteCharacter))),
+                    NSApp.keyWindow?.firstResponder is NSText
+                {
+                    NSApp.sendAction(#selector(NSResponder.deleteToBeginningOfLine(_:)), to: nil, from: nil)
+                } else if let deletable {
+                    window?.requestDelete(deletable)
+                }
             }
             .keyboardShortcut(.delete, modifiers: .command)
-            .disabled(deletable == nil || isSearchingLibrary == true)
+            .disabled(deletable == nil)
         }
     }
 }

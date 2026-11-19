@@ -112,7 +112,7 @@ struct GameLoadingView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbarBackground(.hidden, for: .navigationBar)
-        .containerBackground(isPlayingPhase ? .clear : .black, for: .navigation)
+        .navigationBackground(isPlayingPhase ? .clear : .black)
         // The pause sets the phase inside an animation. The black
         // must not fade in with it: `AppWindow` paints the root
         // background for the zoom transition, and a fade shows that

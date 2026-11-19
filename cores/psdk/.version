@@ -1,5 +1,5 @@
 # The PSDK core release from github.com/mateo-m/psdk-apple-mobile that
 # cores/psdk/fetch.sh downloads. The release notes give the sha256.
-PSDK_CORE_VERSION=v5
-PSDK_CORE_SHA256=f7d0883e5b17dbccdac516744632025e37fbec9bc406d52163a2c7ee083784ee
+PSDK_CORE_VERSION=v6
+PSDK_CORE_SHA256=082cd637d53836c40a81d091be3b04fb5e136ab569601e9841f480c214165a7a
 PSDK_CORE_ASSET=psdk-ios.tar.gz

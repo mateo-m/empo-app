@@ -35,27 +35,27 @@ struct EmpoMacApp: App {
             if let gameID {
                 GameSettingsWindow(gameID: gameID)
                     .environment(\.appSettings, settings)
+                    .windowNotRestored()
             }
         }
         .defaultSize(width: 520, height: 640)
         .windowResizability(.contentMinSize)
-        .restorationBehavior(.disabled)
 
         Window("Game Cores", id: HelpCommands.gameCoresWindowID) {
             NavigationStack { GameCoresView() }
                 .frame(minWidth: 420, minHeight: 360)
                 .tint(.brand)
+                .windowNotRestored()
         }
         .defaultSize(width: 520, height: 560)
-        .restorationBehavior(.disabled)
 
         Window("Open-Source Licenses", id: HelpCommands.licensesWindowID) {
             NavigationStack { LicensesView() }
                 .frame(minWidth: 420, minHeight: 360)
                 .tint(.brand)
+                .windowNotRestored()
         }
         .defaultSize(width: 560, height: 640)
-        .restorationBehavior(.disabled)
 
         Settings {
             MacSettingsView()

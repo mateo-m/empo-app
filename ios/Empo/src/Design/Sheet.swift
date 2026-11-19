@@ -103,7 +103,11 @@ struct StandardSheet<Content: View, Footer: View>: View {
         case .grouped:
             core.presentationBackground(Color(.systemGroupedBackground))
         case .material:
-            core
+            if #available(iOS 26.0, *) {
+                core
+            } else {
+                core.presentationBackground(.regularMaterial)
+            }
         }
     }
 
@@ -163,7 +167,7 @@ struct StandardSheet<Content: View, Footer: View>: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize)
-        if hasFooter {
+        if hasFooter, #available(iOS 18.0, *) {
             // The content fades out under the pinned header and footer
             // only as far as it runs past them.
             scroll
@@ -171,6 +175,8 @@ struct StandardSheet<Content: View, Footer: View>: View {
                     fade = new
                 }
                 .mask { ScrollEdgeFadeMask(fade: fade).ignoresSafeArea() }
+        } else if hasFooter {
+            scroll
         } else {
             // During a detent change UIKit sizes this view to the new
             // height at once and animates only the sheet's frame. With
@@ -308,6 +314,7 @@ private struct ScrollEdgeFade: Equatable {
 
     init() {}
 
+    @available(iOS 18.0, *)
     init(_ geometry: ScrollGeometry) {
         // `visibleRect` includes the safe area insets, and
         // `containerSize` does not.

@@ -27,8 +27,7 @@ struct PlusScreen: View {
             .padding(.bottom, Spacing._3xl)
         }
         .background(Color(.systemGroupedBackground))
-        .scrollEdgeEffectStyle(.hard, for: .bottom)
-        .safeAreaBar(edge: .bottom) {
+        .bottomBar {
             buttons
                 .padding(.horizontal, Spacing._2xl)
                 .padding(.top, Spacing.lg)
@@ -523,5 +522,17 @@ private struct ArcEntrance: ViewModifier, Animatable {
             .offset(
                 x: end.width * p - end.height / length * lift,
                 y: end.height * p + end.width / length * lift)
+    }
+}
+
+extension View {
+    @ViewBuilder
+    fileprivate func bottomBar(@ViewBuilder _ bar: () -> some View) -> some View {
+        if #available(iOS 26.0, *) {
+            scrollEdgeEffectStyle(.hard, for: .bottom)
+                .safeAreaBar(edge: .bottom, content: bar)
+        } else {
+            safeAreaInset(edge: .bottom) { bar().background(.bar) }
+        }
     }
 }

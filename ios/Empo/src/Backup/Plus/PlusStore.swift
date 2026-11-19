@@ -41,8 +41,10 @@ final class PlusStore {
         let refresh = Task {
             await previous?.value
             var subscribed = false
-            for await entitlement in Transaction.currentEntitlements(for: Self.productID) {
-                if case .verified(let transaction) = entitlement, transaction.revocationDate == nil {
+            for await entitlement in Transaction.currentEntitlements {
+                if case .verified(let transaction) = entitlement, transaction.productID == Self.productID,
+                    transaction.revocationDate == nil
+                {
                     subscribed = true
                 }
             }

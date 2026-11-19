@@ -60,8 +60,9 @@ final class PlusStoreTests: XCTestCase {
         await store.refresh()
 
         var left: [String] = []
-        for await entitlement in Transaction.currentEntitlements(for: PlusStore.productID) {
+        for await entitlement in Transaction.currentEntitlements {
             let transaction = entitlement.unsafePayloadValue
+            guard transaction.productID == PlusStore.productID else { continue }
             left.append(
                 "id \(transaction.id), bought \(transaction.purchaseDate), "
                     + "ends \(transaction.expirationDate.map { "\($0)" } ?? "never"), "

@@ -128,13 +128,17 @@ private struct InterleavedRows<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        Group(subviews: content) { rows in
-            ForEach(rows) { row in
-                if row.id != rows.first?.id {
-                    SheetRowSeparator(leadingColumn: 24)
+        if #available(iOS 18.0, *) {
+            Group(subviews: content) { rows in
+                ForEach(rows) { row in
+                    if row.id != rows.first?.id {
+                        SheetRowSeparator(leadingColumn: 24)
+                    }
+                    row
                 }
-                row
             }
+        } else {
+            content
         }
     }
 }

@@ -5,7 +5,7 @@ import Foundation
 import GameProbe
 import Observation
 import SwiftUI
-import Synchronization
+import os
 
 struct QueuedImportRequest: Identifiable, Hashable, Sendable {
     let id: UUID

@@ -26,7 +26,7 @@ packages:
 options:
   bundleIdPrefix: sh.mateo
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "17.0"
   createIntermediateGroups: true
 settings:
   base:
@@ -485,7 +485,7 @@ targets:
     # process (src-player), which opens the game's core.
     type: application
     platform: macOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "14.0"
     preBuildScripts:
       - *generateGitInfo
       - *wrapMkxp
@@ -543,6 +543,8 @@ targets:
           - Design/Haptics.swift
           - Design/Button.swift
           - Design/IconButton.swift
+          - Design/ZoomTransition.swift
+          - Design/NavigationBackground.swift
           - Design/Sheet.swift
           - Design/IntrinsicSheet.swift
           - Design/SheetToolbar.swift
@@ -652,7 +654,7 @@ targets:
     # runs in Empo's sandbox and container.
     type: application
     platform: macOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "14.0"
     preBuildScripts:
       - *buildSDL
     sources:
@@ -710,7 +712,7 @@ targets:
     # The MvmzCore framework for the Mac.
     type: framework
     platform: macOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "14.0"
     sources: *mvmzSources
     preBuildScripts: *mvmzPreBuild
     postBuildScripts: *mvmzPostBuild
@@ -753,7 +755,7 @@ targets:
   EmpoMacTests:
     type: bundle.unit-test
     platform: macOS
-    deploymentTarget: "26.0"
+    deploymentTarget: "14.0"
     sources:
       - TestsMac
       - TestsShared

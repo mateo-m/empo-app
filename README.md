@@ -59,7 +59,7 @@ The app works end to end with RGSS1/2/3 games, modern mkxp-z forks, and PSDK gam
 
 Each release on the [Releases page](https://github.com/mateo-m/empo-app/releases) has an unsigned `.ipa` file for iPhone and iPad. Install it with [AltStore](https://altstore.io), [SideStore](https://sidestore.io) or [Sideloadly](https://sideloadly.io). [Install Empo](https://empo.mateo.sh/install#iphone-and-ipad) shows how.
 
-The release also has a disk image for a Mac with Apple silicon and macOS 26 or newer. Apple has not notarized it, so macOS blocks it the first time you open it. [Install Empo](https://empo.mateo.sh/install#mac) shows how to allow it.
+The release also has a disk image for a Mac with Apple silicon and macOS 14 or newer. Apple has not notarized it, so macOS blocks it the first time you open it. [Install Empo](https://empo.mateo.sh/install#mac) shows how to allow it.
 
 AltStore/SideStore users can add Empo as a source for native update notifications:
 

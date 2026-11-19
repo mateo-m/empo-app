@@ -5,6 +5,7 @@ import ExtensionFoundation
 import ExtensionKit
 import UIKit
 
+@available(iOS 26.0, *)
 extension AppExtensionPoint {
     @Definition
     static var gameProcess: AppExtensionPoint {
@@ -17,8 +18,10 @@ extension AppExtensionPoint {
 /// shows that process's screen at the bottom of `AppWindow`.
 @MainActor
 enum GameProcessHost {
+    @available(iOS 26.0, *)
     private static var monitor: AppExtensionPoint.Monitor?
-    private static var controller: EXHostViewController?
+    private static var controller: UIViewController?
+    @available(iOS 26.0, *)
     private static let delegate = Delegate()
     private static var session = 0
     private static var lastExit: Task<Void, Never>?
@@ -27,6 +30,9 @@ enum GameProcessHost {
     static var gameView: UIView? { controller?.viewIfLoaded }
 
     static func start(framework: String) {
+        guard #available(iOS 26.0, *) else {
+            fatalError("AppSettings.gameProcessIsAvailable is false before iOS 26.")
+        }
         EmpoGameProcessClient.begin(withFramework: framework)
         session += 1
         let current = session
@@ -81,6 +87,7 @@ enum GameProcessHost {
         }
     }
 
+    @available(iOS 26.0, *)
     private static func identity() async -> AppExtensionIdentity? {
         if let found = monitor?.identities.first { return found }
         do {
@@ -93,6 +100,7 @@ enum GameProcessHost {
         }
     }
 
+    @available(iOS 26.0, *)
     private static func show(_ identity: AppExtensionIdentity) {
         guard let root = AppWindow.rootViewController, let hostView = root.viewIfLoaded else {
             EmpoGameProcessClient.processLost()
@@ -112,6 +120,7 @@ enum GameProcessHost {
         self.controller = controller
     }
 
+    @available(iOS 26.0, *)
     private final class Delegate: NSObject, EXHostViewControllerDelegate {
         func hostViewControllerDidActivate(_ viewController: EXHostViewController) {
             MainActor.assumeIsolated {

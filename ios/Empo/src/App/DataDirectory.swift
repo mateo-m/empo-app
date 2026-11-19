@@ -3,7 +3,7 @@
 
 import Foundation
 import GameProbe
-import Synchronization
+import os
 
 /// Resolves the writable data directory a session hands the engine
 /// (`GameCoreSessionConfig.userDataDirectory`, surfaced to games as
@@ -276,7 +276,7 @@ enum DataDirectory {
     /// (bulk delete) or a delete racing a launch could otherwise
     /// interleave their move-with-rename steps on one shared
     /// directory and fail spuriously.
-    private static let drainLock = Mutex<Void>(())
+    private static let drainLock = OSAllocatedUnfairLock()
 
     /// Nil when the core of the game names no folder.
     static func resolve(for container: GameContainer, core: (any GameCore)?) -> URL? {

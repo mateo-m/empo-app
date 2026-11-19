@@ -271,11 +271,16 @@ class AppSettings {
     /// The game process needs a core that cannot kill its session, and
     /// an app group for the games and the saves. A sideload tool can
     /// remove the extensions to save App IDs.
-    nonisolated static var gameProcessIsAvailable: Bool {
+    nonisolated static var gameProcessIsInBuild: Bool {
         !GameCores.gameProcessCores.isEmpty
             && DataDirectory.appGroupURL != nil
             && FileManager.default.fileExists(
                 atPath: Bundle.main.bundleURL.appendingPathComponent("Extensions/GameProcess.appex").path)
+    }
+
+    nonisolated static var gameProcessIsAvailable: Bool {
+        guard #available(iOS 26.0, *) else { return false }
+        return gameProcessIsInBuild
     }
 
     // MARK: - Splash disclaimer acknowledgment

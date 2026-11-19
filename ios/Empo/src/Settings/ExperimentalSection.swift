@@ -12,13 +12,20 @@ struct ExperimentalSection: View {
                 SettingsToggle(
                     title: "Quit and switch games",
                     isOn: Binding(
-                        get: { settings.rubyGameRunner == .gameProcess },
+                        get: {
+                            AppSettings.gameProcessIsAvailable && settings.rubyGameRunner == .gameProcess
+                        },
                         set: { settings.rubyGameRunner = $0 ? .gameProcess : .app }
                     ),
                     description:
                         "Quit a game and start another one without closing \(AppInfo.name). Works with \(GameCores.gameProcessGamesName)."
                 )
-                if settings.rubyGameRunner == .gameProcess, DataDirectory.unmovedItem != nil {
+                .disabled(!AppSettings.gameProcessIsAvailable)
+                if !AppSettings.gameProcessIsAvailable {
+                    Label("Needs iOS 26 or newer.", systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } else if settings.rubyGameRunner == .gameProcess, DataDirectory.unmovedItem != nil {
                     Label(
                         "Couldn't move your games and saves, so this setting isn't on yet. Your files didn't change. \(AppInfo.name) tries again each time you open it.",
                         systemImage: "exclamationmark.triangle"

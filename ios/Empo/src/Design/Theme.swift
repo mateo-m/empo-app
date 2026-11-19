@@ -97,7 +97,7 @@ extension View {
     /// Two-layer shadow for library artwork tiles and hero
     /// cards. The tight first layer defines the edge against the
     /// surface. The diffuse second layer gives ambient elevation.
-    /// Apply it after `matchedTransitionSource` in the modifier
+    /// Apply it after `zoomTransitionSource` in the modifier
     /// chain. The transition source clips its subtree to the
     /// configured snapshot bounds, and that clip would crop a
     /// shadow drawn earlier in the chain.
@@ -131,10 +131,10 @@ extension View {
         shadow(color: .black.opacity(0.7), radius: 3, x: 0, y: 1)
     }
 
-    /// Pin the Liquid Glass material to its dark variant. The player
-    /// controls (toolbar, D-pad, action buttons, debug overlay) use
-    /// it so the glass tone stays consistent regardless of the
-    /// system color scheme or the backdrop brightness.
+    /// Pin the glass, or the material before iOS 26, to its dark
+    /// variant. The player controls (toolbar, D-pad, action buttons,
+    /// debug overlay) use it so the tone stays consistent regardless
+    /// of the system color scheme or the backdrop brightness.
     func darkGlass() -> some View {
         environment(\.colorScheme, .dark)
     }
