@@ -71,9 +71,26 @@ enum ErrorReports {
     /// The game's title and its session log. Nil when debug logs are off.
     typealias Game = (title: String, log: URL)
 
-    static func gameError(_ message: String, game: Game?) {
+    static func gameError(_ message: String, game: Game?, saveLoad: SaveLoad?) {
         let report = gameErrorTitle(message).map { "\($0)\n\n\(message)" } ?? message
-        send(report, level: .error, fingerprint: gameErrorFingerprint(message), game: game)
+        send(
+            report, level: .error, fingerprint: gameErrorFingerprint(message), game: game, saveLoad: saveLoad)
+    }
+
+    /// The engine repaired a broken value in a save, and the game goes
+    /// on. The detail is "<file name>: <fault>".
+    static func saveRepaired(_ detail: String, game: Game?, saveLoad: SaveLoad?) {
+        let fault = saveRepairFault(detail)
+        send(
+            "The engine repaired a save: \(fault)", level: .warning, fingerprint: ["save-repaired", fault],
+            game: game, saveLoad: saveLoad)
+    }
+
+    /// The file name goes: a report holds file names only in the log that
+    /// Debug logs adds, and the saves of all players group as one issue
+    /// for each fault. A file name can hold ": ", and the fault cannot.
+    nonisolated static func saveRepairFault(_ detail: String) -> String {
+        detail.range(of: ": ", options: .backwards).map { String(detail[$0.upperBound...]) } ?? detail
     }
 
     private nonisolated static let exceptionLine = try? NSRegularExpression(
@@ -150,26 +167,35 @@ enum ErrorReports {
     /// example `p [$!.class, $!.message, $!.backtrace]` in Insurgence's
     /// `Marshal.load`. The engine shows that as a game message, not an
     /// error.
-    static func gameMessage(_ message: String, game: Game?) {
+    static func gameMessage(_ message: String, game: Game?, saveLoad: SaveLoad?) {
         guard let error = RescuedRubyError(message) else { return }
-        send(message, level: .error, fingerprint: error.fingerprint, game: game)
+        send(message, level: .error, fingerprint: error.fingerprint, game: game, saveLoad: saveLoad)
     }
 
-    static func gameCrash(game: Game?) {
-        send("The game crashed.", level: .fatal, fingerprint: ["crash", game?.title ?? ""], game: game)
+    static func gameCrash(game: Game?, saveLoad: SaveLoad?) {
+        send(
+            "The game crashed.", level: .fatal, fingerprint: ["crash", game?.title ?? ""], game: game,
+            saveLoad: saveLoad)
     }
 
     private static func send(
-        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?
+        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?
     ) {
         guard SentrySDK.isEnabled else { return }
         let event = Event(level: level)
         event.message = SentryMessage(formatted: message)
         event.fingerprint = fingerprint
         let log = game.flatMap { logTail(of: $0.log) }
+        let now = ContinuousClock.now
         SentrySDK.capture(event: event) { scope in
             if let game {
                 scope.setTag(value: game.title, key: "game")
+            }
+            if let saveLoad {
+                scope.setTag(value: saveLoad.tag(at: now), key: SaveLoad.tagKey)
+                if let seconds = saveLoad.seconds(at: now) {
+                    scope.setContext(value: ["seconds_since_load": seconds], key: "save_load")
+                }
             }
             if let log {
                 scope.addAttachment(Attachment(data: log, filename: "session.log", contentType: "text/plain"))
@@ -183,6 +209,30 @@ enum ErrorReports {
         guard let size = try? file.seekToEnd() else { return nil }
         try? file.seek(toOffset: size > UInt64(logTailBytes) ? size - UInt64(logTailBytes) : 0)
         return try? file.readToEnd()
+    }
+}
+
+/// When the game last read a save. A report that comes soon
+/// after a load can come from a damaged save. Nil in place of a
+/// `SaveLoad` means that the core does not report its loads, or that
+/// the report is about an earlier launch.
+enum SaveLoad: Equatable {
+    case never
+    case at(ContinuousClock.Instant)
+
+    static let tagKey = "save_loaded"
+    static let soon = Duration.seconds(60)
+
+    func tag(at now: ContinuousClock.Instant) -> String {
+        switch self {
+        case .never: "none"
+        case .at(let load): now - load <= Self.soon ? "within_60s" : "over_60s"
+        }
+    }
+
+    func seconds(at now: ContinuousClock.Instant) -> Int? {
+        guard case .at(let load) = self else { return nil }
+        return Int((now - load).components.seconds)
     }
 }
 

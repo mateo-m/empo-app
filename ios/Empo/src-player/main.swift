@@ -44,7 +44,9 @@ if let error = EmpoCoreOpen(launch.corePath) {
 
 // The cores print to standard output, which Empo reads for
 // PlayerMessage lines. Their output goes to standard error instead.
-let messages = FileHandle(fileDescriptor: dup(STDOUT_FILENO), closeOnDealloc: true)
+// A process that a game starts must not keep the messages open after
+// the game ends, because Empo waits for their end.
+let messages = FileHandle(fileDescriptor: fcntl(STDOUT_FILENO, F_DUPFD_CLOEXEC, 0), closeOnDealloc: true)
 dup2(STDERR_FILENO, STDOUT_FILENO)
 // A write after Empo is gone fails with EPIPE, not with a SIGPIPE that
 // ends the game.

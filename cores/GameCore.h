@@ -126,6 +126,16 @@ typedef void (*gamecore_TextInputModeCallback)(int active, void *userdata);
 typedef void (*gamecore_ErrorMessageCallback)(const char *message, void *userdata);
 typedef void (*gamecore_InfoMessageCallback)(const char *message, void *userdata);
 
+typedef enum {
+    // The game read a save. The detail is the file name.
+    GAMECORE_SAVE_LOAD = 0,
+    // The engine repaired a broken value in a save that the game writes
+    // or reads. The detail is the file name and the fault.
+    GAMECORE_SAVE_REPAIRED = 1,
+} GameCoreSaveEvent;
+
+typedef void (*gamecore_SaveEventCallback)(GameCoreSaveEvent event, const char *detail, void *userdata);
+
 // Fires on engine thread when paused (snapshot captured, audio suspended).
 typedef void (*gamecore_PausedCallback)(void *userdata);
 typedef void (*gamecore_ResumedCallback)(void *userdata);
@@ -332,6 +342,10 @@ void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *us
 void gamecore_signalInfoDismissed(void);
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata);
+
+// Save events (Engine -> UI). They fire on a core thread, and the game
+// does not wait. A core that does not report saves never calls it.
+void gamecore_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata);
 
 // Pause / Resume (UI <-> Engine).
 //   1. UI calls `gamecore_requestPause()`

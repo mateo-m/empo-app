@@ -38,6 +38,7 @@ _gamecore_setLauncherIdentity
 _gamecore_setPausedCallback
 _gamecore_setResumedCallback
 _gamecore_setSafeAreaInsets
+_gamecore_setSaveEventCallback
 _gamecore_setSetting
 _gamecore_setShowViewportBounds
 _gamecore_setTextInputModeCallback

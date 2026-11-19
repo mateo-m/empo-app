@@ -2,16 +2,19 @@ Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
 Empo Plus.
 
-Last update: 17 November 2026.
+Last update: 19 November 2026.
 
 ## What Empo collects
 
 Only error reports. Empo has no analytics and no advertising.
 
 When a game shows an error or crashes, Empo sends an error
-report to Sentry, the service that collects these reports for me. A report holds:
+report to Sentry, the service that collects these reports for me. Empo also
+sends a report when it repairs a broken value in a save file. A report holds:
 
-- The error message, or the fact that the game crashed.
+- The error message, the fact that the game crashed, or the type of value that
+  Empo repaired.
+- Whether the game loaded a save in that play session, and how many seconds ago.
 - The name of the game, and the end of the game's log for that play session,
   when **Debug logs** is on. The log holds what the game engine wrote, such as
   the names of the game's files that it opened and the error details.

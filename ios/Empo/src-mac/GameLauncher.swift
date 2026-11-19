@@ -39,6 +39,7 @@ final class GameLauncher {
         /// writes run here and not on the main thread.
         let liveChangesQueue = DispatchQueue(label: "sh.mateo.empo.live-settings")
         var showedError = false
+        var saveLoad: SaveLoad?
 
         @MainActor var reportedGame: ErrorReports.Game? { logger.logURL.map { (gameTitle, $0) } }
     }
@@ -134,16 +135,16 @@ final class GameLauncher {
         // A write after the game ended fails with EPIPE, not with a
         // SIGPIPE that ends Empo.
         _ = fcntl(liveChanges.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
-        process.terminationHandler = { process in
-            Task { @MainActor in GameLauncher.shared.ended(process) }
-        }
+        let (exited, exit) = AsyncStream<Void>.makeStream()
+        process.terminationHandler = { _ in exit.finish() }
         try process.run()
         logger.beginSession(for: game, container: start.container)
         logger.note("\(game.title) starts on \(start.core.framework) \(start.core.version) in Empo Player")
         sessions[game.id] = Session(
             gameID: game.id, gameTitle: game.title, container: start.container,
             launchedSettings: start.launchedSettings, manifestBindings: manifestBindings,
-            process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting)
+            process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting,
+            saveLoad: start.core.reportsSaveLoads ? .never : nil)
         Task { [weak self] in
             do {
                 for try await line in messages.fileHandleForReading.bytes.lines {
@@ -152,6 +153,10 @@ final class GameLauncher {
             } catch {
                 logger.note("Empo cannot read the messages of Empo Player: \(error)")
             }
+            // The last messages can come after the exit, and the crash
+            // report needs them.
+            for await _ in exited {}
+            self?.ended(process)
         }
     }
 
@@ -210,12 +215,17 @@ final class GameLauncher {
             if let game = entry(session) { session.logger.resumeSessionTiming(for: game) }
         case .error(let text?):
             sessions[session.gameID]?.showedError = true
-            ErrorReports.gameError(text, game: session.reportedGame)
+            ErrorReports.gameError(text, game: session.reportedGame, saveLoad: session.saveLoad)
         case .error(nil):
             sessions[session.gameID]?.showedError = true
-            ErrorReports.gameCrash(game: session.reportedGame)
+            ErrorReports.gameCrash(game: session.reportedGame, saveLoad: session.saveLoad)
         case .info(let text):
-            ErrorReports.gameMessage(text, game: session.reportedGame)
+            ErrorReports.gameMessage(text, game: session.reportedGame, saveLoad: session.saveLoad)
+        case .saveLoaded:
+            sessions[session.gameID]?.saveLoad = .at(.now)
+        case .saveRepaired(let detail):
+            session.logger.note("The engine repaired a save: \(detail)")
+            ErrorReports.saveRepaired(detail, game: session.reportedGame, saveLoad: session.saveLoad)
         }
     }
 
@@ -233,7 +243,7 @@ final class GameLauncher {
         // 64: the launch data was wrong. 70: the core did not open.
         let couldNotStart = !crashed && [64, 70].contains(status)
         if !couldNotStart, !session.showedError {
-            ErrorReports.gameCrash(game: session.reportedGame)
+            ErrorReports.gameCrash(game: session.reportedGame, saveLoad: session.saveLoad)
         }
         let title =
             couldNotStart

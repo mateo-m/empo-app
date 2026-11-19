@@ -60,4 +60,7 @@ enum PlayerMessage: Codable {
     /// Nil when the game stopped without a message.
     case error(String?)
     case info(String)
+    case saveLoaded
+    /// The engine repaired a save. The detail is "<file name>: <fault>".
+    case saveRepaired(String)
 }

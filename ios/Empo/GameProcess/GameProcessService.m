@@ -153,6 +153,10 @@ static void onInfoMessage(const char *message, void *userdata) {
     [host() infoMessage:text(message)];
 }
 
+static void onSaveEvent(GameCoreSaveEvent event, const char *detail, void *userdata) {
+    [host() saveEvent:event detail:text(detail)];
+}
+
 // The core waits in this callback until the app resumes it, so the
 // snapshot it copies is the paused frame.
 static void onPaused(void *userdata) {
@@ -270,6 +274,7 @@ void EmpoGameProcessSceneHasSize(void) {
         gamecore_setTextInputModeCallback(onTextInputMode, NULL);
         gamecore_setErrorMessageCallback(onErrorMessage, NULL);
         gamecore_setInfoMessageCallback(onInfoMessage, NULL);
+        gamecore_setSaveEventCallback(onSaveEvent, NULL);
         gamecore_setPausedCallback(onPaused, NULL);
         gamecore_setResumedCallback(onResumed, NULL);
         gamecore_setFrameRenderedCallback(onFrameRendered, NULL);

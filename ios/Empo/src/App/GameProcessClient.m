@@ -54,6 +54,8 @@ static gamecore_ErrorMessageCallback gErrorCallback;
 static void *gErrorUserdata;
 static gamecore_InfoMessageCallback gInfoCallback;
 static void *gInfoUserdata;
+static gamecore_SaveEventCallback gSaveCallback;
+static void *gSaveUserdata;
 static gamecore_PausedCallback gPausedCallback;
 static void *gPausedUserdata;
 static gamecore_ResumedCallback gResumedCallback;
@@ -250,6 +252,18 @@ static BOOL fromSession(NSXPCConnection *connection, void (^body)(void)) {
     });
     if (callback != NULL) {
         callback(message.UTF8String, userdata);
+    }
+}
+
+- (void)saveEvent:(int)event detail:(NSString *)detail {
+    __block gamecore_SaveEventCallback callback = NULL;
+    __block void *userdata = NULL;
+    fromSession(self.connection, ^{
+        callback = gSaveCallback;
+        userdata = gSaveUserdata;
+    });
+    if (callback != NULL) {
+        callback((GameCoreSaveEvent)event, detail.UTF8String, userdata);
     }
 }
 
@@ -641,6 +655,13 @@ void gameprocess_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *u
     os_unfair_lock_lock(&gLock);
     gInfoCallback = cb;
     gInfoUserdata = userdata;
+    os_unfair_lock_unlock(&gLock);
+}
+
+void gameprocess_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata) {
+    os_unfair_lock_lock(&gLock);
+    gSaveCallback = cb;
+    gSaveUserdata = userdata;
     os_unfair_lock_unlock(&gLock);
 }
 
