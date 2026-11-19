@@ -306,7 +306,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         send(.error(message))
         reportedError = true
         errorAlertsOnScreen += 1
-        let alert = NSAlert()
+        let alert = makeAlert()
         alert.alertStyle = .critical
         alert.messageText = String(localized: "The game stopped")
         alert.informativeText = message ?? String(localized: "Something went wrong while it was running.")
@@ -320,11 +320,20 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func showInfo(_ message: String) {
         send(.info(message))
-        let alert = NSAlert()
+        let alert = makeAlert()
         alert.messageText = launch.title
         alert.informativeText = message
         alert.addButton(withTitle: String(localized: "Continue"))
         alert.beginSheetModal(for: windowForSheet()) { _ in gamecore_signalInfoDismissed() }
+    }
+
+    // On macOS 14, a sheet alert shows the bundle icon and ignores
+    // applicationIconImage, and Empo Player has no bundle icon. macOS 26
+    // shows no icon in a sheet unless the alert sets one.
+    private func makeAlert() -> NSAlert {
+        let alert = NSAlert()
+        if #unavailable(macOS 26) { alert.icon = NSApp.applicationIconImage }
+        return alert
     }
 
     /// A core that fails before it shows its game leaves this app's
@@ -441,7 +450,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         if gameEnded { return .terminateNow }
         guard !isAskingToQuit else { return .terminateCancel }
         isAskingToQuit = true
-        let alert = NSAlert()
+        let alert = makeAlert()
         alert.messageText = String(
             localized: "Quit \"\(launch.title)\"?",
             comment: "Alert title. The placeholder is the game's name.")
