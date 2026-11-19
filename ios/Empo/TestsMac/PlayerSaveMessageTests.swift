@@ -16,11 +16,11 @@ final class PlayerSaveMessageTests: XCTestCase {
         }
     }
 
-    func testSaveRejectedLineKeepsTheDetail() throws {
-        let line = #"{"saveRejected":{"_0":"Game_2.rxdata: the @name of an RPG::AudioFile is a Float"}}"#
-        guard case .saveRejected(let detail) = try decode(line) else {
-            return XCTFail("not a refused save")
+    func testSaveRepairedLineKeepsTheDetail() throws {
+        let line = #"{"saveRepaired":{"_0":"Game_2.rxdata: the @name of an RPG::AudioFile was a Float"}}"#
+        guard case .saveRepaired(let detail) = try decode(line) else {
+            return XCTFail("not a repaired save")
         }
-        XCTAssertEqual(detail, "Game_2.rxdata: the @name of an RPG::AudioFile is a Float")
+        XCTAssertEqual(detail, "Game_2.rxdata: the @name of an RPG::AudioFile was a Float")
     }
 }

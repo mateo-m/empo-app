@@ -3,13 +3,14 @@
 
 import AppKit
 import GameProbe
+import Synchronization
 
 /// Runs one game: starts its core, and owns its window and menus. Empo
 /// starts one Empo Player process for each game.
 @MainActor
 final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let launch: PlayerLaunch
-    private let messages: FileHandle
+    private nonisolated let messages: Mutex<FileHandle>
     private let liveChanges: FileHandle
     private var window: NSWindow
     private let pausedOverlay = PausedOverlay()
@@ -28,7 +29,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     init(launch: PlayerLaunch, messages: FileHandle, liveChanges: FileHandle) {
         self.launch = launch
-        self.messages = messages
+        self.messages = Mutex(messages)
         self.liveChanges = liveChanges
         window = Self.makeWindow(title: launch.title)
         let keys = HeldKeys<KeyHolder>(send: { scancode, pressed in
@@ -45,7 +46,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private var context: UnsafeMutableRawPointer { Unmanaged.passUnretained(self).toOpaque() }
 
-    private static func delegate(_ context: UnsafeMutableRawPointer?) -> PlayerAppDelegate? {
+    private nonisolated static func delegate(_ context: UnsafeMutableRawPointer?) -> PlayerAppDelegate? {
         context.map { Unmanaged<PlayerAppDelegate>.fromOpaque($0).takeUnretainedValue() }
     }
 
@@ -177,18 +178,15 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                     MainActor.assumeIsolated { PlayerAppDelegate.delegate(context)?.showInfo(text) }
                 }
             }, context)
+        // A game error can end this process right after a save load, so
+        // the engine thread writes the save events at once.
         gamecore_setSaveEventCallback(
             { event, detail, context in
                 let text = detail.map { String(cString: $0) } ?? ""
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated {
-                        guard let delegate = PlayerAppDelegate.delegate(context) else { return }
-                        switch event {
-                        case GAMECORE_SAVE_LOAD: delegate.send(.saveLoaded)
-                        case GAMECORE_SAVE_REJECTED: delegate.showSaveRejected(text)
-                        default: break
-                        }
-                    }
+                switch event {
+                case GAMECORE_SAVE_LOAD: PlayerAppDelegate.delegate(context)?.send(.saveLoaded)
+                case GAMECORE_SAVE_REPAIRED: PlayerAppDelegate.delegate(context)?.send(.saveRepaired(text))
+                default: break
                 }
             }, context)
     }
@@ -329,16 +327,6 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         alert.beginSheetModal(for: windowForSheet()) { _ in gamecore_signalInfoDismissed() }
     }
 
-    private func showSaveRejected(_ detail: String) {
-        send(.saveRejected(detail))
-        let alert = NSAlert()
-        alert.messageText = String(localized: "Couldn't save the game")
-        alert.informativeText = String(
-            localized: "Your last save is safe. If this happens again, load it to keep playing.")
-        alert.addButton(withTitle: String(localized: "Got it"))
-        alert.beginSheetModal(for: windowForSheet())
-    }
-
     /// A core that fails before it shows its game leaves this app's
     /// window hidden, and a sheet on a hidden window does not show.
     private func windowForSheet() -> NSWindow {
@@ -371,9 +359,9 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         send(paused ? .paused : .resumed)
     }
 
-    private func send(_ message: PlayerMessage) {
+    private nonisolated func send(_ message: PlayerMessage) {
         guard let line = try? JSONEncoder().encode(message) else { return }
-        try? messages.write(contentsOf: line + Data("\n".utf8))
+        messages.withLock { try? $0.write(contentsOf: line + Data("\n".utf8)) }
     }
 
     @objc func toggleFastForward(_ sender: Any?) {

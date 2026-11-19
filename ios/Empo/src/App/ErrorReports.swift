@@ -77,17 +77,19 @@ enum ErrorReports {
             report, level: .error, fingerprint: gameErrorFingerprint(message), game: game, saveLoad: saveLoad)
     }
 
-    /// The engine kept the old save, because the new file did not pass
-    /// its check. The detail is "<file name>: <fault>".
-    static func saveRejected(_ detail: String, game: Game?, saveLoad: SaveLoad?) {
-        let fault = detail.range(of: ": ").map { String(detail[$0.upperBound...]) } ?? detail
+    /// The engine repaired a broken value in a save, and the game goes
+    /// on. The detail is "<file name>: <fault>".
+    static func saveRepaired(_ detail: String, game: Game?, saveLoad: SaveLoad?) {
+        let fault = saveRepairFault(detail)
         send(
-            "A save did not pass the check: \(fault)\n\n\(detail)", level: .error,
-            fingerprint: saveRejectedFingerprint(fault), game: game, saveLoad: saveLoad)
+            "The engine repaired a save: \(fault)\n\n\(detail)", level: .warning,
+            fingerprint: ["save-repaired", fault], game: game, saveLoad: saveLoad)
     }
 
-    nonisolated static func saveRejectedFingerprint(_ fault: String) -> [String] {
-        ["save-rejected", fault.replacingOccurrences(of: "[0-9]+", with: "0", options: .regularExpression)]
+    /// The file name goes, so that the saves of all players group as one
+    /// issue for each fault.
+    nonisolated static func saveRepairFault(_ detail: String) -> String {
+        detail.range(of: ": ").map { String(detail[$0.upperBound...]) } ?? detail
     }
 
     private nonisolated static let exceptionLine = try? NSRegularExpression(

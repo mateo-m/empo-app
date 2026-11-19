@@ -24,12 +24,12 @@ final class SaveLoadReportTests: XCTestCase {
         XCTAssertEqual(SaveLoad.at(load).seconds(at: load + .seconds(3600)), 3600)
     }
 
-    func testRejectedSavesOfOneFaultShareAnIssue() {
+    func testRepairReportKeepsTheFaultWithoutTheFileName() {
         XCTAssertEqual(
-            ErrorReports.saveRejectedFingerprint("bytes 4 to 1800 do not read back as a dump"),
-            ErrorReports.saveRejectedFingerprint("bytes 0 to 95 do not read back as a dump"))
+            ErrorReports.saveRepairFault("Game_2.rxdata: the @name of an RPG::AudioFile was a Float"),
+            "the @name of an RPG::AudioFile was a Float")
         XCTAssertEqual(
-            ErrorReports.saveRejectedFingerprint("the @name of an RPG::AudioFile is a Float"),
-            ["save-rejected", "the @name of an RPG::AudioFile is a Float"])
+            ErrorReports.saveRepairFault("Save12.rvdata: the @name of an RPG::BGS was an Array"),
+            "the @name of an RPG::BGS was an Array")
     }
 }

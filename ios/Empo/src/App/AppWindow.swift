@@ -89,7 +89,7 @@ class AppWindow: UIWindow {
     /// The reasons that the overlay stays key while a game in the app
     /// plays.
     enum KeyClaim {
-        case alert, info, saveRejected, keyboard, buttonEditor
+        case alert, info, keyboard, buttonEditor
     }
 
     private var keyClaims: Set<KeyClaim> = []
@@ -205,7 +205,6 @@ class AppWindow: UIWindow {
         let state = AppState.shared
         if state.shownError != nil { return true }
         if state.infoMessage != nil { return true }
-        if state.saveRejected { return true }
         if state.phase != .playing { return true }
         if EngineSessionCoordinator.shared.runner != .app { return true }
         return !keyClaims.isEmpty

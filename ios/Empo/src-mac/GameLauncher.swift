@@ -135,9 +135,8 @@ final class GameLauncher {
         // A write after the game ended fails with EPIPE, not with a
         // SIGPIPE that ends Empo.
         _ = fcntl(liveChanges.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
-        process.terminationHandler = { process in
-            Task { @MainActor in GameLauncher.shared.ended(process) }
-        }
+        let (exited, exit) = AsyncStream<Void>.makeStream()
+        process.terminationHandler = { _ in exit.finish() }
         try process.run()
         logger.beginSession(for: game, container: start.container)
         logger.note("\(game.title) starts on \(start.core.framework) \(start.core.version) in Empo Player")
@@ -154,6 +153,10 @@ final class GameLauncher {
             } catch {
                 logger.note("Empo cannot read the messages of Empo Player: \(error)")
             }
+            // The last messages can come after the exit, and the crash
+            // report needs them.
+            for await _ in exited {}
+            self?.ended(process)
         }
     }
 
@@ -220,9 +223,9 @@ final class GameLauncher {
             ErrorReports.gameMessage(text, game: session.reportedGame, saveLoad: session.saveLoad)
         case .saveLoaded:
             sessions[session.gameID]?.saveLoad = .at(.now)
-        case .saveRejected(let detail):
-            session.logger.note("A save did not pass the check, and the old save stays: \(detail)")
-            ErrorReports.saveRejected(detail, game: session.reportedGame, saveLoad: session.saveLoad)
+        case .saveRepaired(let detail):
+            session.logger.note("The engine repaired a save: \(detail)")
+            ErrorReports.saveRepaired(detail, game: session.reportedGame, saveLoad: session.saveLoad)
         }
     }
 

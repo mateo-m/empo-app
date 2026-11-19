@@ -21,7 +21,7 @@ protocol EngineSessionCoordinatorDelegate: AnyObject {
     func coordinatorDidReportEngineError(_ message: String)
     func coordinatorDidReportEngineInfo(_ message: String)
     func coordinatorSaveLoaded()
-    func coordinatorDidRejectSave(_ detail: String)
+    func coordinatorDidRepairSave(_ detail: String)
     func coordinatorEngineDidPause(snapshot: UIImage?)
     func coordinatorPausedGameStopped()
 }
@@ -304,9 +304,7 @@ final class EngineSessionCoordinator {
                     guard let delegate = EngineSessionCoordinator.shared.delegate else { return }
                     switch event {
                     case GAMECORE_SAVE_LOAD: delegate.coordinatorSaveLoaded()
-                    case GAMECORE_SAVE_REJECTED:
-                        delegate.coordinatorDidRejectSave(detail)
-                        AppWindow.claimKey(.saveRejected)
+                    case GAMECORE_SAVE_REPAIRED: delegate.coordinatorDidRepairSave(detail)
                     default: break
                     }
                 }

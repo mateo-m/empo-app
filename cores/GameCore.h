@@ -129,9 +129,9 @@ typedef void (*gamecore_InfoMessageCallback)(const char *message, void *userdata
 typedef enum {
     // The game started to read a save. The detail is the file name.
     GAMECORE_SAVE_LOAD = 0,
-    // A new save did not pass the check, and the old save stays. The
-    // detail is the file name and the fault.
-    GAMECORE_SAVE_REJECTED = 1,
+    // The engine repaired a broken value in a save that the game writes
+    // or reads. The detail is the file name and the fault.
+    GAMECORE_SAVE_REPAIRED = 1,
 } GameCoreSaveEvent;
 
 typedef void (*gamecore_SaveEventCallback)(GameCoreSaveEvent event, const char *detail, void *userdata);
@@ -344,7 +344,7 @@ void gamecore_signalInfoDismissed(void);
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata);
 
 // Save events (Engine -> UI). They fire on a core thread, and the game
-// does not wait. A core that does not check saves never calls it.
+// does not wait. A core that does not report saves never calls it.
 void gamecore_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata);
 
 // Pause / Resume (UI <-> Engine).

@@ -61,6 +61,6 @@ enum PlayerMessage: Codable {
     case error(String?)
     case info(String)
     case saveLoaded
-    /// The engine kept the old save. The detail is "<file name>: <fault>".
-    case saveRejected(String)
+    /// The engine repaired a save. The detail is "<file name>: <fault>".
+    case saveRepaired(String)
 }

@@ -35,9 +35,6 @@ class AppState {
     /// RootView's info alert. The game then
     /// continues to run, so the alert shows no restart framing.
     var infoMessage: String?
-    /// True while the alert says that the engine kept the old save.
-    /// The game does not wait for it.
-    var saveRejected = false
     @ObservationIgnored private var saveLoad: SaveLoad?
     var engineReady = false
     /// The latest release-check result for sideload/dev builds.
@@ -503,10 +500,9 @@ extension AppState: EngineSessionCoordinatorDelegate {
         saveLoad = .at(.now)
     }
 
-    func coordinatorDidRejectSave(_ detail: String) {
-        session.note("A save did not pass the check, and the old save stays: \(detail)")
-        ErrorReports.saveRejected(detail, game: reportedGame, saveLoad: saveLoad)
-        saveRejected = true
+    func coordinatorDidRepairSave(_ detail: String) {
+        session.note("The engine repaired a save: \(detail)")
+        ErrorReports.saveRepaired(detail, game: reportedGame, saveLoad: saveLoad)
     }
 
     func coordinatorEngineDidPause(snapshot: UIImage?) {
