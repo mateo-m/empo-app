@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.5 - 2026-11-19
+
+### Bug Fixes
+
+- Do not count a pause as a frame in Graphics.average_frame_rate (mateo-m/mkxp-z-apple-mobile#94) ([`4c40325`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4c40325818855323ddf5968621a4eb83db4a9e3f))
+- Stop the engine clock while a pause, a game dialog, or a pause request is open (mateo-m/mkxp-z-apple-mobile#95) ([`8a06d66`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8a06d66bf865dfcbdcb0979881cd94eb592275ba))
+- Repair sound names that the old Ruby 1.8 sweep broke in saves (mateo-m/mkxp-z-apple-mobile#96) ([`81a9aea`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/81a9aea1ddb6447bb9725564ba8e1134e5c9d3a2))
+- Repair broken sound names before a save (mateo-m/mkxp-z-apple-mobile#98) ([`4cfab3f`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4cfab3f57d4386efd0031d9e29abed092e9fe8bf))
+
+### Features
+
+- Report save repairs and tag game errors that follow a save load (#300) ([`4bcd660`](https://github.com/mateo-m/empo-app/commit/4bcd660f674ba3b65eca8b766337bb34b1d4c7f5))
+
+### Other
+
+- Update the core and ANGLE pins (#297) ([`619c88c`](https://github.com/mateo-m/empo-app/commit/619c88c153411c767bc4dad28a96065d315c5fa9))
+- Update the core and ANGLE pins (#298) ([`21cae64`](https://github.com/mateo-m/empo-app/commit/21cae64fdf8f85aeee4ef008a5672411e3429919))
+- Update the core and ANGLE pins (#299) ([`9d38430`](https://github.com/mateo-m/empo-app/commit/9d38430cbcc477a87c8e07ad6c551dd6ccda6869))
+- Update the core and ANGLE pins (#301) ([`8cbce0b`](https://github.com/mateo-m/empo-app/commit/8cbce0bd4e2ef9f475bd6e0ff00c43cf5d1cf7f4))
+
 ## 0.11.4 - 2026-11-18
 
 ### Bug Fixes
