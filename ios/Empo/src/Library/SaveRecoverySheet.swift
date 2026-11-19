@@ -89,10 +89,17 @@ private struct SaveRecoverySheet: View {
     let records: [SaveRecoveryLedger.Record]
     let artworkPaths: [String: String]
 
+    private static let emblem =
+        if #available(iOS 18.0, macOS 15.0, *) {
+            "checkmark.arrow.trianglehead.counterclockwise"
+        } else {
+            "checkmark.gobackward"
+        }
+
     var body: some View {
         StandardSheet(
             title: "Saves recovered",
-            emblem: "checkmark.gobackward"
+            emblem: Self.emblem
         ) {
             SheetBodyText(
                 LocalizedStringResource(

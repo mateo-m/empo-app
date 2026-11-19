@@ -9,12 +9,19 @@ struct BackupHistoryScreen: View {
 
     let model: BackupsScreenModel
 
+    private static let emptySymbol =
+        if #available(iOS 18.0, macOS 15.0, *) {
+            "clock.arrow.trianglehead.counterclockwise.rotate.90"
+        } else {
+            "clock.arrow.circlepath"
+        }
+
     var body: some View {
         List {
             if model.history.isEmpty {
                 ContentUnavailableView(
                     "No backups yet",
-                    systemImage: "clock.arrow.circlepath",
+                    systemImage: Self.emptySymbol,
                     description: Text("Your first backup shows up here.")
                 )
                 .listRowBackground(Color.clear)
