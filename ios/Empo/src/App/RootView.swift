@@ -90,7 +90,7 @@ struct RootView: View {
                 PlayerView(appState: appState, engineState: engineState, layout: layout)
                     .transition(.identity)
                     .allowsHitTesting(
-                        appState.shownError == nil && appState.infoMessage == nil
+                        appState.shownError == nil && appState.infoMessage == nil && !appState.saveRejected
                     )
             }
         }
@@ -208,6 +208,11 @@ struct RootView: View {
         } message: {
             Text(appState.infoMessage ?? "")
         }
+        .alert("Couldn't save the game", isPresented: showSaveRejectedAlert) {
+            Button("Got it") {}
+        } message: {
+            Text("Your last save is safe. If this happens again, load it to keep playing.")
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) {
             _ in
             if appState.phase == .playing {
@@ -253,6 +258,13 @@ struct RootView: View {
                 AppWindow.releaseKey(.info)
             }
         }
+        .onChange(of: appState.saveRejected) { _, rejected in
+            if rejected {
+                AppWindow.claimKey(.saveRejected)
+            } else {
+                AppWindow.releaseKey(.saveRejected)
+            }
+        }
     }
 
     private var errorAlertTitle: Text {
@@ -279,6 +291,13 @@ struct RootView: View {
         appState.shownError = nil
         appState.restoreCrashMarker()
         if EmpoCoreIsOpen() != 0 { gamecore_signalErrorDismissed() }
+    }
+
+    private var showSaveRejectedAlert: Binding<Bool> {
+        Binding(
+            get: { appState.saveRejected },
+            set: { appState.saveRejected = $0 }
+        )
     }
 
     private var showInfoAlert: Binding<Bool> {

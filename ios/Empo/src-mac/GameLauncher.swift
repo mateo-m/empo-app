@@ -39,6 +39,7 @@ final class GameLauncher {
         /// writes run here and not on the main thread.
         let liveChangesQueue = DispatchQueue(label: "sh.mateo.empo.live-settings")
         var showedError = false
+        var saveLoad: SaveLoad?
 
         @MainActor var reportedGame: ErrorReports.Game? { logger.logURL.map { (gameTitle, $0) } }
     }
@@ -143,7 +144,8 @@ final class GameLauncher {
         sessions[game.id] = Session(
             gameID: game.id, gameTitle: game.title, container: start.container,
             launchedSettings: start.launchedSettings, manifestBindings: manifestBindings,
-            process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting)
+            process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting,
+            saveLoad: start.core.reportsSaveLoads ? .never : nil)
         Task { [weak self] in
             do {
                 for try await line in messages.fileHandleForReading.bytes.lines {
@@ -210,12 +212,17 @@ final class GameLauncher {
             if let game = entry(session) { session.logger.resumeSessionTiming(for: game) }
         case .error(let text?):
             sessions[session.gameID]?.showedError = true
-            ErrorReports.gameError(text, game: session.reportedGame)
+            ErrorReports.gameError(text, game: session.reportedGame, saveLoad: session.saveLoad)
         case .error(nil):
             sessions[session.gameID]?.showedError = true
-            ErrorReports.gameCrash(game: session.reportedGame)
+            ErrorReports.gameCrash(game: session.reportedGame, saveLoad: session.saveLoad)
         case .info(let text):
-            ErrorReports.gameMessage(text, game: session.reportedGame)
+            ErrorReports.gameMessage(text, game: session.reportedGame, saveLoad: session.saveLoad)
+        case .saveLoaded:
+            sessions[session.gameID]?.saveLoad = .at(.now)
+        case .saveRejected(let detail):
+            session.logger.note("A save did not pass the check, and the old save stays: \(detail)")
+            ErrorReports.saveRejected(detail, game: session.reportedGame, saveLoad: session.saveLoad)
         }
     }
 
@@ -233,7 +240,7 @@ final class GameLauncher {
         // 64: the launch data was wrong. 70: the core did not open.
         let couldNotStart = !crashed && [64, 70].contains(status)
         if !couldNotStart, !session.showedError {
-            ErrorReports.gameCrash(game: session.reportedGame)
+            ErrorReports.gameCrash(game: session.reportedGame, saveLoad: session.saveLoad)
         }
         let title =
             couldNotStart

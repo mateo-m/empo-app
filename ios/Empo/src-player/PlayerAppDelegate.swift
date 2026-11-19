@@ -177,6 +177,20 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                     MainActor.assumeIsolated { PlayerAppDelegate.delegate(context)?.showInfo(text) }
                 }
             }, context)
+        gamecore_setSaveEventCallback(
+            { event, detail, context in
+                let text = detail.map { String(cString: $0) } ?? ""
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let delegate = PlayerAppDelegate.delegate(context) else { return }
+                        switch event {
+                        case GAMECORE_SAVE_LOAD: delegate.send(.saveLoaded)
+                        case GAMECORE_SAVE_REJECTED: delegate.showSaveRejected(text)
+                        default: break
+                        }
+                    }
+                }
+            }, context)
     }
 
     private func runGame() {
@@ -313,6 +327,16 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
         alert.informativeText = message
         alert.addButton(withTitle: String(localized: "Continue"))
         alert.beginSheetModal(for: windowForSheet()) { _ in gamecore_signalInfoDismissed() }
+    }
+
+    private func showSaveRejected(_ detail: String) {
+        send(.saveRejected(detail))
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Couldn't save the game")
+        alert.informativeText = String(
+            localized: "Your last save is safe. If this happens again, load it to keep playing.")
+        alert.addButton(withTitle: String(localized: "Got it"))
+        alert.beginSheetModal(for: windowForSheet())
     }
 
     /// A core that fails before it shows its game leaves this app's

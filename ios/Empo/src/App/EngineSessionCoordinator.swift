@@ -20,6 +20,8 @@ protocol EngineSessionCoordinatorDelegate: AnyObject {
     func coordinatorGameRectDidChange(_ rect: CGRect)
     func coordinatorDidReportEngineError(_ message: String)
     func coordinatorDidReportEngineInfo(_ message: String)
+    func coordinatorSaveLoaded()
+    func coordinatorDidRejectSave(_ detail: String)
     func coordinatorEngineDidPause(snapshot: UIImage?)
     func coordinatorPausedGameStopped()
 }
@@ -292,6 +294,21 @@ final class EngineSessionCoordinator {
                     EngineSessionCoordinator.shared.delegate?
                         .coordinatorDidReportEngineInfo(message)
                     AppWindow.claimKey(.info)
+                }
+            }, nil)
+
+        gamecore_setSaveEventCallback(
+            { event, detail, _ in
+                let detail = detail.map { String(cString: $0) } ?? ""
+                Task { @MainActor in
+                    guard let delegate = EngineSessionCoordinator.shared.delegate else { return }
+                    switch event {
+                    case GAMECORE_SAVE_LOAD: delegate.coordinatorSaveLoaded()
+                    case GAMECORE_SAVE_REJECTED:
+                        delegate.coordinatorDidRejectSave(detail)
+                        AppWindow.claimKey(.saveRejected)
+                    default: break
+                    }
                 }
             }, nil)
 

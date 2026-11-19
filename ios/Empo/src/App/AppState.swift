@@ -35,6 +35,10 @@ class AppState {
     /// RootView's info alert. The game then
     /// continues to run, so the alert shows no restart framing.
     var infoMessage: String?
+    /// True while the alert says that the engine kept the old save.
+    /// The game does not wait for it.
+    var saveRejected = false
+    @ObservationIgnored private var saveLoad: SaveLoad?
     var engineReady = false
     /// The latest release-check result for sideload/dev builds.
     /// `RootView` fills it at launch. Settings and the library banner
@@ -134,6 +138,7 @@ class AppState {
             keys: start.core.defaultKeys(forGameAt: start.container.gameURL))
         PauseManager.shared.reset()
         sessionShowedError = false
+        saveLoad = start.core.reportsSaveLoads ? .never : nil
         phase = .loading
 
         session.configureEngine(
@@ -251,7 +256,7 @@ class AppState {
 
     func consumeCrashRecovery() {
         if let message = session.consumeCrashRecovery() {
-            ErrorReports.gameCrash(game: reportedGame)
+            ErrorReports.gameCrash(game: reportedGame, saveLoad: nil)
             shownError = ShownError(message: message)
         }
     }
@@ -428,7 +433,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
         if !cleanExit, !sessionShowedError {
-            ErrorReports.gameCrash(game: reportedGame)
+            ErrorReports.gameCrash(game: reportedGame, saveLoad: saveLoad)
         }
         phase = .ended(clean: cleanExit, started: phase == .playing)
         clearEndedGame()
@@ -482,16 +487,26 @@ extension AppState: EngineSessionCoordinatorDelegate {
     func coordinatorDidReportEngineError(_ message: String) {
         session.note("Error shown: \(message)")
         sessionShowedError = true
-        ErrorReports.gameError(message, game: reportedGame)
+        ErrorReports.gameError(message, game: reportedGame, saveLoad: saveLoad)
         shownError = ShownError(message: message)
         if alertHoldsGame { clearCrashMarker() }
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
         session.note("Message shown: \(message)")
-        ErrorReports.gameMessage(message, game: reportedGame)
+        ErrorReports.gameMessage(message, game: reportedGame, saveLoad: saveLoad)
         infoMessage = message
         if alertHoldsGame { clearCrashMarker() }
+    }
+
+    func coordinatorSaveLoaded() {
+        saveLoad = .at(.now)
+    }
+
+    func coordinatorDidRejectSave(_ detail: String) {
+        session.note("A save did not pass the check, and the old save stays: \(detail)")
+        ErrorReports.saveRejected(detail, game: reportedGame, saveLoad: saveLoad)
+        saveRejected = true
     }
 
     func coordinatorEngineDidPause(snapshot: UIImage?) {

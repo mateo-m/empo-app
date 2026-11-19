@@ -16981,6 +16981,64 @@
         }
       }
     },
+    "Couldn't save the game" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spiel konnte nicht gespeichert werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar la partida"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'enregistrer la partie"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile salvare la partita"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームをセーブできませんでした"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임을 저장하지 못했어요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não deu para salvar o jogo"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не получилось сохранить игру"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存游戏"
+          }
+        }
+      }
+    },
     "Couldn't save your buttons. This game's controls file has errors. Fix it in Finder and try again." : {
       "localizations" : {
         "de" : {
@@ -72739,6 +72797,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的游戏、存档和日志都在这个文件夹里。"
+          }
+        }
+      }
+    },
+    "Your last save is safe. If this happens again, load it to keep playing." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein letzter Spielstand ist sicher. Wenn das wieder passiert, lade ihn, um weiterzuspielen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu última partida guardada está a salvo. Si vuelve a pasar, cárgala para seguir jugando."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ta dernière sauvegarde est intacte. Si ça se reproduit, charge-la pour continuer à jouer."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il tuo ultimo salvataggio è al sicuro. Se succede di nuovo, caricalo per continuare a giocare."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前回のセーブデータは無事です。もう一度起きたら、そのセーブデータをロードして続きを遊んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "마지막 세이브는 안전해요. 다시 이런 일이 생기면 그 세이브를 불러와서 계속 플레이하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seu último save está seguro. Se isso acontecer de novo, carregue ele para continuar jogando."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваше последнее сохранение в порядке. Если это повторится, загрузите его, чтобы продолжить."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你上次的存档没事。如果再次出现这种情况，读取那个存档就能继续玩。"
           }
         }
       }
