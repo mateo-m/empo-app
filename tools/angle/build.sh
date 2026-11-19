@@ -68,7 +68,7 @@ for sdk in iphoneos iphonesimulator macosx; do
     case "$sdk" in
         iphoneos) out=ios-arm64 sdk_args="$IOS_ARGS target_environment=\"device\"" ;;
         iphonesimulator) out=sim-arm64 sdk_args="$IOS_ARGS target_environment=\"simulator\"" ;;
-        macosx) out=mac-arm64 sdk_args="target_os=\"mac\" mac_deployment_target=\"26.0\"" ;;
+        macosx) out=mac-arm64 sdk_args="target_os=\"mac\" mac_deployment_target=\"14.0\"" ;;
     esac
     out="$SRC/out/$out"
     "$GN" gen "$out" --args="$ARGS $sdk_args"
