@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0 - 2026-11-19
+
+### Features
+
+- Lower the minimum to iOS 17 and macOS 14 (#302) ([`0327e29`](https://github.com/mateo-m/empo-app/commit/0327e29502770eb35d8117dc47223a945bb78bd5))
+
 ## 0.11.5 - 2026-11-19
 
 ### Bug Fixes
