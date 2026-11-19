@@ -9,7 +9,7 @@ Issues, ideas, and PRs are welcome.
 
 ## Requirements
 
-- macOS with Xcode 27 or newer (iOS 27 SDK).
+- macOS with Xcode 27.1 or newer (iOS 27.1 SDK).
 - Homebrew (`xcodegen`, `gh`).
 - Apple developer account (required only for on-device builds).
 - iPhone or iPad running iOS 17+ for on-device testing. iPhone 11 is the floor model.
