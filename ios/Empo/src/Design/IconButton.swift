@@ -92,12 +92,12 @@ private struct IconGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         switch style {
         case .primary:
-            content.glassEffect(.regular.tint(.brand).interactive(), in: .circle)
+            content.glass(.regular.tint(.brand).interactive(), in: .circle)
         case .secondary:
-            content.glassEffect(
+            content.glass(
                 .regular.tint(.brand.opacity(Alpha.brandTintBackground)).interactive(), in: .circle)
         case .outline:
-            content.glassEffect(hasAction ? .regular.interactive() : .regular, in: .circle)
+            content.glass(hasAction ? .regular.interactive() : .regular, in: .circle)
         }
     }
 }
@@ -105,6 +105,7 @@ private struct IconGlassModifier: ViewModifier {
 private struct IconPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            .glassPress(configuration.isPressed)
             .onChange(of: configuration.isPressed) { _, pressed in
                 if pressed { Haptics.tap() }
             }

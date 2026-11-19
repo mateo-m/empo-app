@@ -27,6 +27,6 @@ struct BackupStaleBannerView: View {
         }
         .padding(.horizontal, Spacing.xl)
         .padding(.vertical, Spacing.md)
-        .glassEffect(.regular, in: .capsule)
+        .glass(.regular, in: .capsule)
     }
 }

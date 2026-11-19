@@ -9,7 +9,7 @@ enum SettingsSection: String, Decodable {
 
     var isShown: Bool {
         switch self {
-        case .experimental: AppSettings.gameProcessIsAvailable
+        case .experimental: AppSettings.gameProcessIsInBuild
         }
     }
 }
@@ -681,11 +681,11 @@ private struct BrandGlassModifier: ViewModifier {
     func body(content: Content) -> some View {
         if interactive {
             content
-                .glassEffect(.regular.tint(tint).interactive(), in: .capsule)
+                .glass(.regular.tint(tint).interactive(), in: .capsule)
                 .darkGlass()
         } else {
             content
-                .glassEffect(.regular.tint(tint), in: .capsule)
+                .glass(.regular.tint(tint), in: .capsule)
                 .darkGlass()
         }
     }

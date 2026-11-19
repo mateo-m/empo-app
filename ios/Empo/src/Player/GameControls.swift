@@ -80,7 +80,7 @@ struct BackedGlass<S: Shape>: View {
                 .fill(backing)
             shape
                 .fill(.clear)
-                .glassEffect(.regular.interactive(), in: shape)
+                .glass(.regular.interactive(), in: shape)
         }
     }
 }

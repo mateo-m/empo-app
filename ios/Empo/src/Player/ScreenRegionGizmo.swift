@@ -211,7 +211,7 @@ struct ScreenRegionChips: View {
                 .foregroundStyle(Color.brand)
                 .padding(.horizontal, Spacing.sm)
                 .padding(.vertical, 2)
-                .glassEffect(.regular, in: .capsule)
+                .glass(.regular, in: .capsule)
                 .position(x: rect.midX, y: chipY(row: 0))
                 .allowsHitTesting(false)
 
@@ -224,7 +224,7 @@ struct ScreenRegionChips: View {
                         .padding(.horizontal, Spacing.sm)
                         .padding(.vertical, Spacing.xs)
                         .foregroundStyle(.white)
-                        .glassEffect(.regular.interactive(), in: .capsule)
+                        .glass(.regular.interactive(), in: .capsule)
                 }
                 // Top area, below the "Screen" label: the bottom
                 // corner belongs to the resize grabber, and at the
@@ -246,7 +246,7 @@ struct ScreenRegionChips: View {
                     .padding(.horizontal, Spacing.sm)
                     .padding(.vertical, Spacing.xs)
                     .foregroundStyle(overlayOn ? Color.brand : .white)
-                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .glass(.regular.interactive(), in: .capsule)
                 }
                 .position(x: rect.midX, y: chipY(row: showsReset ? 2 : 1))
                 .accessibilityLabel("Controls over game")

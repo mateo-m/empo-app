@@ -29,11 +29,7 @@ struct GameCard: View {
     @ViewBuilder
     private func heroSource<V: View>(_ view: V) -> some View {
         if let heroTransitionID, let heroNamespace {
-            view.matchedTransitionSource(id: heroTransitionID, in: heroNamespace) { config in
-                config
-                    .background(.black)
-                    .clipShape(.rect(cornerRadius: Radius.md))
-            }
+            view.zoomTransitionSource(id: heroTransitionID, in: heroNamespace, cornerRadius: Radius.md)
         } else {
             view
         }
@@ -95,7 +91,7 @@ struct GameCard: View {
             .overlay { centerOverlay }
             .clipShape(.rect(cornerRadius: Radius.md))
         // NOTE: cardShadow lives at the GameLibraryView callsite,
-        // not here. Applied AFTER matchedTransitionSource so the
+        // not here. Applied AFTER zoomTransitionSource so the
         // transition source's clip doesn't crop the shadow.
     }
 
@@ -191,12 +187,9 @@ struct GameListRow: View {
                 onShimmerFinished: { game.justImported = false },
                 reloadToken: game.artworkRevision
             )
-            .matchedTransitionSource(id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace) {
-                config in
-                config
-                    .background(.black)
-                    .clipShape(.rect(cornerRadius: Radius.sm))
-            }
+            .zoomTransitionSource(
+                id: "\(game.id)-item", in: heroNamespace ?? fallbackNamespace, cornerRadius: Radius.sm
+            )
             .cardShadow()
 
             VStack(alignment: .leading, spacing: Spacing.xxs) {
@@ -342,14 +335,14 @@ struct GameStatusIndicator: View {
         case .importing, .deleting, .backingUp:
             core.blendMode(.difference)
         case .backupMark(let mark):
-            core.glassEffect(.regular, in: .circle)
+            core.glass(.regular, in: .circle)
                 .overlay(alignment: .topTrailing) { markDot(mark) }
         case .paused:
             // Inverted scheme tint so the paused badge reads stronger
             // than the ambient ready state.
-            core.glassEffect(.regular.tint(pausedBackgroundTint), in: .circle)
+            core.glass(.regular.tint(pausedBackgroundTint), in: .circle)
         case .ready, .invalid:
-            core.glassEffect(.regular, in: .circle)
+            core.glass(.regular, in: .circle)
         }
     }
 

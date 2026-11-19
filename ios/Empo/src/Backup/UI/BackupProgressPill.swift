@@ -30,7 +30,7 @@ struct BackupProgressPill: View {
             .padding(.horizontal, Spacing.xl)
             .padding(.vertical, Spacing.md)
             .geometryGroup()
-            .glassEffect(.regular, in: .capsule)
+            .glass(.regular, in: .capsule)
             .animation(Motion.standard, value: monitor.line)
         }
         .buttonStyle(.plain)

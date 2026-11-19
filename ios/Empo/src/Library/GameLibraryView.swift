@@ -70,7 +70,7 @@ struct GameLibraryView: View {
     @State private var sizesTask: Task<Void, Never>?
     @State private var importPipeline = ImportPipeline()
     /// Per-game record of which visual source triggered the most recent
-    /// navigation into the player. Drives `.navigationTransition(.zoom)`
+    /// navigation into the player. Drives `zoomTransition`
     /// so the exit animation lands on the same spot the user tapped.
     @State private var tappedSource: [String: GameTapSource] = [:]
 
@@ -188,10 +188,7 @@ struct GameLibraryView: View {
                     game: game, dormant: dormant,
                     mode: appState.isLaunching || appState.phase != nil ? .loading : .resuming
                 )
-                .navigationTransition(
-                    .zoom(
-                        sourceID: source.transitionID(for: game.id),
-                        in: heroNamespace))
+                .zoomTransition(sourceID: source.transitionID(for: game.id), in: heroNamespace)
             }
             .onChange(of: appState.isLaunching) { _, launching in
                 if !launching, appState.phase == nil { path = NavigationPath() }
@@ -349,7 +346,7 @@ struct GameLibraryView: View {
                     onContinueDespiteWarning: continueDespiteLaunchWarning
                 )
             )
-            .toolbarVisibility(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
     }
 
     private var libraryScene: some View {
@@ -362,10 +359,7 @@ struct GameLibraryView: View {
             // Match GameLoadingView: NavigationStack container fills stay
             // opaque on device under parent opacity(0). Clear them while
             // the SDL window must show through AppWindow.
-            .containerBackground(
-                appState.phase == .playing ? .clear : Color(.systemBackground),
-                for: .navigation
-            )
+            .navigationBackground(appState.phase == .playing ? .clear : Color(.systemBackground))
             .animation(Motion.standard, value: showEmpty)
             .onChange(of: splashDismissed) { _, dismissed in
                 handleSplashDismissedChange(dismissed)
@@ -994,7 +988,7 @@ struct GameLibraryView: View {
         }
         // NOTE: no .id("...-\(isPaused)") here on purpose.
         // Forcing a remount on pause toggle destroys the
-        // matchedTransitionSource mid-animation, which
+        // zoomTransitionSource mid-animation, which
         // makes the exit hero zoom snap to a fallback
         // frame at its end. GameCard already animates its
         // own pause overlay via GameStatusIndicator's

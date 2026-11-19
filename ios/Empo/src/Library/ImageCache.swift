@@ -3,7 +3,7 @@
 
 import CryptoKit
 import ImageIO
-import Synchronization
+import os
 
 #if os(iOS)
 import UIKit
@@ -58,7 +58,7 @@ final class ImageCache: @unchecked Sendable {
     /// overwritten at fixed paths) could repopulate the cache
     /// *after* the eviction that was meant to clear them, and the
     /// stale image would then be served until process death.
-    private let generations = Mutex<[String: Int]>([:])
+    private let generations = OSAllocatedUnfairLock<[String: Int]>(initialState: [:])
 
     private init() {
         // Thumbnails are bounded (a 16:9 cell thumbnail decodes to

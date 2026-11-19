@@ -7,7 +7,7 @@ description: The two pause modes, and the frozen-frame snapshots that bridge the
 
 The app has two pause modes:
 
-1. **Manual pause.** The user taps the pause button in the toolbar. The engine stops, the UI goes back to the library, and the game card shows a pause indicator. A tap on the card resumes the game with a hero zoom animation.
+1. **Manual pause.** The user taps the pause button in the toolbar. The engine stops, the UI goes back to the library, and the game card shows a pause indicator. A tap on the card resumes the game with a hero zoom animation. Before iOS 18 the player opens with the standard push.
 2. **Background pause.** The app moves to the background. The engine stops with no UI change, and the player view stays mounted. The game resumes when the app comes back to the foreground.
 
 Both modes use the same engine pause. They differ in how the UI responds. The Ruby cores block the game thread on a condition variable. The MV/MZ core stops the game in its web page.

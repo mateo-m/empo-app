@@ -22,7 +22,9 @@ struct KeyboardFieldRepresentable: UIViewRepresentable {
         // An empty content type stops it.
         field.textContentType = UITextContentType(rawValue: "")
         field.inlinePredictionType = UITextInlinePredictionType.no
-        field.writingToolsBehavior = UIWritingToolsBehavior.none
+        if #available(iOS 18.0, *) {
+            field.writingToolsBehavior = UIWritingToolsBehavior.none
+        }
         field.inputAssistantItem.leadingBarButtonGroups = []
         field.inputAssistantItem.trailingBarButtonGroups = []
         // Arrow keys move the text selection of the field. The system

@@ -152,10 +152,12 @@ enum BackupTaskScheduler {
     ///
     /// The two entry points are the Backup sheet of one game and the
     /// Backups screen. There is no third. Returns false when the
-    /// system refuses the request, and the caller then runs the pass
-    /// in the foreground.
+    /// system refuses the request or has no continued-processing task
+    /// (before iOS 26), and the caller then runs the pass in the
+    /// foreground.
     @discardableResult
     static func submitManual(_ press: ManualBackupPress, overCellular: Bool) -> Bool {
+        guard #available(iOS 26.0, *) else { return false }
         let taskIdentifier = identifier(for: press, overCellular: overCellular)
         registerPress(taskIdentifier)
         let request = BGContinuedProcessingTaskRequest(
@@ -188,6 +190,7 @@ enum BackupTaskScheduler {
     /// `Info.plist` advertises the family as
     /// `<bundle id>.backup.manual.*`, and the wildcard there covers
     /// every identifier this makes.
+    @available(iOS 26.0, *)
     private static func registerPress(_ taskIdentifier: String) {
         guard registeredPresses.insert(taskIdentifier).inserted else { return }
         BGTaskScheduler.shared.register(
@@ -199,6 +202,7 @@ enum BackupTaskScheduler {
         }
     }
 
+    @available(iOS 26.0, *)
     private static func handleManual(_ task: BGContinuedProcessingTask) {
         BackupLog.line("BackupTaskScheduler", "the manual task started, title \(task.title)")
         guard let parsed = press(identifier: task.identifier, title: task.title) else {

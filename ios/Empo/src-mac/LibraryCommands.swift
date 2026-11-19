@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import AppKit
 import SwiftUI
 
 struct LibraryCommands: Commands {
     @FocusedValue(\.libraryWindow) private var window
-    @FocusedValue(\.isSearchingLibrary) private var isSearchingLibrary
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
@@ -41,10 +41,16 @@ struct LibraryCommands: Commands {
             Divider()
             let deletable = window?.selectedGame.flatMap { window?.canDelete($0) == true ? $0 : nil }
             Button("Delete Game…") {
-                if let deletable { window?.requestDelete(deletable) }
+                // In a text field, Command-Delete deletes the text before
+                // the caret. A click on the menu item still deletes the game.
+                if NSApp.currentEvent?.type == .keyDown, NSApp.keyWindow?.firstResponder is NSText {
+                    NSApp.sendAction(#selector(NSResponder.deleteToBeginningOfLine(_:)), to: nil, from: nil)
+                } else if let deletable {
+                    window?.requestDelete(deletable)
+                }
             }
             .keyboardShortcut(.delete, modifiers: .command)
-            .disabled(deletable == nil || isSearchingLibrary == true)
+            .disabled(deletable == nil)
         }
     }
 }

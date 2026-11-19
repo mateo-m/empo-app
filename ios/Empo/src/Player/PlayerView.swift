@@ -525,7 +525,7 @@ struct PlayerView: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.xs)
-            .glassEffect(.regular, in: .capsule)
+            .glass(.regular, in: .capsule)
             .darkGlass()
             .frame(width: max(bounds.width - 2 * cornerInset, 0))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

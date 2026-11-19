@@ -14,7 +14,7 @@ struct BackupHistoryScreen: View {
             if model.history.isEmpty {
                 ContentUnavailableView(
                     "No backups yet",
-                    systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                    systemImage: "clock.arrow.circlepath",
                     description: Text("Your first backup shows up here.")
                 )
                 .listRowBackground(Color.clear)

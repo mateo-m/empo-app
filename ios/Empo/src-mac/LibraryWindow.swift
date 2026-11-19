@@ -8,7 +8,6 @@ import UniformTypeIdentifiers
 struct LibraryWindow: View {
     @State private var model = LibraryWindowModel()
     @State private var isDropTargeted = false
-    @FocusState private var isSearchFocused: Bool
     @Environment(\.appSettings) private var settings
     @Environment(\.openURL) private var openURL
 
@@ -27,7 +26,6 @@ struct LibraryWindow: View {
             .navigationTitle("Library")
             .navigationSubtitle(subtitle)
             .searchable(text: $model.search, placement: .toolbar, prompt: "Search games")
-            .searchFocused($isSearchFocused)
             .toolbar { toolbar }
             .inspector(isPresented: $model.showsInspector) {
                 GameInspector(model: model)
@@ -48,7 +46,6 @@ struct LibraryWindow: View {
                     onConfirm: model.importPipeline.confirmChoice(_:approvedUpdateIDs:))
             }
             .focusedSceneValue(\.libraryWindow, model)
-            .focusedSceneValue(\.isSearchingLibrary, isSearchFocused)
             .tint(.brand)
             .onChange(of: settings.librarySortOption, initial: true) { model.refreshSizesIfNeeded() }
             .onChange(of: model.library.readyGameIDs) { model.refreshSizesIfNeeded() }

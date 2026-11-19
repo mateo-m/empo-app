@@ -3,14 +3,14 @@
 
 import AppKit
 import GameProbe
-import Synchronization
+import os
 
 /// Runs one game: starts its core, and owns its window and menus. Empo
 /// starts one Empo Player process for each game.
 @MainActor
 final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let launch: PlayerLaunch
-    private nonisolated let messages: Mutex<FileHandle>
+    private nonisolated let messages: OSAllocatedUnfairLock<FileHandle>
     private let liveChanges: FileHandle
     private var window: NSWindow
     private let pausedOverlay = PausedOverlay()
@@ -29,7 +29,7 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     init(launch: PlayerLaunch, messages: FileHandle, liveChanges: FileHandle) {
         self.launch = launch
-        self.messages = Mutex(messages)
+        self.messages = OSAllocatedUnfairLock(initialState: messages)
         self.liveChanges = liveChanges
         window = Self.makeWindow(title: launch.title)
         let keys = HeldKeys<KeyHolder>(send: { scancode, pressed in

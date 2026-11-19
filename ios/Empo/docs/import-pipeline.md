@@ -132,7 +132,7 @@ These invariants match the current code. Do not break them.
    selection's relativePath. Never replace the extractor's component-level checks with a
    filesystem-path prefix check. That check false-positives on device: `/var` is a symlink to
    `/private/var`, so standardized paths compare unequal.
-2. **Cancellation contract**: `GameLibrary.cancelledImports` (`Mutex<Set<String>>`) signals a
+2. **Cancellation contract**: `GameLibrary.cancelledImports` (`OSAllocatedUnfairLock<Set<String>>`) signals a
    cancel. Every long phase checks it through `isImportCancelled(_:)`, and the `shouldCancel`
    closure reports it as `ArchiveExtractor.Error.cancelled`. During a shared extract,
    `shouldCancel` aborts only when the user cancels **all** selections. `checkCancellations()`

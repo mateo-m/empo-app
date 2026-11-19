@@ -124,5 +124,4 @@ final class LibraryWindowModel {
 
 extension FocusedValues {
     @Entry var libraryWindow: LibraryWindowModel?
-    @Entry var isSearchingLibrary: Bool?
 }

@@ -10,7 +10,8 @@
 
 # For a manual run. Xcode gives the deployment target of the target that
 # runs the script.
-DEFAULT_MIN_OS=26.0
+DEFAULT_IOS_MIN_OS=17.0
+DEFAULT_MACOS_MIN_OS=14.0
 ARCH=arm64
 
 # Prints the Ruby of each PSDK core that cores/cores.sh lists, such as
@@ -56,17 +57,17 @@ parse_sdk() {
     MIN_OS_KEY=MinimumOSVersion
     case "$SDK" in
         iphoneos)
-            MIN_OS="${IPHONEOS_DEPLOYMENT_TARGET:-$DEFAULT_MIN_OS}"
+            MIN_OS="${IPHONEOS_DEPLOYMENT_TARGET:-$DEFAULT_IOS_MIN_OS}"
             TARGET="$ARCH-apple-ios$MIN_OS"
             PLATFORM=iPhoneOS
             ;;
         iphonesimulator)
-            MIN_OS="${IPHONEOS_DEPLOYMENT_TARGET:-$DEFAULT_MIN_OS}"
+            MIN_OS="${IPHONEOS_DEPLOYMENT_TARGET:-$DEFAULT_IOS_MIN_OS}"
             TARGET="$ARCH-apple-ios$MIN_OS-simulator"
             PLATFORM=iPhoneSimulator
             ;;
         macosx)
-            MIN_OS="${MACOSX_DEPLOYMENT_TARGET:-$DEFAULT_MIN_OS}"
+            MIN_OS="${MACOSX_DEPLOYMENT_TARGET:-$DEFAULT_MACOS_MIN_OS}"
             TARGET="$ARCH-apple-macos$MIN_OS"
             PLATFORM=MacOSX
             MIN_OS_KEY=LSMinimumSystemVersion

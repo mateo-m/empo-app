@@ -7,11 +7,12 @@ import SwiftUI
 struct MacSettingsView: View {
     var body: some View {
         TabView {
-            Tab("General", systemImage: "gearshape") { GeneralSettings() }
-            Tab("Controller", systemImage: "gamecontroller") {
-                ControllerButtonsForm(game: nil).frame(height: 560)
-            }
-            Tab("Advanced", systemImage: "wrench.and.screwdriver") { AdvancedSettings() }
+            GeneralSettings()
+                .tabItem { Label("General", systemImage: "gearshape") }
+            ControllerButtonsForm(game: nil).frame(height: 560)
+                .tabItem { Label("Controller", systemImage: "gamecontroller") }
+            AdvancedSettings()
+                .tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
         }
         .frame(width: 540)
         .tint(.brand)

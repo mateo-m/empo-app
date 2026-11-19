@@ -147,7 +147,7 @@ struct PlayerEditToolbar: View {
                 .lineLimit(1)
                 .padding(.horizontal, Spacing.md)
                 .padding(.vertical, Spacing.xs)
-                .glassEffect(.regular, in: .capsule)
+                .glass(.regular, in: .capsule)
                 .onGeometryChange(
                     for: CGRect.self, of: { $0.frame(in: .global) },
                     action: {
@@ -228,7 +228,7 @@ struct PlayerEditToolbar: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, Spacing.lg)
                     .frame(height: IconButtonSize.sm.points)
-                    .glassEffect(.regular.tint(.success).interactive(), in: .capsule)
+                    .glass(.regular.tint(.success).interactive(), in: .capsule)
             }
         }
         .darkGlass()

@@ -5,7 +5,7 @@ import Foundation
 import GameProbe
 import Observation
 import SwiftUI
-import Synchronization
+import os
 
 #if os(iOS)
 import UIKit
@@ -116,7 +116,7 @@ class GameLibrary {
     var localMutationDates: [String: Date] = [:]
 
     private let fm = FileManager.default
-    nonisolated let cancelledImports = Mutex(Set<String>())
+    nonisolated let cancelledImports = OSAllocatedUnfairLock(initialState: Set<String>())
 
     /// IDs of imports currently extracting / moving on a detached
     /// task. The library scan skips these so a concurrent reload
@@ -126,7 +126,7 @@ class GameLibrary {
     /// surface it as an `.invalid` "Unknown Game" entry, which
     /// would clobber the in-memory progress card via the
     /// scan/merge replace step in `reload()`.
-    nonisolated let inFlightImports = Mutex(Set<String>())
+    nonisolated let inFlightImports = OSAllocatedUnfairLock(initialState: Set<String>())
 
     /// IDs of containers a detached user-initiated delete is still
     /// removing (a multi-GB rm -rf takes seconds). `planImports`
@@ -134,7 +134,7 @@ class GameLibrary {
     /// installed list so a fast re-import cannot race the running
     /// delete. Registered in `deleteGame` before the task starts.
     /// Released by the task when it finishes, aborts, or fails.
-    nonisolated let deletionsInFlight = Mutex(Set<String>())
+    nonisolated let deletionsInFlight = OSAllocatedUnfairLock(initialState: Set<String>())
 
     /// IDs of in-flight imports that update an installed game in
     /// place (user-confirmed replacement). `abandonImport` consults
@@ -143,7 +143,7 @@ class GameLibrary {
     /// and (the update swaps in atomically or not at all) the
     /// intact installed game - so the existing entry is re-surfaced
     /// instead.
-    nonisolated let replacingImports = Mutex(Set<String>())
+    nonisolated let replacingImports = OSAllocatedUnfairLock(initialState: Set<String>())
 
     nonisolated static var gamesDirectory: URL { GameContainer.rootURL }
 
@@ -173,8 +173,7 @@ class GameLibrary {
         // seconds, and an import (in particular an in-place update
         // of an existing container) registered after this reload
         // started must still be skipped by the loop when it reaches
-        // that container. The closure reads the mutex through self
-        // because Mutex is noncopyable and cannot bind to a local.
+        // that container.
         let isImportInFlight: @Sendable (String) -> Bool = { id in
             self.inFlightImports.withLock { $0.contains(id) }
         }

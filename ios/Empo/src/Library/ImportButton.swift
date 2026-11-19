@@ -213,7 +213,7 @@ struct ImportButton: View {
             width: collapsed ? AppSize.toolbarButton : nil,
             height: collapsed ? AppSize.toolbarButton : nil
         )
-        .glassEffect(.regular.tint(.brand).interactive(), in: .capsule)
+        .glass(.regular.tint(.brand).interactive(), in: .capsule)
         .darkGlass()
     }
 

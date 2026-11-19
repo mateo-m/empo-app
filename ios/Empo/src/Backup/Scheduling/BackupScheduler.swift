@@ -212,8 +212,9 @@ final class BackupScheduler {
             return
         }
         guard !BackupTaskScheduler.submitManual(press, overCellular: overCellular) else { return }
-        // The system refused the task, so the pass runs in the
-        // foreground and hands its uploads to the background session.
+        // The system refused the task, or has none before iOS 26, so
+        // the pass runs in the foreground and hands its uploads to the
+        // background session.
         startManualRun(press, overCellular: overCellular)
     }
 

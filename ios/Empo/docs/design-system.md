@@ -109,7 +109,8 @@ Sizes:
 
 ## Materials and elevation
 
-- Every control is Liquid Glass. Primary is glass with a full brand tint and white text.
+- Every control is Liquid Glass on iOS 26 and macOS 26, and a thin material with a hairline
+  before that (`glass(_:in:)`). Primary is glass with a full brand tint and white text.
   Secondary is glass with a 10% brand tint and brand text. Outline is plain glass with a
   quaternary hairline. Chips are glass with a 30% black scrim and white `caption2` text.
 - Cards carry a two-layer shadow: a tight 1 pt layer at 5% to define the edge, and a 6 pt
