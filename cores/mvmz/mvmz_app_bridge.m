@@ -363,6 +363,9 @@ void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *user
     gInfoMessage = (Callback){(void *)cb, userdata};
 }
 
+void gamecore_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata) {
+}
+
 void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
     gPaused = (Callback){(void *)cb, userdata};
 }

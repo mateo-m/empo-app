@@ -31,6 +31,9 @@ protocol GameCore {
     /// until `gamecore_signalErrorDismissed` or
     /// `gamecore_signalInfoDismissed`.
     var waitsForAlerts: Bool { get }
+    /// True when the core calls the save event callback each time the
+    /// game reads a save.
+    var reportsSaveLoads: Bool { get }
     /// The four keys of the builtin button grid, in grid order.
     func defaultKeys(forGameAt root: URL) -> [GameKey]
 
@@ -85,6 +88,7 @@ extension GameCore {
     var gamesName: String { madeWith }
     var canKillSession: Bool { false }
     var waitsForAlerts: Bool { false }
+    var reportsSaveLoads: Bool { false }
     func defaultKeys(forGameAt root: URL) -> [GameKey] { GameKey.standard }
     func archiveEntryUse(_ entry: ArchiveEntry) -> ArchiveEntryUse { .skip }
     func validateMarkedRoot(marker: String) throws {}

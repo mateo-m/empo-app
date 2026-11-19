@@ -604,6 +604,9 @@ void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback, void *) {
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback, void *) {
 }
 
+void gamecore_setSaveEventCallback(gamecore_SaveEventCallback, void *) {
+}
+
 void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {
     gPaused = {reinterpret_cast<void *>(cb), userdata};
 }

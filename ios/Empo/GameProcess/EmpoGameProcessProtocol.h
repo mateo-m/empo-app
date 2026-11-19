@@ -52,6 +52,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)textInputModeChanged:(BOOL)active;
 - (void)errorMessage:(NSString *)message;
 - (void)infoMessage:(NSString *)message;
+// event is a GameCoreSaveEvent.
+- (void)saveEvent:(int)event detail:(NSString *)detail;
 // The snapshot is RGBA, width * height * 4 bytes, or nil.
 - (void)pausedWithSnapshot:(nullable NSData *)rgba width:(int)width height:(int)height;
 - (void)resumed;

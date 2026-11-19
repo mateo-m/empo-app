@@ -162,6 +162,13 @@ void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *user
     mkxp_setInfoMessageCallback(cb, userdata);
 }
 
+_Static_assert((int)GAMECORE_SAVE_LOAD == (int)MKXP_SAVE_LOAD, "save events differ");
+_Static_assert((int)GAMECORE_SAVE_REJECTED == (int)MKXP_SAVE_REJECTED, "save events differ");
+
+void gamecore_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata) {
+    mkxp_setSaveEventCallback((mkxp_SaveEventCallback)cb, userdata);
+}
+
 void gamecore_requestPause(void) {
     mkxp_requestPause();
 }
