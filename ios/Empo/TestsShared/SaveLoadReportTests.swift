@@ -31,5 +31,8 @@ final class SaveLoadReportTests: XCTestCase {
         XCTAssertEqual(
             ErrorReports.saveRepairFault("Save12.rvdata: the @name of an RPG::BGS was an Array"),
             "the @name of an RPG::BGS was an Array")
+        XCTAssertEqual(
+            ErrorReports.saveRepairFault("a: b.rxdata: the @name of an RPG::BGM was a Float"),
+            "the @name of an RPG::BGM was a Float")
     }
 }

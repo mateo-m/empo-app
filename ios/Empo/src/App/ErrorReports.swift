@@ -88,9 +88,9 @@ enum ErrorReports {
 
     /// The file name goes: a report holds file names only in the log that
     /// Debug logs adds, and the saves of all players group as one issue
-    /// for each fault.
+    /// for each fault. A file name can hold ": ", and the fault cannot.
     nonisolated static func saveRepairFault(_ detail: String) -> String {
-        detail.range(of: ": ").map { String(detail[$0.upperBound...]) } ?? detail
+        detail.range(of: ": ", options: .backwards).map { String(detail[$0.upperBound...]) } ?? detail
     }
 
     private nonisolated static let exceptionLine = try? NSRegularExpression(
@@ -212,7 +212,7 @@ enum ErrorReports {
     }
 }
 
-/// When the game last started to read a save. A report that comes soon
+/// When the game last read a save. A report that comes soon
 /// after a load can come from a damaged save. Nil in place of a
 /// `SaveLoad` means that the core does not report its loads, or that
 /// the report is about an earlier launch.

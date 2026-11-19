@@ -127,7 +127,7 @@ typedef void (*gamecore_ErrorMessageCallback)(const char *message, void *userdat
 typedef void (*gamecore_InfoMessageCallback)(const char *message, void *userdata);
 
 typedef enum {
-    // The game started to read a save. The detail is the file name.
+    // The game read a save. The detail is the file name.
     GAMECORE_SAVE_LOAD = 0,
     // The engine repaired a broken value in a save that the game writes
     // or reads. The detail is the file name and the fault.
