@@ -455,7 +455,9 @@ jobs:
             -scheme Empo \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED_DATA" \
-            build-for-testing 2>&1 | tail -n 60
+            -showBuildTimingSummary \
+            SWIFT_COMPILATION_MODE=wholemodule \
+            build-for-testing 2>&1 | tail -n 100
 
       - name: Start the app on the runner's Simulator
         # A Simulator that does not boot holds the runner until this limit.
