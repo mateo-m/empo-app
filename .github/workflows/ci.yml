@@ -468,6 +468,14 @@ jobs:
             sed -E "s/^ *[0-9.]+ ([A-Za-z]+) .*in target '([^']+)'.*/\1 \2/" | sort | uniq -c | sort -rn | head -40 || true
           [ -z "${STATUS:-}" ] || { tail -n 200 "$LOG"; exit "$STATUS"; }
 
+      - name: Keep the build log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: simulator-build-log
+          path: ${{ runner.temp }}/build.log
+          retention-days: 3
+
       - name: Start the app on the runner's Simulator
         # A Simulator that does not boot holds the runner until this limit.
         timeout-minutes: 10
