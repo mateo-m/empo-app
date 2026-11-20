@@ -457,7 +457,12 @@ jobs:
             -derivedDataPath "$DERIVED_DATA" \
             -showBuildTimingSummary \
             SWIFT_COMPILATION_MODE=wholemodule \
-            build-for-testing 2>&1 | tail -n 100
+            build-for-testing >"$RUNNER_TEMP/build.log" 2>&1 || STATUS=$?
+          LOG="$RUNNER_TEMP/build.log"
+          sed -n '/^Build Timing Summary/,/^note:/p' "$LOG" | grep '|' || true
+          grep -E "^(SwiftCompile|CompileC|SwiftEmitModule|PhaseScriptExecution|Ld) " "$LOG" |
+            sed -E "s/^([A-Za-z]+) .*in target '([^']+)'.*/\1 \2/" | sort | uniq -c | sort -rn | head -40 || true
+          [ -z "${STATUS:-}" ] || { tail -n 200 "$LOG"; exit "$STATUS"; }
 
       - name: Start the app on the runner's Simulator
         # A Simulator that does not boot holds the runner until this limit.
