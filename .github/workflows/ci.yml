@@ -450,17 +450,22 @@ jobs:
         working-directory: ios/Empo
         run: |
           set -o pipefail
+          LOG="$RUNNER_TEMP/build.log"
+          # Each line starts with the seconds since the build started.
           xcodebuild \
             -project Empo.xcodeproj \
             -scheme Empo \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$DERIVED_DATA" \
             -showBuildTimingSummary \
-            build-for-testing >"$RUNNER_TEMP/build.log" 2>&1 || STATUS=$?
-          LOG="$RUNNER_TEMP/build.log"
-          sed -n '/^Build Timing Summary/,/^note:/p' "$LOG" | grep '|' || true
-          grep -E "^(SwiftCompile|CompileC|SwiftEmitModule|PhaseScriptExecution|Ld) " "$LOG" |
-            sed -E "s/^([A-Za-z]+) .*in target '([^']+)'.*/\1 \2/" | sort | uniq -c | sort -rn | head -40 || true
+            build-for-testing 2>&1 |
+            perl -MTime::HiRes=time -ne 'BEGIN { $| = 1; $s = time } printf "%7.1f %s", time - $s, $_' >"$LOG" || STATUS=$?
+          echo "Pauses of 10 seconds or more in the build output:"
+          awk 'NR > 1 && $1 - t >= 10 { printf "%6.1f s after:  %s\n        before: %s\n", $1 - t, substr(p, 1, 220), substr($0, 1, 220) } { t = $1; p = $0 }' "$LOG"
+          tail -n 1 "$LOG" | awk '{ print "Total: " $1 " s" }'
+          sed -n '/Build Timing Summary/,/note:/p' "$LOG" | grep '|' || true
+          grep -E "^ *[0-9.]+ (SwiftCompile|CompileC|SwiftEmitModule|PhaseScriptExecution|Ld) " "$LOG" |
+            sed -E "s/^ *[0-9.]+ ([A-Za-z]+) .*in target '([^']+)'.*/\1 \2/" | sort | uniq -c | sort -rn | head -40 || true
           [ -z "${STATUS:-}" ] || { tail -n 200 "$LOG"; exit "$STATUS"; }
 
       - name: Start the app on the runner's Simulator
