@@ -136,6 +136,9 @@ struct RootView: View {
             await appState.checkForUpdatesIfStale()
         }
         .task {
+            // A StoreKit call before the test's SKTestSession exists ties
+            // the app to the sandbox store for the whole test run.
+            guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
             await EmpoPlus.shared.refresh()
         }
         .task {

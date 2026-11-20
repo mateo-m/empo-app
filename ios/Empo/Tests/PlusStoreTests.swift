@@ -9,11 +9,9 @@ final class PlusStoreTests: XCTestCase {
 
     private var session: SKTestSession!
 
-    // On a Simulator that never ran these tests, the 3 tests fail on the
-    // first run. The app starts before the session puts the StoreKit file
-    // on the Simulator, so StoreKit sends the app to the sandbox for that
-    // whole run. Xcode loads the file before launch only for Run, not
-    // for Test.
+    // The session must exist before the host app's first StoreKit call,
+    // or StoreKit uses the sandbox store for the whole run. RootView
+    // skips its launch refresh while the app hosts the tests.
     override func setUp() async throws {
         session = try SKTestSession(configurationFileNamed: "Empo")
         session.resetToDefaultState()
