@@ -741,7 +741,9 @@ targets:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - Tests
+      - path: Tests
+        excludes:
+          - Purchase
       - TestsShared
       - path: Empo.storekit
         buildPhase: resources
@@ -754,6 +756,22 @@ targets:
         CODE_SIGNING_ALLOWED: "NO"
         GENERATE_INFOPLIST_FILE: "YES"
         INFOPLIST_KEY_NSPrincipalClass: EmpoTests.EmpoTestRun
+  # The purchase tests need a start of the app after EmpoTests put the
+  # StoreKit file on the Simulator. Each test bundle gets its own start.
+  EmpoPurchaseTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - Tests/Purchase
+      - path: Empo.storekit
+        buildPhase: resources
+    dependencies:
+      - target: Empo
+    settings:
+      base:
+        TEST_TARGET_NAME: Empo
+        PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.purchase-tests
+        CODE_SIGNING_ALLOWED: "NO"
   EmpoMacTests:
     type: bundle.unit-test
     platform: macOS
@@ -778,10 +796,13 @@ schemes:
       targets:
         Empo: all
         EmpoTests: [test]
+        EmpoPurchaseTests: [test]
     test:
       config: Debug
+      # Xcode runs the bundles in this order.
       targets:
         - EmpoTests
+        - EmpoPurchaseTests
     run:
       config: Debug
       storeKitConfiguration: Empo.storekit

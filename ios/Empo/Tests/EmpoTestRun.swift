@@ -2,16 +2,22 @@ import Foundation
 import StoreKitTest
 
 /// XCTest makes the principal class of the test bundle when it loads the
-/// bundle, before the first test.
+/// bundle.
 final class EmpoTestRun: NSObject {
 
-    // StoreKit uses the sandbox store for the whole run when the app makes
-    // a StoreKit call before the session exists. Tests that run before
-    // PlusStoreTests read Plus too, for example the backup tests.
-    static let storeSession = Result { try SKTestSession(configurationFileNamed: "Empo") }
+    // StoreKit picks the test store or the sandbox when the app starts. It
+    // picks the test store only after a session put the StoreKit file on
+    // the Simulator, so a new Simulator sends the first start to the
+    // sandbox. This start puts the file there. The scheme runs
+    // EmpoPurchaseTests after this bundle, in a new start of the app.
+    private let storeSession: SKTestSession
 
     override init() {
-        _ = Self.storeSession
+        do {
+            storeSession = try SKTestSession(configurationFileNamed: "Empo")
+        } catch {
+            fatalError("The test store did not start: \(error)")
+        }
         super.init()
     }
 }

@@ -72,8 +72,10 @@ For device builds, swap `iphonesimulator` for `iphoneos` and create a gitignored
 ```sh
 SIM=$(xcrun simctl list devices booted | grep -oE '[0-9A-F-]{36}' | head -1)
 xcodebuild test -project ios/Empo/Empo.xcodeproj -scheme Empo \
-  -destination "id=$SIM" -only-testing:EmpoTests CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
+  -destination "id=$SIM" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=
 ```
+
+`EmpoPurchaseTests` holds the Plus purchase tests. StoreKit uses the StoreKit file only in a start of the app after a test session put the file on the Simulator. `EmpoTests` puts it there, so run the purchase tests after `EmpoTests`, as the scheme does.
 
 The tests sign the app ad hoc. The Simulator gives the keychain and StoreKit only to a signed app, so with `CODE_SIGNING_ALLOWED=NO` the backup sign-in and Plus tests fail.
 

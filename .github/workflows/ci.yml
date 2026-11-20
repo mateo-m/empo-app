@@ -491,23 +491,7 @@ jobs:
             -scheme Empo \
             -destination "id=$SIM_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
-            test-without-building 2>&1 |
-            perl -MTime::HiRes=time -ne 'BEGIN { $| = 1; $s = time } printf "%7.1f %s", time - $s, $_' >"$RUNNER_TEMP/test.log" &
-          TESTS=$!
-          for _ in $(seq 96); do kill -0 "$TESTS" 2>/dev/null || break; sleep 5; done
-          if kill -0 "$TESTS" 2>/dev/null; then
-            echo "::warning::The tests still run after 8 minutes"
-            grep -vE "^ *[0-9.]+ +(cd |export |builtin-|/Applications)" "$RUNNER_TEMP/test.log" | tail -n 150
-            pgrep -lf 'Empo' || true
-            for PID in $(pgrep -f 'Empo.app/Empo'); do echo "== sample of $PID"; sample "$PID" 3 2>&1 | head -200; done
-            xcrun simctl spawn "$SIM_UDID" log show --last 5m --style compact \
-              --predicate 'process == "Empo" OR subsystem CONTAINS[c] "storekit"' 2>&1 | tail -n 120
-            pkill -f xcodebuild || true
-            exit 1
-          fi
-          wait "$TESTS" || STATUS=$?
-          grep -E "Test Case|error:|Executed|TEST (SUCCEEDED|FAILED)" "$RUNNER_TEMP/test.log" | tail -n 200
-          exit "${STATUS:-0}"
+            test-without-building 2>&1 | tail -n 200
 
       - name: Shut down the Simulator
         if: always() && env.SIM_UDID != ''

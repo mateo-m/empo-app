@@ -10,7 +10,7 @@ final class PlusStoreTests: XCTestCase {
     private var session: SKTestSession!
 
     override func setUp() async throws {
-        session = try EmpoTestRun.storeSession.get()
+        session = try SKTestSession(configurationFileNamed: "Empo")
         session.resetToDefaultState()
         session.clearTransactions()
         session.disableDialogs = true
@@ -20,12 +20,6 @@ final class PlusStoreTests: XCTestCase {
     override func tearDown() async throws {
         session.clearTransactions()
         await PlusStore.shared.refresh()
-    }
-
-    func testTheSessionStartsWhenTheBundleLoads() {
-        XCTAssertEqual(
-            Bundle(for: EmpoTestRun.self).principalClass.map(ObjectIdentifier.init),
-            ObjectIdentifier(EmpoTestRun.self))
     }
 
     func testAPurchaseGivesPlus() async throws {
