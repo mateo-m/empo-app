@@ -417,35 +417,6 @@ jobs:
         with:
           build-data: simulator
 
-      # A Simulator of its own for each runner: another job or a person
-      # can boot a shared one, and `simctl boot` then fails. The
-      # self-hosted runners keep their Simulator for the next run. On a
-      # GitHub-hosted runner, the first boot of a new Simulator takes up
-      # to 5 minutes, so it starts here and goes on during the build.
-      - name: Boot the runner's Simulator
-        timeout-minutes: 10
-        run: |
-          read -r RUNTIME DEVICE_TYPE < <(xcrun simctl list runtimes available -j | jq -r '
-            [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
-            "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
-          NAME="empo-ci-$RUNNER_NAME-${RUNTIME##*.}"
-          # Delete this runner's Simulators of older iOS versions. "iOS-"
-          # is part of the prefix, so mateo-mac does not delete the
-          # Simulators of mateo-mac-2.
-          xcrun simctl list devices -j |
-            jq -r --arg prefix "empo-ci-$RUNNER_NAME-iOS-" --arg name "$NAME" \
-              '.devices[][] | select((.name | startswith($prefix)) and .name != $name) | .udid' |
-            while read -r OLD; do xcrun simctl delete "$OLD"; done
-          UDID="$(xcrun simctl list devices available -j |
-            jq -r --arg name "$NAME" 'first(.devices[][] | select(.name == $name) | .udid) // empty')"
-          [ -n "$UDID" ] || UDID="$(xcrun simctl create "$NAME" "$DEVICE_TYPE" "$RUNTIME")"
-          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
-          echo "Simulator $NAME ($UDID)"
-          # `simctl boot` fails on a booted Simulator. It returns before
-          # the Simulator is ready, and the start step waits for the rest.
-          STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
-          [ "$STATE" = Booted ] || xcrun simctl boot "$UDID"
-
       - name: Build the app and its tests (iOS Simulator)
         working-directory: ios/Empo
         run: |
@@ -454,7 +425,7 @@ jobs:
           LOAD="$RUNNER_TEMP/load.log"
           while sleep 15; do
             printf '%s load %s |' "$(date +%T)" "$(sysctl -n vm.loadavg)"
-            ps -Ao pcpu=,comm= -r | head -5 | awk '{ n = split($2, p, "/"); printf " %s%% %s", $1, p[n] }'
+            ps -Ao pcpu=,comm= -r | awk 'NR <= 5 { n = split($0, p, "/"); printf " %s%% %s", $1, p[n] }' || true
             echo
           done >"$LOAD" 2>&1 &
           SAMPLER=$!
@@ -485,6 +456,35 @@ jobs:
           name: simulator-build-log
           path: ${{ runner.temp }}/build.log
           retention-days: 3
+
+      # A Simulator of its own for each runner: another job or a person
+      # can boot a shared one, and `simctl boot` then fails. The
+      # self-hosted runners keep their Simulator for the next run. On a
+      # GitHub-hosted runner, the first boot of a new Simulator uses all
+      # the CPU for minutes, so it starts after the build.
+      - name: Boot the runner's Simulator
+        timeout-minutes: 10
+        run: |
+          read -r RUNTIME DEVICE_TYPE < <(xcrun simctl list runtimes available -j | jq -r '
+            [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
+            "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
+          NAME="empo-ci-$RUNNER_NAME-${RUNTIME##*.}"
+          # Delete this runner's Simulators of older iOS versions. "iOS-"
+          # is part of the prefix, so mateo-mac does not delete the
+          # Simulators of mateo-mac-2.
+          xcrun simctl list devices -j |
+            jq -r --arg prefix "empo-ci-$RUNNER_NAME-iOS-" --arg name "$NAME" \
+              '.devices[][] | select((.name | startswith($prefix)) and .name != $name) | .udid' |
+            while read -r OLD; do xcrun simctl delete "$OLD"; done
+          UDID="$(xcrun simctl list devices available -j |
+            jq -r --arg name "$NAME" 'first(.devices[][] | select(.name == $name) | .udid) // empty')"
+          [ -n "$UDID" ] || UDID="$(xcrun simctl create "$NAME" "$DEVICE_TYPE" "$RUNTIME")"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "Simulator $NAME ($UDID)"
+          # `simctl boot` fails on a booted Simulator. It returns before
+          # the Simulator is ready, and the start step waits for the rest.
+          STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
+          [ "$STATE" = Booted ] || xcrun simctl boot "$UDID"
 
       - name: Start the app on the runner's Simulator
         # A Simulator that does not boot holds the runner until this limit.
