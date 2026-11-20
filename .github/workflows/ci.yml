@@ -451,8 +451,16 @@ jobs:
         run: |
           set -o pipefail
           LOG="$RUNNER_TEMP/build.log"
+          LOAD="$RUNNER_TEMP/load.log"
+          while sleep 15; do
+            printf '%s load %s |' "$(date +%T)" "$(sysctl -n vm.loadavg)"
+            ps -Ao pcpu=,comm= -r | head -5 | awk '{ n = split($2, p, "/"); printf " %s%% %s", $1, p[n] }'
+            echo
+          done >"$LOAD" 2>&1 &
+          SAMPLER=$!
+          date +"%T xcodebuild starts" >"$LOAD.start"
           # Each line starts with the seconds since the build started.
-          xcodebuild \
+          NSUnbufferedIO=YES xcodebuild \
             -project Empo.xcodeproj \
             -scheme Empo \
             -destination 'generic/platform=iOS Simulator' \
@@ -466,6 +474,8 @@ jobs:
           sed -n '/Build Timing Summary/,/note:/p' "$LOG" | grep '|' || true
           grep -E "^ *[0-9.]+ (SwiftCompile|CompileC|SwiftEmitModule|PhaseScriptExecution|Ld) " "$LOG" |
             sed -E "s/^ *[0-9.]+ ([A-Za-z]+) .*in target '([^']+)'.*/\1 \2/" | sort | uniq -c | sort -rn | head -40 || true
+          kill "$SAMPLER" || true
+          cat "$LOAD.start" "$LOAD"
           [ -z "${STATUS:-}" ] || { tail -n 200 "$LOG"; exit "$STATUS"; }
 
       - name: Keep the build log
