@@ -484,6 +484,15 @@ jobs:
           # `simctl boot` fails on a booted Simulator. It returns before
           # the Simulator is ready, and the start step waits for the rest.
           STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
+          echo "dyld caches:"; ls -la /Library/Developer/CoreSimulator/Caches/dyld 2>&1 | head; ls ~/Library/Developer/CoreSimulator/Caches/dyld 2>&1 | head
+          echo "Devices of the image:"; xcrun simctl list devices available | head -40
+          echo "Data of the new device: $(du -sh ~/Library/Developer/CoreSimulator/Devices/$UDID 2>&1)"
+          while sleep 10; do
+            printf '%s load %s |' "$(date +%T)" "$(sysctl -n vm.loadavg)"
+            ps -Ao pcpu=,comm= -r | awk 'NR <= 6 { c = $1; $1 = ""; s = index($0, "RuntimeRoot") ? "sim:" : ""; n = split($0, p, "/"); printf " %s%% %s%s", c, s, p[n] }' || true
+            echo
+          done >"$RUNNER_TEMP/sim-load.log" 2>&1 &
+          date +"%T boot starts" >"$RUNNER_TEMP/sim-load.start"
           [ "$STATE" = Booted ] || xcrun simctl boot "$UDID"
 
       - name: Start the app on the runner's Simulator
@@ -496,6 +505,7 @@ jobs:
           [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
           # -b boots the Simulator, or only waits when it already runs.
           xcrun simctl bootstatus "$UDID" -b >/dev/null
+          date +"%T boot done" >>"$RUNNER_TEMP/sim-load.start"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
           # Remove the app and its data, so each run tests a first start.
           xcrun simctl uninstall "$UDID" "$BUNDLE_ID"
@@ -520,7 +530,16 @@ jobs:
             -scheme Empo \
             -destination "id=$SIM_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
-            test-without-building 2>&1 | tail -n 200
+            test-without-building 2>&1 |
+            perl -MTime::HiRes=time -ne 'BEGIN { $| = 1; $s = time } printf "%7.1f %s", time - $s, $_' >"$RUNNER_TEMP/test.log" || STATUS=$?
+          awk 'NR > 1 && $1 - t >= 10 { printf "%6.1f s after:  %s\n        before: %s\n", $1 - t, substr(p, 1, 220), substr($0, 1, 220) } { t = $1; p = $0 }' "$RUNNER_TEMP/test.log"
+          head -n 30 "$RUNNER_TEMP/test.log"
+          tail -n 40 "$RUNNER_TEMP/test.log"
+          [ -z "${STATUS:-}" ] || exit "$STATUS"
+
+      - name: Show the load during the Simulator steps
+        if: always()
+        run: cat "$RUNNER_TEMP/sim-load.start" "$RUNNER_TEMP/sim-load.log" || true
 
       - name: Shut down the Simulator
         if: always() && env.SIM_UDID != ''
