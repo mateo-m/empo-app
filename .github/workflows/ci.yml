@@ -455,6 +455,18 @@ jobs:
           # `simctl boot` fails on a booted Simulator. It returns before
           # the Simulator is ready, and the start step waits for the rest.
           STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
+          echo "Data of each iOS 27.2 iPhone:"
+          xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME" '.devices[$rt][] | select(.name | startswith("iPhone")) | "\(.udid) \(.name)"' |
+            while read -r ID REST; do echo "$(du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$ID" | cut -f1) $REST"; done
+          IMAGE_UDID="$(xcrun simctl list devices available -j | jq -r --arg rt "$RUNTIME" 'first(.devices[$rt][] | select(.name == "iPhone 17") | .udid) // empty')"
+          if [ -n "$IMAGE_UDID" ]; then UDID="$IMAGE_UDID"; echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"; echo "Experiment: boot the image's iPhone 17 ($UDID)"; fi
+          while sleep 10; do
+            printf '%s load %s |' "$(date +%T)" "$(sysctl -n vm.loadavg)"
+            ps -Ao pcpu=,comm= -r | awk 'NR <= 5 { c = $1; $1 = ""; s = index($0, "RuntimeRoot") ? "sim:" : ""; n = split($0, p, "/"); printf " %s%% %s%s", c, s, p[n] }' || true
+            echo
+          done >"$RUNNER_TEMP/sim-load.log" 2>&1 &
+          date +"%T boot starts" >"$RUNNER_TEMP/sim-load.start"
+          STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
           [ "$STATE" = Booted ] || xcrun simctl boot "$UDID"
 
       - name: Start the app on the runner's Simulator
@@ -467,6 +479,7 @@ jobs:
           [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
           # -b boots the Simulator, or only waits when it already runs.
           xcrun simctl bootstatus "$UDID" -b >/dev/null
+          date +"%T boot done" >>"$RUNNER_TEMP/sim-load.start"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
           # Remove the app and its data, so each run tests a first start.
           xcrun simctl uninstall "$UDID" "$BUNDLE_ID"
@@ -491,7 +504,13 @@ jobs:
             -scheme Empo \
             -destination "id=$SIM_UDID" \
             -derivedDataPath "$DERIVED_DATA" \
-            test-without-building 2>&1 | tail -n 200
+            test-without-building 2>&1 |
+            perl -MTime::HiRes=time -ne 'BEGIN { $| = 1; $s = time } printf "%7.1f %s", time - $s, $_' |
+            grep -E "Test Case .*(passed|failed)|Executed|started at|\*\*|error"
+
+      - name: Show the load during the Simulator steps
+        if: always()
+        run: cat "$RUNNER_TEMP/sim-load.start" "$RUNNER_TEMP/sim-load.log" || true
 
       - name: Shut down the Simulator
         if: always() && env.SIM_UDID != ''
