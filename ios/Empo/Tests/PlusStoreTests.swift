@@ -9,11 +9,8 @@ final class PlusStoreTests: XCTestCase {
 
     private var session: SKTestSession!
 
-    // The session must exist before the host app's first StoreKit call,
-    // or StoreKit uses the sandbox store for the whole run. RootView
-    // skips its launch refresh while the app hosts the tests.
     override func setUp() async throws {
-        session = try SKTestSession(configurationFileNamed: "Empo")
+        session = try EmpoTestRun.storeSession.get()
         session.resetToDefaultState()
         session.clearTransactions()
         session.disableDialogs = true
@@ -23,6 +20,12 @@ final class PlusStoreTests: XCTestCase {
     override func tearDown() async throws {
         session.clearTransactions()
         await PlusStore.shared.refresh()
+    }
+
+    func testTheSessionStartsWhenTheBundleLoads() {
+        XCTAssertEqual(
+            Bundle(for: EmpoTestRun.self).principalClass.map(ObjectIdentifier.init),
+            ObjectIdentifier(EmpoTestRun.self))
     }
 
     func testAPurchaseGivesPlus() async throws {

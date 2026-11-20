@@ -752,6 +752,8 @@ targets:
         TEST_TARGET_NAME: Empo
         PRODUCT_BUNDLE_IDENTIFIER: sh.mateo.empo.tests
         CODE_SIGNING_ALLOWED: "NO"
+        GENERATE_INFOPLIST_FILE: "YES"
+        INFOPLIST_KEY_NSPrincipalClass: EmpoTests.EmpoTestRun
   EmpoMacTests:
     type: bundle.unit-test
     platform: macOS
