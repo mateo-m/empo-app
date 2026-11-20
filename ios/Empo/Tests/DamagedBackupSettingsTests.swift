@@ -73,7 +73,9 @@ final class DamagedBackupSettingsTests: XCTestCase {
             targetId: target.id, answerAtStart: nil,
             result: runResult(stop: .writerConflict(otherDevice)))
 
-        let model = BackupsScreenModel()
+        // On a Simulator that booted for the first time, the real iCloud check
+        // answers only after minutes.
+        let model = BackupsScreenModel(iCloudAvailability: { .ready })
         await model.refresh()
 
         XCTAssertEqual(model.writerQuestions.map(\.deviceName), ["Other iPad"])
@@ -88,7 +90,7 @@ final class DamagedBackupSettingsTests: XCTestCase {
             targetId: target.id, answerAtStart: .takeOver,
             result: runResult(stop: .writerConflict(otherDevice)))
 
-        let model = BackupsScreenModel()
+        let model = BackupsScreenModel(iCloudAvailability: { .ready })
         await model.refresh()
         XCTAssertEqual(model.writerQuestions.map(\.deviceName), ["Other iPad"])
     }
