@@ -7,15 +7,26 @@ import Foundation
 /// `.rgss2a` use the version 1 layout, and `.rgss3a` uses version 3.
 enum RGSSArchive {
 
-    /// The engine mounts only the archive named after the game: `Game`, or
-    /// the name of the game's `.ini` file when there is no `Game.ini`.
+    /// The `.ini` file that the engine reads, and its `Scripts=` path.
+    /// `Game.ini` needs only `Scripts=`. Another `.ini` file also needs
+    /// `Library=`.
+    static func gameINI(in gameDirectory: URL, fm: FileManager) -> (name: String, scripts: String)? {
+        GameINI.iniFileURLs(at: gameDirectory, fm: fm).lazy.compactMap { url -> (String, String)? in
+            let name = url.deletingPathExtension().lastPathComponent.lowercased()
+            guard let scripts = GameINI.parseINIValue(in: url, section: "game", key: "scripts"),
+                !scripts.isEmpty,
+                name == "game"
+                    || GameINI.parseINIValue(in: url, section: "game", key: "library")?.isEmpty == false
+            else { return nil }
+            return (name, scripts)
+        }.first
+    }
+
+    /// The engine mounts only the archive with the name of its `.ini` file.
     static func mountable(in gameDirectory: URL, fm: FileManager) -> [URL] {
-        let names = Set(
-            ["game"]
-                + gameDirectory.directoryEntries(matchingExtensions: ["ini"], fm: fm)
-                .map { $0.deletingPathExtension().lastPathComponent.lowercased() })
+        let name = gameINI(in: gameDirectory, fm: fm)?.name ?? "game"
         return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
-            .filter { names.contains($0.deletingPathExtension().lastPathComponent.lowercased()) }
+            .filter { $0.deletingPathExtension().lastPathComponent.lowercased() == name }
     }
 
     /// The decrypted bytes of the first entry whose path is in `paths`.

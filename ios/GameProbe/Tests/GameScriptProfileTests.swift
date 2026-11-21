@@ -479,7 +479,30 @@ final class GameScriptProfileTests: XCTestCase {
             .write(to: dir.appendingPathComponent("Backup.rgssad"))
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
 
-        try "[Game]\n".write(to: dir.appendingPathComponent("Backup.ini"), atomically: true, encoding: .utf8)
+        let ini = "[Game]\nLibrary=RGSS102E.dll\nScripts=Data\\Scripts.rxdata\n"
+        try ini.write(to: dir.appendingPathComponent("Backup.ini"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+
+        try ini.write(to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+    }
+
+    func testTheArchiveReadsTheScriptsPathOfGameIni() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nScripts=Data\\Main.rxdata\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try rgssArchive(
+            version: 1,
+            files: [
+                ("Data\\Scripts.rxdata", compiledScripts(["x = 1\n"])),
+                ("Data\\Main.rxdata", compiledScripts(["a&.b\n", "c&.d\n", "e&.f\n"])),
+            ]
+        ).write(to: dir.appendingPathComponent("Game.rgssad"))
+
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
     }
 

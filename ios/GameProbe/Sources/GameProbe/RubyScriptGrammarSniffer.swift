@@ -161,7 +161,12 @@ public enum RubyScriptGrammarSniffer {
     }
 
     private static func archivedScripts(in gameDirectory: URL, fm: FileManager) -> [String]? {
-        let paths = Set(scriptsFilenames.flatMap { [$0, "Data/\($0)"] }.map { $0.lowercased() })
+        let names =
+            RGSSArchive.gameINI(in: gameDirectory, fm: fm).map {
+                [$0.scripts.replacingOccurrences(of: "\\", with: "/")]
+            }
+            ?? scriptsFilenames.flatMap { [$0, "Data/\($0)"] }
+        let paths = Set(names.map { $0.lowercased() })
         return RGSSArchive.mountable(in: gameDirectory, fm: fm)
             .lazy.compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
     }
