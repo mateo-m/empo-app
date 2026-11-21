@@ -65,7 +65,7 @@ final class GameScriptProfileTests: XCTestCase {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? fm.removeItem(at: dir) }
-        let read = ["Game.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/PluginScripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb", "mkxp.json", "Fix/Early.rb", "Late.rb"]
+        let read = ["Game.ini", "Uranium.ini", "RGSS104E.dll", "Game.rgssad", "Data/Scripts.rxdata", "Data/PluginScripts.rxdata", "Data/a.fpk", "Data/Scripts/Plugins/a.rb", "mkxp.json", "Fix/Early.rb", "Late.rb"]
         let unread = ["Save01.rxdata", "Data/Map001.rxdata", "Data/Game.ini", "Data/x.dll", "a.fpk", "Graphics/Titles/t.png", "preload.rb"]
         let files = read + unread
         for file in files {
@@ -481,6 +481,21 @@ final class GameScriptProfileTests: XCTestCase {
 
         try "[Game]\n".write(to: dir.appendingPathComponent("Backup.ini"), atomically: true, encoding: .utf8)
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testAnArchiveThatTheEngineDoesNotMountDoesNotPickTheRuby() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try rgssArchive(version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["y = 2\n"]))])
+            .write(to: dir.appendingPathComponent("Game.rgssad"))
+        try rgssArchive(version: 3, files: []).write(to: dir.appendingPathComponent("Backup.rgss3a"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby18)
     }
 
     func testCutArchivesAreInconclusive() throws {

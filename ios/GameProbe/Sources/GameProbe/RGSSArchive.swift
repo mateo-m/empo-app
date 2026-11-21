@@ -7,6 +7,17 @@ import Foundation
 /// `.rgss2a` use the version 1 layout, and `.rgss3a` uses version 3.
 enum RGSSArchive {
 
+    /// The engine mounts only the archive named after the game: `Game`, or
+    /// the name of the game's `.ini` file when there is no `Game.ini`.
+    static func mountable(in gameDirectory: URL, fm: FileManager) -> [URL] {
+        let names = Set(
+            ["game"]
+                + gameDirectory.directoryEntries(matchingExtensions: ["ini"], fm: fm)
+                .map { $0.deletingPathExtension().lastPathComponent.lowercased() })
+        return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
+            .filter { names.contains($0.deletingPathExtension().lastPathComponent.lowercased()) }
+    }
+
     /// The decrypted bytes of the first entry whose path is in `paths`.
     /// The comparison ignores case, and `\` and `/` are the same.
     static func file(at paths: Set<String>, in archive: URL) -> Data? {

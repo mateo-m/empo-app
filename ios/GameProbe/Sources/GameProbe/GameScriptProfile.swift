@@ -119,8 +119,8 @@ public enum GameScriptProfile {
         }
         let looseScripts = RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
         return files(
-            in: "", named: ["Game.ini"] + scripts,
-            extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
+            in: "", named: scripts,
+            extensions: ["ini", "dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
             + files(in: "Data", named: scripts + ["PluginScripts.rxdata"], extensions: ["fpk"])
             + looseScripts
             + files(in: "", named: ["mkxp.json"], extensions: [])
@@ -298,10 +298,7 @@ public enum GameScriptProfile {
         at gameDirectory: URL,
         fm: FileManager
     ) -> String? {
-        let entries = gameDirectory.directoryEntries(
-            matchingExtensions: ["rgssad", "rgss2a", "rgss3a"],
-            fm: fm
-        )
+        let entries = RGSSArchive.mountable(in: gameDirectory, fm: fm)
         var best: String?
         var bestRank = 0
         for url in entries {

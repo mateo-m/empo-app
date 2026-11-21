@@ -160,17 +160,10 @@ public enum RubyScriptGrammarSniffer {
         return nil
     }
 
-    /// The engine mounts only the archive named after the game: `Game`, or
-    /// the name of the game's `.ini` file when there is no `Game.ini`.
     private static func archivedScripts(in gameDirectory: URL, fm: FileManager) -> [String]? {
         let paths = Set(scriptsFilenames.flatMap { [$0, "Data/\($0)"] }.map { $0.lowercased() })
-        let names = Set(
-            ["game"]
-                + gameDirectory.directoryEntries(matchingExtensions: ["ini"], fm: fm)
-                .map { $0.deletingPathExtension().lastPathComponent.lowercased() })
-        return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
-            .lazy.filter { names.contains($0.deletingPathExtension().lastPathComponent.lowercased()) }
-            .compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
+        return RGSSArchive.mountable(in: gameDirectory, fm: fm)
+            .lazy.compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
     }
 
     /// Walks `Scripts/` and `Data/Scripts/` to find `.rb` files.
