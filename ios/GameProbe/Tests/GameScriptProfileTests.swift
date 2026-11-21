@@ -487,6 +487,28 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
     }
 
+    func testTheArchiveFollowsTheExecNameOfMkxpJson() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        for name in ["Game", "Uranium"] {
+            try "[Game]\nScripts=Data\\Scripts.rxdata\n".write(
+                to: dir.appendingPathComponent("\(name).ini"), atomically: true, encoding: .utf8)
+        }
+        try rgssArchive(version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["x = 1\n"]))])
+            .write(to: dir.appendingPathComponent("Game.rgssad"))
+        try rgssArchive(
+            version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["a&.b\n", "c&.d\n", "e&.f\n"]))]
+        ).write(to: dir.appendingPathComponent("Uranium.rgssad"))
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+
+        try #"{"execName": "Uranium"}"#.write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
     func testTheArchiveReadsTheScriptsPathOfGameIni() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

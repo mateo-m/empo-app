@@ -7,26 +7,33 @@ import Foundation
 /// `.rgss2a` use the version 1 layout, and `.rgss3a` uses version 3.
 enum RGSSArchive {
 
-    /// The `.ini` file that the engine reads, and its `Scripts=` path.
-    /// `Game.ini` needs only `Scripts=`. Another `.ini` file also needs
-    /// `Library=`.
+    /// The `.ini` file that the engine reads, and its `Scripts=` path. The
+    /// engine reads `<execName>.ini` first, with `execName` from
+    /// `mkxp.json` or "Game". Another `.ini` file also needs `Library=`.
     static func gameINI(in gameDirectory: URL, fm: FileManager) -> (name: String, scripts: String)? {
-        GameINI.iniFileURLs(at: gameDirectory, fm: fm).lazy.compactMap { url -> (String, String)? in
-            let name = url.deletingPathExtension().lastPathComponent.lowercased()
+        let execName = execName(in: gameDirectory)
+        let urls = GameINI.iniFileURLs(at: gameDirectory, fm: fm)
+        func name(_ url: URL) -> String { url.deletingPathExtension().lastPathComponent.lowercased() }
+        let ordered = urls.filter { name($0) == execName } + urls.filter { name($0) != execName }
+        return ordered.lazy.compactMap { url -> (String, String)? in
             guard let scripts = GameINI.parseINIValue(in: url, section: "game", key: "scripts"),
                 !scripts.isEmpty,
-                name == "game"
+                name(url) == execName
                     || GameINI.parseINIValue(in: url, section: "game", key: "library")?.isEmpty == false
             else { return nil }
-            return (name, scripts)
+            return (name(url), scripts)
         }.first
     }
 
     /// The engine mounts only the archive with the name of its `.ini` file.
     static func mountable(in gameDirectory: URL, fm: FileManager) -> [URL] {
-        let name = gameINI(in: gameDirectory, fm: fm)?.name ?? "game"
+        let name = gameINI(in: gameDirectory, fm: fm)?.name ?? execName(in: gameDirectory)
         return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
             .filter { $0.deletingPathExtension().lastPathComponent.lowercased() == name }
+    }
+
+    private static func execName(in gameDirectory: URL) -> String {
+        (ManagedMkxpConfig.loadBaseDict(from: gameDirectory)?["execName"] as? String ?? "Game").lowercased()
     }
 
     /// The decrypted bytes of the first entry whose path is in `paths`.
