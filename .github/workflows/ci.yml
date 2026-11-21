@@ -6,14 +6,15 @@
 #
 # The repository variable MACOS_RUNNER chooses the Mac. The value is
 # JSON: a label list such as ["self-hosted","macOS"], or one quoted
-# label such as "xcode-27". A bare xcode-27 fails. It applies only to
-# a run that someone starts by hand. With no variable, that run uses a
-# GitHub-hosted Mac. Every pull request and every push to main uses a
-# GitHub-hosted Mac, also a pull request from a branch of this
-# repository or from Dependabot. A pull request runs the workflow files
-# of its own branch, so a pull request that edits this file can still
-# choose the self-hosted Mac. Only the repository's approval rule for
-# fork runs stops that for a fork.
+# label such as "xcode-27". A bare xcode-27 fails. A run that someone
+# starts by hand uses it for each Mac job. A pull request that the
+# repository owner opened from a branch of this repository uses it for
+# the Simulator job only. Every other run uses a GitHub-hosted Mac,
+# also a pull request from Dependabot, from another person, or from a
+# fork. With no variable, each run uses a GitHub-hosted Mac. A pull
+# request runs the workflow files of its own branch, so a pull request
+# that edits this file can still choose the self-hosted Mac. Only the
+# repository's approval rule for fork runs stops that for a fork.
 #
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
@@ -76,6 +77,13 @@ jobs:
       code: ${{ steps.classify.outputs.code }}
       # JSON for runs-on.
       mac_runner: ${{ github.event_name == 'workflow_dispatch' && vars.MACOS_RUNNER || '"xcode-27"' }}
+      # A Simulator boot keeps the 3 cores of a GitHub-hosted Mac busy
+      # for about 15 minutes, and the build and the tests wait for it.
+      simulator_runner: >-
+        ${{ (github.event_name == 'workflow_dispatch'
+        || (github.event.pull_request.user.login == github.repository_owner
+        && github.event.pull_request.head.repo.full_name == github.repository))
+        && vars.MACOS_RUNNER || '"xcode-27"' }}
     steps:
       - name: Classify the changed paths
         id: classify
@@ -405,7 +413,7 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
+    runs-on: ${{ fromJSON(needs.changes.outputs.simulator_runner) }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -419,9 +427,8 @@ jobs:
 
       # A Simulator of its own for each runner: another job or a person
       # can boot a shared one, and `simctl boot` then fails. The
-      # self-hosted runners keep their Simulator for the next run. On a
-      # GitHub-hosted runner, the first boot of a new Simulator takes up
-      # to 5 minutes, so it starts here and goes on during the build.
+      # self-hosted runners keep their Simulator for the next run. A boot
+      # takes minutes, so it starts here and goes on during the build.
       - name: Boot the runner's Simulator
         timeout-minutes: 10
         run: |
