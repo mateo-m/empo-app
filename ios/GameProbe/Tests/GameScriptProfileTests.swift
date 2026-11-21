@@ -98,7 +98,7 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
     }
 
-    func testDefaultsThatLookLikeKeywordParametersStayLegacy() throws {
+    func testKeywordParametersAfterEmptyDefaultsRouteToModernRuby31() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(
             at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
@@ -108,6 +108,33 @@ final class GameScriptProfileTests: XCTestCase {
 
         try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
         try """
+        def canChangeFE?(newfield = [], ignoreOverlays: false)
+        end
+        def show(opts = {}, enabled: true)
+        end
+        def pick(value = default_value(), enabled: true)
+        end
+
+        """.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testDefaultsThatLookLikeKeywordParametersStayLegacy() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        // Two real modern tokens, so one false hit makes three.
+        try """
+        a = b&.c
+        h.except(:k)
         def initialize(x, opts = {:a => 1})
         end
         def pick(a = b ? c:d)
@@ -115,6 +142,16 @@ final class GameScriptProfileTests: XCTestCase {
         def kind(a = Game_Battler::NORMAL)
         end
         def show(a, b = {c: 1})
+        end
+        def show(a, b = {c: 1, d: 2})
+        end
+        def kind(a = g(1, Game_Battler::NORMAL))
+        end
+        def call(a = g(1, k: 2))
+        end
+        def list(x, a = [1, k: 2])
+        end
+        def pass(a, b = h(x, y: 1))
         end
         # def getRoll(update_roll:true, isDebuff:false)
         help = "def getRoll(update_roll:true, isDebuff:false)"

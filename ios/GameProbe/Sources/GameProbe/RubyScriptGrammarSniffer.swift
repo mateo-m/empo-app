@@ -209,16 +209,12 @@ public enum RubyScriptGrammarSniffer {
             }
     }
 
-    /// Reads up to `maxLooseFiles` `.rb` files.
-    /// A 4 MB cap on the total prevents one huge generated file
-    /// from using too much memory.
+    /// Reads up to `maxLooseFiles` `.rb` files, and stops after 16 MB.
+    /// Pokemon Rejuvenation ships about 15 MB of loose scripts, half of
+    /// them data tables, and the read order is the disk order.
     private static func readLooseScripts(urls: [URL]) -> [String] {
         var scripts: [String] = []
         var total = 0
-        // Pokemon Rejuvenation 13.5 and 14 ship about 15 MB of loose
-        // scripts, half of them data tables. A 4 MB cap read only the
-        // files that come first on disk, and those files can have no
-        // modern code.
         let cap = 16_000_000
         for url in urls {
             guard let str = try? Data(contentsOf: url).decodeAsLooseText() else { continue }
@@ -344,9 +340,10 @@ public enum RubyScriptGrammarSniffer {
         #"\{\s*[^}]*\b_[1-9]\b"#,
         // Keyword-arg shorthand (3.1+): foo(x:, y:)
         #"\b\w+:\s*[,)]"#,
-        // Keyword parameter (2.0+): `def f(a, b: 1)`. A `{` before the
-        // label makes it a 1.9 hash in a default value.
-        #"(?<![.:\w])def[ \t]+[\w.?!]+[ \t]*\((?:[^{)\n]*,)?[ \t]*\w+:(?!:)"#,
+        // Keyword parameter (2.0+): `def f(a, b = [], c: 1)`. A `{`, `(`,
+        // or `[` that is not empty puts the label in a 1.9 hash in a
+        // default value.
+        #"(?<![.:\w])def[ \t]+[\w.?!]+[ \t]*\((?:(?:[^{(\[)\n]|\{\s*\}|\(\s*\)|\[\s*\])*,)?[ \t]*\w+:(?!:)"#,
         // Hash#except (3.0+): h.except(:k)
         #"\.except\s*\("#,
         // Array#filter_map (2.7+): arr.filter_map { ... }
