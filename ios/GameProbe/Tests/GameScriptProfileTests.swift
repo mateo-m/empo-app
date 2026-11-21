@@ -382,6 +382,90 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
     }
 
+    func testModernScriptsInAnEncryptedArchiveRouteToRuby31() throws {
+        let modern = compiledScripts(["a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n"])
+        for (archive, version) in [("Game.rgssad", 1), ("Game.rgss2a", 1), ("Game.rgss3a", 3)] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try "[Game]\nLibrary=RGSS102E.dll\nScripts=Data\\Scripts.rxdata\n".write(
+                to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+            try rgssArchive(
+                version: version,
+                files: [("Data\\EditorScripts.rxdata", compiledScripts(["x = 1\n"])), ("Data\\Scripts.rxdata", modern)]
+            ).write(to: dir.appendingPathComponent(archive))
+
+            let profile = GameScriptProfile.analyze(gameDirectory: dir)
+            XCTAssertEqual(profile.grammar, .modern, archive)
+            XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false), archive)
+        }
+    }
+
+    func testLegacyScriptsInAnEncryptedArchiveKeepTheArchiveRuby() throws {
+        for (archive, version, ruby) in [
+            ("Game.rgssad", 1, GameScriptProfile.Ruby.ruby18), ("Game.rgss3a", 3, .ruby19),
+        ] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try rgssArchive(version: version, files: [("Data\\Scripts.rxdata", compiledScripts(["x = 1\n"]))])
+                .write(to: dir.appendingPathComponent(archive))
+
+            let profile = GameScriptProfile.analyze(gameDirectory: dir)
+            XCTAssertEqual(profile.grammar, .legacy, archive)
+            XCTAssertEqual(profile.ruby, ruby, archive)
+        }
+    }
+
+    /// Pokemon Insurgence 2.0.1 keeps its Ruby 3.1 port of 1.8 scripts
+    /// only in an encrypted `Game.rgssad`.
+    func testRuby19CallsInAnEncryptedRGSS1ArchiveRouteToRuby31Legacy() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try rgssArchive(version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["s.force_encoding('UTF-8')\n"]))])
+            .write(to: dir.appendingPathComponent("Game.rgssad"))
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .mixed)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true))
+    }
+
+    func testScriptsInTheArchiveWinOverALooseScriptsFile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try rgssArchive(
+            version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["a&.b\n", "c&.d\n", "e&.f\n"]))]
+        ).write(to: dir.appendingPathComponent("Game.rgssad"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
+    func testCutArchivesAreInconclusive() throws {
+        let full = rgssArchive(version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["a&.b\n"]))])
+        let full3 = rgssArchive(version: 3, files: [("Data\\Scripts.rxdata", compiledScripts(["a&.b\n"]))])
+        for bytes in [full.prefix(20), full.prefix(full.count - 3), full3.prefix(30), full3.prefix(full3.count - 3), Data("RGSSAD\0\u{2}".utf8)] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            try Data(bytes).write(to: dir.appendingPathComponent("Game.rgssad"))
+
+            XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .inconclusive)
+        }
+    }
+
     func testMixedLooseScriptsBesideAPackedArchiveKeepTheLegacyTransform() throws {
         let dir = try packedGame(plugins: ["x = 1\n"])
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -1061,6 +1145,50 @@ final class GameScriptProfileTests: XCTestCase {
                 + marshalString(deflated(source))
         }
         return Data(data)
+    }
+
+    /// XOR is its own inverse, so the decrypt steps also encrypt.
+    private func rgssArchive(version: Int, files: [(name: String, data: Data)]) -> Data {
+        func next(_ key: inout UInt32) -> UInt32 {
+            defer { key = key &* 7 &+ 3 }
+            return key
+        }
+        func le(_ value: UInt32) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: value >> (8 * UInt32($0))) } }
+        func encrypt(_ data: Data, key: UInt32) -> [UInt8] {
+            var key = key
+            return data.enumerated().map { index, byte in
+                defer { if index % 4 == 3 { key = key &* 7 &+ 3 } }
+                return byte ^ UInt8(truncatingIfNeeded: key >> (8 * UInt32(index % 4)))
+            }
+        }
+        var out = Array("RGSSAD\0".utf8) + [UInt8(version)]
+        if version == 1 {
+            var key: UInt32 = 0xDEAD_CAFE
+            for file in files {
+                let name = Array(file.name.utf8)
+                out += le(UInt32(name.count) ^ next(&key))
+                out += name.map { $0 ^ UInt8(truncatingIfNeeded: next(&key)) }
+                out += le(UInt32(file.data.count) ^ next(&key))
+                out += encrypt(file.data, key: key)
+            }
+            return Data(out)
+        }
+        let base: UInt32 = 0x1234_5678
+        let key = base &* 9 &+ 3
+        out += le(base)
+        let table = files.reduce(0) { $0 + 16 + $1.name.utf8.count } + 4
+        var offset = out.count + table
+        var bodies: [UInt8] = []
+        for (index, file) in files.enumerated() {
+            let name = Array(file.name.utf8)
+            let dataKey = UInt32(0xC0FFEE + index)
+            out += le(UInt32(offset) ^ key) + le(UInt32(file.data.count) ^ key)
+            out += le(dataKey ^ key) + le(UInt32(name.count) ^ key)
+            out += name.enumerated().map { $1 ^ UInt8(truncatingIfNeeded: key >> (8 * UInt32($0 % 4))) }
+            bodies += encrypt(file.data, key: dataKey)
+            offset += file.data.count
+        }
+        return Data(out + le(key) + bodies)
     }
 
     /// One plugin, `[name, {}, [[path, zlib source], ...]]`, in a Marshal array.

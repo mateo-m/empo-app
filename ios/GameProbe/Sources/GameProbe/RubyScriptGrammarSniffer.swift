@@ -44,9 +44,9 @@ public enum RubyScriptGrammarSniffer {
         case mixed
 
         /// The sniffer could not read the live source. Causes: an
-        /// encrypted archive with no unpack, a missing file, a
-        /// parse error, an unknown Marshal tag, or scripts packed
-        /// in a `Data/*.fpk` archive. The caller falls back to
+        /// archive that it cannot read, a missing file, a parse
+        /// error, an unknown Marshal tag, or scripts packed in a
+        /// `Data/*.fpk` archive. The caller falls back to
         /// packaging signals, the extension, Game.ini, or the
         /// default.
         case inconclusive
@@ -96,9 +96,12 @@ public enum RubyScriptGrammarSniffer {
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
         // VX Ace projects use it, and so do forks that did not
-        // extract their scripts.
-        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
-            let scripts = decodeScripts(at: url)
+        // extract their scripts. The engine reads the copy in the
+        // encrypted archive before the one in the game folder.
+        guard
+            let scripts = archivedScripts(in: gameDirectory, fm: fm)
+                ?? locateCompiledScriptsFile(in: gameDirectory, fm: fm)
+                .flatMap({ try? Data(contentsOf: $0) }).flatMap(decodeScripts)
         else {
             return (classifyExtrasAlone(extras), .unread)
         }
@@ -150,6 +153,12 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         return nil
+    }
+
+    private static func archivedScripts(in gameDirectory: URL, fm: FileManager) -> [String]? {
+        let paths = Set(scriptsFilenames.flatMap { [$0, "Data/\($0)"] }.map { $0.lowercased() })
+        return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
+            .lazy.compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
     }
 
     /// Walks `Scripts/` and `Data/Scripts/` to find `.rb` files.
@@ -227,8 +236,7 @@ public enum RubyScriptGrammarSniffer {
 
     // MARK: - Marshal + Zlib decode
 
-    private static func decodeScripts(at url: URL) -> [String]? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+    private static func decodeScripts(_ data: Data) -> [String]? {
         var reader = MarshalReader(data: data)
         guard reader.readVersion() else { return nil }
         // The outer container is an array of script entries.

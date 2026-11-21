@@ -49,9 +49,12 @@ public enum GameScriptProfile {
         /// A 1.9 call under Zeus81's `vxace?` check, or in a `case` or
         /// `begin` block whose `end` line has a 1.9 check, does not count.
         case vxAceGuard = "vx-ace-guard"
+        /// The scan also reads the Scripts file inside an encrypted
+        /// `.rgssad`, `.rgss2a`, or `.rgss3a` archive.
+        case archivedScripts = "archived-scripts"
     }
 
-    public static let currentSchema: Schema = .vxAceGuard
+    public static let currentSchema: Schema = .archivedScripts
 
     /// The Ruby that runs the game. Only Ruby 3.1 has the syntax
     /// transform, so only Ruby 3.1 has a legacy or modern mode.
