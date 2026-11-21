@@ -480,8 +480,9 @@ public enum RubyScriptGrammarSniffer {
         }
     }
 
+    /// `prepend` is `String#prepend` (1.9.3) or `Module#prepend` (2.0).
     private static let ruby19Call = try? NSRegularExpression(
-        pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
+        pattern: #"\.force_encoding\b|\bEncoding::[A-Z]|\.prepend\b|^\s*prepend[\s(]+[A-Z]"#)
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
