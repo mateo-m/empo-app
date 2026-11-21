@@ -54,6 +54,9 @@ public enum RubyScriptGrammarSniffer {
 
     enum CoreScripts: Equatable, Sendable {
         case read
+        /// The sniffer read them from the encrypted archive, so the
+        /// extension of a loose Scripts file says nothing about them.
+        case archived
         /// A `Data/*.fpk` archive holds them, so the sniffer skipped them.
         case packed
         case unread
@@ -98,9 +101,11 @@ public enum RubyScriptGrammarSniffer {
         // VX Ace projects use it, and so do forks that did not
         // extract their scripts. The engine reads the copy in the
         // encrypted archive before the one in the game folder.
+        if let scripts = archivedScripts(in: gameDirectory, fm: fm) {
+            return (classify(scripts: scripts + extras), .archived)
+        }
         guard
-            let scripts = archivedScripts(in: gameDirectory, fm: fm)
-                ?? locateCompiledScriptsFile(in: gameDirectory, fm: fm)
+            let scripts = locateCompiledScriptsFile(in: gameDirectory, fm: fm)
                 .flatMap({ try? Data(contentsOf: $0) }).flatMap(decodeScripts)
         else {
             return (classifyExtrasAlone(extras), .unread)
@@ -155,10 +160,17 @@ public enum RubyScriptGrammarSniffer {
         return nil
     }
 
+    /// The engine mounts only the archive named after the game: `Game`, or
+    /// the name of the game's `.ini` file when there is no `Game.ini`.
     private static func archivedScripts(in gameDirectory: URL, fm: FileManager) -> [String]? {
         let paths = Set(scriptsFilenames.flatMap { [$0, "Data/\($0)"] }.map { $0.lowercased() })
+        let names = Set(
+            ["game"]
+                + gameDirectory.directoryEntries(matchingExtensions: ["ini"], fm: fm)
+                .map { $0.deletingPathExtension().lastPathComponent.lowercased() })
         return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
-            .lazy.compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
+            .lazy.filter { names.contains($0.deletingPathExtension().lastPathComponent.lowercased()) }
+            .compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
     }
 
     /// Walks `Scripts/` and `Data/Scripts/` to find `.rb` files.

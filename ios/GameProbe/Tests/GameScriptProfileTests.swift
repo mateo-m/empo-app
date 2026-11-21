@@ -452,6 +452,37 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
     }
 
+    func testALooseScriptsFileBesideAnArchiveDoesNotPickTheRuby() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try rgssArchive(version: 3, files: [("Data\\Scripts.rvdata2", compiledScripts(["y = 2\n"]))])
+            .write(to: dir.appendingPathComponent("Game.rgss3a"))
+
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby19)
+    }
+
+    func testAnArchiveThatTheEngineDoesNotMountIsNotRead() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        let modern = compiledScripts(["a&.b\n", "c&.d\n", "e&.f\n"])
+        try rgssArchive(version: 1, files: [("Data\\Scripts.rxdata", modern)])
+            .write(to: dir.appendingPathComponent("Backup.rgssad"))
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+
+        try "[Game]\n".write(to: dir.appendingPathComponent("Backup.ini"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
+    }
+
     func testCutArchivesAreInconclusive() throws {
         let full = rgssArchive(version: 1, files: [("Data\\Scripts.rxdata", compiledScripts(["a&.b\n"]))])
         let full3 = rgssArchive(version: 3, files: [("Data\\Scripts.rxdata", compiledScripts(["a&.b\n"]))])

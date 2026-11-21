@@ -154,7 +154,7 @@ public enum GameScriptProfile {
             }
         let ruby =
             runtime.dispatchVersion
-            ?? (grammar == .inconclusive || core == .packed
+            ?? (grammar == .inconclusive || core == .packed || core == .archived
                 ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
             ?? archiveRuby ?? libraryRuby ?? 31
         // Ruby 1.8 has neither the methods nor the grammar of mixed source.
@@ -181,7 +181,7 @@ public enum GameScriptProfile {
             return true
         case .legacy:
             return false
-        case .mixed where core == .read:
+        case .mixed where core == .read || core == .archived:
             return false
         case .mixed, .inconclusive:
             // Without the core, mixed comes from plugin or mkxp.json scripts
