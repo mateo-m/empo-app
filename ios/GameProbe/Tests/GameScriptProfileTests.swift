@@ -98,7 +98,7 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
     }
 
-    func testKeywordParametersAfterEmptyDefaultsRouteToModernRuby31() throws {
+    func testKeywordParametersAfterBracketDefaultsRouteToModernRuby31() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(
             at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
@@ -110,9 +110,9 @@ final class GameScriptProfileTests: XCTestCase {
         try """
         def canChangeFE?(newfield = [], ignoreOverlays: false)
         end
-        def show(opts = {}, enabled: true)
+        def show(values = [1], opts = {}, enabled: true)
         end
-        def pick(value = default_value(), enabled: true)
+        def pick(value = default_value(x), enabled: true)
         end
 
         """.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
