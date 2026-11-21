@@ -6,14 +6,15 @@
 #
 # The repository variable MACOS_RUNNER chooses the Mac. The value is
 # JSON: a label list such as ["self-hosted","macOS"], or one quoted
-# label such as "xcode-27". A bare xcode-27 fails. It applies only to
-# a run that someone starts by hand. With no variable, that run uses a
-# GitHub-hosted Mac. Every pull request and every push to main uses a
-# GitHub-hosted Mac, also a pull request from a branch of this
-# repository or from Dependabot. A pull request runs the workflow files
-# of its own branch, so a pull request that edits this file can still
-# choose the self-hosted Mac. Only the repository's approval rule for
-# fork runs stops that for a fork.
+# label such as "xcode-27". A bare xcode-27 fails. A run that someone
+# starts by hand uses it for each Mac job. A pull request that the
+# repository owner opened uses it for the Simulator job only. Every
+# other run uses a GitHub-hosted Mac, also a pull request from
+# Dependabot or from another person. With no variable, each run uses a
+# GitHub-hosted Mac. A pull request runs the workflow files of its own
+# branch, so a pull request that edits this file can still choose the
+# self-hosted Mac. Only the repository's approval rule for fork runs
+# stops that for a fork.
 #
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
@@ -76,6 +77,12 @@ jobs:
       code: ${{ steps.classify.outputs.code }}
       # JSON for runs-on.
       mac_runner: ${{ github.event_name == 'workflow_dispatch' && vars.MACOS_RUNNER || '"xcode-27"' }}
+      # A Simulator boot keeps the 3 cores of a GitHub-hosted Mac busy
+      # for about 15 minutes, and the build and the tests wait for it.
+      simulator_runner: >-
+        ${{ (github.event_name == 'workflow_dispatch'
+        || github.event.pull_request.user.login == github.repository_owner)
+        && vars.MACOS_RUNNER || '"xcode-27"' }}
     steps:
       - name: Classify the changed paths
         id: classify
@@ -405,7 +412,7 @@ jobs:
     name: Simulator build
     needs: changes
     if: needs.changes.outputs.code == 'true' || github.event_name == 'push'
-    runs-on: ${{ fromJSON(needs.changes.outputs.mac_runner) }}
+    runs-on: ${{ fromJSON(needs.changes.outputs.simulator_runner) }}
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -416,6 +423,34 @@ jobs:
       - uses: ./.github/actions/prepare-xcode-project
         with:
           build-data: simulator
+
+      # A Simulator of its own for each runner: another job or a person
+      # can boot a shared one, and `simctl boot` then fails. The
+      # self-hosted runners keep their Simulator for the next run. A boot
+      # takes minutes, so it starts here and goes on during the build.
+      - name: Boot the runner's Simulator
+        timeout-minutes: 10
+        run: |
+          read -r RUNTIME DEVICE_TYPE < <(xcrun simctl list runtimes available -j | jq -r '
+            [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
+            "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
+          NAME="empo-ci-$RUNNER_NAME-${RUNTIME##*.}"
+          # Delete this runner's Simulators of older iOS versions. "iOS-"
+          # is part of the prefix, so mateo-mac does not delete the
+          # Simulators of mateo-mac-2.
+          xcrun simctl list devices -j |
+            jq -r --arg prefix "empo-ci-$RUNNER_NAME-iOS-" --arg name "$NAME" \
+              '.devices[][] | select((.name | startswith($prefix)) and .name != $name) | .udid' |
+            while read -r OLD; do xcrun simctl delete "$OLD"; done
+          UDID="$(xcrun simctl list devices available -j |
+            jq -r --arg name "$NAME" 'first(.devices[][] | select(.name == $name) | .udid) // empty')"
+          [ -n "$UDID" ] || UDID="$(xcrun simctl create "$NAME" "$DEVICE_TYPE" "$RUNTIME")"
+          echo "SIM_UDID=$UDID" >> "$GITHUB_ENV"
+          echo "Simulator $NAME ($UDID)"
+          # `simctl boot` fails on a booted Simulator. It returns before
+          # the Simulator is ready, and the start step waits for the rest.
+          STATE="$(xcrun simctl list devices -j | jq -r --arg udid "$UDID" '.devices[][] | select(.udid == $udid) | .state')"
+          [ "$STATE" = Booted ] || xcrun simctl boot "$UDID"
 
       - name: Build the app and its tests (iOS Simulator)
         working-directory: ios/Empo
@@ -428,54 +463,45 @@ jobs:
             -derivedDataPath "$DERIVED_DATA" \
             build-for-testing 2>&1 | tail -n 60
 
-      - name: Measure the boots of the Simulator
-        timeout-minutes: 50
-        working-directory: ios/Empo
+      - name: Start the app on the runner's Simulator
+        # A Simulator that does not boot holds the runner until this limit.
+        timeout-minutes: 10
+        env:
+          UDID: ${{ env.SIM_UDID }}
         run: |
-          read -r RUNTIME DEVICE_TYPE < <(xcrun simctl list runtimes available -j | jq -r '
-            [.runtimes[] | select(.platform == "iOS")] | max_by(.version | split(".") | map(tonumber)) |
-            "\(.identifier) \([.supportedDeviceTypes[] | select(.productFamily == "iPhone")] | max_by(.minRuntimeVersion) | .identifier)"')
-          START=$(date +%s)
-          t() { echo "$(( $(date +%s) - START )) s: $*"; }
-          load() { sysctl -n vm.loadavg | awk '{ print $2 }'; }
-          # Waits until the 1-minute load is under 12, at most 20 minutes.
-          calm() {
-            local from; from=$(date +%s)
-            while [ "$(load | cut -d. -f1)" -ge 12 ] && [ $(( $(date +%s) - from )) -lt 1200 ]; do sleep 15; done
-            t "calm after $(( $(date +%s) - from )) s, load $(load)"
-          }
-          tests() {
-            local from; from=$(date +%s)
-            xcodebuild -project Empo.xcodeproj -scheme Empo -destination "id=$1" \
-              -derivedDataPath "$DERIVED_DATA" test-without-building >"$RUNNER_TEMP/test-$2.log" 2>&1 && R=ok || R=failed
-            t "tests on $2 $R in $(( $(date +%s) - from )) s"
-            grep -E "Executed [0-9]+ tests" "$RUNNER_TEMP/test-$2.log" | tail -n 1
-          }
-          boot() {
-            local from; from=$(date +%s)
-            xcrun simctl boot "$1"
-            xcrun simctl bootstatus "$1" >/dev/null
-            t "$2 booted in $(( $(date +%s) - from )) s, load $(load)"
-          }
-          A="$(xcrun simctl create empo-a "$DEVICE_TYPE" "$RUNTIME")"
-          t "load at start $(load)"
-          boot "$A" "first boot of A"
-          calm
-          t "data of A: $(du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$A" | cut -f1)"
-          tests "$A" "A after its first boot"
-          xcrun simctl shutdown "$A"
-          t "A shut down, data $(du -sh "$HOME/Library/Developer/CoreSimulator/Devices/$A" | cut -f1)"
-          boot "$A" "second boot of A"
-          calm
-          tests "$A" "A after its second boot"
-          xcrun simctl shutdown "$A"
-          B="$(xcrun simctl create empo-b "$DEVICE_TYPE" "$RUNTIME")"
-          boot "$B" "first boot of B"
-          calm
-          tests "$B" "B after its first boot"
-          xcrun simctl shutdown "$B"
-          t "done"
+          APP="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/Empo.app"
+          [ -d "$APP" ] || { echo "::error::$APP not found"; exit 1; }
+          # -b boots the Simulator, or only waits when it already runs.
+          xcrun simctl bootstatus "$UDID" -b >/dev/null
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+          # Remove the app and its data, so each run tests a first start.
+          xcrun simctl uninstall "$UDID" "$BUNDLE_ID"
+          xcrun simctl install "$UDID" "$APP"
+          # `simctl launch` prints "<bundle id>: <pid>". A Simulator app
+          # is a macOS process, so kill -0 sees it.
+          PID="$(xcrun simctl launch "$UDID" "$BUNDLE_ID" | awk '{print $NF}')"
+          echo "Empo started as process $PID"
+          # The app sends no "ready" signal. A crash at start shows in
+          # these seconds.
+          sleep 10
+          kill -0 "$PID" 2>/dev/null || { echo "::error::Empo stopped within 10 seconds of its start"; exit 1; }
+          echo "Empo still runs after 10 seconds"
 
+      - name: App tests (iOS Simulator)
+        working-directory: ios/Empo
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Empo.xcodeproj \
+            -scheme Empo \
+            -destination "id=$SIM_UDID" \
+            -derivedDataPath "$DERIVED_DATA" \
+            test-without-building 2>&1 | tail -n 200
+
+      - name: Shut down the Simulator
+        if: always() && env.SIM_UDID != ''
+        run: xcrun simctl shutdown "$SIM_UDID"
 
   # The release builds the Mac app with the same script. The script
   # starts the signed app and opens each core in Empo Player, so a pull
