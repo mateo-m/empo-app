@@ -750,6 +750,12 @@ final class GameScriptProfileTests: XCTestCase {
         key = :prepend
         def self.prepend(item)
         end
+        def  self.prepend(item)
+        end
+        def Scene_Map.prepend(item)
+        end
+        def RPG::Cache.prepend(item)
+        end
         notes = <<-EOS
         prepend MapText
         EOS
