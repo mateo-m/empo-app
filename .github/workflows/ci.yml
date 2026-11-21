@@ -8,13 +8,13 @@
 # JSON: a label list such as ["self-hosted","macOS"], or one quoted
 # label such as "xcode-27". A bare xcode-27 fails. A run that someone
 # starts by hand uses it for each Mac job. A pull request that the
-# repository owner opened uses it for the Simulator job only. Every
-# other run uses a GitHub-hosted Mac, also a pull request from
-# Dependabot or from another person. With no variable, each run uses a
-# GitHub-hosted Mac. A pull request runs the workflow files of its own
-# branch, so a pull request that edits this file can still choose the
-# self-hosted Mac. Only the repository's approval rule for fork runs
-# stops that for a fork.
+# repository owner opened from a branch of this repository uses it for
+# the Simulator job only. Every other run uses a GitHub-hosted Mac,
+# also a pull request from Dependabot, from another person, or from a
+# fork. With no variable, each run uses a GitHub-hosted Mac. A pull
+# request runs the workflow files of its own branch, so a pull request
+# that edits this file can still choose the self-hosted Mac. Only the
+# repository's approval rule for fork runs stops that for a fork.
 #
 # A self-hosted Mac keeps ios/Dependencies, the Swift package .build
 # folders and the DerivedData in its tool cache from one run to the
@@ -81,7 +81,8 @@ jobs:
       # for about 15 minutes, and the build and the tests wait for it.
       simulator_runner: >-
         ${{ (github.event_name == 'workflow_dispatch'
-        || github.event.pull_request.user.login == github.repository_owner)
+        || (github.event.pull_request.user.login == github.repository_owner
+        && github.event.pull_request.head.repo.full_name == github.repository))
         && vars.MACOS_RUNNER || '"xcode-27"' }}
     steps:
       - name: Classify the changed paths
