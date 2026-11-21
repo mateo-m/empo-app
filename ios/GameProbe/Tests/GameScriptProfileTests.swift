@@ -61,6 +61,72 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.grammar, .legacy)
     }
 
+    /// Sentry EMPO-APP-13: Pokemon Rejuvenation 13.5 stops with "unexpected
+    /// symbol literal" at `def getRoll(update_roll:true, isDebuff:false)`.
+    /// The legacy transform cannot parse a keyword parameter.
+    func testKeywordParametersRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data/Scripts"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nLibrary=RGSS104E.dll\nScripts=Data\\Scripts.rxdata\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        // The scan reads `Scripts/` first, so this 4.5 MB data table
+        // comes before the code.
+        try String(repeating: "MOVEHASH[:TACKLE] = [1, 2, 3]\n", count: 150_000).write(
+            to: dir.appendingPathComponent("Scripts/Moves.rb"), atomically: true, encoding: .utf8)
+        try """
+        class PokeBattle_Battler
+          def getRoll(update_roll:true, isDebuff:false)
+          end
+          def pbReduceHP(amt, anim: false, registerDamage: true)
+          end
+          def self.pbFaint(showMessage: true)
+          end
+        end
+        ItemHandlers::UseOnPokemon.add(:RARECANDY, proc { |item, pokemon, scene, amount = 1|
+        })
+
+        """.write(to: dir.appendingPathComponent("Data/Scripts/Battler.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testDefaultsThatLookLikeKeywordParametersStayLegacy() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        def initialize(x, opts = {:a => 1})
+        end
+        def pick(a = b ? c:d)
+        end
+        def kind(a = Game_Battler::NORMAL)
+        end
+        def show(a, b = {c: 1})
+        end
+        # def getRoll(update_roll:true, isDebuff:false)
+        help = "def getRoll(update_roll:true, isDebuff:false)"
+        x = cond ? a:b
+
+        """.write(to: dir.appendingPathComponent("Scripts/Util.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .legacy)
+        XCTAssertEqual(profile.ruby.code, 18)
+    }
+
     func testInputFilesHoldWhatTheScanReads() throws {
         let fm = FileManager.default
         let dir = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
