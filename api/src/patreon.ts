@@ -36,10 +36,18 @@ export async function token(env: Env, grant: Record<string, string>): Promise<To
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = (JSON.parse(body || "{}") as { error?: string }).error;
     // Only `invalid_grant` is about the user. The other errors, such
     // as `invalid_client`, are a fault in this server.
-    throw new (error === "invalid_grant" ? SignedOut : Error)(`Patreon token call failed: ${response.status} ${body}`);
+    throw new (errorCode(body) === "invalid_grant" ? SignedOut : Error)(`Patreon token call failed: ${response.status} ${body}`);
   }
   return (await response.json()) as Tokens;
+}
+
+function errorCode(body: string): string | undefined {
+  try {
+    return (JSON.parse(body) as { error?: string }).error;
+  } catch {
+    // Cloudflare answers for Patreon with a text page, such as `error code: 1009`.
+    return undefined;
+  }
 }
