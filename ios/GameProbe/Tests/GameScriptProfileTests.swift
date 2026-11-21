@@ -279,7 +279,13 @@ final class GameScriptProfileTests: XCTestCase {
     /// Sentry EMPO-APP-54: Pokemon Dark Light stops on Ruby 1.8 with
     /// "undefined method `prepend' for Scene_Jukebox:Class".
     func testModulePrependInAConfigPreloadScriptRoutesToRuby31Legacy() throws {
-        for call in ["Scene_Jukebox.prepend(Module.new do\n  def update; end\nend)", "class Scene_Jukebox\n  prepend JukeboxText\nend"] {
+        for call in [
+            "Scene_Jukebox.prepend(Module.new do\n  def update; end\nend)",
+            "class Scene_Jukebox\n  prepend JukeboxText\nend",
+            "class Scene_Jukebox; prepend JukeboxText; end",
+            "class Scene_Jukebox\n  prepend(::JukeboxText)\nend",
+            "Scene_Jukebox.prepend(JukeboxText) if Scene_Jukebox.respond_to?(:force_encoding)",
+        ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(
@@ -740,6 +746,16 @@ final class GameScriptProfileTests: XCTestCase {
         # Scene_Map.prepend(MapText)
         def prepend(item)
           print "prepend MapText"
+        end
+        key = :prepend
+        def self.prepend(item)
+        end
+        notes = <<-EOS
+        prepend MapText
+        EOS
+        Scene_Map.prepend(MapText) if Scene_Map.respond_to?(:prepend)
+        if respond_to?(:prepend)
+          prepend MapText
         end
         s = s.force_encoding('UTF-8') if s.respond_to?(:force_encoding)
         t = t.force_encoding('UTF-8') if t.respond_to? :force_encoding
