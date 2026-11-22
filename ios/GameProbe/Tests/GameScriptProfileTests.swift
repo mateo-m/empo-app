@@ -285,6 +285,7 @@ final class GameScriptProfileTests: XCTestCase {
             "class Scene_Jukebox; prepend JukeboxText; end",
             "class Scene_Jukebox\n  prepend(::JukeboxText)\nend",
             "Scene_Jukebox.prepend(JukeboxText) if Scene_Jukebox.respond_to?(:force_encoding)",
+            "RPG::Cache.prepend(JukeboxText) if Cache.respond_to?(:prepend)",
         ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
@@ -760,6 +761,7 @@ final class GameScriptProfileTests: XCTestCase {
         prepend MapText
         EOS
         Scene_Map.prepend(MapText) if Scene_Map.respond_to?(:prepend)
+        RPG::Cache.prepend(MapText) if RPG::Cache.respond_to?(:prepend)
         if respond_to?(:prepend)
           prepend MapText
         end

@@ -497,7 +497,7 @@ public enum RubyScriptGrammarSniffer {
     /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:(force_encoding|prepend)\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+(?![\s)]*[=!]=))(?![^#;]*(?:\|\||\bor\b))"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.:]+)\.)?respond_to\?[\s(]*:(force_encoding|prepend)\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+(?![\s)]*[=!]=))(?![^#;]*(?:\|\||\bor\b))"#
     )
 
     private static let branchBlockStart = try? NSRegularExpression(
@@ -530,7 +530,7 @@ public enum RubyScriptGrammarSniffer {
             var start = call.location
             while start > 0,
                 units[start - 1].isLetter || units[start - 1].isNumber
-                    || "_.@$".contains(units[start - 1])
+                    || "_.:@$".contains(units[start - 1])
             {
                 start -= 1
             }
