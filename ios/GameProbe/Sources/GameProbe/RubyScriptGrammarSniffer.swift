@@ -485,9 +485,11 @@ public enum RubyScriptGrammarSniffer {
     }
 
     /// `prepend` is `String#prepend` (1.9.3) or `Module#prepend` (2.0).
+    /// The `def` check comes after `.prepend`. Before it, ICU runs the
+    /// look-behind at every character, 40 times slower on a 1 MB line.
     private static let ruby19Call = try? NSRegularExpression(
         pattern:
-            #"\.force_encoding\b|\bEncoding::[A-Z]|(?<!\bdef\s{1,8}[\w:]{1,64})\.prepend\b|(?:^|(?<=;))\s*prepend[\s(]+(?:::)?[A-Z]"#
+            #"\.force_encoding\b|\bEncoding::[A-Z]|\.prepend\b(?<!\bdef\s{1,8}[\w:]{1,64}\.prepend)|(?:^|(?<=;))\s*prepend[\s(]+(?:::)?[A-Z]"#
     )
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
