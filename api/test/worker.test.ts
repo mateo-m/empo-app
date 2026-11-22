@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { parseMembership } from "../src/membership";
 import { signPass } from "../src/pass";
 import { newRenewal, open, renewalKeys, seal } from "../src/renewal";
@@ -123,7 +123,7 @@ class MemoryState implements SessionState {
 // Patreon refresh tokens are single use: a spent one gets `invalid_grant`.
 class FakePatreon {
   live = new Set<string>();
-  answer: { status: number; body: object } | null = null;
+  answer: { status: number; body: object | string } | null = null;
   refreshedWith: string[] = [];
   private count = 0;
 
@@ -137,6 +137,7 @@ class FakePatreon {
     const url = new URL(input instanceof Request ? input.url : input.toString());
     if (url.pathname === "/api/oauth2/v2/identity") return Response.json(identity({ status: "active_patron", campaign: "c-1", cents: 300 }));
     const form = new URLSearchParams(init!.body as URLSearchParams);
+    if (typeof this.answer?.body === "string") return new Response(this.answer.body, { status: this.answer.status });
     if (this.answer) return Response.json(this.answer.body, { status: this.answer.status });
     if (form.get("grant_type") === "authorization_code") return Response.json(this.issue());
     const refresh = form.get("refresh_token")!;
@@ -326,6 +327,20 @@ describe("routes", () => {
     expect((await renew(renewal)).status).toBe(502);
     patreon.answer = { status: 400, body: { error: "invalid_request" } };
     expect((await renew(renewal)).status).toBe(502);
+    patreon.answer = null;
+    expect((await renew(renewal)).status).toBe(200);
+  });
+
+  test("a token call that Patreon blocks logs its status and text, and keeps the user signed in", async () => {
+    const { renewal } = await signIn();
+    patreon.answer = { status: 403, body: "error code: 1009\n" };
+    const logged = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await renew(renewal)).status).toBe(502);
+      expect(String(logged.mock.calls[0]?.[0])).toBe("Error: Patreon token call failed: 403 error code: 1009\n");
+    } finally {
+      logged.mockRestore();
+    }
     patreon.answer = null;
     expect((await renew(renewal)).status).toBe(200);
   });
