@@ -11,22 +11,24 @@ enum RGSSArchive {
     /// engine reads `<execName>.ini` first, with `execName` from
     /// `mkxp.json` or "Game". Another `.ini` file also needs `Library=`.
     static func gameINI(in gameDirectory: URL, fm: FileManager) -> (name: String, scripts: String)? {
-        let execName = execName(in: gameDirectory)
+        let execName = execName(in: gameDirectory).lowercased()
         let urls = GameINI.iniFileURLs(at: gameDirectory, fm: fm)
-        func name(_ url: URL) -> String { url.deletingPathExtension().lastPathComponent.lowercased() }
-        let ordered = urls.filter { name($0) == execName } + urls.filter { name($0) != execName }
+        func name(_ url: URL) -> String { url.deletingPathExtension().lastPathComponent }
+        let ordered =
+            urls.filter { name($0).lowercased() == execName }
+            + urls.filter { name($0).lowercased() != execName }
         return ordered.lazy.compactMap { url -> (String, String)? in
             guard let scripts = GameINI.parseINIValue(in: url, section: "game", key: "scripts"),
                 !scripts.isEmpty,
-                name(url) == execName
+                name(url).lowercased() == execName
                     || GameINI.parseINIValue(in: url, section: "game", key: "library")?.isEmpty == false
             else { return nil }
             return (name(url), scripts)
         }.first
     }
 
-    /// The engine mounts one archive: the `.ini` name with the extension of
-    /// its RGSS version. `rgssVersion` in `mkxp.json` sets the version. Else
+    /// The engine opens one archive by its exact name: the `.ini` name with
+    /// the extension of its RGSS version. `rgssVersion` in `mkxp.json` sets the version. Else
     /// the `Scripts=` extension sets it, and the engine compares it with case.
     static func mountable(in gameDirectory: URL, fm: FileManager) -> URL? {
         let ini = gameINI(in: gameDirectory, fm: fm)
@@ -43,13 +45,13 @@ enum RGSSArchive {
         } else {
             version = 1
         }
-        let ext = ["rgssad", "rgss2a", "rgss3a"][version - 1]
-        return gameDirectory.directoryEntries(matchingExtensions: [ext], fm: fm)
-            .first { $0.deletingPathExtension().lastPathComponent.lowercased() == name }
+        let archive = gameDirectory.appendingPathComponent(
+            name + [".rgssad", ".rgss2a", ".rgss3a"][version - 1])
+        return fm.fileExists(atPath: archive.path) ? archive : nil
     }
 
     private static func execName(in gameDirectory: URL) -> String {
-        (ManagedMkxpConfig.loadBaseDict(from: gameDirectory)?["execName"] as? String ?? "Game").lowercased()
+        ManagedMkxpConfig.loadBaseDict(from: gameDirectory)?["execName"] as? String ?? "Game"
     }
 
     /// The decrypted bytes of the first entry whose path is in `paths`.
