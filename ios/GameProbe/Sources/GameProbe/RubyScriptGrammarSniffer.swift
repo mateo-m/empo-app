@@ -44,9 +44,9 @@ public enum RubyScriptGrammarSniffer {
         case mixed
 
         /// The sniffer could not read the live source. Causes: an
-        /// encrypted archive with no unpack, a missing file, a
-        /// parse error, an unknown Marshal tag, or scripts packed
-        /// in a `Data/*.fpk` archive. The caller falls back to
+        /// archive that it cannot read, a missing file, a parse
+        /// error, an unknown Marshal tag, or scripts packed in a
+        /// `Data/*.fpk` archive. The caller falls back to
         /// packaging signals, the extension, Game.ini, or the
         /// default.
         case inconclusive
@@ -54,6 +54,9 @@ public enum RubyScriptGrammarSniffer {
 
     enum CoreScripts: Equatable, Sendable {
         case read
+        /// The sniffer read them from the encrypted archive, so the
+        /// extension of a loose Scripts file says nothing about them.
+        case archived
         /// A `Data/*.fpk` archive holds them, so the sniffer skipped them.
         case packed
         case unread
@@ -96,9 +99,14 @@ public enum RubyScriptGrammarSniffer {
 
         // Compiled Scripts file. Vanilla RPG Maker XP / VX /
         // VX Ace projects use it, and so do forks that did not
-        // extract their scripts.
-        guard let url = locateCompiledScriptsFile(in: gameDirectory, fm: fm),
-            let scripts = decodeScripts(at: url)
+        // extract their scripts. The engine reads the copy in the
+        // encrypted archive before the one in the game folder.
+        if let scripts = archivedScripts(in: gameDirectory, fm: fm) {
+            return (classify(scripts: scripts + extras), .archived)
+        }
+        guard
+            let scripts = locateCompiledScriptsFile(in: gameDirectory, fm: fm)
+                .flatMap({ try? Data(contentsOf: $0) }).flatMap(decodeScripts)
         else {
             return (classifyExtrasAlone(extras), .unread)
         }
@@ -150,6 +158,17 @@ public enum RubyScriptGrammarSniffer {
             }
         }
         return nil
+    }
+
+    private static func archivedScripts(in gameDirectory: URL, fm: FileManager) -> [String]? {
+        let names =
+            RGSSArchive.gameINI(in: gameDirectory, fm: fm).map {
+                [$0.scripts.replacingOccurrences(of: "\\", with: "/")]
+            }
+            ?? scriptsFilenames.flatMap { [$0, "Data/\($0)"] }
+        let paths = Set(names.map { $0.lowercased() })
+        return RGSSArchive.mountable(in: gameDirectory, fm: fm)
+            .flatMap { RGSSArchive.file(at: paths, in: $0) }.flatMap(decodeScripts)
     }
 
     /// Walks `Scripts/` and `Data/Scripts/` to find `.rb` files.
@@ -227,8 +246,7 @@ public enum RubyScriptGrammarSniffer {
 
     // MARK: - Marshal + Zlib decode
 
-    private static func decodeScripts(at url: URL) -> [String]? {
-        guard let data = try? Data(contentsOf: url) else { return nil }
+    private static func decodeScripts(_ data: Data) -> [String]? {
         var reader = MarshalReader(data: data)
         guard reader.readVersion() else { return nil }
         // The outer container is an array of script entries.

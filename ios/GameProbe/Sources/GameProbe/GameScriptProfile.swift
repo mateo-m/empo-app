@@ -54,9 +54,12 @@ public enum GameScriptProfile {
         case keywordParameter = "keyword-parameter"
         /// A `prepend` call reads as a Ruby 1.9+ call.
         case prependCall = "prepend-call"
+        /// The scan also reads the Scripts file inside an encrypted
+        /// `.rgssad`, `.rgss2a`, or `.rgss3a` archive.
+        case archivedScripts = "archived-scripts"
     }
 
-    public static let currentSchema: Schema = .prependCall
+    public static let currentSchema: Schema = .archivedScripts
 
     /// The Ruby that runs the game. Only Ruby 3.1 has the syntax
     /// transform, so only Ruby 3.1 has a legacy or modern mode.
@@ -121,8 +124,8 @@ public enum GameScriptProfile {
         }
         let looseScripts = RubyScriptGrammarSniffer.locateLooseScripts(in: gameDirectory, fm: fm)
         return files(
-            in: "", named: ["Game.ini"] + scripts,
-            extensions: ["dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
+            in: "", named: scripts,
+            extensions: ["ini", "dll", "dylib", "so", "rgssad", "rgss2a", "rgss3a"])
             + files(in: "Data", named: scripts + ["PluginScripts.rxdata"], extensions: ["fpk"])
             + looseScripts
             + files(in: "", named: ["mkxp.json"], extensions: [])
@@ -156,7 +159,7 @@ public enum GameScriptProfile {
             }
         let ruby =
             runtime.dispatchVersion
-            ?? (grammar == .inconclusive || core == .packed
+            ?? (grammar == .inconclusive || core == .packed || core == .archived
                 ? nil : rubyVersionFromScriptExtension(at: gameDirectory, fm: fm))
             ?? archiveRuby ?? libraryRuby ?? 31
         // Ruby 1.8 has neither the methods nor the grammar of mixed source.
@@ -183,7 +186,7 @@ public enum GameScriptProfile {
             return true
         case .legacy:
             return false
-        case .mixed where core == .read:
+        case .mixed where core == .read || core == .archived:
             return false
         case .mixed, .inconclusive:
             // Without the core, mixed comes from plugin or mkxp.json scripts
@@ -300,27 +303,7 @@ public enum GameScriptProfile {
         at gameDirectory: URL,
         fm: FileManager
     ) -> String? {
-        let entries = gameDirectory.directoryEntries(
-            matchingExtensions: ["rgssad", "rgss2a", "rgss3a"],
-            fm: fm
-        )
-        var best: String?
-        var bestRank = 0
-        for url in entries {
-            let ext = url.pathExtension.lowercased()
-            let rank: Int
-            switch ext {
-            case "rgssad": rank = 1
-            case "rgss2a": rank = 2
-            case "rgss3a": rank = 3
-            default: continue
-            }
-            if rank > bestRank {
-                bestRank = rank
-                best = ext
-            }
-        }
-        return best
+        RGSSArchive.mountable(in: gameDirectory, fm: fm)?.pathExtension.lowercased()
     }
 
     private static func rgssLibraryMajor(
