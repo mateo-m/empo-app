@@ -380,12 +380,17 @@ final class GameScriptProfileTests: XCTestCase {
     }
 
     func testBlockDefaultInAConfigScriptBesideAnEncryptedCoreRulesOutRuby18() throws {
-        for (archive, ruby) in [("Game.rgssad", GameScriptProfile.Ruby.ruby31(convertLegacy: true)), ("Game.rgss3a", .ruby19)] {
+        for (archive, scripts, ruby) in [
+            ("Game.rgssad", "Scripts.rxdata", GameScriptProfile.Ruby.ruby31(convertLegacy: true)),
+            ("Game.rgss3a", "Scripts.rvdata2", .ruby19),
+        ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
 
+            try "[Game]\nScripts=Data\\\(scripts)\n".write(
+                to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
             try Data().write(to: dir.appendingPathComponent(archive))
             try "{\"preloadScript\": \"Correction.rb\"}".write(
                 to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
@@ -487,17 +492,19 @@ final class GameScriptProfileTests: XCTestCase {
 
     func testModernScriptsInAnEncryptedArchiveRouteToRuby31() throws {
         let modern = compiledScripts(["a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n"])
-        for (archive, version) in [("Game.rgssad", 1), ("Game.rgss2a", 1), ("Game.rgss3a", 3)] {
+        for (archive, version, scripts) in [
+            ("Game.rgssad", 1, "Scripts.rxdata"), ("Game.rgss2a", 1, "Scripts.rvdata"), ("Game.rgss3a", 3, "Scripts.rvdata2"),
+        ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
 
-            try "[Game]\nLibrary=RGSS102E.dll\nScripts=Data\\Scripts.rxdata\n".write(
+            try "[Game]\nScripts=Data\\\(scripts)\n".write(
                 to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
             try rgssArchive(
                 version: version,
-                files: [("Data\\EditorScripts.rxdata", compiledScripts(["x = 1\n"])), ("Data\\Scripts.rxdata", modern)]
+                files: [("Data\\EditorScripts.rxdata", compiledScripts(["x = 1\n"])), ("Data\\\(scripts)", modern)]
             ).write(to: dir.appendingPathComponent(archive))
 
             let profile = GameScriptProfile.analyze(gameDirectory: dir)
@@ -507,15 +514,17 @@ final class GameScriptProfileTests: XCTestCase {
     }
 
     func testLegacyScriptsInAnEncryptedArchiveKeepTheArchiveRuby() throws {
-        for (archive, version, ruby) in [
-            ("Game.rgssad", 1, GameScriptProfile.Ruby.ruby18), ("Game.rgss3a", 3, .ruby19),
+        for (archive, version, scripts, ruby) in [
+            ("Game.rgssad", 1, "Scripts.rxdata", GameScriptProfile.Ruby.ruby18), ("Game.rgss3a", 3, "Scripts.rvdata2", .ruby19),
         ] {
             let dir = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             defer { try? FileManager.default.removeItem(at: dir) }
 
-            try rgssArchive(version: version, files: [("Data\\Scripts.rxdata", compiledScripts(["x = 1\n"]))])
+            try "[Game]\nScripts=Data\\\(scripts)\n".write(
+                to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+            try rgssArchive(version: version, files: [("Data\\\(scripts)", compiledScripts(["x = 1\n"]))])
                 .write(to: dir.appendingPathComponent(archive))
 
             let profile = GameScriptProfile.analyze(gameDirectory: dir)
@@ -562,11 +571,34 @@ final class GameScriptProfileTests: XCTestCase {
             at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
 
+        try "[Game]\nScripts=Data\\Scripts.rvdata2\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
         try compiledScripts(["x = 1\n"]).write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
         try rgssArchive(version: 3, files: [("Data\\Scripts.rvdata2", compiledScripts(["y = 2\n"]))])
             .write(to: dir.appendingPathComponent("Game.rgss3a"))
 
         XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby19)
+    }
+
+    func testTheArchiveFollowsTheRGSSVersionOfTheEngine() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "[Game]\nScripts=Data\\Scripts.rvdata2\n".write(
+            to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+        try rgssArchive(
+            version: 1, files: [("Data\\Scripts.rvdata2", compiledScripts(["a&.b\n", "c&.d\n", "e&.f\n"]))]
+        ).write(to: dir.appendingPathComponent("Game.rgssad"))
+        try rgssArchive(version: 3, files: [("Data\\Scripts.rvdata2", compiledScripts(["x = 1\n"]))])
+            .write(to: dir.appendingPathComponent("Game.rgss3a"))
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .legacy)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).ruby, .ruby19)
+
+        try #"{"rgssVersion": 1}"#.write(
+            to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern)
     }
 
     func testAnArchiveThatTheEngineDoesNotMountIsNotRead() throws {

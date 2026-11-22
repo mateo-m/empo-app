@@ -301,24 +301,7 @@ public enum GameScriptProfile {
         at gameDirectory: URL,
         fm: FileManager
     ) -> String? {
-        let entries = RGSSArchive.mountable(in: gameDirectory, fm: fm)
-        var best: String?
-        var bestRank = 0
-        for url in entries {
-            let ext = url.pathExtension.lowercased()
-            let rank: Int
-            switch ext {
-            case "rgssad": rank = 1
-            case "rgss2a": rank = 2
-            case "rgss3a": rank = 3
-            default: continue
-            }
-            if rank > bestRank {
-                bestRank = rank
-                best = ext
-            }
-        }
-        return best
+        RGSSArchive.mountable(in: gameDirectory, fm: fm)?.pathExtension.lowercased()
     }
 
     private static func rgssLibraryMajor(

@@ -25,11 +25,27 @@ enum RGSSArchive {
         }.first
     }
 
-    /// The engine mounts only the archive with the name of its `.ini` file.
-    static func mountable(in gameDirectory: URL, fm: FileManager) -> [URL] {
-        let name = gameINI(in: gameDirectory, fm: fm)?.name ?? execName(in: gameDirectory)
-        return gameDirectory.directoryEntries(matchingExtensions: ["rgssad", "rgss2a", "rgss3a"], fm: fm)
-            .filter { $0.deletingPathExtension().lastPathComponent.lowercased() == name }
+    /// The engine mounts one archive: the `.ini` name with the extension of
+    /// its RGSS version. `rgssVersion` in `mkxp.json` sets the version. Else
+    /// the `Scripts=` extension sets it, and the engine compares it with case.
+    static func mountable(in gameDirectory: URL, fm: FileManager) -> URL? {
+        let ini = gameINI(in: gameDirectory, fm: fm)
+        let name = ini?.name ?? execName(in: gameDirectory)
+        let version: Int
+        if let configured = ManagedMkxpConfig.loadBaseDict(from: gameDirectory)?["rgssVersion"] as? Int,
+            configured > 0
+        {
+            version = min(configured, 3)
+        } else if ini?.scripts.hasSuffix(".rvdata2") == true {
+            version = 3
+        } else if ini?.scripts.hasSuffix(".rvdata") == true {
+            version = 2
+        } else {
+            version = 1
+        }
+        let ext = ["rgssad", "rgss2a", "rgss3a"][version - 1]
+        return gameDirectory.directoryEntries(matchingExtensions: [ext], fm: fm)
+            .first { $0.deletingPathExtension().lastPathComponent.lowercased() == name }
     }
 
     private static func execName(in gameDirectory: URL) -> String {

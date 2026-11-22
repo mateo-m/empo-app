@@ -168,7 +168,7 @@ public enum RubyScriptGrammarSniffer {
             ?? scriptsFilenames.flatMap { [$0, "Data/\($0)"] }
         let paths = Set(names.map { $0.lowercased() })
         return RGSSArchive.mountable(in: gameDirectory, fm: fm)
-            .lazy.compactMap { RGSSArchive.file(at: paths, in: $0).flatMap(decodeScripts) }.first
+            .flatMap { RGSSArchive.file(at: paths, in: $0) }.flatMap(decodeScripts)
     }
 
     /// Walks `Scripts/` and `Data/Scripts/` to find `.rb` files.
