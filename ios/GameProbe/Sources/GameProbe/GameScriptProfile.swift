@@ -52,9 +52,11 @@ public enum GameScriptProfile {
         /// A keyword parameter in a `def` reads as modern grammar, and
         /// the scan reads up to 16 MB of loose scripts.
         case keywordParameter = "keyword-parameter"
+        /// A `prepend` call reads as a Ruby 1.9+ call.
+        case prependCall = "prepend-call"
     }
 
-    public static let currentSchema: Schema = .keywordParameter
+    public static let currentSchema: Schema = .prependCall
 
     /// The Ruby that runs the game. Only Ruby 3.1 has the syntax
     /// transform, so only Ruby 3.1 has a legacy or modern mode.
