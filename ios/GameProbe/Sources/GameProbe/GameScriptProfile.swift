@@ -52,6 +52,8 @@ public enum GameScriptProfile {
         /// A keyword parameter in a `def` reads as modern grammar, and
         /// the scan reads up to 16 MB of loose scripts.
         case keywordParameter = "keyword-parameter"
+        /// A `prepend` call reads as a Ruby 1.9+ call.
+        case prependCall = "prepend-call"
         /// The scan also reads the Scripts file inside an encrypted
         /// `.rgssad`, `.rgss2a`, or `.rgss3a` archive.
         case archivedScripts = "archived-scripts"

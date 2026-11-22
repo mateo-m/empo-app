@@ -379,6 +379,41 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true))
     }
 
+    /// Sentry EMPO-APP-54: Pokemon Dark Light stops on Ruby 1.8 with
+    /// "undefined method `prepend' for Scene_Jukebox:Class".
+    func testModulePrependInAConfigPreloadScriptRoutesToRuby31Legacy() throws {
+        for call in [
+            "Scene_Jukebox.prepend(Module.new do\n  def update; end\nend)",
+            "class Scene_Jukebox\n  prepend JukeboxText\nend",
+            "class Scene_Jukebox; prepend JukeboxText; end",
+            "class Scene_Jukebox\n  prepend(::JukeboxText)\nend",
+            "Scene_Jukebox.prepend(JukeboxText) if Scene_Jukebox.respond_to?(:force_encoding)",
+            "RPG::Cache.prepend(JukeboxText) if Cache.respond_to?(:prepend)",
+        ] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(
+                at: dir.appendingPathComponent("scripts/preload"), withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(
+                at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try "[Game]\nLibrary=RGSS104E.dll\nScripts=Data\\Scripts.rxdata\n".write(
+                to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+            try compiledScripts(["class Scene_Jukebox\n  def update\n  end\nend\n"])
+                .write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+            try "{\"preloadScript\": [\"scripts/preload/92_jukebox_text.rb\"]}".write(
+                to: dir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+            try "\(call)\n".write(
+                to: dir.appendingPathComponent("scripts/preload/92_jukebox_text.rb"), atomically: true,
+                encoding: .utf8)
+
+            let profile = GameScriptProfile.analyze(gameDirectory: dir)
+            XCTAssertEqual(profile.grammar, .mixed, call)
+            XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: true), call)
+        }
+    }
+
     func testBlockDefaultInAConfigScriptBesideAnEncryptedCoreRulesOutRuby18() throws {
         for (archive, scripts, ruby) in [
             ("Game.rgssad", "Scripts.rxdata", GameScriptProfile.Ruby.ruby31(convertLegacy: true)),
@@ -1019,6 +1054,27 @@ final class GameScriptProfileTests: XCTestCase {
         Encoding::UTF_8 is not in Ruby 1.8
         =end
         print "use .force_encoding"
+        # Scene_Map.prepend(MapText)
+        def prepend(item)
+          print "prepend MapText"
+        end
+        key = :prepend
+        def self.prepend(item)
+        end
+        def  self.prepend(item)
+        end
+        def Scene_Map.prepend(item)
+        end
+        def RPG::Cache.prepend(item)
+        end
+        notes = <<-EOS
+        prepend MapText
+        EOS
+        Scene_Map.prepend(MapText) if Scene_Map.respond_to?(:prepend)
+        RPG::Cache.prepend(MapText) if RPG::Cache.respond_to?(:prepend)
+        if respond_to?(:prepend)
+          prepend MapText
+        end
         s = s.force_encoding('UTF-8') if s.respond_to?(:force_encoding)
         t = t.force_encoding('UTF-8') if t.respond_to? :force_encoding
         u = u.encode(Encoding::UTF_8) if defined? Encoding

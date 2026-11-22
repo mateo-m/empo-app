@@ -502,20 +502,26 @@ public enum RubyScriptGrammarSniffer {
         }
     }
 
+    /// `prepend` is `String#prepend` (1.9.3) or `Module#prepend` (2.0).
+    /// The `def` check comes after `.prepend`. Before it, ICU runs the
+    /// look-behind at every character, 40 times slower on a 1 MB line.
     private static let ruby19Call = try? NSRegularExpression(
-        pattern: #"\.force_encoding\b|\bEncoding::[A-Z]"#)
+        pattern:
+            #"\.force_encoding\b|\bEncoding::[A-Z]|\.prepend\b(?<!\bdef\s{1,8}[\w:]{1,64}\.prepend)|(?:^|(?<=;))\s*prepend[\s(]+(?:::)?[A-Z]"#
+    )
 
     /// Only an `if` or `elsif` that checks for 1.9 directly. A negated
     /// check, `unless`, `else`, or an `||` / `or` in the condition runs
     /// its body on 1.8. So does a comparison such as `vxace? == false`.
-    /// Group 1 is the receiver of `respond_to?`.
+    /// Group 1 is the receiver of `respond_to?`, and group 2 is the
+    /// method that it checks.
     /// Zeus81's `vxace?` is false only on RPG Maker XP's own Ruby 1.8.1.
     /// On Empo's 1.8.8 it is true and a 1.9 call under it raises, but
     /// Pokemon Xenoverse ships these scripts and runs on Ruby 1.8.7 in
     /// its own engine.
     private static let ruby19Guard = try? NSRegularExpression(
         pattern:
-            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.]+)\.)?respond_to\?[\s(]*:force_encoding\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+(?![\s)]*[=!]=))(?![^#;]*(?:\|\||\bor\b))"#
+            #"\b(?:if|elsif)\s+\(?\s*(?:(?:([@$]?[\w.:]+)\.)?respond_to\?[\s(]*:(force_encoding|prepend)\b|defined\?[\s(]*Encoding\b|vxace\?(?:\(\s*\))?+(?![\s)]*[=!]=))(?![^#;]*(?:\|\||\bor\b))"#
     )
 
     private static let branchBlockStart = try? NSRegularExpression(
@@ -526,10 +532,10 @@ public enum RubyScriptGrammarSniffer {
         pattern: #"(?<![\w)\]}"'`])<<([-~]?)(["'`]?)([A-Za-z_]\w*)\2"#)
 
     /// What a guard makes safe: every 1.9 call after `defined?(Encoding)`,
-    /// or only `force_encoding` on the receiver that `respond_to?` checked.
+    /// or only the method and the receiver that `respond_to?` checked.
     private enum Cover: Equatable {
         case all
-        case receiver(String)
+        case call(receiver: String, method: String)
     }
 
     /// Scripts written for both 1.8 and 1.9 check for the method first,
@@ -539,25 +545,31 @@ public enum RubyScriptGrammarSniffer {
         guard let ruby19Call, let ruby19Guard else { return false }
         func covered(_ call: NSRange, in units: [Character], by covers: [Cover]) -> Bool {
             if covers.contains(.all) { return true }
-            guard units[call.location] == "." else { return false }
+            let text = String(units[call.location..<call.location + call.length])
+                .trimmingCharacters(in: .whitespaces)
+            guard text.hasPrefix(".") else {
+                return text.hasPrefix("prepend")
+                    && covers.contains(.call(receiver: "self", method: "prepend"))
+            }
             var start = call.location
             while start > 0,
                 units[start - 1].isLetter || units[start - 1].isNumber
-                    || "_.@$".contains(units[start - 1])
+                    || "_.:@$".contains(units[start - 1])
             {
                 start -= 1
             }
             let receiver = String(units[start..<call.location])
-            return covers.contains(.receiver(receiver.isEmpty ? "self" : receiver))
+            let method = String(text.dropFirst())
+            return covers.contains(.call(receiver: receiver.isEmpty ? "self" : receiver, method: method))
         }
         func codeMatches(_ regex: NSRegularExpression, in scanned: ScannedLine) -> [NSTextCheckingResult] {
             regex.matches(in: scanned.text, range: NSRange(scanned.text.startIndex..., in: scanned.text))
                 .filter { scanned.code[$0.range.location] }
         }
         func cover(of match: NSTextCheckingResult, in line: String) -> Cover {
-            Range(match.range(at: 1), in: line).map { Cover.receiver(String(line[$0])) }
-                ?? ((line as NSString).substring(with: match.range).contains("respond_to")
-                    ? .receiver("self") : .all)
+            guard let method = Range(match.range(at: 2), in: line) else { return .all }
+            let receiver = Range(match.range(at: 1), in: line).map { String(line[$0]) } ?? "self"
+            return .call(receiver: receiver, method: String(line[method]))
         }
         // `when 2; begin` opens a block of its own, so the search stops there.
         func branchOpensNoBlock(_ text: String) -> Bool {
