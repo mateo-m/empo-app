@@ -49,6 +49,9 @@ public enum GameScriptProfile {
         /// A 1.9 call under Zeus81's `vxace?` check, or in a `case` or
         /// `begin` block whose `end` line has a 1.9 check, does not count.
         case vxAceGuard = "vx-ace-guard"
+        /// A keyword parameter in a `def` reads as modern grammar, and
+        /// the scan reads up to 16 MB of loose scripts.
+        case keywordParameter = "keyword-parameter"
         /// A `prepend` call reads as a Ruby 1.9+ call.
         case prependCall = "prepend-call"
     }
