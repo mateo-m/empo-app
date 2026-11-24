@@ -110,27 +110,29 @@ enum ControlsZone {
         }
     }
 
-    /// A toolbar column in a sensor strip gives the strip to the
-    /// controls. Only `toolbarKeepout` stays closed to them.
-    static func controlsSafeArea(_ safeArea: EdgeInsets, toolbar: ToolbarPlacement) -> EdgeInsets {
-        guard toolbar.isVertical else { return safeArea }
-        return EdgeInsets(top: safeArea.top, leading: 0, bottom: safeArea.bottom, trailing: 0)
-    }
-
-    /// The toolbar column, from the top of the screen to the column's
-    /// bottom and out to the screen edge. `.null` without a column.
-    static func toolbarKeepout(_ toolbar: ToolbarPlacement, geoSize: CGSize) -> CGRect {
-        guard toolbar.isVertical else { return .null }
-        let column = toolbar.frame.insetBy(dx: -toolbarEdgePad, dy: -toolbarEdgePad)
-        let minX = column.midX > geoSize.width / 2 ? column.minX : 0
-        let maxX = column.midX > geoSize.width / 2 ? geoSize.width : column.maxX
-        return CGRect(x: minX, y: 0, width: maxX - minX, height: column.maxY)
+    /// The block that the system draws over at the top of a sensor
+    /// strip, out to the top and the side edge of the screen. `.null`
+    /// without a strip.
+    static func sensorStripKeepout(safeArea: EdgeInsets, geoSize: CGSize, occluded: [CGRect]) -> CGRect {
+        let strip: CGRect
+        switch safeArea.sensorStripEdge(minWidth: 1) {
+        case .trailing:
+            strip = CGRect(
+                x: geoSize.width - safeArea.trailing, y: 0, width: safeArea.trailing, height: geoSize.height)
+        case .leading: strip = CGRect(x: 0, y: 0, width: safeArea.leading, height: geoSize.height)
+        case nil: return .null
+        }
+        let block = occluded.filter { $0.intersects(strip) }.reduce(CGRect.null) { $0.union($1) }
+        guard !block.isNull else { return .null }
+        let minX = block.midX > geoSize.width / 2 ? block.minX : 0
+        let maxX = block.midX > geoSize.width / 2 ? geoSize.width : block.maxX
+        return CGRect(x: minX, y: 0, width: maxX - minX, height: block.maxY)
     }
 
     /// The keep-out touches the top and the side edge of the screen,
     /// so a control leaves it either away from that side or down
-    /// below the column, whichever legal move is shorter. Without a
-    /// legal move, the control stays on the column, not off-screen.
+    /// below it, whichever legal move is shorter. Without a legal
+    /// move, the control stays where it is, not off-screen.
     static func pushedOutOfKeepout(
         _ point: CGPoint, controlHalf: CGFloat, keepout: CGRect,
         geoSize: CGSize, safeArea: EdgeInsets, controlsMinY: CGFloat

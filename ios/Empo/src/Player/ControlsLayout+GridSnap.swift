@@ -183,13 +183,13 @@ extension ControlsLayout {
         ControlsZone.absolutePosition(
             for: relative, in: geometry.geoSize,
             controlSize: size,
-            safeArea: geometry.safeArea, controlsMinY: geometry.controlsMinY, keepout: toolbarKeepout)
+            safeArea: geometry.safeArea, controlsMinY: geometry.controlsMinY, keepout: sensorStripKeepout)
     }
 
     private func clamped(_ point: CGPoint, size: CGFloat, in geometry: EditGeometry) -> CGPoint {
         ControlsZone.clampToSafeArea(
             point, controlSize: size, geoSize: geometry.geoSize, safeArea: geometry.safeArea,
-            controlsMinY: geometry.controlsMinY, keepout: toolbarKeepout)
+            controlsMinY: geometry.controlsMinY, keepout: sensorStripKeepout)
     }
 
     private func snappedToGrid(_ point: CGPoint, size: CGFloat, in geometry: EditGeometry) -> CGPoint {
@@ -197,7 +197,7 @@ extension ControlsLayout {
             ControlsZone.snappedToEditGrid(
                 point, controlSize: size, geoSize: geometry.geoSize,
                 safeArea: geometry.safeArea, controlsMinY: geometry.controlsMinY),
-            controlHalf: size / 2, keepout: toolbarKeepout,
+            controlHalf: size / 2, keepout: sensorStripKeepout,
             geoSize: geometry.geoSize, safeArea: geometry.safeArea,
             controlsMinY: geometry.controlsMinY)
     }
@@ -244,7 +244,7 @@ extension ControlsLayout {
     }
 
     private var chromeWalls: [EditDragSolver.Rect] {
-        (editChromeFrames + [toolbarKeepout].filter { !$0.isNull }).map {
+        (editChromeFrames + [sensorStripKeepout].filter { !$0.isNull }).map {
             EditDragSolver.Rect(
                 x: Double($0.minX), y: Double($0.minY),
                 width: Double($0.width), height: Double($0.height))

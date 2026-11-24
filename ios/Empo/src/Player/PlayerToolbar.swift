@@ -5,8 +5,7 @@ import SwiftUI
 
 struct PlayerToolbar: View {
     let isPortrait: Bool
-    let safeArea: EdgeInsets
-    let geoSize: CGSize
+    let center: CGPoint
     let controlsHidden: Bool
     let keyboardShown: Bool
     let toolbarOpacity: Double
@@ -20,13 +19,20 @@ struct PlayerToolbar: View {
         case keyboard, editControls, hideControls, more
     }
 
-    static func placement(
-        isPortrait: Bool, safeArea: EdgeInsets, geoSize: CGSize
-    ) -> ControlsZone.ToolbarPlacement {
-        ControlsZone.toolbarPlacement(
-            safeArea: safeArea, geoSize: geoSize, occluded: AppWindow.occludedRects,
-            btnSize: IconButtonSize.sm.points, gap: gap(isPortrait: isPortrait),
-            count: CGFloat(Entry.allCases.count))
+    /// A sensor strip screen has the row at the top leading corner,
+    /// because the game draws under the strip.
+    static func center(isPortrait: Bool, safeArea: EdgeInsets, geoSize: CGSize) -> CGPoint {
+        let btnSize = IconButtonSize.sm.points
+        let count = CGFloat(Entry.allCases.count)
+        let gap = gap(isPortrait: isPortrait)
+        guard safeArea.sensorStripEdge(minWidth: 1) == nil else {
+            let origin = ControlsZone.topChromeOrigin(safeArea: safeArea)
+            let length = count * btnSize + (count - 1) * gap
+            return CGPoint(x: origin.x + length / 2, y: origin.y + btnSize / 2)
+        }
+        return ControlsZone.toolbarPlacement(
+            safeArea: safeArea, geoSize: geoSize, occluded: [], btnSize: btnSize, gap: gap, count: count
+        ).center
     }
 
     private static func gap(isPortrait: Bool) -> CGFloat { isPortrait ? Spacing.sm : Spacing.md }
@@ -34,15 +40,8 @@ struct PlayerToolbar: View {
     var body: some View {
         let gap = Self.gap(isPortrait: isPortrait)
         let buttons = toolbarButtons()
-        let placement = Self.placement(isPortrait: isPortrait, safeArea: safeArea, geoSize: geoSize)
-        let stack =
-            placement.isVertical
-            ? AnyLayout(VStackLayout(spacing: gap)) : AnyLayout(HStackLayout(spacing: gap))
-
-        let ordered = placement.isVertical ? Array(buttons.reversed()) : buttons
-
-        stack {
-            ForEach(Array(ordered.enumerated()), id: \.offset) { _, entry in
+        HStack(spacing: gap) {
+            ForEach(Array(buttons.enumerated()), id: \.offset) { _, entry in
                 IconButton(
                     entry.icon,
                     label: entry.label,
@@ -60,7 +59,7 @@ struct PlayerToolbar: View {
         // region before it.
         .chromeHitRegion()
         .opacity(toolbarOpacity)
-        .position(placement.center)
+        .position(center)
     }
 
     private func toolbarButtons() -> [ToolbarEntry] {

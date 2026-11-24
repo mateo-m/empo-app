@@ -17,11 +17,12 @@ struct ScreenCanvas {
     /// the top and bottom insets do not apply: the engine also ignores
     /// them, because the home indicator hides by itself.
     var safeRect: CGRect {
-        let top = isPortrait ? safeArea.top : 0
-        let bottom = isPortrait ? size.height - safeArea.bottom : size.height
+        let insets = safeArea.gameArea
+        let top = isPortrait ? insets.top : 0
+        let bottom = isPortrait ? size.height - insets.bottom : size.height
         return CGRect(
-            x: safeArea.leading, y: top,
-            width: size.width - safeArea.leading - safeArea.trailing,
+            x: insets.leading, y: top,
+            width: size.width - insets.leading - insets.trailing,
             height: bottom - top)
     }
 
@@ -47,14 +48,15 @@ struct ScreenCanvas {
             return region
         case .preset(let preset):
             guard let aspect else { return nil }
+            let insets = safeArea.gameArea
             return ScreenPresetPlacement.region(
                 preset: preset,
                 canvasWidth: Double(size.width),
                 canvasHeight: Double(size.height),
-                safeTop: Double(safeArea.top),
-                safeBottom: Double(safeArea.bottom),
-                safeLeading: Double(safeArea.leading),
-                safeTrailing: Double(safeArea.trailing),
+                safeTop: Double(insets.top),
+                safeBottom: Double(insets.bottom),
+                safeLeading: Double(insets.leading),
+                safeTrailing: Double(insets.trailing),
                 isPortrait: isPortrait,
                 aspect: Double(aspect))
         }

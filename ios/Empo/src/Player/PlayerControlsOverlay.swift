@@ -101,7 +101,7 @@ struct PlayerControlsOverlay: View {
             opacity: layout.dpadOpacity,
             position: ControlsZone.absolutePosition(
                 for: layout.dpadRelativeCenter, in: geo.size, controlSize: size,
-                safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.toolbarKeepout),
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: layout.sensorStripKeepout),
             onTapEdit: { editDialog = .sheet(.dpad) },
             onDelete: nil,
             update: { layout.dpadRelativeCenter = $0 }
@@ -238,7 +238,7 @@ struct PlayerControlsOverlay: View {
                 for: center, in: geo.size,
                 controlSize: size,
                 safeArea: safeArea,
-                controlsMinY: controlsMinY, keepout: layout.toolbarKeepout)
+                controlsMinY: controlsMinY, keepout: layout.sensorStripKeepout)
     }
 
     private func editableControl<Control: View>(
