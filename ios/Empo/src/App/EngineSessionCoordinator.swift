@@ -36,6 +36,9 @@ final class EngineSessionCoordinator {
     weak var delegate: EngineSessionCoordinatorDelegate?
 
     private let crashTracker = CrashTracker()
+    /// An answer that comes after Empo went to the background again
+    /// must not delete the new marker.
+    private var backgroundCount = 0
     private let sessionLogger = SessionLogger()
     private var textInputModeHandler: ((Bool) -> Void)?
     /// The core `openCore` opened, or nil before it runs. The player
@@ -217,12 +220,25 @@ final class EngineSessionCoordinator {
 
     func writeBackgroundMarker(state: BackgroundSession.State, for container: GameContainer) {
         guard let openedCore else { return }
+        backgroundCount += 1
         crashTracker.writeBackgroundMarker(
             BackgroundSession(core: openedCore.framework, runner: runner, state: state), for: container)
     }
 
+    /// Empo hears that iOS ended a game process while Empo was
+    /// suspended only after Empo wakes, before or after the foreground
+    /// event. A process that ended does not answer, so its marker stays
+    /// for `handleEngineTerminated`.
     func removeBackgroundMarker(for container: GameContainer) {
-        crashTracker.removeBackgroundMarker(for: container)
+        guard runner == .gameProcess else { return crashTracker.removeBackgroundMarker(for: container) }
+        let count = backgroundCount
+        EmpoGameProcessClient.whenTheProcessAnswers {
+            Task { @MainActor in
+                let coordinator = EngineSessionCoordinator.shared
+                guard coordinator.backgroundCount == count else { return }
+                coordinator.crashTracker.removeBackgroundMarker(for: container)
+            }
+        }
     }
 
     func consumeBackgroundEnd() -> BackgroundSession? {
