@@ -22,6 +22,7 @@
 #import "EmpoCore.h"
 #import "EmpoGameProcessProtocol.h"
 #include "GameCore.h"
+#import "ScreenRate.h"
 
 static NSXPCConnection *gConnection;
 static BOOL gCoreOpen;
@@ -134,6 +135,7 @@ static void captureOutput(const char *logPath) {
 }
 
 static void onEngineTerminated(void *userdata) {
+    EmpoSetGameRate(0);
     [host() engineTerminatedCleanly:gamecore_didEngineExitCleanly() != 0 hung:gamecore_isEngineHung() != 0];
 }
 
@@ -160,6 +162,7 @@ static void onSaveEvent(GameCoreSaveEvent event, const char *detail, void *userd
 // The core waits in this callback until the app resumes it, so the
 // snapshot it copies is the paused frame.
 static void onPaused(void *userdata) {
+    EmpoSetGameRate(0);
     int width = 0;
     int height = 0;
     NSMutableData *rgba = nil;
@@ -191,6 +194,7 @@ static void onFrameRendered(void *userdata) {
     dispatch_once(&claimed, ^{
       dispatch_async(dispatch_get_main_queue(), ^{ claimKeyboard(); });
     });
+    EmpoSetGameRate(gamecore_getTargetFPS());
     [host() frameRendered];
 }
 
