@@ -21,6 +21,8 @@ In a game process, the app sends `quit` to end a game, and the extension calls `
 - The More sheet shows "Quit" under "Pause". Quit asks first, then ends the process and goes back to the library.
 - The loading screen shows "Stop Loading".
 
+An MV or MZ game in the app gets the same four.
+
 A Ruby game that runs in the app cannot end. The screens tell the person to close Empo from the app switcher and open it again.
 
 `EngineSessionCoordinator.openCore` picks the runner and calls `EmpoCoreUseGameProcess`. Every `gamecore_*` call of the app goes through `AppCoreForwarders.c`. In a game process, a forwarder calls the `gameprocess_*` function of the same name in `GameProcessClient.m`, which sends an XPC message to `GameProcessService.m` in the extension. The getters answer from the last status that the extension sent. In the app, a forwarder calls the core that the app opened. `tools/gamecore/generate.ts` writes the list of the forwarded functions, `GameCoreFunctions.h`, and the XPC messages of the relayed functions from `cores/GameCore.h`.

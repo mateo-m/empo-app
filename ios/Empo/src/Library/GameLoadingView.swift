@@ -269,7 +269,7 @@ struct GameLoadingView: View {
                     .padding(.bottom, Spacing.xl)
                     .transition(.opacity.combined(with: .offset(y: 8)))
             } else {
-                // A static label, not a button. A game in the app
+                // A static label, not a button. A Ruby game in the app
                 // can't stop, and an app may not close itself: App
                 // Store guideline 2.5.1 forbids it. So the label tells
                 // the user to close Empo from the app switcher, which
