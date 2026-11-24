@@ -186,7 +186,7 @@ struct RootView: View {
                 )
             } else if appState.phase != nil {
                 Text(
-                    appState.canEndStuckGame
+                    EngineSessionCoordinator.shared.canEndGame
                         ? appState.shownError?.message
                             ?? String(localized: "Something went wrong while it was running.")
                         : "\(appState.shownError?.message ?? String(localized: "The game stopped."))\n\nClose Empo from the app switcher, then reopen it."
@@ -258,7 +258,7 @@ struct RootView: View {
     private var errorAlertTitle: Text {
         if appState.shownError?.gameDidNotStart == true { return Text("Can't start the game") }
         guard appState.engineHung || appState.phase != nil else { return Text("Last session ended early") }
-        return appState.canEndStuckGame ? Text("The game stopped") : Text("Restart Empo")
+        return EngineSessionCoordinator.shared.canEndGame ? Text("The game stopped") : Text("Restart Empo")
     }
 
     private func closeErrorAlert() {
