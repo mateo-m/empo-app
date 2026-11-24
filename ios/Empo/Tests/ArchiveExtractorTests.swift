@@ -35,6 +35,22 @@ final class ArchiveExtractorTests: XCTestCase {
         assertFiles(["黑魂/Audio/BGM/标题.ogg", "黑魂/存档/存档01.rvdata2"])
     }
 
+    func testAJapaneseNameWithTheBackslashByteKeepsItsNameAtTheTop() throws {
+        try ArchiveExtractor.extract(archive: fixture("shift-jis-root-name"), to: scratch)
+
+        assertFiles(["ソフト説明.txt", "ブラックソウルズ/Game.ini"])
+    }
+
+    func testAZipFromARussianWindowsPCKeepsAllItsFilesInOneFolder() throws {
+        try ArchiveExtractor.extract(archive: fixture("cp1251-names"), to: scratch)
+
+        let folders = try FileManager.default.contentsOfDirectory(atPath: scratch.path)
+        XCTAssertEqual(folders.count, 1, "\(folders)")
+        let files = try XCTUnwrap(FileManager.default.subpathsOfDirectory(atPath: scratch.path))
+        XCTAssertTrue(files.contains { $0.hasSuffix("/Game.ini") }, "\(files)")
+        XCTAssertTrue(files.contains { $0.hasSuffix(".txt") }, "\(files)")
+    }
+
     func testTheImportProbeReadsTheSameJapaneseNames() throws {
         var paths: [String] = []
         try ArchiveExtractor.extractSelective(

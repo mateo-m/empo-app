@@ -418,11 +418,7 @@ enum ArchiveExtractor {
             }
             archive_read_data_skip(reader)
         }
-        return legacyNameEncoding(of: legacyNames)
-    }
-
-    private static func legacyNameEncoding(of names: [Data]) -> String.Encoding? {
-        guard !names.isEmpty else { return nil }
+        guard !legacyNames.isEmpty else { return nil }
         let candidates = [
             String.Encoding.shiftJIS.rawValue,
             CFStringConvertEncodingToNSStringEncoding(
@@ -430,8 +426,8 @@ enum ArchiveExtractor {
             CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.big5.rawValue)),
             CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.dosKorean.rawValue)),
         ]
-        let encoding = NSString.stringEncoding(
-            for: Data(names.joined(separator: [0x0A])),
+        let detected = NSString.stringEncoding(
+            for: Data(legacyNames.joined(separator: [0x0A])),
             encodingOptions: [
                 .suggestedEncodingsKey: candidates,
                 .useOnlySuggestedEncodingsKey: true,
@@ -440,7 +436,20 @@ enum ArchiveExtractor {
             convertedString: nil,
             usedLossyConversion: nil
         )
-        return encoding == 0 ? nil : String.Encoding(rawValue: encoding)
+        guard detected != 0 else { return nil }
+        let encoding = String.Encoding(rawValue: detected)
+        // The detector can pick an encoding that fails on some of the names,
+        // also with `allowLossyKey` false.
+        guard legacyNames.allSatisfy({ decodeLegacyName($0, encoding) != nil }) else { return nil }
+        return encoding
+    }
+
+    /// libarchive turns each 0x5C byte into "/" in a zip name that has no "/".
+    /// In Shift-JIS, 0x5C is also the second byte of ソ, 表 and 能.
+    fileprivate static func decodeLegacyName(_ bytes: Data, _ encoding: String.Encoding) -> String? {
+        if let name = String(data: bytes, encoding: encoding) { return name }
+        guard !bytes.contains(0x5C) else { return nil }
+        return String(data: Data(bytes.map { $0 == 0x2F ? 0x5C : $0 }), encoding: encoding)
     }
 
     private static func errorString(_ reader: OpaquePointer) -> String? {
@@ -762,18 +771,15 @@ enum ArchiveExtractor {
 private struct EntryNameDecoder {
     let archiveURL: URL
     let payloadOffset: Int64
-    private lazy var legacyEncoding = ArchiveExtractor.legacyNameEncoding(
+    lazy var legacyEncoding = ArchiveExtractor.legacyNameEncoding(
         archiveURL: archiveURL, payloadOffset: payloadOffset)
-
-    init(archiveURL: URL, payloadOffset: Int64) {
-        self.archiveURL = archiveURL
-        self.payloadOffset = payloadOffset
-    }
 
     mutating func decode(_ cPath: UnsafePointer<CChar>) -> String {
         let bytes = Data(bytes: cPath, count: strlen(cPath))
         if let name = String(data: bytes, encoding: .utf8) { return name }
-        if let encoding = legacyEncoding, let name = String(data: bytes, encoding: encoding) { return name }
+        if let encoding = legacyEncoding, let name = ArchiveExtractor.decodeLegacyName(bytes, encoding) {
+            return name
+        }
         return String(cString: cPath)
     }
 }
