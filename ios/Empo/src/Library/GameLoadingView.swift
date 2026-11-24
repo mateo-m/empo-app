@@ -262,7 +262,7 @@ struct GameLoadingView: View {
         // game ended: the screen already tells the user what to do, so
         // the "if loading is stuck..." line only clutters it.
         if cancelVisible && appState.shownError == nil && !isEnded {
-            if appState.canEndStuckGame {
+            if EngineSessionCoordinator.shared.canEndGame {
                 Button("Stop Loading") { appState.cancelLoading() }
                     .buttonStyle(.secondary)
                     .padding(.horizontal, Spacing.xl)

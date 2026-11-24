@@ -180,7 +180,7 @@ struct RootView: View {
         } message: {
             if appState.engineHung {
                 Text(
-                    appState.canEndStuckGame
+                    EngineSessionCoordinator.shared.canEndGame
                         ? "It stopped responding and will close. Progress you haven't saved will be lost."
                         : "The game stopped responding. Close Empo from the app switcher, then reopen it."
                 )
