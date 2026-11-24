@@ -517,6 +517,7 @@ targets:
           - App/GameViewEmbedder.swift
           - App/EmpoSceneDelegate.swift
           - App/EmpoAppDelegate.swift
+          - App/BackgroundExitReports.swift
           - App/AppWindow.swift
           - App/RootView.swift
           - App/EngineSessionCoordinator.swift
