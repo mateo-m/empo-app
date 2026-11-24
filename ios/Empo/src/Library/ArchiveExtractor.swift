@@ -160,6 +160,7 @@ enum ArchiveExtractor {
         // is registered), so running this before the free defer is safe.
         defer { withExtendedLifetime(stream) {} }
 
+        var names = EntryNameDecoder(archiveURL: archiveURL, payloadOffset: payloadOffset)
         var entry: OpaquePointer?
         while true {
             if shouldCancel?() == true { throw Error.cancelled }
@@ -175,7 +176,7 @@ enum ArchiveExtractor {
                 archive_read_data_skip(reader)
                 continue
             }
-            let rawName = String(cString: cPath)
+            let rawName = names.decode(cPath)
             let relative = rawName.replacingOccurrences(of: "\\", with: "/")
             let components = relative.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             if relative.hasPrefix("/") || components.contains("..") {
@@ -281,6 +282,7 @@ enum ArchiveExtractor {
         var uncompressedWritten: Int64 = 0
         var entryIndex = 0
 
+        var names = EntryNameDecoder(archiveURL: archiveURL, payloadOffset: payloadOffset)
         var entry: OpaquePointer?
         while true {
             if shouldCancel?() == true { throw Error.cancelled }
@@ -293,7 +295,7 @@ enum ArchiveExtractor {
             guard let entry else { continue }
 
             guard let cPath = archive_entry_pathname(entry) else { continue }
-            let rawName = String(cString: cPath)
+            let rawName = names.decode(cPath)
 
             let relative = rawName.replacingOccurrences(of: "\\", with: "/")
             let components = relative.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
@@ -391,6 +393,54 @@ enum ArchiveExtractor {
             totalWritten += written
         }
         return totalWritten
+    }
+
+    fileprivate static func legacyNameEncoding(archiveURL: URL, payloadOffset: Int64) -> String.Encoding? {
+        guard let reader = archive_read_new() else { return nil }
+        defer { archive_read_free(reader) }
+        let stream: SfxPayloadStream?
+        do {
+            stream = try openLibarchiveReader(reader, archiveURL: archiveURL, payloadOffset: payloadOffset)
+        } catch {
+            return nil
+        }
+        defer { withExtendedLifetime(stream) {} }
+
+        var legacyNames: [Data] = []
+        var entry: OpaquePointer?
+        while true {
+            let headerResult = archive_read_next_header(reader, &entry)
+            if headerResult == ARCHIVE_EOF || headerResult < ARCHIVE_WARN { break }
+            if headerResult == ARCHIVE_RETRY { continue }
+            if let cPath = archive_entry_pathname(entry) {
+                let bytes = Data(bytes: cPath, count: strlen(cPath))
+                if String(data: bytes, encoding: .utf8) == nil { legacyNames.append(bytes) }
+            }
+            archive_read_data_skip(reader)
+        }
+        return legacyNameEncoding(of: legacyNames)
+    }
+
+    private static func legacyNameEncoding(of names: [Data]) -> String.Encoding? {
+        guard !names.isEmpty else { return nil }
+        let candidates = [
+            String.Encoding.shiftJIS.rawValue,
+            CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)),
+            CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.big5.rawValue)),
+            CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(CFStringEncodings.dosKorean.rawValue)),
+        ]
+        let encoding = NSString.stringEncoding(
+            for: Data(names.joined(separator: [0x0A])),
+            encodingOptions: [
+                .suggestedEncodingsKey: candidates,
+                .useOnlySuggestedEncodingsKey: true,
+                .allowLossyKey: false,
+            ],
+            convertedString: nil,
+            usedLossyConversion: nil
+        )
+        return encoding == 0 ? nil : String.Encoding(rawValue: encoding)
     }
 
     private static func errorString(_ reader: OpaquePointer) -> String? {
@@ -700,6 +750,31 @@ enum ArchiveExtractor {
         }
 
         progress?("", 1.0)
+    }
+}
+
+// MARK: - Entry names
+
+/// Zip tools on a Japanese or Chinese Windows PC write the names in the
+/// code page of the PC and do not set the UTF-8 flag. libarchive gives
+/// those bytes as they are. The encoding detector misreads a short name
+/// alone, so it reads all such names of the archive at once.
+private struct EntryNameDecoder {
+    let archiveURL: URL
+    let payloadOffset: Int64
+    private lazy var legacyEncoding = ArchiveExtractor.legacyNameEncoding(
+        archiveURL: archiveURL, payloadOffset: payloadOffset)
+
+    init(archiveURL: URL, payloadOffset: Int64) {
+        self.archiveURL = archiveURL
+        self.payloadOffset = payloadOffset
+    }
+
+    mutating func decode(_ cPath: UnsafePointer<CChar>) -> String {
+        let bytes = Data(bytes: cPath, count: strlen(cPath))
+        if let name = String(data: bytes, encoding: .utf8) { return name }
+        if let encoding = legacyEncoding, let name = String(data: bytes, encoding: encoding) { return name }
+        return String(cString: cPath)
     }
 }
 
