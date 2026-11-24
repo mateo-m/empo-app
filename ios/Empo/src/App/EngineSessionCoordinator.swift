@@ -253,6 +253,8 @@ final class EngineSessionCoordinator {
 
         gamecore_setFrameRenderedCallback(
             { _ in
+                // A game process asks for its own screen rate.
+                EmpoSetGameRate(EmpoGameProcessIsOpen() != 0 ? 0 : gamecore_getTargetFPS())
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.delegate?.coordinatorFrameRendered()
                 }
@@ -260,6 +262,7 @@ final class EngineSessionCoordinator {
 
         gamecore_setEngineTerminatedCallback(
             { _ in
+                EmpoSetGameRate(0)
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.handleEngineTerminated()
                 }
@@ -312,6 +315,7 @@ final class EngineSessionCoordinator {
 
         gamecore_setPausedCallback(
             { _ in
+                EmpoSetGameRate(0)
                 let snapshot = EngineSessionCoordinator.capturePauseSnapshot()
                 Task { @MainActor in
                     EngineSessionCoordinator.shared.delegate?

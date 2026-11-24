@@ -298,6 +298,8 @@ targets:
       - path: GameProcess/EmpoGameProcessProtocol.m
       # A game that runs in the app plays its sound through the app.
       - path: GameProcess/AudioSession.m
+      # A game that runs in the app is drawn by the app.
+      - path: GameProcess/ScreenRate.m
       # Gitignored generated file. Listed explicitly so xcodegen keeps
       # it in Compile Sources after `src` group scans skip ignored paths.
       - path: src/App/GitInfo.generated.swift
@@ -414,6 +416,7 @@ targets:
           - -framework AVFoundation
           - -framework GameController
           - -framework Metal
+          - -framework QuartzCore
   FilesProvider:
     # Shows the games and saves, which live in the app group, in the
     # Files app.

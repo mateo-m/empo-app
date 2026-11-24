@@ -32,5 +32,7 @@
 		<key>EXExtensionPointIdentifier</key>
 		<string>$(EMPO_HOST_BUNDLE_IDENTIFIER).game-process</string>
 	</dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 </dict>
 </plist>
