@@ -153,8 +153,10 @@ enum ArchiveExtractor {
         }
         defer { archive_read_free(reader) }
 
+        let nameCharset = try legacyNameCharset(
+            archiveURL: archiveURL, payloadOffset: payloadOffset, shouldCancel: shouldCancel)
         let stream = try openLibarchiveReader(
-            reader, archiveURL: archiveURL, payloadOffset: payloadOffset)
+            reader, archiveURL: archiveURL, payloadOffset: payloadOffset, nameCharset: nameCharset)
         // Keep the callback client data alive for the whole read loop.
         // archive_read_free itself never touches it (no close callback
         // is registered), so running this before the free defer is safe.
@@ -171,11 +173,10 @@ enum ArchiveExtractor {
             }
             guard let entry else { continue }
 
-            guard let cPath = archive_entry_pathname(entry) else {
+            guard let rawName = entryName(entry, nameCharset: nameCharset) else {
                 archive_read_data_skip(reader)
                 continue
             }
-            let rawName = String(cString: cPath)
             let relative = rawName.replacingOccurrences(of: "\\", with: "/")
             let components = relative.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
             if relative.hasPrefix("/") || components.contains("..") {
@@ -270,8 +271,10 @@ enum ArchiveExtractor {
         }
         defer { archive_read_free(reader) }
 
+        let nameCharset = try legacyNameCharset(
+            archiveURL: archiveURL, payloadOffset: payloadOffset, shouldCancel: shouldCancel)
         let stream = try openLibarchiveReader(
-            reader, archiveURL: archiveURL, payloadOffset: payloadOffset)
+            reader, archiveURL: archiveURL, payloadOffset: payloadOffset, nameCharset: nameCharset)
         // Keep the callback client data alive for the whole read loop.
         // archive_read_free itself never touches it (no close callback
         // is registered), so running this before the free defer is safe.
@@ -292,8 +295,7 @@ enum ArchiveExtractor {
             }
             guard let entry else { continue }
 
-            guard let cPath = archive_entry_pathname(entry) else { continue }
-            let rawName = String(cString: cPath)
+            guard let rawName = entryName(entry, nameCharset: nameCharset) else { continue }
 
             let relative = rawName.replacingOccurrences(of: "\\", with: "/")
             let components = relative.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
@@ -393,6 +395,85 @@ enum ArchiveExtractor {
         return totalWritten
     }
 
+    /// Zip tools on a Japanese or Chinese Windows PC write the names in the
+    /// code page of the PC and do not set the UTF-8 flag. The encoding
+    /// detector misreads a short name alone, so it reads all such names of
+    /// the zip at once. The result is an iconv name for `hdrcharset`.
+    private static func legacyNameCharset(
+        archiveURL: URL,
+        payloadOffset: Int64,
+        shouldCancel: (() -> Bool)?
+    ) throws -> String? {
+        guard let reader = archive_read_new() else { return nil }
+        defer { archive_read_free(reader) }
+        let stream: SfxPayloadStream?
+        do {
+            stream = try openLibarchiveReader(reader, archiveURL: archiveURL, payloadOffset: payloadOffset)
+        } catch {
+            return nil
+        }
+        defer { withExtendedLifetime(stream) {} }
+
+        var legacyNames: [Data] = []
+        var entry: OpaquePointer?
+        while true {
+            if shouldCancel?() == true { throw Error.cancelled }
+            let headerResult = archive_read_next_header(reader, &entry)
+            if headerResult == ARCHIVE_EOF || headerResult < ARCHIVE_WARN { break }
+            if headerResult == ARCHIVE_RETRY { continue }
+            // In a solid 7z, each skip decompresses the data.
+            guard archive_format(reader) & ARCHIVE_FORMAT_BASE_MASK == ARCHIVE_FORMAT_ZIP else { return nil }
+            if let cPath = archive_entry_pathname(entry) {
+                let bytes = Data(bytes: cPath, count: strlen(cPath))
+                if String(data: bytes, encoding: .utf8) == nil { legacyNames.append(bytes) }
+            }
+            archive_read_data_skip(reader)
+        }
+        guard !legacyNames.isEmpty else { return nil }
+        func cfEncoding(_ encoding: CFStringEncodings) -> String.Encoding {
+            String.Encoding(
+                rawValue: CFStringConvertEncodingToNSStringEncoding(CFStringEncoding(encoding.rawValue)))
+        }
+        let candidates: [(charset: String, encoding: String.Encoding)] = [
+            ("CP932", .shiftJIS),
+            ("GB18030", cfEncoding(.GB_18030_2000)),
+            ("BIG5", cfEncoding(.big5)),
+            ("CP949", cfEncoding(.dosKorean)),
+        ]
+        let detected = NSString.stringEncoding(
+            for: Data(legacyNames.joined(separator: [0x0A])),
+            encodingOptions: [
+                .suggestedEncodingsKey: candidates.map(\.encoding.rawValue),
+                .useOnlySuggestedEncodingsKey: true,
+                .allowLossyKey: false,
+            ],
+            convertedString: nil,
+            usedLossyConversion: nil
+        )
+        // The detector can pick an encoding that fails on some of the names,
+        // also with `allowLossyKey` false.
+        guard let match = candidates.first(where: { $0.encoding.rawValue == detected }),
+            legacyNames.allSatisfy({ decodeLegacyName($0, match.encoding) != nil })
+        else { return nil }
+        return match.charset
+    }
+
+    /// With `hdrcharset` set, libarchive converts only the names that have
+    /// no UTF-8 flag, and gives the result through the UTF-8 getter.
+    private static func entryName(_ entry: OpaquePointer, nameCharset: String?) -> String? {
+        let cPath = nameCharset == nil ? archive_entry_pathname(entry) : archive_entry_pathname_utf8(entry)
+        guard let cPath = cPath ?? archive_entry_pathname(entry) else { return nil }
+        return String(cString: cPath)
+    }
+
+    /// libarchive turns each 0x5C byte into "/" in a zip name that has no "/".
+    /// In Shift-JIS, 0x5C is also the second byte of ソ, 表 and 能.
+    private static func decodeLegacyName(_ bytes: Data, _ encoding: String.Encoding) -> String? {
+        if let name = String(data: bytes, encoding: encoding) { return name }
+        guard !bytes.contains(0x5C) else { return nil }
+        return String(data: Data(bytes.map { $0 == 0x2F ? 0x5C : $0 }), encoding: encoding)
+    }
+
     private static func errorString(_ reader: OpaquePointer) -> String? {
         guard let cStr = archive_error_string(reader) else { return nil }
         return String(cString: cStr)
@@ -409,10 +490,14 @@ enum ArchiveExtractor {
     private static func openLibarchiveReader(
         _ reader: OpaquePointer,
         archiveURL: URL,
-        payloadOffset: Int64
+        payloadOffset: Int64,
+        nameCharset: String? = nil
     ) throws -> SfxPayloadStream? {
         archive_read_support_format_all(reader)
         archive_read_support_filter_all(reader)
+        if let nameCharset {
+            archive_read_set_format_option(reader, "zip", "hdrcharset", nameCharset)
+        }
 
         if payloadOffset == 0 {
             let blockSize = 10 * 1024 * 1024
