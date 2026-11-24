@@ -119,11 +119,11 @@ struct GameContainer: Equatable, Hashable {
     }
 
     var sessionActiveMarkerURL: URL {
-        empoStateURL.appendingPathComponent(".session-active")
+        empoStateURL.appendingPathComponent(BackupSetRules.sessionActiveMarkerName)
     }
 
     var backgroundSessionMarkerURL: URL {
-        empoStateURL.appendingPathComponent(".background-session")
+        empoStateURL.appendingPathComponent(BackupSetRules.backgroundSessionMarkerName)
     }
 
     var sessionHistoryURL: URL {

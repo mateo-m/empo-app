@@ -36,6 +36,12 @@ public enum BackupSetRules {
     /// with the game to another device.
     public static let stateDirectoryName = "EmpoState"
 
+    /// The markers of an open play session in `EmpoState/`. On the
+    /// device that restores them, they read as a session that ended
+    /// there.
+    public static let sessionActiveMarkerName = ".session-active"
+    public static let backgroundSessionMarkerName = ".background-session"
+
     /// A directory of fonts, out per 3.2. The game's own
     /// `Game/Fonts/` and the shared `Documents/Fonts/` both carry
     /// this name.
@@ -54,6 +60,11 @@ public enum BackupSetRules {
         guard !components.isEmpty else { return true }
 
         if components.contains(where: carriesDisplacedMarker) { return true }
+        if components.count == 2, components[0].caseInsensitiveCompare(stateDirectoryName) == .orderedSame,
+            [sessionActiveMarkerName, backgroundSessionMarkerName].contains(components[1])
+        {
+            return true
+        }
         if components.contains(where: { $0.caseInsensitiveCompare(fontsDirectoryName) == .orderedSame }) {
             return true
         }
