@@ -441,10 +441,10 @@ class AppWindow: UIWindow {
 }
 
 extension EdgeInsets {
-    /// The iPhone Duo keeps its camera and status bar in a strip on
-    /// one side edge, closed or open, and insets only that edge
-    /// (closed: trailing 84; open: trailing 84, bottom 34). An
-    /// iPhone on its side insets both side edges the same.
+    /// The closed iPhone Duo keeps its camera and status bar in a
+    /// strip on one side edge (trailing 84, bottom 34). The open Duo
+    /// has its camera at the top when upright, and on its side it
+    /// insets both side edges the same, like any iPhone.
     func sensorStripEdge(minWidth: CGFloat) -> HorizontalEdge? {
         if leading == 0 && trailing >= minWidth { return .trailing }
         if trailing == 0 && leading >= minWidth { return .leading }
