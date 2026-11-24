@@ -35,6 +35,13 @@ final class ArchiveExtractorTests: XCTestCase {
         assertFiles(["黑魂/Audio/BGM/标题.ogg", "黑魂/存档/存档01.rvdata2"])
     }
 
+    // The GBK bytes of 隆 are also the UTF-8 bytes of ¡. 说明 has the UTF-8 flag.
+    func testAChineseNameThatIsAlsoValidUTF8KeepsItsChineseName() throws {
+        try ArchiveExtractor.extract(archive: fixture("gbk-mixed-names"), to: scratch)
+
+        assertFiles(["隆.txt", "黑魂/说明.txt", "黑魂/Audio/BGM/标题.ogg"])
+    }
+
     func testAJapaneseNameWithTheBackslashByteKeepsItsNameAtTheTop() throws {
         try ArchiveExtractor.extract(archive: fixture("shift-jis-root-name"), to: scratch)
 
