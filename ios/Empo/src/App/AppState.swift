@@ -386,7 +386,10 @@ class AppState {
     /// marker says at the next launch that Empo ended in the
     /// background with this game open.
     func writeBackgroundMarker() {
-        guard let container = activeSessionGame?.container, let state = backgroundSessionState else { return }
+        guard let container = activeSessionGame?.container,
+            let state = Self.backgroundSessionState(
+                phase: phase, resuming: resumeTask != nil, paused: PauseManager.shared.pausedGame != nil)
+        else { return }
         session.writeBackgroundMarker(state: state, for: container)
     }
 
@@ -395,12 +398,16 @@ class AppState {
         session.removeBackgroundMarker(for: container)
     }
 
-    private var backgroundSessionState: BackgroundSession.State? {
+    /// `resuming`: `resumePausedGame` already resumed the engine, and
+    /// `phase` becomes `.playing` after the zoom animation.
+    static func backgroundSessionState(
+        phase: GamePhase?, resuming: Bool, paused: Bool
+    ) -> BackgroundSession.State? {
         switch phase {
         case .loading: .loading
         case .playing: .playing
         case .ended: nil
-        case nil: PauseManager.shared.pausedGame != nil ? .paused : nil
+        case nil: resuming ? .playing : paused ? .paused : nil
         }
     }
 
@@ -443,11 +450,11 @@ extension AppState: EngineSessionCoordinatorDelegate {
         }
     }
 
-    func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
+    func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool, reportedInBackground: Bool) {
         // We intentionally do NOT set phase = nil here. If phase
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
-        if !cleanExit, !sessionShowedError {
+        if !cleanExit, !sessionShowedError, !reportedInBackground {
             ErrorReports.gameCrash(game: reportedGame, saveLoad: saveLoad)
         }
         phase = .ended(clean: cleanExit, started: phase == .playing)

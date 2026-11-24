@@ -16,7 +16,9 @@ protocol EngineSessionCoordinatorDelegate: AnyObject {
     var coordinatorActiveSessionGame: GameEntry? { get }
 
     func coordinatorFrameRendered()
-    func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool)
+    /// `reportedInBackground`: `coordinatorGameEndedInBackground` already
+    /// reported this end.
+    func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool, reportedInBackground: Bool)
     func coordinatorGameRectDidChange(_ rect: CGRect)
     func coordinatorDidReportEngineError(_ message: String)
     func coordinatorDidReportEngineInfo(_ message: String)
@@ -348,10 +350,11 @@ final class EngineSessionCoordinator {
         if let container = delegate?.coordinatorSelectedGame?.container {
             crashTracker.removeMarker(for: container)
         }
-        if let container = delegate?.coordinatorActiveSessionGame?.container,
-            let session = crashTracker.takeBackgroundMarker(for: container)
-        {
-            delegate?.coordinatorGameEndedInBackground(session)
+        let backgroundSession = delegate?.coordinatorActiveSessionGame?.container.flatMap {
+            crashTracker.takeBackgroundMarker(for: $0)
+        }
+        if let backgroundSession {
+            delegate?.coordinatorGameEndedInBackground(backgroundSession)
         }
         GameLibrary.shared.reload()
 
@@ -362,7 +365,8 @@ final class EngineSessionCoordinator {
         if delegate?.coordinatorPhase != nil {
             let cleanExit = gamecore_didEngineExitCleanly() != 0
             note(cleanExit ? "The game closed itself." : "The game stopped.")
-            delegate?.coordinatorEngineTerminatedUnexpectedly(cleanExit: cleanExit)
+            delegate?.coordinatorEngineTerminatedUnexpectedly(
+                cleanExit: cleanExit, reportedInBackground: backgroundSession != nil)
         } else if runner == .gameProcess {
             note("The game process of the paused game stopped.")
             delegate?.coordinatorPausedGameStopped()

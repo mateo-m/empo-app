@@ -55,6 +55,19 @@ final class BackgroundEndTests: XCTestCase {
         XCTAssertNil(CrashTracker().consumeBackgroundEnd())
     }
 
+    func testMarkerStateFollowsTheGame() {
+        XCTAssertEqual(
+            AppState.backgroundSessionState(phase: .loading, resuming: false, paused: false), .loading)
+        XCTAssertEqual(
+            AppState.backgroundSessionState(phase: .playing, resuming: false, paused: false), .playing)
+        XCTAssertEqual(AppState.backgroundSessionState(phase: nil, resuming: true, paused: false), .playing)
+        XCTAssertEqual(AppState.backgroundSessionState(phase: nil, resuming: false, paused: true), .paused)
+        XCTAssertNil(AppState.backgroundSessionState(phase: nil, resuming: false, paused: false))
+        XCTAssertNil(
+            AppState.backgroundSessionState(
+                phase: .ended(clean: false, started: true), resuming: false, paused: false))
+    }
+
     func testDayWithNoMemoryEndSendsNothing() {
         XCTAssertNil(ErrorReports.backgroundExitTags(memoryLimit: 0, memoryPressure: 0, normal: 4))
     }

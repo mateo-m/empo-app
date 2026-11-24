@@ -208,7 +208,7 @@ enum ErrorReports {
             fingerprint: ["background-memory-exits"], game: nil, saveLoad: nil, tags: tags)
     }
 
-    nonisolated static func backgroundExitTags(
+    static func backgroundExitTags(
         memoryLimit: Int, memoryPressure: Int, normal: Int
     ) -> [String: String]? {
         guard memoryLimit + memoryPressure > 0 else { return nil }
