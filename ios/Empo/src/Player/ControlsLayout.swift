@@ -697,7 +697,7 @@ class ControlsLayout {
     var editChromeFrames: [CGRect] = []
 
     /// In window space.
-    var toolbarKeepout: CGRect = .null
+    var sensorStripKeepout: CGRect = .null
 
     var editGeometry: EditGeometry?
 
@@ -765,7 +765,7 @@ class ControlsLayout {
             let clamped = ControlsZone.absolutePosition(
                 for: circle.center, in: geoSize,
                 controlSize: circle.size,
-                safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
+                safeArea: safeArea, controlsMinY: controlsMinY, keepout: sensorStripKeepout
             )
             return (x: Double(clamped.x), y: Double(clamped.y), size: Double(circle.size))
         }
@@ -782,7 +782,7 @@ class ControlsLayout {
         let dpadClamped = ControlsZone.absolutePosition(
             for: dpadRelativeCenter, in: geoSize,
             controlSize: dpadSize,
-            safeArea: safeArea, controlsMinY: controlsMinY, keepout: toolbarKeepout
+            safeArea: safeArea, controlsMinY: controlsMinY, keepout: sensorStripKeepout
         )
 
         // Separate inside the clamp band, not the full window. Against
@@ -807,7 +807,7 @@ class ControlsLayout {
             )
         ]
 
-        let keepout = toolbarKeepout.insetBy(
+        let keepout = sensorStripKeepout.insetBy(
             dx: -ControlsZone.innerPadding, dy: -ControlsZone.innerPadding)
         let walls =
             keepout.isNull

@@ -66,7 +66,7 @@ private class AppRootViewController: UIViewController {
         let phase = AppState.shared.phase
         guard phase == .playing else { return false }
         let size = view.bounds.size
-        return size.width > size.height  // hide only in landscape gameplay
+        return size.width > size.height || AppWindow.currentSafeArea.sensorStripEdge(minWidth: 1) != nil
     }
 
     override func viewWillTransition(
@@ -115,10 +115,11 @@ class AppWindow: UIWindow {
     /// reads the live window and `EngineSessionCoordinator.openCore`
     /// calls it once the core is in.
     static func pushSafeAreaInsets() {
-        guard EmpoCoreIsOpen() != 0, let insets = instance?.safeAreaInsets else { return }
+        guard EmpoCoreIsOpen() != 0, instance != nil else { return }
+        let insets = currentSafeArea.gameArea
         gamecore_setSafeAreaInsets(
             Float(insets.top), Float(insets.bottom),
-            Float(insets.left), Float(insets.right)
+            Float(insets.leading), Float(insets.trailing)
         )
     }
 
@@ -355,6 +356,7 @@ class AppWindow: UIWindow {
                 if let window {
                     applyOverlayPresentationMode(window: window)
                     window.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    window.rootViewController?.setNeedsStatusBarAppearanceUpdate()
                     observePhase(window: window)
                 }
             }
@@ -439,14 +441,24 @@ class AppWindow: UIWindow {
 }
 
 extension EdgeInsets {
-    /// The iPhone Duo keeps its camera and status bar in a strip on
-    /// one side edge, closed or open, and insets only that edge
-    /// (closed: trailing 84; open: trailing 84, bottom 34). An
-    /// iPhone on its side insets both side edges the same.
+    /// The closed iPhone Duo keeps its camera and status bar in a
+    /// strip on one side edge (trailing 84, bottom 34). The open Duo
+    /// has its camera at the top when upright, and on its side it
+    /// insets both side edges the same, like any iPhone.
     func sensorStripEdge(minWidth: CGFloat) -> HorizontalEdge? {
         if leading == 0 && trailing >= minWidth { return .trailing }
         if trailing == 0 && leading >= minWidth { return .leading }
         return nil
+    }
+
+    /// The game draws under the sensor strip. The status bar hides
+    /// during play there, so only the camera stays over the strip.
+    var gameArea: EdgeInsets {
+        switch sensorStripEdge(minWidth: 1) {
+        case .leading: EdgeInsets(top: top, leading: 0, bottom: bottom, trailing: trailing)
+        case .trailing: EdgeInsets(top: top, leading: leading, bottom: bottom, trailing: 0)
+        case nil: self
+        }
     }
 }
 

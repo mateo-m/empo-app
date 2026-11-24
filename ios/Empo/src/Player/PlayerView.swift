@@ -48,10 +48,11 @@ struct PlayerView: View {
                 isPortrait: isPortrait, gameRect: gameRect, safeArea: safeArea,
                 btnSize: toolbarBtnSize,
                 geoHeight: geo.size.height, forcedOverlay: forcedOverlay)
-            let toolbarPlacement = PlayerToolbar.placement(
+            let toolbarCenter = PlayerToolbar.center(
                 isPortrait: isPortrait, safeArea: safeArea, geoSize: geo.size)
-            let controlsSafeArea = ControlsZone.controlsSafeArea(safeArea, toolbar: toolbarPlacement)
-            let toolbarKeepout = ControlsZone.toolbarKeepout(toolbarPlacement, geoSize: geo.size)
+            let controlsSafeArea = safeArea.gameArea
+            let sensorStripKeepout = ControlsZone.sensorStripKeepout(
+                safeArea: safeArea, geoSize: geo.size, occluded: AppWindow.occludedRects)
             let screenContext = editMode ? screenGizmoContext(canvas: canvas, gameRect: gameRect) : nil
 
             ZStack {
@@ -123,8 +124,7 @@ struct PlayerView: View {
                 if controlsVisible {
                     PlayerToolbar(
                         isPortrait: isPortrait,
-                        safeArea: safeArea,
-                        geoSize: geo.size,
+                        center: toolbarCenter,
                         controlsHidden: controlsHidden,
                         keyboardShown: keyboardMode,
                         toolbarOpacity: toolbarOpacity,
@@ -241,8 +241,8 @@ struct PlayerView: View {
                 layout.refreshForGameGeometryChange()
                 layout.screenRegion.gameRectChanged(rect)
             }
-            .onChange(of: toolbarKeepout, initial: true) { _, keepout in
-                layout.toolbarKeepout = keepout
+            .onChange(of: sensorStripKeepout, initial: true) { _, keepout in
+                layout.sensorStripKeepout = keepout
             }
             .onChange(of: editMode) { _, editing in
                 layout.editModeChanged(
