@@ -96,17 +96,16 @@ enum ControlsZone {
 
     struct ToolbarPlacement {
         let center: CGPoint
-        let isVertical: Bool
         let length: CGFloat
-        let thickness: CGFloat
+    }
 
-        var frame: CGRect {
-            let size =
-                isVertical
-                ? CGSize(width: thickness, height: length) : CGSize(width: length, height: thickness)
-            return CGRect(
-                x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width,
-                height: size.height)
+    static func sensorStripRect(safeArea: EdgeInsets, geoSize: CGSize, minWidth: CGFloat) -> CGRect? {
+        switch safeArea.sensorStripEdge(minWidth: minWidth) {
+        case .trailing:
+            CGRect(
+                x: geoSize.width - safeArea.trailing, y: 0, width: safeArea.trailing, height: geoSize.height)
+        case .leading: CGRect(x: 0, y: 0, width: safeArea.leading, height: geoSize.height)
+        case nil: nil
         }
     }
 
@@ -114,13 +113,8 @@ enum ControlsZone {
     /// strip, out to the top and the side edge of the screen. `.null`
     /// without a strip.
     static func sensorStripKeepout(safeArea: EdgeInsets, geoSize: CGSize, occluded: [CGRect]) -> CGRect {
-        let strip: CGRect
-        switch safeArea.sensorStripEdge(minWidth: 1) {
-        case .trailing:
-            strip = CGRect(
-                x: geoSize.width - safeArea.trailing, y: 0, width: safeArea.trailing, height: geoSize.height)
-        case .leading: strip = CGRect(x: 0, y: 0, width: safeArea.leading, height: geoSize.height)
-        case nil: return .null
+        guard let strip = sensorStripRect(safeArea: safeArea, geoSize: geoSize, minWidth: 1) else {
+            return .null
         }
         let block = occluded.filter { $0.intersects(strip) }.reduce(CGRect.null) { $0.union($1) }
         guard !block.isNull else { return .null }
@@ -159,25 +153,19 @@ enum ControlsZone {
         count: CGFloat
     ) -> ToolbarPlacement {
         let length = count * btnSize + (count - 1) * gap
-        if let edge = safeArea.sensorStripEdge(minWidth: btnSize + 2 * toolbarEdgePad) {
-            let strip =
-                edge == .trailing
-                ? CGRect(
-                    x: geoSize.width - safeArea.trailing, y: 0, width: safeArea.trailing,
-                    height: geoSize.height)
-                : CGRect(x: 0, y: 0, width: safeArea.leading, height: geoSize.height)
+        if let strip = sensorStripRect(
+            safeArea: safeArea, geoSize: geoSize, minWidth: btnSize + 2 * toolbarEdgePad)
+        {
             let y = stripColumnCenterY(
                 strip: strip, occluded: occluded, top: safeArea.top,
                 bottom: geoSize.height - safeArea.bottom, length: length)
             let x = sensorStripColumnX(strip: strip, occluded: occluded)
-            return ToolbarPlacement(
-                center: CGPoint(x: x, y: y), isVertical: true, length: length, thickness: btnSize)
+            return ToolbarPlacement(center: CGPoint(x: x, y: y), length: length)
         }
         let rightInset = max(safeArea.trailing, minLandscapeInset)
         let x = geoSize.width - rightInset - toolbarEdgePad - length / 2
         let y = topChromeOrigin(safeArea: safeArea).y + btnSize / 2
-        return ToolbarPlacement(
-            center: CGPoint(x: x, y: y), isVertical: false, length: length, thickness: btnSize)
+        return ToolbarPlacement(center: CGPoint(x: x, y: y), length: length)
     }
 
     /// Without a gap that fits, the column centers in the strip.

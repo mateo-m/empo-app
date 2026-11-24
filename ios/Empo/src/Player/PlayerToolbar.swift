@@ -19,8 +19,6 @@ struct PlayerToolbar: View {
         case keyboard, editControls, hideControls, more
     }
 
-    /// A sensor strip screen has the row at the top leading corner,
-    /// because the game draws under the strip.
     static func center(isPortrait: Bool, safeArea: EdgeInsets, geoSize: CGSize) -> CGPoint {
         let btnSize = IconButtonSize.sm.points
         let count = CGFloat(Entry.allCases.count)
