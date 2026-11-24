@@ -169,13 +169,6 @@ class AppState {
         clearEndedGame()
     }
 
-    /// True when a game that loads too long or stops responding can
-    /// end at once. Only a game process can: Empo ends it, and nothing
-    /// of it stays in the app.
-    var canEndStuckGame: Bool {
-        session.runner == .gameProcess
-    }
-
     /// True when the RGSS thread did not ack a termination request in
     /// time. Ruby is then in an unrecoverable state. The single-thread
     /// engine architecture cannot respawn the VM in place, so the only
@@ -186,7 +179,7 @@ class AppState {
     }
 
     func cancelLoading() {
-        guard canEndStuckGame, phase == .loading else { return }
+        guard session.canEndGame, phase == .loading else { return }
         session.note("The player stopped the loading.")
         session.recordSessionPlayTime()
         session.killSession(of: selectedGame)
@@ -196,7 +189,7 @@ class AppState {
 
     /// A hung core cannot pause, so its process ends at once.
     func endStuckGame() {
-        guard canEndStuckGame else { return }
+        guard session.canEndGame else { return }
         session.note("The game stopped responding, and Empo ended it.")
         session.recordSessionPlayTime()
         session.killSession(of: activeSessionGame)
