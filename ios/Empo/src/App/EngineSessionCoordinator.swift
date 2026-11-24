@@ -24,6 +24,7 @@ protocol EngineSessionCoordinatorDelegate: AnyObject {
     func coordinatorDidRepairSave(_ detail: String)
     func coordinatorEngineDidPause(snapshot: UIImage?)
     func coordinatorPausedGameStopped()
+    func coordinatorGameEndedInBackground(_ session: BackgroundSession)
 }
 
 @MainActor
@@ -135,6 +136,7 @@ final class EngineSessionCoordinator {
     func killSession(of game: GameEntry?) {
         if let container = game?.container {
             crashTracker.removeMarker(for: container)
+            crashTracker.removeBackgroundMarker(for: container)
         }
         heldKeys.clear()
         switch runner {
@@ -209,6 +211,20 @@ final class EngineSessionCoordinator {
 
     func restoreCrashMarker(for container: GameContainer) {
         crashTracker.writeMarker(for: container)
+    }
+
+    func writeBackgroundMarker(state: BackgroundSession.State, for container: GameContainer) {
+        guard let openedCore else { return }
+        crashTracker.writeBackgroundMarker(
+            BackgroundSession(core: openedCore.framework, runner: runner, state: state), for: container)
+    }
+
+    func removeBackgroundMarker(for container: GameContainer) {
+        crashTracker.removeBackgroundMarker(for: container)
+    }
+
+    func consumeBackgroundEnd() -> BackgroundSession? {
+        crashTracker.consumeBackgroundEnd()
     }
 
     func setTextInputModeHandler(_ handler: @escaping (Bool) -> Void) {
@@ -331,6 +347,11 @@ final class EngineSessionCoordinator {
         GameSaveWatch.shared.endSession()
         if let container = delegate?.coordinatorSelectedGame?.container {
             crashTracker.removeMarker(for: container)
+        }
+        if let container = delegate?.coordinatorActiveSessionGame?.container,
+            let session = crashTracker.takeBackgroundMarker(for: container)
+        {
+            delegate?.coordinatorGameEndedInBackground(session)
         }
         GameLibrary.shared.reload()
 

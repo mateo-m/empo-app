@@ -227,10 +227,12 @@ struct RootView: View {
             // No-op when the timer already flushed (e.g. the user
             // paused to the library).
             appState.flushSessionPlayTimeForBackground()
+            appState.writeBackgroundMarker()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) {
             _ in
             Task { await EmpoPlus.shared.refresh() }
+            appState.removeBackgroundMarker()
             if appState.phase == .playing {
                 engineState.resumeFromBackground()
                 // Re-create the crash marker, so the next launch still

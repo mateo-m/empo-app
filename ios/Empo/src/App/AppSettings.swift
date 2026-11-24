@@ -145,7 +145,7 @@ enum AppTheme: String, CaseIterable {
 
 /// Where a game runs: in the app, or in a game process of its own
 /// (`GameProcessHost`). See ios/Empo/docs/multi-session.md.
-enum GameRunner: String {
+enum GameRunner: String, Codable {
     case app
     case gameProcess
 }

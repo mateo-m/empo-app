@@ -245,6 +245,9 @@ class AppState {
     }
 
     func consumeCrashRecovery() {
+        if let ended = session.consumeBackgroundEnd() {
+            ErrorReports.backgroundEnd(ended, endedProcess: .empo, game: reportedGame)
+        }
         if let message = session.consumeCrashRecovery() {
             ErrorReports.gameCrash(game: reportedGame, saveLoad: nil)
             shownError = ShownError(message: message)
@@ -379,6 +382,28 @@ class AppState {
         GameSaveWatch.shared.takeReading()
     }
 
+    /// Runs on `UIApplication.didEnterBackgroundNotification`. The
+    /// marker says at the next launch that Empo ended in the
+    /// background with this game open.
+    func writeBackgroundMarker() {
+        guard let container = activeSessionGame?.container, let state = backgroundSessionState else { return }
+        session.writeBackgroundMarker(state: state, for: container)
+    }
+
+    func removeBackgroundMarker() {
+        guard let container = activeSessionGame?.container else { return }
+        session.removeBackgroundMarker(for: container)
+    }
+
+    private var backgroundSessionState: BackgroundSession.State? {
+        switch phase {
+        case .loading: .loading
+        case .playing: .playing
+        case .ended: nil
+        case nil: PauseManager.shared.pausedGame != nil ? .paused : nil
+        }
+    }
+
     /// Restarts the session timer after the app returns from the
     /// background. A paused game has no timer.
     func resumeSessionTimingAfterBackground() {
@@ -461,6 +486,10 @@ extension AppState: EngineSessionCoordinatorDelegate {
         guard resumeTask != nil else { return killPausedGame() }
         session.killSession(of: selectedGame)
         clearEndedGame()
+    }
+
+    func coordinatorGameEndedInBackground(_ session: BackgroundSession) {
+        ErrorReports.backgroundEnd(session, endedProcess: .game, game: reportedGame)
     }
 
     func coordinatorGameRectDidChange(_ rect: CGRect) {

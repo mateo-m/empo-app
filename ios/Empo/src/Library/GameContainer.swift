@@ -33,6 +33,9 @@ import GameProbe
 ///   │                          marker written by pokemon_input.rb)
 ///   │                        - .session-active (crash-detection
 ///   │                          marker, present while a session runs)
+///   │                        - .background-session (present while
+///   │                          Empo is in the background with the
+///   │                          game open)
 ///   ├── Logs/              Per-game session logs:
 ///   │                        - session-history.log (chronological
 ///   │                          list of session timestamps for this
@@ -117,6 +120,10 @@ struct GameContainer: Equatable, Hashable {
 
     var sessionActiveMarkerURL: URL {
         empoStateURL.appendingPathComponent(".session-active")
+    }
+
+    var backgroundSessionMarkerURL: URL {
+        empoStateURL.appendingPathComponent(".background-session")
     }
 
     var sessionHistoryURL: URL {
