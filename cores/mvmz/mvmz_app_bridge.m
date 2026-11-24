@@ -37,6 +37,7 @@ typedef struct {
 
 static Callback gFrameRendered;
 static Callback gEngineTerminated;
+static Callback gErrorMessage;
 static Callback gGameRectChanged;
 static Callback gInfoMessage;
 static Callback gPaused;
@@ -244,6 +245,12 @@ static void gameExited(int clean, void *userdata) {
     terminate(clean);
 }
 
+static void gameError(const char *message, void *userdata) {
+    if (gErrorMessage.fn) {
+        ((gamecore_ErrorMessageCallback)gErrorMessage.fn)(message, gErrorMessage.userdata);
+    }
+}
+
 static void gameAlert(const char *message, void *userdata) {
     if (gInfoMessage.fn) {
         ((gamecore_InfoMessageCallback)gInfoMessage.fn)(message, gInfoMessage.userdata);
@@ -293,6 +300,7 @@ int gamecore_run_app(int argc, char **argv) {
     mvmz_set_frame_callback(frameRendered, NULL);
     mvmz_set_size_callback(gameSizeChanged, NULL);
     mvmz_set_exit_callback(gameExited, NULL);
+    mvmz_set_error_callback(gameError, NULL);
     mvmz_set_alert_callback(gameAlert, NULL);
     mvmz_set_log_callback(coreLog, NULL);
     // The launcher passes Games/<name>/Game, and <name> is the game's identity.
@@ -355,8 +363,8 @@ void gamecore_setGameRectChangedCallback(gamecore_GameRectChangedCallback cb, vo
     gGameRectChanged = (Callback){(void *)cb, userdata};
 }
 
-// A web game has no engine error or text input mode to report.
 void gamecore_setErrorMessageCallback(gamecore_ErrorMessageCallback cb, void *userdata) {
+    gErrorMessage = (Callback){(void *)cb, userdata};
 }
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata) {
@@ -374,6 +382,7 @@ void gamecore_setResumedCallback(gamecore_ResumedCallback cb, void *userdata) {
     gResumed = (Callback){(void *)cb, userdata};
 }
 
+// A web game has no text input mode to report.
 void gamecore_setTextInputModeCallback(gamecore_TextInputModeCallback cb, void *userdata) {
 }
 
