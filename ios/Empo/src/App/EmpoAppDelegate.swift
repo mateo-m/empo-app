@@ -1,4 +1,5 @@
 import BackgroundTasks
+import MetricKit
 import UIKit
 
 /// Three things need an app delegate and reach no other way.
@@ -18,6 +19,10 @@ final class EmpoAppDelegate: UIResponder, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         ErrorReports.apply(enabled: AppSettings.shared.errorReports)
+        // Under LiveContainer, the exit counts also hold the other apps.
+        if !AppInfo.runsInLiveContainer {
+            MXMetricManager.shared.add(BackgroundExitReports.shared)
+        }
         BackupTaskScheduler.register()
         BackupNotifier.start()
         BackupScheduler.shared.start()

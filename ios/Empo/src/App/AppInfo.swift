@@ -34,4 +34,7 @@ enum AppInfo {
     static let build: String = {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
     }()
+
+    /// LiveContainer runs other apps inside its own app.
+    static let runsInLiveContainer = ProcessInfo.processInfo.environment["LC_HOME_PATH"] != nil
 }

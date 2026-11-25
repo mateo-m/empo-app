@@ -2,7 +2,7 @@ Empo runs on your iPhone, iPad, or Mac. There is no Empo account. The one Empo
 server, `api.empo.mateo.sh`, takes part only when you sign in with Patreon for
 Empo Plus.
 
-Last update: 19 November 2026.
+Last update: 25 November 2026.
 
 ## What Empo collects
 
@@ -10,10 +10,14 @@ Only error reports. Empo has no analytics and no advertising.
 
 When a game shows an error or crashes, Empo sends an error
 report to Sentry, the service that collects these reports for me. Empo also
-sends a report when it repairs a broken value in a save file. A report holds:
+sends a report when it repairs a broken value in a save file, and when a game
+closed while Empo was in the background. A report holds:
 
-- The error message, the fact that the game crashed, or the type of value that
-  Empo repaired.
+- The error message, the fact that the game crashed, the type of value that
+  Empo repaired, or the fact that the game closed in the background.
+- For a close in the background: the game engine, whether the game ran in its
+  own process, whether Empo or only the game closed, and whether the game was
+  loading, running, or paused.
 - Whether the game loaded a save in that play session, and how many seconds ago.
 - The name of the game, and the end of the game's log for that play session,
   when **Debug logs** is on. The log holds what the game engine wrote, such as
@@ -26,6 +30,10 @@ When Empo itself crashes, iOS or macOS gives Empo a crash report at a later
 launch, and Empo sends it to Sentry too. It holds the type of the crash, the
 list of the functions that ran in Empo at that time, the version of Empo, and
 details of the device.
+
+Once a day, iOS tells Empo how many times it closed Empo in the background. When
+iOS closed Empo to free memory, Empo sends these counts to Sentry, with the
+version of Empo and details of the device.
 
 A report holds no save files, no name, and no account. Sentry sees the IP
 address that a report comes from, and Empo does not ask Sentry to store it.

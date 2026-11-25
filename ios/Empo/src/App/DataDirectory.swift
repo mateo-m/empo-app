@@ -79,7 +79,7 @@ enum DataDirectory {
     static let appGroupURL: URL? = {
         // LiveContainer gives the app a made-up folder for any group
         // name, which the game process and the Files app cannot open.
-        guard ProcessInfo.processInfo.environment["LC_HOME_PATH"] == nil else { return nil }
+        guard !AppInfo.runsInLiveContainer else { return nil }
         let info =
             Bundle.main.builtInPlugInsURL
             .flatMap { Bundle(url: $0.appendingPathComponent("FilesProvider.appex")) }?

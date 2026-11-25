@@ -178,8 +178,50 @@ enum ErrorReports {
             saveLoad: saveLoad)
     }
 
+    /// A game that was open when Empo went to the background ended
+    /// there: iOS, the player, or a crash ended it. A close from the app
+    /// switcher can come with no background event, and then it does not
+    /// count here.
+    static func backgroundEnd(
+        _ session: BackgroundSession, endedProcess: BackgroundSession.EndedProcess, game: Game?
+    ) {
+        send(
+            "The game ended while Empo was in the background.", level: .warning,
+            fingerprint: ["background-end", session.core], game: game, saveLoad: nil,
+            tags: [
+                "core": session.core, "runner": session.runner.rawValue, "game_state": session.state.rawValue,
+                "ended_process": endedProcess.rawValue,
+            ])
+    }
+
+    /// Apple's count of the times Empo exited in the background in one
+    /// day. A report goes only for a day with a memory end, which comes
+    /// from iOS. Apple says that a close from the app switcher is a
+    /// normal exit (WWDC20 "Why is my app getting killed?").
+    static func backgroundExits(memoryLimit: Int, memoryPressure: Int, normal: Int) {
+        guard
+            let tags = backgroundExitTags(
+                memoryLimit: memoryLimit, memoryPressure: memoryPressure, normal: normal)
+        else { return }
+        send(
+            "iOS ended Empo in the background to free memory.", level: .warning,
+            fingerprint: ["background-memory-exits"], game: nil, saveLoad: nil, tags: tags)
+    }
+
+    static func backgroundExitTags(
+        memoryLimit: Int, memoryPressure: Int, normal: Int
+    ) -> [String: String]? {
+        guard memoryLimit + memoryPressure > 0 else { return nil }
+        return [
+            "memory_limit_exits": String(memoryLimit),
+            "memory_pressure_exits": String(memoryPressure),
+            "normal_exits": String(normal),
+        ]
+    }
+
     private static func send(
-        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?
+        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?,
+        tags: [String: String] = [:]
     ) {
         guard SentrySDK.isEnabled else { return }
         let event = Event(level: level)
@@ -188,6 +230,7 @@ enum ErrorReports {
         let log = game.flatMap { logTail(of: $0.log) }
         let now = ContinuousClock.now
         SentrySDK.capture(event: event) { scope in
+            scope.setTags(tags)
             if let game {
                 scope.setTag(value: game.title, key: "game")
             }

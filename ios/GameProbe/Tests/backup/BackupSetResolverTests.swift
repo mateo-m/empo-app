@@ -112,6 +112,15 @@ final class BackupSetResolverTests: XCTestCase {
         }
     }
 
+    func testTheSessionMarkersStayOutOfBothModes() {
+        for mode in BackupMode.allCases {
+            let paths = paths(resolve(mode: mode))
+            XCTAssertFalse(paths.contains("EmpoState/.session-active"))
+            XCTAssertFalse(paths.contains("EmpoState/.background-session"))
+            XCTAssertTrue(paths.contains("EmpoState/backup.json"))
+        }
+    }
+
     func testADisplacedCopyStaysOutOfBothModes() {
         // The file carries the Marshal magic, so the classifier
         // would take it. Only the marker rule keeps it out, and

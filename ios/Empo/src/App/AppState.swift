@@ -245,6 +245,9 @@ class AppState {
     }
 
     func consumeCrashRecovery() {
+        if let ended = session.consumeBackgroundEnd() {
+            ErrorReports.backgroundEnd(ended, endedProcess: .empo, game: reportedGame)
+        }
         if let message = session.consumeCrashRecovery() {
             ErrorReports.gameCrash(game: reportedGame, saveLoad: nil)
             shownError = ShownError(message: message)
@@ -379,6 +382,35 @@ class AppState {
         GameSaveWatch.shared.takeReading()
     }
 
+    /// Runs on `UIApplication.didEnterBackgroundNotification`. The
+    /// marker says at the next launch that Empo ended in the
+    /// background with this game open.
+    func writeBackgroundMarker() {
+        guard let container = activeSessionGame?.container,
+            let state = Self.backgroundSessionState(
+                phase: phase, resuming: resumeTask != nil, paused: PauseManager.shared.pausedGame != nil)
+        else { return }
+        session.writeBackgroundMarker(state: state, for: container)
+    }
+
+    func removeBackgroundMarker() {
+        guard let container = activeSessionGame?.container else { return }
+        session.removeBackgroundMarker(for: container)
+    }
+
+    /// `resuming`: `resumePausedGame` already resumed the engine, and
+    /// `phase` becomes `.playing` after the zoom animation.
+    static func backgroundSessionState(
+        phase: GamePhase?, resuming: Bool, paused: Bool
+    ) -> BackgroundSession.State? {
+        switch phase {
+        case .loading: .loading
+        case .playing: .playing
+        case .ended: nil
+        case nil: resuming ? .playing : paused ? .paused : nil
+        }
+    }
+
     /// Restarts the session timer after the app returns from the
     /// background. A paused game has no timer.
     func resumeSessionTimingAfterBackground() {
@@ -418,11 +450,11 @@ extension AppState: EngineSessionCoordinatorDelegate {
         }
     }
 
-    func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool) {
+    func coordinatorEngineTerminatedUnexpectedly(cleanExit: Bool, reportedInBackground: Bool) {
         // We intentionally do NOT set phase = nil here. If phase
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
-        if !cleanExit, !sessionShowedError {
+        if !cleanExit, !sessionShowedError, !reportedInBackground {
             ErrorReports.gameCrash(game: reportedGame, saveLoad: saveLoad)
         }
         phase = .ended(clean: cleanExit, started: phase == .playing)
@@ -461,6 +493,10 @@ extension AppState: EngineSessionCoordinatorDelegate {
         guard resumeTask != nil else { return killPausedGame() }
         session.killSession(of: selectedGame)
         clearEndedGame()
+    }
+
+    func coordinatorGameEndedInBackground(_ session: BackgroundSession) {
+        ErrorReports.backgroundEnd(session, endedProcess: .game, game: reportedGame)
     }
 
     func coordinatorGameRectDidChange(_ rect: CGRect) {

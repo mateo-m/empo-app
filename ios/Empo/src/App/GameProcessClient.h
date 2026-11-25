@@ -47,6 +47,10 @@ void EmpoGameProcessSend(void (^call)(id<EmpoGameProcess> process));
 // status. 0 when no status came yet.
 + (uint64_t)memoryFootprint;
 
+// Runs `answered` on any thread when the process of the session answers.
+// A process that went away never answers.
++ (void)whenTheProcessAnswers:(void (^)(void))answered;
+
 // The process of the session went away, or never started. A session
 // that did not end reports it as a game that stopped.
 + (void)processLost;

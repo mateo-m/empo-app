@@ -24,9 +24,23 @@ final class CrashTracker {
     /// checks after we handle the alert do not re-trigger.
     private(set) var pendingCrashRecovery: Bool
 
+    /// The session that was open when Empo went to the background and
+    /// did not come back: iOS or the player ended Empo there.
+    private var backgroundEnd: BackgroundSession?
+
     init() {
         pendingCrashRecovery = false
         for container in GameContainer.discover() {
+            let backgroundURL = container.backgroundSessionMarkerURL
+            // An update also ends Empo in the background.
+            if let session = Self.readBackgroundMarker(at: backgroundURL),
+                Self.isMarkerFromCurrentInstall(at: backgroundURL)
+            {
+                backgroundEnd = session
+            } else {
+                try? FileManager.default.removeItem(at: backgroundURL)
+            }
+
             let url = container.sessionActiveMarkerURL
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
             if Self.isMarkerFromCurrentInstall(at: url) {
@@ -77,6 +91,42 @@ final class CrashTracker {
 
     func removeMarker(for container: GameContainer) {
         try? FileManager.default.removeItem(at: container.sessionActiveMarkerURL)
+    }
+
+    /// Returns the session once, and deletes the markers, so that no
+    /// later call or launch reports it again.
+    func consumeBackgroundEnd() -> BackgroundSession? {
+        guard let backgroundEnd else { return nil }
+        self.backgroundEnd = nil
+        for container in GameContainer.discover() {
+            removeBackgroundMarker(for: container)
+        }
+        return backgroundEnd
+    }
+
+    func writeBackgroundMarker(_ session: BackgroundSession, for container: GameContainer) {
+        container.ensureEmpoStateDirectory()
+        FileManager.default.createFile(
+            atPath: container.backgroundSessionMarkerURL.path,
+            contents: try? JSONEncoder().encode(session)
+        )
+    }
+
+    func removeBackgroundMarker(for container: GameContainer) {
+        try? FileManager.default.removeItem(at: container.backgroundSessionMarkerURL)
+    }
+
+    /// Returns the marker of a game that is in the background, and deletes it.
+    func takeBackgroundMarker(for container: GameContainer) -> BackgroundSession? {
+        let url = container.backgroundSessionMarkerURL
+        defer { try? FileManager.default.removeItem(at: url) }
+        return Self.readBackgroundMarker(at: url)
+    }
+
+    private static func readBackgroundMarker(at url: URL) -> BackgroundSession? {
+        FileManager.default.contents(atPath: url.path).flatMap {
+            try? JSONDecoder().decode(BackgroundSession.self, from: $0)
+        }
     }
 
     /// Compare the marker's mtime with the executable's bundle

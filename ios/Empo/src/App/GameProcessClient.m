@@ -488,6 +488,12 @@ static xpc_object_t lentMemory(void) {
     return [statusValue(EmpoGameProcessStatusMemoryFootprint, NSNumber.class) unsignedLongLongValue];
 }
 
++ (void)whenTheProcessAnswers:(void (^)(void))answered {
+    EmpoGameProcessSend(^(id<EmpoGameProcess> process) {
+        [process fetchStatus:^(NSDictionary<NSString *, id> *status) { answered(); }];
+    });
+}
+
 + (void)processLost {
     void *userdata = NULL;
     os_unfair_lock_lock(&gLock);
