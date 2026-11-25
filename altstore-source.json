@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.12.1",
+          "buildVersion": "903",
+          "date": "2026-11-25",
+          "localizedDescription": "New\n• Fill the closed iPhone Duo screen and put the toolbar in the top left corner\n• Report games that end while Empo is in the background\n• Write the frame times to the debug log\n\nFixed\n• Read a keyword parameter as modern ruby grammar\n• Read a prepend call as a ruby 1.9 call\n• Read the scripts inside encrypted rgss archives\n• Keep the Japanese and Chinese file names of a zip made on Windows\n• Show a 40 fps game evenly on a 120 Hz iPhone\n• Show the script error that stops a game at boot\n• Convert text in the Win32API stand-ins on Ruby 1.8\n• Open http and https links with System.launch\n• Add the Essentials screen border to the full-screen size\n• Run a frozen screen at the full frame rate\n• Run LonaRPG on Ruby 1.9\n• Let LonaRPG start a new game\n• Log the frame rate only when it changes\n• Split only the .rb files of the Data/Scripts loader\n• Read a clear pixel without NaN in high-res mode\n• Skip a patch folder that is missing\n• End the game only when the first load fails\n• Report a script error that stops the game before its first frame\n• Start the game again from its resume point when iOS stops the web content process\n• Load the gems that a game ships, and build bigdecimal\n\nFaster\n• Read game files through a buffer\n• Give the game thread a frame deadline so that iOS runs it on the fast cores\n• Send the texts of one frame to a bitmap together\n\nOther changes\n• Pass the purchase tests on the first run on a new simulator\n• Update the engine and PSDK pins\n• Update the core and ANGLE pins",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.12.1/Empo-ios.ipa",
+          "size": 102053442,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "0.12.0",
           "buildVersion": "885",
           "date": "2026-11-19",
