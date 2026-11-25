@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.2 - 2026-11-25
+
+### Bug Fixes
+
+- Keep the key repeat delay in real time under fast-forward (mateo-m/mkxp-z-apple-mobile#117) ([`e1fe243`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e1fe243d91d5f5a88a109b98f24cb846793c8f35))
+- Start a GC after each 256 MB of new bitmap pixels (mateo-m/mkxp-z-apple-mobile#116) ([`4bf6313`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4bf6313ff09aca69649f57079a24768c7a0869f6))
+
+### Other
+
+- Update the engine pin to v28 (#323) ([`aace888`](https://github.com/mateo-m/empo-app/commit/aace88827705320237f50cab017c7ddd827e2401))
+
 ## 0.12.1 - 2026-11-25
 
 ### Bug Fixes
