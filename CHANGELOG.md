@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.12.1 - 2026-11-25
+
+### Bug Fixes
+
+- Read a keyword parameter as modern ruby grammar (#310) ([`ee3d678`](https://github.com/mateo-m/empo-app/commit/ee3d678ec74971523090e49fe07966ad1b77bb52))
+- Read a prepend call as a ruby 1.9 call (#308) ([`677d9e9`](https://github.com/mateo-m/empo-app/commit/677d9e98186d4ecf57668aacacfb3ecd802717b6))
+- Read the scripts inside encrypted rgss archives (#309) ([`692cea0`](https://github.com/mateo-m/empo-app/commit/692cea0309b2fd1fbf0be07ccbadc02a3e33dba3))
+- Keep the Japanese and Chinese file names of a zip made on Windows (#311) ([`ba141df`](https://github.com/mateo-m/empo-app/commit/ba141df3d20f099d02c4b697409d8e02b355237b))
+- Show a 40 fps game evenly on a 120 Hz iPhone (#316) ([`3b862cb`](https://github.com/mateo-m/empo-app/commit/3b862cbeb9720e2f8664ba42ced22faab575598a))
+- Show the script error that stops a game at boot (#317) ([`3af4123`](https://github.com/mateo-m/empo-app/commit/3af4123243e6e7efea61e51db3268a3af4c89d3d))
+- Convert text in the Win32API stand-ins on Ruby 1.8 (mateo-m/mkxp-z-apple-mobile#100) ([`d84c788`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d84c7881bf372a57dd56eb068503c175c0f5ae30))
+- Open http and https links with System.launch (mateo-m/mkxp-z-apple-mobile#101) ([`d2d1101`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/d2d110108dab92952a3cf51c09baa96993c65313))
+- Add the Essentials screen border to the full-screen size (mateo-m/mkxp-z-apple-mobile#102) ([`34b5e80`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/34b5e80104c52380a9d2e973156f3188b36fa0e5))
+- Run a frozen screen at the full frame rate (mateo-m/mkxp-z-apple-mobile#103) ([`5e94739`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/5e947390e2ce93943062d691e1265e1ca01cc545))
+- Run LonaRPG on Ruby 1.9 (mateo-m/mkxp-z-apple-mobile#109) ([`04f1e46`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/04f1e46d4e1e2ffce511d96cf1f00a4c9dac8429))
+- Let LonaRPG start a new game (mateo-m/mkxp-z-apple-mobile#110) ([`026eb09`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/026eb097856dfe831b60dc5e5e350b3cb8cb009c))
+- Log the frame rate only when it changes (mateo-m/mkxp-z-apple-mobile#115) ([`45b454b`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/45b454b5225b2a0da35fd4cf4051df93dc7d9be0))
+- Split only the .rb files of the Data/Scripts loader (mateo-m/mkxp-z-apple-mobile#114) ([`cb79718`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/cb7971857e085b6e111ed809078269f1e62b6654))
+- Read a clear pixel without NaN in high-res mode (mateo-m/mkxp-z-apple-mobile#113) ([`9142d77`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/9142d7720d61f06ac6fd3f2c5363487cd99b8860))
+- Skip a patch folder that is missing (mateo-m/mkxp-z-apple-mobile#112) ([`475c36d`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/475c36d800dda57e02d5eacf3ba2931c299255a9))
+- End the game only when the first load fails (mateo-m/mvmz-apple-mobile#4) ([`a585f3d`](https://github.com/mateo-m/mvmz-apple-mobile/commit/a585f3d7a2c7f2acb40735f4c3b221e0b5c2db97))
+- Report a script error that stops the game before its first frame (mateo-m/mvmz-apple-mobile#5) ([`b9bad68`](https://github.com/mateo-m/mvmz-apple-mobile/commit/b9bad68b7108542d4672f3e03820c4e46f25d3a1))
+- Start the game again from its resume point when iOS stops the web content process (mateo-m/mvmz-apple-mobile#6) ([`8475e76`](https://github.com/mateo-m/mvmz-apple-mobile/commit/8475e76c8631d085950eaf1fcac4d17d7f1439f7))
+- Load the gems that a game ships, and build bigdecimal (mateo-m/psdk-apple-mobile#9) ([`4407237`](https://github.com/mateo-m/psdk-apple-mobile/commit/440723748589d2fa03c560355addf52c134e2598))
+
+### Features
+
+- Fill the closed iPhone Duo screen and put the toolbar in the top left corner (#315) ([`5383116`](https://github.com/mateo-m/empo-app/commit/5383116b78f90c9362e647622bdc1de78f1d46e5))
+- Report games that end while Empo is in the background (#320) ([`06ade18`](https://github.com/mateo-m/empo-app/commit/06ade18d0ad755566875a6725727b5a356be9730))
+- Write the frame times to the debug log (mateo-m/mkxp-z-apple-mobile#104) ([`9eb0b60`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/9eb0b601d7b0238f1f63035359811d99c8d29b56))
+
+### Other
+
+- Pass the purchase tests on the first run on a new simulator (#305) ([`350fbe8`](https://github.com/mateo-m/empo-app/commit/350fbe82deafa9c2b55418eecb2b214768f95094))
+- Update the engine and PSDK pins (#313) ([`2ca3726`](https://github.com/mateo-m/empo-app/commit/2ca37267b0e7ff174de76221cce49fc650db1b37))
+- Update the core and ANGLE pins (#318) ([`bfa6215`](https://github.com/mateo-m/empo-app/commit/bfa6215cf23e91d3441b2ad6d7ac56de967a7c84))
+- Update the core and ANGLE pins (#319) ([`cb01b24`](https://github.com/mateo-m/empo-app/commit/cb01b248d2529833f797dce8a5f191e40a727475))
+- Update the core and ANGLE pins (#321) ([`5691a50`](https://github.com/mateo-m/empo-app/commit/5691a501c3ffcd5d5e0b01b88fb532ee85a40c53))
+
+### Performance
+
+- Read game files through a buffer (mateo-m/mkxp-z-apple-mobile#105) ([`41244a3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/41244a3d33aeef9308665841eeea05a16bac0817))
+- Give the game thread a frame deadline so that iOS runs it on the fast cores (mateo-m/mkxp-z-apple-mobile#108) ([`aa63290`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/aa63290a5827cc1d7215b09fa8354e5a825f7710))
+- Send the texts of one frame to a bitmap together (mateo-m/mkxp-z-apple-mobile#111) ([`9e995b9`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/9e995b9700848abe361a4dcd2c6b9c222b58c6e0))
+
 ## 0.12.0 - 2026-11-19
 
 ### Features
