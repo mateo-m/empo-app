@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.12.3",
+          "buildVersion": "910",
+          "date": "2026-11-26",
+          "localizedDescription": "Fixed\n• Read keyword parameters over several lines and skip a huge archived Scripts file\n• Repeat a held key by the real time it is held\n• End the frame work interval before a pause or a dialog wait\n\nOther changes\n• Update the engine pin to v29",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.12.3/Empo-ios.ipa",
+          "size": 102053467,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "0.12.2",
           "buildVersion": "906",
           "date": "2026-11-26",
