@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.4 - 2026-11-26
+
+### Bug Fixes
+
+- Count a press once when a game reads repeat? before trigger? (mateo-m/mkxp-z-apple-mobile#120) ([`67c5455`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/67c5455fc5f024f77d9a77c07b1724ee050b88fa))
+
+### Other
+
+- Update the core and ANGLE pins (#327) ([`ec73ba0`](https://github.com/mateo-m/empo-app/commit/ec73ba0637ccb0ede19f605a69cfca5f4fa0a817))
+
 ## 0.12.3 - 2026-11-26
 
 ### Bug Fixes
