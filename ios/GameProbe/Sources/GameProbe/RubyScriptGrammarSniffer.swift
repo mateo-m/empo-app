@@ -358,10 +358,6 @@ public enum RubyScriptGrammarSniffer {
         #"\{\s*[^}]*\b_[1-9]\b"#,
         // Keyword-arg shorthand (3.1+): foo(x:, y:)
         #"\b\w+:\s*[,)]"#,
-        // Keyword parameter (2.0+): `def f(a, b = [1], c: 1)`. A label
-        // inside a bracket of a default value (`g(k: 1)`, `[k: 1]`) is a
-        // 1.9 hash.
-        #"(?<![.:\w])def[ \t]+[\w.?!]+[ \t]*\((?:(?:[^{(\[)\n]|\{[^{}()\[\]\n]*\}|\([^{}()\[\]\n]*\)|\[[^{}()\[\]\n]*\])*,)?[ \t]*\w+:(?!:)"#,
         // Hash#except (3.0+): h.except(:k)
         #"\.except\s*\("#,
         // Array#filter_map (2.7+): arr.filter_map { ... }
@@ -388,7 +384,7 @@ public enum RubyScriptGrammarSniffer {
         let scripts = scripts.map { $0.replacingOccurrences(of: "\r\n", with: "\n") }
         // Each script ends its own heredocs.
         let code = scripts.map(codeOnly).joined(separator: "\n")
-        var hits = scripts.filter(startsFrozen).count
+        var hits = scripts.filter(startsFrozen).count + keywordParameterCount(in: code)
         let range = NSRange(code.startIndex..., in: code)
         for pattern in modernTokens {
             if hits >= modernThreshold { return .modern }
@@ -403,6 +399,63 @@ public enum RubyScriptGrammarSniffer {
         if hits >= modernThreshold { return .modern }
         if blockParameterDefault?.firstMatch(in: code, range: range) != nil { return .mixed }
         return scripts.contains(where: callsRuby19Methods) ? .mixed : .legacy
+    }
+
+    private static let defParameterList = try? NSRegularExpression(
+        pattern: #"(?<![.:\w])def[ \t]+[\w.?!]+[ \t]*\("#)
+
+    /// The `def`s with a keyword parameter (2.0+), as in
+    /// `def f(a, b = [[1]],\n c: 1)`. A label inside a bracket of a
+    /// default value (`g(k: 1)`, `[k: 1]`) is a 1.9 hash.
+    private static func keywordParameterCount(in code: String) -> Int {
+        guard let regex = defParameterList else { return 0 }
+        let units = Array(code.utf16)
+        // Ruby takes each non-ASCII character as a letter of a name.
+        func isWord(_ unit: UInt16) -> Bool {
+            (0x30...0x39).contains(unit) || (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit)
+                || unit == 0x5F || unit >= 0x80
+        }
+        func isLabel(at start: Int) -> Bool {
+            var end = start
+            while end < units.count, isWord(units[end]) { end += 1 }
+            return end > start && end < units.count && units[end] == 0x3A
+                && (end + 1 == units.count || units[end + 1] != 0x3A)
+        }
+        var count = 0
+        for match in regex.matches(in: code, range: NSRange(location: 0, length: units.count)) {
+            var depth = 0
+            var atParameterStart = true
+            var index = match.range.upperBound
+            scan: while index < units.count {
+                switch units[index] {
+                case 0x28, 0x5B, 0x7B:  // ( [ {
+                    depth += 1
+                    atParameterStart = false
+                case 0x29, 0x5D, 0x7D:  // ) ] }
+                    if depth > 0 {
+                        depth -= 1
+                    } else if units[index] == 0x29 {
+                        break scan
+                    }
+                // Else it is the `}` of a `#{` in a string, and
+                // `codeOnly` keeps only that `}`.
+                case 0x2C:  // ,
+                    if depth == 0 { atParameterStart = true }
+                // `codeOnly` keeps the `#` of a comment and the `\` of a
+                // line continuation.
+                case 0x20, 0x09, 0x0A, 0x0D, 0x23, 0x5C:
+                    break
+                default:
+                    if atParameterStart && depth == 0 && isLabel(at: index) {
+                        count += 1
+                        break scan
+                    }
+                    atParameterStart = false
+                }
+                index += 1
+            }
+        }
+        return count
     }
 
     /// A block parameter with a default value (1.9+), as in

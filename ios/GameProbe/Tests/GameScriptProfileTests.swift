@@ -122,6 +122,148 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
     }
 
+    func testKeywordParametersAfterNestedDefaultsOrALineBreakRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        def grid(cells = [[1]], wrap: false)
+        end
+        def draw(x,
+                 enabled: true)
+        end
+        def place(at = {x: [1]},
+                  snap: false)
+        end
+
+        """.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testKeywordParametersAfterDeepDefaultsRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        def deep(cells = [[[1]]], wrap: false)
+        end
+        def deeper(at = {x: [[1]]}, snap: false)
+        end
+        def call(value = f(g(h(1))), enabled: true)
+        end
+
+        """.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testKeywordParametersWithNonASCIINamesRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        def show(text, état: nil)
+        end
+        def frame(x, 幅: 1)
+        end
+        def draw(x, größe: 2)
+        end
+
+        """.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testKeywordParametersAfterACommentRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try """
+        def draw(x, # position
+                 enabled: true)
+        end
+        def show( # text first
+                 text: nil)
+        end
+        def move(x, y, # (a, b)
+                 speed: 1)
+        end
+
+        """.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testKeywordParametersAfterALineContinuationOrACRLFRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "def draw(x, \\\n enabled: true)\nend\ndef show(text,\r\n wrap: nil)\r\nend\r\ndef move(x, y,\r\n speed: 1)\nend\n"
+            .write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
+    func testKeywordParametersAfterAStringDefaultRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try #"""
+        def say(text = "Hi #{name}", wrap: true)
+        end
+        def tag(text = "#{a}, #{b}", bold: false)
+        end
+        def show(text = ")", size: 1)
+        end
+
+        """#.write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
     func testDefaultsThatLookLikeKeywordParametersStayLegacy() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(
@@ -545,6 +687,24 @@ final class GameScriptProfileTests: XCTestCase {
             let profile = GameScriptProfile.analyze(gameDirectory: dir)
             XCTAssertEqual(profile.grammar, .modern, archive)
             XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false), archive)
+        }
+    }
+
+    func testAScriptsFileOver32MBInAnEncryptedArchiveIsNotRead() throws {
+        let large = compiledScripts(["a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n"])
+            + Data(count: 32 * 1024 * 1024)
+        for (archive, version, scripts) in [("Game.rgssad", 1, "Scripts.rxdata"), ("Game.rgss3a", 3, "Scripts.rvdata2")] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try "[Game]\nScripts=Data\\\(scripts)\n".write(
+                to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+            try rgssArchive(version: version, files: [("Data\\\(scripts)", large)])
+                .write(to: dir.appendingPathComponent(archive))
+
+            XCTAssertNotEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern, archive)
         }
     }
 

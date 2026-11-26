@@ -104,10 +104,11 @@ enum Schema: String {
     case vxAceGuard = "vx-ace-guard"  // a 1.9 call under Zeus81's `vxace?` check does not count
     case keywordParameter = "keyword-parameter"  // a keyword parameter in a `def` is modern, the scan reads 16 MB of loose scripts
     case prependCall = "prepend-call"  // a `prepend` call is a 1.9+ call
-    case archivedScripts = "archived-scripts"  // current: the scan also reads the Scripts file in an encrypted archive
+    case archivedScripts = "archived-scripts"  // the scan also reads the Scripts file in an encrypted archive
+    case multilineKeywordParameter = "multiline-keyword-parameter"  // current: a keyword parameter after a nested default or a line break is modern
 }
 
-static let currentSchema: Schema = .archivedScripts
+static let currentSchema: Schema = .multilineKeywordParameter
 ```
 
 `MkxpProfile` stores the scan result, its schema string, and a digest of the files that the scan reads in `Metadata/mkxp-profile.json`. The digest holds the path, size, and modification date of each file that the scan reads (`GameScriptProfile.inputFiles`): the `.ini` files, the libraries, and the RGSS archives in the game folder, the `Scripts` file in the game folder or in `Data/`, `Data/PluginScripts.rxdata`, the `.fpk` archives in `Data/`, the `.rb` files in the loose script folders, `mkxp.json`, and the scripts that it names. Saves are not in it, so a save does not start a new scan. `MkxpProfile.load(for:)` scans again when the schema or the digest is different. The import and the settings reset always scan again, because an archive keeps the dates of its files. `GameScriptProfile` is the only entry point.

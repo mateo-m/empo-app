@@ -95,6 +95,9 @@ enum RGSSArchive {
         var offset: Int
 
         private static let maxNameLength = 512
+        /// The largest real Scripts file that we know is about 2 MB. A
+        /// broken size must not make the import copy a whole archive.
+        private static let maxFileSize = 32 * 1024 * 1024
 
         mutating func u32() -> UInt32? {
             guard data.count - offset >= 4 else { return nil }
@@ -125,7 +128,9 @@ enum RGSSArchive {
                 else { return nil }
                 let path = RGSSArchive.normalized(name.map { $0 ^ UInt8(truncatingIfNeeded: take()) })
                 guard let size = u32().map({ Int($0 ^ take()) }), let body = bytes(size) else { return nil }
-                if paths.contains(path) { return RGSSArchive.decrypt(body, key: key) }
+                if paths.contains(path) {
+                    return size <= Self.maxFileSize ? RGSSArchive.decrypt(body, key: key) : nil
+                }
             }
             return nil
         }
@@ -145,6 +150,7 @@ enum RGSSArchive {
                 let path = RGSSArchive.normalized(
                     name.enumerated().map { $1 ^ UInt8(truncatingIfNeeded: key >> (8 * UInt32($0 % 4))) })
                 guard paths.contains(path) else { continue }
+                guard size <= Self.maxFileSize else { return nil }
                 var body = Reader(data: data, offset: entryOffset)
                 return body.bytes(size).map { RGSSArchive.decrypt($0, key: dataKey) }
             }
