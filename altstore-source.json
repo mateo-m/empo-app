@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.12.2",
+          "buildVersion": "906",
+          "date": "2026-11-26",
+          "localizedDescription": "Fixed\n• Keep the key repeat delay in real time under fast-forward\n• Start a GC after each 256 MB of new bitmap pixels\n\nOther changes\n• Update the engine pin to v28",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.12.2/Empo-ios.ipa",
+          "size": 102053623,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "0.12.1",
           "buildVersion": "903",
           "date": "2026-11-25",
