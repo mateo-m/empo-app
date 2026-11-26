@@ -358,10 +358,10 @@ public enum RubyScriptGrammarSniffer {
         #"\{\s*[^}]*\b_[1-9]\b"#,
         // Keyword-arg shorthand (3.1+): foo(x:, y:)
         #"\b\w+:\s*[,)]"#,
-        // Keyword parameter (2.0+): `def f(a, b = [1], c: 1)`. A label
-        // inside a bracket of a default value (`g(k: 1)`, `[k: 1]`) is a
-        // 1.9 hash.
-        #"(?<![.:\w])def[ \t]+[\w.?!]+[ \t]*\((?:(?:[^{(\[)\n]|\{[^{}()\[\]\n]*\}|\([^{}()\[\]\n]*\)|\[[^{}()\[\]\n]*\])*,)?[ \t]*\w+:(?!:)"#,
+        // Keyword parameter (2.0+): `def f(a, b = [[1]], c: 1)`, also over
+        // several lines. A label inside a bracket of a default value
+        // (`g(k: 1)`, `[k: 1]`) is a 1.9 hash.
+        #"(?<![.:\w])def[ \t]+[\w.?!]+[ \t]*\((?:(?:[^{(\[)]|\{(?:[^{}()\[\]]|\{[^{}()\[\]]*\}|\([^{}()\[\]]*\)|\[[^{}()\[\]]*\])*\}|\((?:[^{}()\[\]]|\{[^{}()\[\]]*\}|\([^{}()\[\]]*\)|\[[^{}()\[\]]*\])*\)|\[(?:[^{}()\[\]]|\{[^{}()\[\]]*\}|\([^{}()\[\]]*\)|\[[^{}()\[\]]*\])*\])*,)?\s*\w+:(?!:)"#,
         // Hash#except (3.0+): h.except(:k)
         #"\.except\s*\("#,
         // Array#filter_map (2.7+): arr.filter_map { ... }

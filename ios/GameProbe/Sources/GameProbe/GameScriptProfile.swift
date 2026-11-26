@@ -57,9 +57,12 @@ public enum GameScriptProfile {
         /// The scan also reads the Scripts file inside an encrypted
         /// `.rgssad`, `.rgss2a`, or `.rgss3a` archive.
         case archivedScripts = "archived-scripts"
+        /// A keyword parameter after a nested default or a line break
+        /// reads as modern grammar.
+        case multilineKeywordParameter = "multiline-keyword-parameter"
     }
 
-    public static let currentSchema: Schema = .archivedScripts
+    public static let currentSchema: Schema = .multilineKeywordParameter
 
     /// The Ruby that runs the game. Only Ruby 3.1 has the syntax
     /// transform, so only Ruby 3.1 has a legacy or modern mode.
