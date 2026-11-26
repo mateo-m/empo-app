@@ -436,7 +436,7 @@ public enum RubyScriptGrammarSniffer {
                     depth -= 1
                 case 0x2C:  // ,
                     if depth == 0 { atParameterStart = true }
-                case 0x20, 0x09, 0x0A:
+                case 0x20, 0x09, 0x0A, 0x23:  // `codeOnly` keeps the `#` of a comment.
                     break
                 default:
                     if atParameterStart && depth == 0 && isLabel(at: index) {
