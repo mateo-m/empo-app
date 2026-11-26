@@ -432,8 +432,13 @@ public enum RubyScriptGrammarSniffer {
                     depth += 1
                     atParameterStart = false
                 case 0x29, 0x5D, 0x7D:  // ) ] }
-                    if depth == 0 { break scan }
-                    depth -= 1
+                    if depth > 0 {
+                        depth -= 1
+                    } else if units[index] == 0x29 {
+                        break scan
+                    }
+                // Else it is the `}` of a `#{` in a string, and
+                // `codeOnly` keeps only that `}`.
                 case 0x2C:  // ,
                     if depth == 0 { atParameterStart = true }
                 // `codeOnly` keeps the `#` of a comment and the `\` of a
