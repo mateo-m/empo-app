@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.12.3 - 2026-11-26
+
+### Bug Fixes
+
+- Read keyword parameters over several lines and skip a huge archived Scripts file (#324) ([`efe58a5`](https://github.com/mateo-m/empo-app/commit/efe58a5f9243ab5baa317d431911366185f0da7e))
+- Repeat a held key by the real time it is held (mateo-m/mkxp-z-apple-mobile#118) ([`257d85c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/257d85c6d8e04335923a90da22da2942a4095b30))
+- End the frame work interval before a pause or a dialog wait (mateo-m/mkxp-z-apple-mobile#119) ([`7bbfd6c`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/7bbfd6c8830b7c43e0296ad6f09f74f9bf690e3b))
+
+### Other
+
+- Update the engine pin to v29 (#326) ([`47a1286`](https://github.com/mateo-m/empo-app/commit/47a12866560e53372911e86caad0dc5b2f761c55))
+
 ## 0.12.2 - 2026-11-25
 
 ### Bug Fixes
