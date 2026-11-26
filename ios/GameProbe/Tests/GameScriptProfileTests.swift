@@ -223,6 +223,23 @@ final class GameScriptProfileTests: XCTestCase {
         XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
     }
 
+    func testKeywordParametersAfterALineContinuationOrACRLFRouteToModernRuby31() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Scripts"), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: dir.appendingPathComponent("Data"), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try Data().write(to: dir.appendingPathComponent("Data/Scripts.rxdata"))
+        try "def draw(x, \\\n enabled: true)\nend\ndef show(text,\r\n wrap: nil)\r\nend\r\ndef move(x, y,\r\n speed: 1)\nend\n"
+            .write(to: dir.appendingPathComponent("Scripts/Field.rb"), atomically: true, encoding: .utf8)
+
+        let profile = GameScriptProfile.analyze(gameDirectory: dir)
+        XCTAssertEqual(profile.grammar, .modern)
+        XCTAssertEqual(profile.ruby, .ruby31(convertLegacy: false))
+    }
+
     func testDefaultsThatLookLikeKeywordParametersStayLegacy() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(
