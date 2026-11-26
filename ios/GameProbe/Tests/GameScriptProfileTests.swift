@@ -548,6 +548,24 @@ final class GameScriptProfileTests: XCTestCase {
         }
     }
 
+    func testAScriptsFileOver32MBInAnEncryptedArchiveIsNotRead() throws {
+        let large = compiledScripts(["a = b&.c\n", "list.filter_map { |x| x }\n", "h.except(:k)\n"])
+            + Data(count: 32 * 1024 * 1024)
+        for (archive, version, scripts) in [("Game.rgssad", 1, "Scripts.rxdata"), ("Game.rgss3a", 3, "Scripts.rvdata2")] {
+            let dir = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+
+            try "[Game]\nScripts=Data\\\(scripts)\n".write(
+                to: dir.appendingPathComponent("Game.ini"), atomically: true, encoding: .utf8)
+            try rgssArchive(version: version, files: [("Data\\\(scripts)", large)])
+                .write(to: dir.appendingPathComponent(archive))
+
+            XCTAssertNotEqual(GameScriptProfile.analyze(gameDirectory: dir).grammar, .modern, archive)
+        }
+    }
+
     func testLegacyScriptsInAnEncryptedArchiveKeepTheArchiveRuby() throws {
         for (archive, version, scripts, ruby) in [
             ("Game.rgssad", 1, "Scripts.rxdata", GameScriptProfile.Ruby.ruby18), ("Game.rgss3a", 3, "Scripts.rvdata2", .ruby19),
