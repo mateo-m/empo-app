@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.12.4",
+          "buildVersion": "913",
+          "date": "2026-11-26",
+          "localizedDescription": "Fixed\n• Count a press once when a game reads repeat? before trigger?\n\nOther changes\n• Update the core and ANGLE pins",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.12.4/Empo-ios.ipa",
+          "size": 102053683,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "0.12.3",
           "buildVersion": "910",
           "date": "2026-11-26",
