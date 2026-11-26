@@ -410,9 +410,10 @@ public enum RubyScriptGrammarSniffer {
     private static func keywordParameterCount(in code: String) -> Int {
         guard let regex = defParameterList else { return 0 }
         let units = Array(code.utf16)
+        // Ruby takes each non-ASCII character as a letter of a name.
         func isWord(_ unit: UInt16) -> Bool {
             (0x30...0x39).contains(unit) || (0x41...0x5A).contains(unit) || (0x61...0x7A).contains(unit)
-                || unit == 0x5F
+                || unit == 0x5F || unit >= 0x80
         }
         func isLabel(at start: Int) -> Bool {
             var end = start
