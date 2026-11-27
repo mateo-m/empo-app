@@ -153,6 +153,7 @@ struct GameLoadingView: View {
             // frame and pan visibly when the button fades in.
             cancelButton
         }
+        .centeredOnScreen()
         .onAppear {
             appearedAt = .now
             withAnimation(.linear(duration: 20).repeatForever(autoreverses: true)) {

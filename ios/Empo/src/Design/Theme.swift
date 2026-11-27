@@ -142,6 +142,30 @@ extension View {
     func centeredMessageWidth() -> some View {
         containerRelativeFrame(.horizontal) { width, _ in width * 2 / 3 }
     }
+
+    /// The closed iPhone Duo insets only its sensor strip side, so the
+    /// content centers on the screen. It keeps the inset that both sides
+    /// share, such as the notch of a turned iPhone. The system draws only
+    /// at the strip's top, above the content.
+    func centeredOnScreen() -> some View {
+        modifier(CenteredOnScreen())
+    }
+}
+
+private struct CenteredOnScreen: ViewModifier {
+    @State private var sideInset: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, sideInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(.container, edges: .horizontal)
+            .onGeometryChange(
+                for: CGFloat.self,
+                of: { min($0.safeAreaInsets.leading, $0.safeAreaInsets.trailing) },
+                action: { sideInset = $0 }
+            )
+    }
 }
 
 /// Typography tokens for sites that don't fit a SwiftUI semantic
