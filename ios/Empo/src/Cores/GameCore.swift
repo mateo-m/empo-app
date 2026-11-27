@@ -55,6 +55,9 @@ protocol GameCore {
     /// library shows the name of its folder.
     var usesFolderName: Bool { get }
 
+    /// Runs on the unpacked game folder before the import moves it into
+    /// the library. The folders around it are still on disk.
+    func prepareImport(of root: URL) throws
     func didImport(_ container: GameContainer, from source: ImportSource, replacing: Bool)
     /// The JoiPlay archive types (the `type` of `manifest.json`) this
     /// core runs.
@@ -108,6 +111,7 @@ extension GameCore {
         title(at: container.gameURL) ?? (usesFolderName ? container.folderName : nil)
     }
 
+    func prepareImport(of root: URL) throws {}
     func didImport(_ container: GameContainer, from source: ImportSource, replacing: Bool) {}
     var joiPlayTypes: Set<String> { [] }
     var joiPlayGames: String? { nil }

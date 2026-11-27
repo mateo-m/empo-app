@@ -1361,6 +1361,7 @@ extension GameLibrary {
 
                     do {
                         try ImportSignpost.interval("move", id: sel.importID) {
+                            try core.prepareImport(of: gameRoot)
                             try fm.createDirectory(
                                 at: container.url,
                                 withIntermediateDirectories: true
