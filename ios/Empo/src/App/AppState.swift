@@ -359,9 +359,16 @@ class AppState {
     /// resumes, so a crash right after the alert still leaves a mark.
     func restoreCrashMarker() {
         guard phase == .loading || phase == .playing || resumeTask != nil, !alertHoldsGame, !engineHung,
-            let container = selectedGame?.container
+            !errorStoppedTheStart, let container = selectedGame?.container
         else { return }
         session.restoreCrashMarker(for: container)
+    }
+
+    /// The error already went out as a report. A core that fails before
+    /// its first frame can stay open with no end event (mkxp's
+    /// `EngineHost::init`), and the alert tells the player to close Empo.
+    private var errorStoppedTheStart: Bool {
+        sessionShowedError && !engineReady
     }
 
     /// The game waits while this is true. A player who closes Empo then
@@ -445,6 +452,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         if phase == .loading, !engineReady {
             Haptics.success()
             engineReady = true
+            restoreCrashMarker()
         } else if phase == .playing {
             PauseManager.shared.snapshotCanFade = true
         }
@@ -515,7 +523,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         sessionShowedError = true
         ErrorReports.gameError(message, game: reportedGame, saveLoad: saveLoad)
         shownError = ShownError(message: message)
-        if alertHoldsGame { clearCrashMarker() }
+        if alertHoldsGame || errorStoppedTheStart { clearCrashMarker() }
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
