@@ -1,5 +1,5 @@
 # The MV/MZ core release from github.com/mateo-m/mvmz-apple-mobile that
 # cores/mvmz/fetch.sh downloads. The release notes give the sha256.
-MVMZ_CORE_VERSION=v7
-MVMZ_CORE_SHA256=0ed155f938d1148ed48069414dce86fabc9c432d0f4f7bcb2372b8c6d7f54195
+MVMZ_CORE_VERSION=v8
+MVMZ_CORE_SHA256=c12405283e1f15608f2607fd2832fa51e86169f28660c0e3d25ad7f555f1bb57
 MVMZ_CORE_ASSET=mvmz-ios.tar.gz
