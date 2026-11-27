@@ -48,6 +48,7 @@ struct MvmzCore: GameCore {
             release.appendingPathComponent(main).standardizedFileURL.path
                 == root.appendingPathComponent("index.html").standardizedFileURL.path
         else { return }
+        GameContainer.normalizeImportedGamePermissions(at: root)
         let runtimeExtensions: Set<String> = ["exe", "dll", "pak", "bin", "dat"]
         let files = try fm.contentsOfDirectory(
             at: release, includingPropertiesForKeys: [.isRegularFileKey], options: .skipsHiddenFiles)

@@ -111,6 +111,7 @@ final class GameImportValidatorTests: XCTestCase {
         try fm.createDirectory(
             at: release.appendingPathComponent("locales", isDirectory: true),
             withIntermediateDirectories: true)
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: www.path)
 
         try XCTUnwrap(GameCores.core(forGameAt: www)).prepareImport(of: www)
 
