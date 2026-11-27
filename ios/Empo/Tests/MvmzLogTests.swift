@@ -37,10 +37,6 @@ final class MvmzLogTests: XCTestCase {
         let savedStderr = dup(STDERR_FILENO)
         dup2(ends[1], STDERR_FILENO)
         close(ends[1])
-        // NSLog skips stderr when this is set. Xcode sets it for the tests,
-        // and a phone has no Xcode.
-        let dtMode = getenv("OS_ACTIVITY_DT_MODE").map { String(cString: $0) }
-        unsetenv("OS_ACTIVITY_DT_MODE")
 
         let readEnd = ends[0]
         let drained = expectation(description: "stderr drained")
@@ -67,9 +63,6 @@ final class MvmzLogTests: XCTestCase {
 
         dup2(savedStderr, STDERR_FILENO)
         close(savedStderr)
-        if let dtMode {
-            setenv("OS_ACTIVITY_DT_MODE", dtMode, 1)
-        }
         wait(for: [drained], timeout: 10)
         close(readEnd)
 

@@ -72,11 +72,10 @@ static int gSnapshotW;
 static int gSnapshotH;
 
 static void logLine(NSString *line) {
-    // Not NSLog: without a debugger it also writes to stderr. Under
-    // LiveContainer, stderr can be a pipe that nothing reads, and a write to
-    // a full pipe stops the main thread until iOS ends the app.
-    os_log(OS_LOG_DEFAULT, "[mvmz] %{public}@", line);
-    // The app adds its own lines to the same file.
+    // Only the session log, not the system log: NSLog, and os_log under Xcode,
+    // also write to stderr. Under LiveContainer, stderr can be a pipe that
+    // nothing reads, and a write to a full pipe stops the main thread until
+    // iOS ends the app. The app adds its own lines to the same file.
     [gLog seekToEndOfFile];
     [gLog writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
 }
