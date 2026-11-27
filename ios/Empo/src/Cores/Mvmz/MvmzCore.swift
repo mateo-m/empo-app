@@ -35,6 +35,32 @@ struct MvmzCore: GameCore {
         return .skip
     }
 
+    /// NW.js runs a desktop MV release from the folder of its top
+    /// `package.json`, and a game can read files such as `lng.txt` from
+    /// there. The core runs the `www` folder, so those files go into it.
+    func prepareImport(of root: URL) throws {
+        let fm = FileManager.default
+        let release = root.deletingLastPathComponent()
+        guard
+            let data = try? Data(contentsOf: release.appendingPathComponent("package.json")),
+            let package = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let main = package["main"] as? String,
+            release.appendingPathComponent(main).standardizedFileURL.path
+                == root.appendingPathComponent("index.html").standardizedFileURL.path
+        else { return }
+        let runtimeExtensions: Set<String> = ["exe", "dll", "pak", "bin", "dat"]
+        let files = try fm.contentsOfDirectory(
+            at: release, includingPropertiesForKeys: [.isRegularFileKey], options: .skipsHiddenFiles)
+        for file in files where !runtimeExtensions.contains(file.pathExtension.lowercased()) {
+            let copy = root.appendingPathComponent(file.lastPathComponent)
+            guard
+                try file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true,
+                !fm.fileExists(atPath: copy.path)
+            else { continue }
+            try fm.copyItem(at: file, to: copy)
+        }
+    }
+
     func title(at root: URL) -> String? {
         MvmzGame.title(at: root)
     }

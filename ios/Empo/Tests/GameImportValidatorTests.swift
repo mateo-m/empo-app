@@ -98,6 +98,50 @@ final class GameImportValidatorTests: XCTestCase {
         XCTAssertNoThrow(try GameImportValidator.validate(picked))
     }
 
+    func testADesktopMVReleaseCopiesTheFilesNextToItsWwwFolder() throws {
+        let fm = FileManager.default
+        let release = scratch.appendingPathComponent("Release 3.0", isDirectory: true)
+        let www = try makeMVGame(at: release.appendingPathComponent("www", isDirectory: true))
+        try Data(#"{"main":"index.html"}"#.utf8).write(to: www.appendingPathComponent("package.json"))
+        try Data(#"{"main":"www/index.html"}"#.utf8).write(to: release.appendingPathComponent("package.json"))
+        try Data("en".utf8).write(to: release.appendingPathComponent("lng.txt"))
+        for runtimeFile in ["game.exe", "nw.dll", "resources.pak", "snapshot_blob.bin", "icudtl.dat"] {
+            try Data("runtime".utf8).write(to: release.appendingPathComponent(runtimeFile))
+        }
+        try fm.createDirectory(
+            at: release.appendingPathComponent("locales", isDirectory: true),
+            withIntermediateDirectories: true)
+
+        try XCTUnwrap(GameCores.core(forGameAt: www)).prepareImport(of: www)
+
+        XCTAssertEqual(
+            try fm.contentsOfDirectory(atPath: www.path).sorted(),
+            ["data", "index.html", "lng.txt", "package.json"])
+        XCTAssertEqual(try String(contentsOf: www.appendingPathComponent("lng.txt"), encoding: .utf8), "en")
+        XCTAssertEqual(
+            try String(contentsOf: www.appendingPathComponent("package.json"), encoding: .utf8),
+            #"{"main":"index.html"}"#)
+    }
+
+    func testAnMVGameInAFolderThatDoesNotStartItGetsNoFiles() throws {
+        let folder = scratch.appendingPathComponent("Downloads", isDirectory: true)
+        let game = try makeMVGame(at: folder.appendingPathComponent("www", isDirectory: true))
+        try Data("read me".utf8).write(to: folder.appendingPathComponent("readme.txt"))
+
+        try XCTUnwrap(GameCores.core(forGameAt: game)).prepareImport(of: game)
+
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: game.path).sorted(), ["data", "index.html"])
+    }
+
+    private func makeMVGame(at url: URL) throws -> URL {
+        try FileManager.default.createDirectory(
+            at: url.appendingPathComponent("data", isDirectory: true), withIntermediateDirectories: true)
+        try Data("<html>".utf8).write(to: url.appendingPathComponent("index.html"))
+        try Data("{}".utf8).write(to: url.appendingPathComponent("data/System.json"))
+        return url
+    }
+
     /// An RGSS archive is proof enough for `validate`, and RGSS1 runs on
     /// every core build, so the mask check passes either way.
     private func makeRPGMakerGame(at url: URL) throws {
