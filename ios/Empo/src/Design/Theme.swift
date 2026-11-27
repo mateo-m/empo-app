@@ -143,9 +143,10 @@ extension View {
         containerRelativeFrame(.horizontal) { width, _ in width * 2 / 3 }
     }
 
-    /// For content over a background that fills the whole screen.
-    /// The closed iPhone Duo insets only its sensor strip side, and
-    /// the system draws only at the strip's top, above the content.
+    /// The closed iPhone Duo insets only its sensor strip side, so the
+    /// content centers on the screen. It keeps the inset that both sides
+    /// share, such as the notch of a turned iPhone. The system draws only
+    /// at the strip's top, above the content.
     func centeredOnScreen() -> some View {
         modifier(CenteredOnScreen())
     }
