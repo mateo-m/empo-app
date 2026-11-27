@@ -25,7 +25,9 @@ typedef UIEdgeInsets PlatformInsets;
 #endif
 #import <WebKit/WebKit.h>
 
+#include <fcntl.h>
 #include <os/lock.h>
+#include <unistd.h>
 
 #include "GameCore.h"
 #include "mvmz_core.h"
@@ -44,7 +46,7 @@ static Callback gPaused;
 static Callback gResumed;
 
 static NSString *gGamePath;
-static NSFileHandle *gLog;
+static int gLog = -1;
 #if TARGET_OS_OSX
 static NSView *gHostView;
 #else
@@ -71,10 +73,16 @@ static int gSnapshotW;
 static int gSnapshotH;
 
 static void logLine(NSString *line) {
-    NSLog(@"[mvmz] %@", line);
-    // The app adds its own lines to the same file.
-    [gLog seekToEndOfFile];
-    [gLog writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+    // Not the system log: NSLog, and os_log under Xcode, also write to stderr.
+    // Under LiveContainer, stderr can be a pipe or a terminal that nothing
+    // reads, and a write then stops the main thread until iOS ends the app
+    // (EMPO-APP-78). The app writes to the same file at the same time, so
+    // each write must append.
+    if (gLog < 0) {
+        return;
+    }
+    NSData *data = [[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
+    write(gLog, data.bytes, data.length);
 }
 
 // The host view is the size of the launcher's window once
@@ -473,13 +481,14 @@ void gamecore_signalInfoDismissed(void) {
 }
 
 void gamecore_setDebugLogPath(const char *path) {
-    [gLog closeFile];
-    gLog = nil;
+    if (gLog >= 0) {
+        close(gLog);
+        gLog = -1;
+    }
     if (!path || !path[0]) {
         return;
     }
-    gLog = [NSFileHandle fileHandleForWritingAtPath:@(path)];
-    [gLog seekToEndOfFile];
+    gLog = open(path, O_WRONLY | O_APPEND | O_CLOEXEC);
     logLine(@"log is attached");
 }
 
@@ -533,7 +542,7 @@ void gamecore_setSetting(const char *key, const char *value) {
         mvmz_set_smooth(value && strcmp(value, "1") == 0);
         return;
     }
-    NSLog(@"[mvmz] unknown setting %s", key ?: "(null)");
+    logLine([NSString stringWithFormat:@"unknown setting %s", key ?: "(null)"]);
 }
 
 // An MV or MZ game has nothing these could reach.
