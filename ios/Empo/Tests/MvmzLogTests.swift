@@ -3,8 +3,10 @@
 
 import XCTest
 
-private final class ByteCount: @unchecked Sendable {
-    var value = 0
+@testable import Empo
+
+private final class StderrBytes: @unchecked Sendable {
+    var value = Data()
 }
 
 @MainActor
@@ -21,26 +23,27 @@ final class MvmzLogTests: XCTestCase {
         try FileManager.default.removeItem(at: logURL)
     }
 
-    // Under LiveContainer, stderr can be a pipe that nothing reads. A write to
-    // it waits when the pipe is full, and iOS ended Empo while an MV game
-    // logged on the main thread.
+    // EMPO-APP-78: a full stderr must not stop the main thread.
     func testCoreLogLinesDoNotWaitForAStderrThatNobodyReads() throws {
-        let binary = try XCTUnwrap(Bundle.main.privateFrameworksURL)
-            .appendingPathComponent("MvmzCore.framework/MvmzCore")
+        guard let binary = MvmzCore().binaryURL else {
+            throw XCTSkip("this build has no MvmzCore")
+        }
         let core = try XCTUnwrap(dlopen(binary.path, RTLD_NOW | RTLD_LOCAL), String(cString: dlerror()))
         typealias SetDebugLogPath = @convention(c) (UnsafePointer<CChar>?) -> Void
         let setDebugLogPath = unsafeBitCast(
             try XCTUnwrap(dlsym(core, "gamecore_setDebugLogPath")), to: SetDebugLogPath.self)
 
         var ends: [Int32] = [0, 0]
-        XCTAssertEqual(pipe(&ends), 0)
+        guard pipe(&ends) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
         let savedStderr = dup(STDERR_FILENO)
         dup2(ends[1], STDERR_FILENO)
         close(ends[1])
 
         let readEnd = ends[0]
         let drained = expectation(description: "stderr drained")
-        let bytesOnStderr = ByteCount()
+        let bytesOnStderr = StderrBytes()
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
             var buffer = [UInt8](repeating: 0, count: 65536)
             while true {
@@ -48,7 +51,7 @@ final class MvmzLogTests: XCTestCase {
                 if count <= 0 {
                     break
                 }
-                bytesOnStderr.value += count
+                bytesOnStderr.value.append(buffer, count: count)
             }
             drained.fulfill()
         }
@@ -67,7 +70,8 @@ final class MvmzLogTests: XCTestCase {
         close(readEnd)
 
         XCTAssertLessThan(elapsed, 1, "the main thread waited \(elapsed) s for stderr")
-        XCTAssertEqual(bytesOnStderr.value, 0)
+        // Other parts of the app can write to stderr while the test runs.
+        XCTAssertNil(bytesOnStderr.value.range(of: Data("log is attached".utf8)))
         let log = try String(contentsOf: logURL, encoding: .utf8)
         XCTAssertEqual(log.components(separatedBy: "log is attached\n").count - 1, lines)
     }

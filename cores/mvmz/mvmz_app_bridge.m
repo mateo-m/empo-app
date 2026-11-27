@@ -26,7 +26,6 @@ typedef UIEdgeInsets PlatformInsets;
 #import <WebKit/WebKit.h>
 
 #include <os/lock.h>
-#include <os/log.h>
 
 #include "GameCore.h"
 #include "mvmz_core.h"
@@ -72,10 +71,10 @@ static int gSnapshotW;
 static int gSnapshotH;
 
 static void logLine(NSString *line) {
-    // Only the session log, not the system log: NSLog, and os_log under Xcode,
-    // also write to stderr. Under LiveContainer, stderr can be a pipe that
-    // nothing reads, and a write to a full pipe stops the main thread until
-    // iOS ends the app. The app adds its own lines to the same file.
+    // Not the system log: NSLog, and os_log under Xcode, also write to stderr.
+    // Under LiveContainer, stderr can be a pipe or a terminal that nothing
+    // reads, and a write then stops the main thread until iOS ends the app
+    // (EMPO-APP-78). The app adds its own lines to the same file.
     [gLog seekToEndOfFile];
     [gLog writeData:[[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
 }
@@ -536,7 +535,7 @@ void gamecore_setSetting(const char *key, const char *value) {
         mvmz_set_smooth(value && strcmp(value, "1") == 0);
         return;
     }
-    os_log(OS_LOG_DEFAULT, "[mvmz] unknown setting %{public}s", key ?: "(null)");
+    logLine([NSString stringWithFormat:@"unknown setting %s", key ?: "(null)"]);
 }
 
 // An MV or MZ game has nothing these could reach.
