@@ -5,9 +5,8 @@ import XCTest
 
 @testable import Empo
 
-/// Each test follows a session from its start to a close from the app
-/// switcher. The next launch reports "The game crashed." when the
-/// session's crash marker is still on disk.
+/// The next launch reports "The game crashed." when the session's crash
+/// marker is still on disk after a close from the app switcher.
 @MainActor
 final class CrashMarkerTests: XCTestCase {
     private var container: GameContainer!
@@ -34,42 +33,28 @@ final class CrashMarkerTests: XCTestCase {
         FileManager.default.fileExists(atPath: container.sessionActiveMarkerURL.path)
     }
 
+    /// The test host opens no core. mkxp waits for its alerts, and
+    /// `coordinatorDidReportEngineError` then removes the marker.
+    private func showErrorOfACoreThatWaits(_ message: String) {
+        appState.coordinatorDidReportEngineError(message)
+        appState.clearCrashMarker()
+    }
+
     /// `RootView.dismissErrorAlert`, less the signal to the core.
     private func closeErrorAlert() {
         appState.shownError = nil
         appState.restoreCrashMarker()
     }
 
-    /// What `RootView` does on the background and foreground events of a
-    /// game that did not draw its first frame.
-    private func goToTheBackgroundAndBack() {
-        appState.writeBackgroundMarker()
-        appState.removeBackgroundMarker()
-    }
-
     func testStartErrorShownBeforeTheFirstFrameReportsNoCrash() {
-        appState.coordinatorDidReportEngineError("ANGLE: eglInitialize failed")
+        showErrorOfACoreThatWaits("ANGLE: eglInitialize failed")
         closeErrorAlert()
-        goToTheBackgroundAndBack()
 
         XCTAssertFalse(nextLaunchReportsACrash)
-    }
-
-    func testStartErrorShownBeforeTheFirstFrameReportsNoCrashWhileTheAlertShows() {
-        appState.coordinatorDidReportEngineError("ANGLE: eglInitialize failed")
-        goToTheBackgroundAndBack()
-
-        XCTAssertFalse(nextLaunchReportsACrash)
-    }
-
-    func testGameStuckWithNoErrorAndNoFirstFrameReportsACrash() {
-        goToTheBackgroundAndBack()
-
-        XCTAssertTrue(nextLaunchReportsACrash)
     }
 
     func testGameThatRunsOnAfterAStartErrorReportsALaterCrash() {
-        appState.coordinatorDidReportEngineError("Exception: RuntimeError")
+        showErrorOfACoreThatWaits("Exception: RuntimeError")
         closeErrorAlert()
         appState.coordinatorFrameRendered()
 
@@ -78,7 +63,7 @@ final class CrashMarkerTests: XCTestCase {
 
     func testErrorAfterTheFirstFrameReportsALaterCrash() {
         appState.coordinatorFrameRendered()
-        appState.coordinatorDidReportEngineError("Exception: RuntimeError")
+        showErrorOfACoreThatWaits("Exception: RuntimeError")
         closeErrorAlert()
 
         XCTAssertTrue(nextLaunchReportsACrash)

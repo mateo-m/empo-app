@@ -366,7 +366,7 @@ class AppState {
 
     /// The error already went out as a report. A core that fails before
     /// its first frame can stay open with no end event (mkxp's
-    /// `EngineHost::init`), and the alert tells the player to close Empo.
+    /// `EngineHost::init`), and the player then closes Empo.
     private var errorStoppedTheStart: Bool {
         sessionShowedError && !engineReady
     }
@@ -523,7 +523,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         sessionShowedError = true
         ErrorReports.gameError(message, game: reportedGame, saveLoad: saveLoad)
         shownError = ShownError(message: message)
-        if alertHoldsGame || errorStoppedTheStart { clearCrashMarker() }
+        if alertHoldsGame { clearCrashMarker() }
     }
 
     func coordinatorDidReportEngineInfo(_ message: String) {
