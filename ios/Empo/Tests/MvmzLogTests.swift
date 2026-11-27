@@ -38,7 +38,9 @@ final class MvmzLogTests: XCTestCase {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
         let savedStderr = dup(STDERR_FILENO)
-        dup2(ends[1], STDERR_FILENO)
+        guard savedStderr >= 0, dup2(ends[1], STDERR_FILENO) >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
         close(ends[1])
 
         let readEnd = ends[0]
