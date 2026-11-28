@@ -344,6 +344,81 @@ final class ManagedMkxpConfigTests: XCTestCase {
         )
     }
 
+    func testOverlayStringPassesTheRTPFoldersToAPlainGame() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir,
+                rtpFolders: ["/RTP/RPGVXAce"]
+            )
+        )
+        XCTAssertEqual(try parseOverlayJSON(json)["RTP"] as? [String], ["/RTP/RPGVXAce"])
+    }
+
+    func testOverlayStringKeepsTheRTPsOfTheGameBeforeTheImportedOnes() throws {
+        for gameRTP in [#"["Extra.zip"]"#, #""Extra.zip""#] {
+            let gameDir = tempRoot.appendingPathComponent("Game-\(UUID().uuidString)", isDirectory: true)
+            let stateDir = tempRoot.appendingPathComponent("EmpoState-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+            try #"{ "RTP": \#(gameRTP) }"#
+                .write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+            let json = try XCTUnwrap(
+                ManagedMkxpConfig.overlayJSONString(
+                    gameDirectory: gameDir,
+                    stateDirectory: stateDir,
+                    rtpFolders: ["/RTP/Standard", "/RTP/RPGVX"]
+                )
+            )
+            XCTAssertEqual(
+                try parseOverlayJSON(json)["RTP"] as? [String], ["Extra.zip", "/RTP/Standard", "/RTP/RPGVX"],
+                gameRTP)
+        }
+    }
+
+    func testOverlayStringAddsTheImportedRTPsToTheRTPsOfTheOverlay() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try #"{ "RTP": ["Game.zip"] }"#
+            .write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try #"{ "RTP": "Extra.zip" }"#
+            .write(
+                to: ManagedMkxpConfig.overlayConfigURL(in: stateDir), atomically: true, encoding: .utf8)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir,
+                rtpFolders: ["/RTP/RPGVXAce"]
+            )
+        )
+        XCTAssertEqual(try parseOverlayJSON(json)["RTP"] as? [String], ["Extra.zip", "/RTP/RPGVXAce"])
+    }
+
+    func testOverlayStringSendsNoRTPKeyWithoutImportedRTPs() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+
+        try """
+            { "RTP": ["Extra.zip"], "defScreenW": 800 }
+            """.write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(gameDirectory: gameDir, stateDirectory: stateDir))
+        XCTAssertNil(try parseOverlayJSON(json)["RTP"])
+    }
+
     func testOverlayStringNilForPlainBaseWithoutSpecialKeys() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)

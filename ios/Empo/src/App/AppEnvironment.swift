@@ -111,4 +111,5 @@ enum EmpoLink {
     static let terms = URL(string: "https://empo.mateo.sh/terms/")!
     static let sourceCode = URL(string: "https://github.com/mateo-m/empo-app")!
     static let twitter = URL(string: "https://x.com/gridplay_")!
+    static let rpgMakerFiles = URL(string: "https://www.rpgmakerweb.com/run-time-package")!
 }

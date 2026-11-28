@@ -126,6 +126,16 @@ struct SettingsView: View {
 
                     Section {
                         SettingsNavigationRow(
+                            title: Text("RPG Maker files"),
+                            description:
+                                "Some RPG Maker XP, VX, and VX Ace games need these shared files to show pictures and play sounds."
+                        ) {
+                            RTPFilesScreen()
+                        }
+                    }
+
+                    Section {
+                        SettingsNavigationRow(
                             title: Text("Backups"),
                             description:
                                 "Keep copies of your saves in iCloud Drive, Dropbox, Google Drive, or on your own server."

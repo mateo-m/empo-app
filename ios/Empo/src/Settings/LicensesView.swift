@@ -192,6 +192,21 @@ private let appLicenses: [LicenseEntry] = [
             """),
 
     LicenseEntry(
+        "innoextract", license: "zlib License",
+        text: """
+            Empo reads the RPG Maker installers with an altered Swift port of parts of innoextract. It is not the original software.
+
+            Copyright (C) 2011-2020 Daniel Scharrer <daniel@constexpr.org>
+
+            This software is provided 'as-is', without any express or implied warranty.  In no event will the author(s) be held liable for any damages arising from the use of this software.
+
+            Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions:
+
+            1. The origin of this software must not be misrepresented; you must not claim that you wrote the original software. If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
+            2. Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
+            3. This notice may not be removed or altered from any source distribution.
+            """),
+    LicenseEntry(
         "json5pp", license: "MIT",
         text: """
             MIT License
@@ -231,6 +246,13 @@ private let appLicenses: [LicenseEntry] = [
             You should have received a copy of the GNU Lesser General Public License along with this library; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA. The full license text is also available at https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html and ships with the source at ios/Empo/vendor/libmspack/COPYING.LIB.
             """),
 
+    LicenseEntry(
+        "LZMA SDK", license: "Public domain",
+        text: """
+            LZMA SDK, from 7-Zip 26.06. Igor Pavlov : Public domain.
+
+            https://www.7-zip.org/sdk.html
+            """),
     LicenseEntry(
         "mimalloc", license: "MIT",
         text: """

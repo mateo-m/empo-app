@@ -77,6 +77,18 @@ final class ArchiveExtractorTests: XCTestCase {
         assertFiles(["ブラックソウルズ/Game.ini"])
     }
 
+    func testTheSelectiveWalkStopsWhenTheWrittenFilesPassTheLimit() throws {
+        XCTAssertThrowsError(
+            try ArchiveExtractor.extractSelective(
+                archive: fixture("shift-jis-names"), to: scratch, maximumBytes: 1, include: { _ in true })
+        ) { error in
+            guard case ArchiveExtractor.Error.cancelled = error else { return XCTFail("\(error)") }
+        }
+        try ArchiveExtractor.extractSelective(
+            archive: fixture("shift-jis-names"), to: scratch, maximumBytes: 1 << 20, include: { _ in true })
+        assertFiles(["ブラックソウルズ/Game.ini"])
+    }
+
     private func fixture(_ name: String) throws -> URL {
         try XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "zip"))
     }

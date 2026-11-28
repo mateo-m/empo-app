@@ -22,7 +22,7 @@ case "$TOOL" in
 esac
 
 # Third-party code keeps the format of its project.
-VENDORED='^ios/Empo/vendor/|^ios/Json5/Sources/json5cpp/json5pp\.hpp$'
+VENDORED='^ios/Empo/vendor/|^ios/GameProbe/Sources/CLzma/|^ios/Json5/Sources/json5cpp/json5pp\.hpp$'
 PENDING=$(sed -n "s/^$TOOL //p" scripts/lint-pending.txt)
 while IFS= read -r file; do
     [[ -n "$file" ]] || continue

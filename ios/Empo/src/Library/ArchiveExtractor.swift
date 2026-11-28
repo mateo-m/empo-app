@@ -29,7 +29,8 @@ enum ArchiveExtractor {
         case writeFailed(String)
         case pathEscape(String)
         /// Thrown when the caller's `shouldCancel` closure returns
-        /// `true` between libarchive entry reads. Callers use this
+        /// `true` between libarchive entry reads, or when the files of
+        /// `extractSelective` pass its `maximumBytes`. Callers use this
         /// to distinguish a user cancel from a genuine error.
         case cancelled
 
@@ -127,6 +128,10 @@ enum ArchiveExtractor {
         /// file has been pulled, avoiding a full walk to EOF.
         stopWhen: (() -> Bool)? = nil,
         onEntry: ((_ relativePath: String, _ uncompressedSize: Int64?) -> Void)? = nil,
+        /// The walk throws `cancelled` when the files it writes pass this
+        /// many bytes. A zip entry can say a small size and still unpack
+        /// to more, so the count is of the bytes written.
+        maximumBytes: Int = .max,
         include: (String) -> Bool
     ) throws {
         let fm = FileManager.default
@@ -142,6 +147,7 @@ enum ArchiveExtractor {
                 shouldCancel: shouldCancel,
                 stopWhen: stopWhen,
                 onEntry: onEntry,
+                maximumBytes: maximumBytes,
                 include: include
             )
             return
@@ -163,6 +169,7 @@ enum ArchiveExtractor {
         defer { withExtendedLifetime(stream) {} }
 
         var entry: OpaquePointer?
+        var written = 0
         while true {
             if shouldCancel?() == true { throw Error.cancelled }
             let headerResult = archive_read_next_header(reader, &entry)
@@ -209,7 +216,7 @@ enum ArchiveExtractor {
             if !fm.fileExists(atPath: parent.path) {
                 try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
             }
-            _ = try writeEntry(reader: reader, to: outURL)
+            written += try writeEntry(reader: reader, to: outURL, limit: maximumBytes - written)
             restoreEntryModificationDate(entry, at: outURL)
 
             if stopWhen?() == true { break }
@@ -367,7 +374,7 @@ enum ArchiveExtractor {
     }
 
     @discardableResult
-    private static func writeEntry(reader: OpaquePointer, to outURL: URL) throws -> Int {
+    private static func writeEntry(reader: OpaquePointer, to outURL: URL, limit: Int = .max) throws -> Int {
         guard let stream = OutputStream(url: outURL, append: false) else {
             throw Error.writeFailed("Cannot open output: \(outURL.path)")
         }
@@ -391,6 +398,7 @@ enum ArchiveExtractor {
                 throw Error.writeFailed(stream.streamError?.localizedDescription ?? "Write failed")
             }
             totalWritten += written
+            if totalWritten > limit { throw Error.cancelled }
         }
         return totalWritten
     }
@@ -684,11 +692,13 @@ enum ArchiveExtractor {
         shouldCancel: (() -> Bool)?,
         stopWhen: (() -> Bool)?,
         onEntry: ((_ relativePath: String, _ uncompressedSize: Int64?) -> Void)?,
+        maximumBytes: Int,
         include: (String) -> Bool
     ) throws {
         let fm = FileManager.default
         let reader = try CabReader(archiveURL: archiveURL)
 
+        var written: Int64 = 0
         for entry in reader.entries {
             if shouldCancel?() == true { throw Error.cancelled }
 
@@ -702,6 +712,8 @@ enum ArchiveExtractor {
 
             onEntry?(relative, entry.size)
             if !include(relative) { continue }
+            written += entry.size
+            if written > maximumBytes { throw Error.cancelled }
 
             let outURL = destDir.appendingPathComponent(relative)
             let parent = outURL.deletingLastPathComponent()

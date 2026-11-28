@@ -176,67 +176,67 @@
         }
       }
     },
-    "\"%@\" needs shared %@ files that don't come with it. Empo can't add them yet, so the game may not start, or pictures and sounds may be missing." : {
+    "\"%@\" needs shared %@ files that don't come with it. Without them, the game may not start, or pictures and sounds may be missing." : {
       "comment" : "The first placeholder is the game title. The second names RPG Maker versions, such as RPG Maker VX Ace.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "„%@“ braucht gemeinsame %@-Dateien, die nicht dabei sind. Empo kann sie noch nicht hinzufügen. Deshalb startet das Spiel vielleicht nicht, oder Bilder und Sounds fehlen."
+            "value" : "„%@“ braucht gemeinsame %@-Dateien, die nicht dabei sind. Ohne sie startet das Spiel vielleicht nicht, oder Bilder und Sounds fehlen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "\"%1$@\" needs shared %2$@ files that don't come with it. Empo can't add them yet, so the game may not start, or pictures and sounds may be missing."
+            "value" : "\"%1$@\" needs shared %2$@ files that don't come with it. Without them, the game may not start, or pictures and sounds may be missing."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@” necesita archivos compartidos de %@ que no vienen con él. Empo aún no puede añadirlos, así que puede que el juego no arranque o que falten imágenes y sonidos."
+            "value" : "“%@” necesita archivos compartidos de %@ que no vienen con él. Sin ellos, puede que el juego no arranque o que falten imágenes y sonidos."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "« %@ » a besoin de fichiers partagés de %@ qui ne sont pas fournis avec lui. Empo ne peut pas encore les ajouter, donc le jeu risque de ne pas démarrer, ou des images et des sons peuvent manquer."
+            "value" : "« %@ » a besoin de fichiers partagés de %@ qui ne sont pas fournis avec lui. Sans eux, le jeu risque de ne pas démarrer, ou des images et des sons peuvent manquer."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "«%@» ha bisogno dei file comuni di %@, che non sono inclusi. Empo non può ancora aggiungerli, quindi il gioco potrebbe non avviarsi, o mancare di immagini e suoni."
+            "value" : "«%@» ha bisogno dei file comuni di %@, che non sono inclusi. Senza di loro, il gioco potrebbe non avviarsi, o mancare di immagini e suoni."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "「%@」には、同梱されていない%@の共通ファイルが必要です。Empoはまだこのファイルを追加できないため、ゲームが起動しなかったり、画像や音が出なかったりすることがあります。"
+            "value" : "「%@」には、同梱されていない%@の共通ファイルが必要です。このファイルがないと、ゲームが起動しなかったり、画像や音が出なかったりすることがあります。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@” 게임에는 같이 들어 있지 않은 %@ 공용 파일이 필요해요. Empo는 아직 이 파일을 넣어 줄 수 없어서, 게임이 시작되지 않거나 그림과 소리가 빠질 수 있어요."
+            "value" : "“%@” 게임에는 같이 들어 있지 않은 %@ 공용 파일이 필요해요. 이 파일이 없으면 게임이 시작되지 않거나 그림과 소리가 빠질 수 있어요."
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@” precisa de arquivos compartilhados do %@ que não vêm com ele. O Empo ainda não consegue adicionar esses arquivos, então o jogo pode não abrir, ou podem faltar imagens e sons."
+            "value" : "“%@” precisa de arquivos compartilhados do %@ que não vêm com ele. Sem eles, o jogo pode não abrir, ou podem faltar imagens e sons."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Игре «%@» нужны общие файлы %@, которых нет в её комплекте. Empo пока не умеет их добавлять, поэтому игра может не запуститься или остаться без картинок и звуков."
+            "value" : "Игре «%@» нужны общие файлы %@, которых нет в её комплекте. Без них игра может не запуститься или остаться без картинок и звуков."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%@”需要游戏本身没有附带的 %@ 公共文件。Empo 暂时还没法添加这些文件，所以游戏可能无法启动，或者缺少图片和声音。"
+            "value" : "“%@”需要游戏本身没有附带的 %@ 公共文件。没有这些文件，游戏可能无法启动，或者缺少图片和声音。"
           }
         }
       }
@@ -6397,6 +6397,122 @@
         }
       }
     },
+    "Add files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien hinzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir archivos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter les fichiers"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi file"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルを追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파일 추가"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar arquivos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить файлы"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加文件"
+          }
+        }
+      }
+    },
+    "Add files…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien hinzufügen…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir archivos…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter les fichiers…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiungi file…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルを追加…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파일 추가…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionar arquivos…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавить файлы…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加文件…"
+          }
+        }
+      }
+    },
     "Add locations again" : {
       "localizations" : {
         "de" : {
@@ -6451,6 +6567,354 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新添加备份位置"
+          }
+        }
+      }
+    },
+    "Added" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinzugefügt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadidos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajoutés"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiunti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "追加済み"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가됨"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавлены"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已添加"
+          }
+        }
+      }
+    },
+    "Adding files…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dateien werden hinzugefügt…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadiendo archivos…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajout des fichiers…"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aggiunta dei file…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルを追加中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파일 추가 중…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adicionando arquivos…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Добавляем файлы…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在添加文件…"
+          }
+        }
+      }
+    },
+    "Couldn't add the files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Dateien konnten nicht hinzugefügt werden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron añadir los archivos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’ajouter les fichiers"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossibile aggiungere i file"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ファイルを追加できませんでした"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "파일을 추가할 수 없습니다"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível adicionar os arquivos"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не удалось добавить файлы"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法添加文件"
+          }
+        }
+      }
+    },
+    "Download from RPG Maker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei RPG Maker laden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descargar de RPG Maker"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Télécharger sur RPG Maker"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scarica da RPG Maker"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Makerからダウンロード"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker에서 다운로드"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baixar do RPG Maker"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачать с сайта RPG Maker"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 RPG Maker 下载"
+          }
+        }
+      }
+    },
+    "Download it again from the RPG Maker website, then add it." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lade sie noch einmal von der RPG-Maker-Website und füge sie dann hinzu."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vuelve a descargarlo de la web de RPG Maker y añádelo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Télécharge-le à nouveau sur le site de RPG Maker, puis ajoute-le."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scaricalo di nuovo dal sito di RPG Maker, poi aggiungilo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Makerのサイトからもう一度ダウンロードして、追加してください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker 웹사이트에서 다시 다운로드한 다음 추가하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baixe de novo no site do RPG Maker e depois adicione."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачайте его снова с сайта RPG Maker, затем добавьте."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请从 RPG Maker 网站重新下载，然后再添加。"
+          }
+        }
+      }
+    },
+    "Download the free files from the RPG Maker website. Then add the .zip or .exe file, or a folder of RPG Maker files from a Windows PC." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lade die kostenlosen Dateien von der RPG-Maker-Website. Füge dann die .zip- oder .exe-Datei hinzu, oder einen Ordner mit RPG-Maker-Dateien von einem Windows-PC."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descarga los archivos gratuitos de la web de RPG Maker. Luego añade el archivo .zip o .exe, o una carpeta de archivos de RPG Maker de un PC con Windows."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Télécharge les fichiers gratuits sur le site de RPG Maker. Ajoute ensuite le fichier .zip ou .exe, ou un dossier de fichiers RPG Maker d’un PC Windows."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scarica i file gratuiti dal sito di RPG Maker. Poi aggiungi il file .zip o .exe, o una cartella di file di RPG Maker da un PC Windows."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Makerのサイトから無料のファイルをダウンロードしてください。次に、.zipか.exeのファイル、またはWindows PCにあるRPG Makerのファイルのフォルダを追加します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker 웹사이트에서 무료 파일을 다운로드하세요. 그런 다음 .zip 또는 .exe 파일이나, Windows PC에 있는 RPG Maker 파일 폴더를 추가하세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Baixe os arquivos gratuitos no site do RPG Maker. Depois adicione o arquivo .zip ou .exe, ou uma pasta de arquivos do RPG Maker de um PC com Windows."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Скачайте бесплатные файлы с сайта RPG Maker. Затем добавьте файл .zip или .exe или папку с файлами RPG Maker с компьютера на Windows."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 RPG Maker 网站下载免费文件。然后添加 .zip 或 .exe 文件，或者来自 Windows 电脑的 RPG Maker 文件文件夹。"
           }
         }
       }
@@ -31706,6 +32170,64 @@
         }
       }
     },
+    "Games that need them may not start, or pictures and sounds may be missing. You can add them again later." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spiele, die sie brauchen, starten vielleicht nicht, oder Bilder und Sounds fehlen. Du kannst sie später wieder hinzufügen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puede que los juegos que los necesitan no arranquen o que falten imágenes y sonidos. Puedes volver a añadirlos más tarde."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les jeux qui en ont besoin risquent de ne pas démarrer, ou des images et des sons peuvent manquer. Tu pourras les ajouter à nouveau plus tard."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I giochi che ne hanno bisogno potrebbero non avviarsi, o mancare di immagini e suoni. Puoi aggiungerli di nuovo più tardi."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "これらが必要なゲームは、起動しなかったり、画像や音が出なかったりすることがあります。あとでまた追加できます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 파일이 필요한 게임은 시작되지 않거나 그림과 소리가 빠질 수 있어요. 나중에 다시 추가할 수 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Os jogos que precisam deles podem não abrir, ou podem faltar imagens e sons. Você pode adicioná-los de novo depois."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игры, которым они нужны, могут не запуститься или остаться без картинок и звуков. Позже их можно добавить снова."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要这些文件的游戏可能无法启动，或者缺少图片和声音。你之后可以再次添加。"
+          }
+        }
+      }
+    },
     "General" : {
       "localizations" : {
         "de" : {
@@ -41458,6 +41980,64 @@
         }
       }
     },
+    "Not added" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht hinzugefügt"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin añadir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non ajoutés"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non aggiunti"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "추가 안 됨"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não adicionados"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Не добавлены"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未添加"
+          }
+        }
+      }
+    },
     "Not available in this version of Empo." : {
       "localizations" : {
         "de" : {
@@ -44023,6 +44603,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已暂停，%@"
+          }
+        }
+      }
+    },
+    "Pick the .zip or .exe file from the RPG Maker website, or a folder of RPG Maker files." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle die .zip- oder .exe-Datei von der RPG-Maker-Website oder einen Ordner mit RPG-Maker-Dateien."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige el archivo .zip o .exe de la web de RPG Maker, o una carpeta de archivos de RPG Maker."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisis le fichier .zip ou .exe du site de RPG Maker, ou un dossier de fichiers RPG Maker."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scegli il file .zip o .exe dal sito di RPG Maker, o una cartella di file di RPG Maker."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Makerのサイトの.zipか.exeのファイル、またはRPG Makerのファイルのフォルダを選んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker 웹사이트의 .zip 또는 .exe 파일이나 RPG Maker 파일 폴더를 고르세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Escolha o arquivo .zip ou .exe do site do RPG Maker, ou uma pasta de arquivos do RPG Maker."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выберите файл .zip или .exe с сайта RPG Maker или папку с файлами RPG Maker."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择 RPG Maker 网站上的 .zip 或 .exe 文件，或者一个 RPG Maker 文件的文件夹。"
           }
         }
       }
@@ -47409,6 +48047,124 @@
         }
       }
     },
+    "Remove the %@ files" : {
+      "comment" : "The placeholder names an RPG Maker version, such as RPG Maker VX Ace.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Dateien entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar los archivos de %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer les fichiers %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovi i file di %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@のファイルを外す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 파일 제거"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remover os arquivos do %@"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать файлы %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除 %@ 文件"
+          }
+        }
+      }
+    },
+    "Remove the %@ files?" : {
+      "comment" : "The placeholder names an RPG Maker version, such as RPG Maker VX Ace.",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@-Dateien entfernen?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Quitar los archivos de %@?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retirer les fichiers %@ ?"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rimuovere i file di %@?"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@のファイルを外しますか？"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 파일을 제거할까요?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remover os arquivos do %@?"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Убрать файлы %@?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除 %@ 文件？"
+          }
+        }
+      }
+    },
     "Remove without deleting" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -49280,6 +50036,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "RGSS 版本"
+          }
+        }
+      }
+    },
+    "RPG Maker files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG-Maker-Dateien"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos de RPG Maker"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers RPG Maker"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File di RPG Maker"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Makerのファイル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker 파일"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arquivos do RPG Maker"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Файлы RPG Maker"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker 文件"
           }
         }
       }
@@ -54635,6 +55449,64 @@
         }
       }
     },
+    "Setup.exe needs Setup-1.bin next to it. Pick the .zip file, or the folder with both files." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exe braucht Setup-1.bin im selben Ordner. Wähle die .zip-Datei oder den Ordner mit beiden Dateien."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exe necesita Setup-1.bin a su lado. Elige el archivo .zip o la carpeta con los dos archivos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exe a besoin de Setup-1.bin à côté de lui. Choisis le fichier .zip, ou le dossier avec les deux fichiers."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exe ha bisogno di Setup-1.bin accanto. Scegli il file .zip, o la cartella con entrambi i file."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exeの横にSetup-1.binが必要です。.zipファイルか、両方のファイルが入ったフォルダを選んでください。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exe 옆에 Setup-1.bin이 있어야 해요. .zip 파일이나 두 파일이 모두 있는 폴더를 고르세요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O Setup.exe precisa do Setup-1.bin ao lado. Escolha o arquivo .zip, ou a pasta com os dois arquivos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Рядом с Setup.exe должен быть Setup-1.bin. Выберите файл .zip или папку с обоими файлами."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup.exe 旁边需要有 Setup-1.bin。请选择 .zip 文件，或者包含这两个文件的文件夹。"
+          }
+        }
+      }
+    },
     "Share Report" : {
       "localizations" : {
         "de" : {
@@ -58079,6 +58951,122 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有些游戏可能还运行不了。"
+          }
+        }
+      }
+    },
+    "Some RPG Maker XP, VX, and VX Ace games need these shared files to show pictures and play sounds." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manche Spiele für RPG Maker XP, VX und VX Ace brauchen diese gemeinsamen Dateien für Bilder und Sounds."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos juegos de RPG Maker XP, VX y VX Ace necesitan estos archivos compartidos para mostrar imágenes y reproducir sonidos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains jeux RPG Maker XP, VX et VX Ace ont besoin de ces fichiers partagés pour afficher les images et jouer les sons."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni giochi di RPG Maker XP, VX e VX Ace hanno bisogno di questi file comuni per mostrare immagini e riprodurre suoni."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker XP、VX、VX Aceのゲームには、画像や音を出すためにこの共通ファイルが必要なものがあります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일부 RPG Maker XP, VX, VX Ace 게임은 그림을 보여 주고 소리를 내려면 이 공용 파일이 필요해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguns jogos do RPG Maker XP, VX e VX Ace precisam destes arquivos compartilhados para mostrar imagens e tocar sons."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некоторым играм RPG Maker XP, VX и VX Ace нужны эти общие файлы для картинок и звуков."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分 RPG Maker XP、VX 和 VX Ace 游戏需要这些公共文件来显示图片和播放声音。"
+          }
+        }
+      }
+    },
+    "Some RPG Maker XP, VX, and VX Ace games need these shared files. All your games use the same copy." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manche Spiele für RPG Maker XP, VX und VX Ace brauchen diese gemeinsamen Dateien. Alle deine Spiele nutzen dieselbe Kopie."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Algunos juegos de RPG Maker XP, VX y VX Ace necesitan estos archivos compartidos. Todos tus juegos usan la misma copia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Certains jeux RPG Maker XP, VX et VX Ace ont besoin de ces fichiers partagés. Tous tes jeux utilisent la même copie."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alcuni giochi di RPG Maker XP, VX e VX Ace hanno bisogno di questi file comuni. Tutti i tuoi giochi usano la stessa copia."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RPG Maker XP、VX、VX Aceのゲームには、この共通ファイルが必要なものがあります。すべてのゲームが同じコピーを使います。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일부 RPG Maker XP, VX, VX Ace 게임에는 이 공용 파일이 필요해요. 모든 게임이 같은 사본을 사용해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alguns jogos do RPG Maker XP, VX e VX Ace precisam destes arquivos compartilhados. Todos os seus jogos usam a mesma cópia."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Некоторым играм RPG Maker XP, VX и VX Ace нужны эти общие файлы. Все ваши игры используют одну копию."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分 RPG Maker XP、VX 和 VX Ace 游戏需要这些公共文件。你的所有游戏共用同一份副本。"
           }
         }
       }
@@ -64387,6 +65375,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这次导出还需要这台设备上 %@ 的可用空间。"
+          }
+        }
+      }
+    },
+    "This file is incomplete" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Datei ist unvollständig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este archivo está incompleto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce fichier est incomplet"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Questo file è incompleto"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このファイルは不完全です"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 파일은 불완전해요"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este arquivo está incompleto"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Этот файл неполный"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个文件不完整"
           }
         }
       }

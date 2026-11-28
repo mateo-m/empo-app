@@ -1509,9 +1509,11 @@ private struct LibraryAlertPresentation: ViewModifier {
     let onDismissPausedGameAlert: () -> Void
     let onReplacePausedGame: () -> Void
     let onContinueDespiteWarning: (GameEntry) -> Void
+    @State private var showsRTPFiles = false
 
     func body(content: Content) -> some View {
         content
+            .sheet(isPresented: $showsRTPFiles) { RTPFilesSheet() }
             .alert(item: $importPipelineAlert) { alert in
                 Alert(
                     title: Text(alert.title),
@@ -1559,6 +1561,9 @@ private struct LibraryAlertPresentation: ViewModifier {
                 presenting: warnedLaunch
             ) { launch in
                 Button("Cancel", role: .cancel) {}
+                if launch.warning.offersRTPFiles {
+                    Button("Add files") { showsRTPFiles = true }
+                }
                 Button(launch.warning.confirm) {
                     onContinueDespiteWarning(launch.game)
                 }
