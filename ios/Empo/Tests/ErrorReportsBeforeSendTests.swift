@@ -92,4 +92,13 @@ final class ErrorReportsBeforeSendTests: XCTestCase {
         event.message = SentryMessage(formatted: "Script 'Main' line 1: NameError occurred.")
         XCTAssertNotNil(ErrorReports.beforeSend(event))
     }
+
+    func testDropsTheInstallIDOfALog() {
+        let log = SentryLog(
+            level: .warn, body: "The game ended while Empo was in the background.",
+            attributes: ["user.id": .init(string: "install"), "runner": .init(string: "process")])
+        let sent = ErrorReports.beforeSendLog(log)
+        XCTAssertNil(sent?.attributes["user.id"])
+        XCTAssertNotNil(sent?.attributes["runner"])
+    }
 }

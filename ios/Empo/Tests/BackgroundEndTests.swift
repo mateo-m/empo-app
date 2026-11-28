@@ -69,12 +69,12 @@ final class BackgroundEndTests: XCTestCase {
     }
 
     func testDayWithNoMemoryEndSendsNothing() {
-        XCTAssertNil(ErrorReports.backgroundExitTags(memoryLimit: 0, memoryPressure: 0, normal: 4))
+        XCTAssertNil(ErrorReports.backgroundExitAttributes(memoryLimit: 0, memoryPressure: 0, normal: 4))
     }
 
     func testDayWithAMemoryEndSendsTheCounts() {
         XCTAssertEqual(
-            ErrorReports.backgroundExitTags(memoryLimit: 1, memoryPressure: 2, normal: 4),
-            ["memory_limit_exits": "1", "memory_pressure_exits": "2", "normal_exits": "4"])
+            ErrorReports.backgroundExitAttributes(memoryLimit: 1, memoryPressure: 2, normal: 4),
+            ["memory_limit_exits": 1, "memory_pressure_exits": 2, "normal_exits": 4])
     }
 }
