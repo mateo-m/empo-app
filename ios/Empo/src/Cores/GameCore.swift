@@ -267,6 +267,7 @@ struct LaunchWarning {
     let title: String
     let message: String
     let confirm: String
+    let offersRTPFiles: Bool
 }
 
 struct InfoRow: Identifiable {

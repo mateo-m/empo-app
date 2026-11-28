@@ -37,17 +37,21 @@ public struct GameRTPRequirement: Sendable, Equatable {
         packages.joined(separator: ", ")
     }
 
-    /// Human-readable engine names for alert copy.
-    public var friendlyNames: [String] {
-        packages.map(Self.friendlyPackageName)
+    /// The RTPs that Empo can import, without duplicates.
+    public var knownPackages: [RTPPackage] {
+        var seen = Set<RTPPackage>()
+        return packages.compactMap(RTPPackage.init(gameINIValue:)).filter { seen.insert($0).inserted }
     }
 
-    private static func friendlyPackageName(_ package: String) -> String {
-        switch package.trimmingCharacters(in: .whitespaces).lowercased() {
-        case "rpgvxace": "RPG Maker VX Ace"
-        case "rpgvx": "RPG Maker VX"
-        case "standard": "RPG Maker XP"
-        default: package
+    /// The names of the RTPs that the game can't read, for alert copy,
+    /// without duplicates. Empo can't add an RTP that it doesn't know,
+    /// so a name such as a fan-made RTP is always missing.
+    public func missingNames(isInstalled: (RTPPackage) -> Bool) -> [String] {
+        var seen = Set<String>()
+        return packages.compactMap { value in
+            guard let package = RTPPackage(gameINIValue: value) else { return value }
+            return isInstalled(package) ? nil : package.engineName
         }
+        .filter { seen.insert($0.lowercased()).inserted }
     }
 }

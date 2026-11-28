@@ -182,6 +182,8 @@ struct MkxpCore: GameCore {
             ),
             midiSoundFont: settings.midiSoundFont(
                 for: container, gameSoundFont: MkxpGameSoundFont.url(in: container)),
+            rtpFolders: (GameRTPRequirement.detect(at: container.gameURL)?.knownPackages ?? [])
+                .filter(RTPLibrary.isInstalled).map { RTPLibrary.folderURL($0).path },
             onUnparseableOverlay: { NSLog($0) }
         )
         if let overlay {
@@ -219,21 +221,22 @@ struct MkxpCore: GameCore {
     }
 
     func launchWarning(for container: GameContainer, gameTitle: String) -> LaunchWarning? {
-        // Empo has no way to install the RTP yet, so every game that
-        // declares one in Game.ini gets the warning.
         guard let requirement = GameRTPRequirement.detect(at: container.gameURL) else { return nil }
+        let missing = requirement.missingNames(isInstalled: RTPLibrary.isInstalled)
+        guard !missing.isEmpty else { return nil }
         return LaunchWarning(
             title: String(localized: "This game needs extra RPG Maker files"),
             message: String(
                 localized: """
-                    "\(gameTitle)" needs shared \(requirement.friendlyNames.formatted(.list(type: .and))) \
-                    files that don't come with it. Empo can't add them yet, so \
-                    the game may not start, or pictures and sounds may be missing.
+                    "\(gameTitle)" needs shared \(missing.formatted(.list(type: .and))) \
+                    files that don't come with it. Without them, the game may not start, or pictures \
+                    and sounds may be missing.
                     """,
                 comment:
                     "The first placeholder is the game title. The second names RPG Maker versions, such as RPG Maker VX Ace."
             ),
-            confirm: String(localized: "Play anyway"))
+            confirm: String(localized: "Play anyway"),
+            offersRTPFiles: requirement.knownPackages.contains { !RTPLibrary.isInstalled($0) })
     }
 
     // MARK: - Settings and info

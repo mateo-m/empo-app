@@ -378,6 +378,7 @@ public enum ManagedMkxpConfig {
         stateDirectory: URL,
         overrides: MkxpEngineValues = MkxpEngineValues(),
         midiSoundFont: String? = nil,
+        rtpFolders: [String] = [],
         onUnparseableOverlay: ((String) -> Void)? = nil
     ) -> String? {
         let overlayURL = overlayConfigURL(in: stateDirectory)
@@ -426,6 +427,14 @@ public enum ManagedMkxpConfig {
 
         if let midiSoundFont {
             patches["midiSoundFont"] = midiSoundFont
+        }
+
+        // The engine replaces a whole top-level key, so the RTPs of the
+        // game's own mkxp.json must stay in the list. The engine also
+        // reads one RTP given as a string.
+        if !rtpFolders.isEmpty {
+            let gameRTPs = (base?["RTP"] as? [String]) ?? (base?["RTP"] as? String).map { [$0] } ?? []
+            patches["RTP"] = gameRTPs + rtpFolders
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {

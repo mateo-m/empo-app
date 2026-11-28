@@ -167,9 +167,11 @@ private struct DropHighlight: View {
 private struct LibraryAlerts: ViewModifier {
     @Bindable var model: LibraryWindowModel
     @Bindable private var launcher = GameLauncher.shared
+    @State private var showsRTPFiles = false
 
     func body(content: Content) -> some View {
         content
+            .sheet(isPresented: $showsRTPFiles) { RTPFilesSheet() }
             .modifier(
                 DeleteGameAlerts(
                     isPresented: isPresented($model.gameToDelete),
@@ -193,6 +195,9 @@ private struct LibraryAlerts: ViewModifier {
                 presenting: model.warnedLaunch
             ) { warned in
                 Button(warned.warning.confirm) { model.launch(warned.game) }
+                if warned.warning.offersRTPFiles {
+                    Button("Add files") { showsRTPFiles = true }
+                }
                 Button("Cancel", role: .cancel) {}
             } message: { warned in
                 Text(warned.warning.message)

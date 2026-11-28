@@ -38,6 +38,7 @@ private struct GeneralSettings: View {
             Section {
                 MidiSoundSetRow()
             }
+            RTPFilesSections()
         }
         .formStyle(.grouped)
         .scrollDisabled(true)

@@ -29,9 +29,15 @@ let package = Package(
             providers: [.apt(["libsqlite3-dev"])]
         ),
         .target(
+            name: "CLzma",
+            path: "Sources/CLzma",
+            exclude: ["README.md"]
+        ),
+        .target(
             name: "GameProbe",
             dependencies: [
                 "CSQLite",
+                "CLzma",
                 .product(name: "Json5", package: "Json5"),
                 .product(
                     name: "SWCompression",
