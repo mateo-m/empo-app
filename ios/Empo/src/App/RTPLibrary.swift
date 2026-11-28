@@ -92,12 +92,14 @@ final class RTPLibrary {
         let fileManager = FileManager.default
         // The iOS picker copies the pick into tmp, and the system clears
         // tmp only later. A file that the Mac picker gives is the user's.
-        let tmp = fileManager.temporaryDirectory.resolvingSymlinksInPath().path
+        #if os(iOS)
+        let tmp = fileManager.temporaryDirectory.resolvingSymlinksInPath().pathComponents
         defer {
-            if source.resolvingSymlinksInPath().path.hasPrefix(tmp) {
+            if source.resolvingSymlinksInPath().pathComponents.starts(with: tmp) {
                 try? fileManager.removeItem(at: source)
             }
         }
+        #endif
         try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true

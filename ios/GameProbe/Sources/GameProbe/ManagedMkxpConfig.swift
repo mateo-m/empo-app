@@ -430,11 +430,11 @@ public enum ManagedMkxpConfig {
         }
 
         // The engine replaces a whole top-level key, so the RTPs of the
-        // game's own mkxp.json must stay in the list. The engine also
-        // reads one RTP given as a string.
+        // overlay, or else of the game's own mkxp.json, must stay in the
+        // list. The engine also reads one RTP given as a string.
         if !rtpFolders.isEmpty {
-            let gameRTPs = (base?["RTP"] as? [String]) ?? (base?["RTP"] as? String).map { [$0] } ?? []
-            patches["RTP"] = gameRTPs + rtpFolders
+            let listed = { (value: Any?) in (value as? [String]) ?? (value as? String).map { [$0] } }
+            overlay["RTP"] = (listed(overlay["RTP"]) ?? listed(base?["RTP"]) ?? []) + rtpFolders
         }
 
         guard !overlay.isEmpty || !patches.isEmpty else {

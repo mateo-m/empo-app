@@ -236,11 +236,7 @@ final class RTPImportTests: XCTestCase {
     }
 
     func testInstallerImportRefusesAChangedOrCutInstaller() throws {
-        let files: [FakeInstallerFile] = [
-            .init(path: #"{app}\Audio\SE\Decision1.ogg"#, languages: "", data: "sound"),
-            .init(path: #"{app}\Graphics\Faces\Actor1.png"#, languages: "", data: "face"),
-        ]
-        let installer = try makeInstaller(files: files)
+        let installer = try makeInstaller(files: Self.storedFiles)
         var bytes = try Data(contentsOf: installer)
 
         var changed = bytes
@@ -262,7 +258,95 @@ final class RTPImportTests: XCTestCase {
             ]))
     }
 
+    func testInstallerImportReadsLzmaBlocksAndAnLzmaChunk() throws {
+        let installer = try makeInstaller(
+            files: Self.lzmaFiles, data: .lzma(try Self.stream(Self.lzmaChunk)),
+            blockStreams: (try Self.stream(Self.lzmaHeader), try Self.stream(Self.lzmaEntries)))
+        let destination = tempRoot.appendingPathComponent("copy", isDirectory: true)
+
+        XCTAssertEqual(try RTPImport.copy(from: installer, to: destination), .vx)
+        XCTAssertEqual(
+            relativeFiles(in: destination), ["Audio/SE/Decision1.ogg", "Graphics/Faces/Actor1.png"])
+        for (path, file) in zip(
+            ["Audio/SE/Decision1.ogg", "Graphics/Faces/Actor1.png"], Self.lzmaFiles.dropFirst())
+        {
+            XCTAssertEqual(
+                try String(contentsOf: destination.appendingPathComponent(path), encoding: .utf8), file.data)
+        }
+    }
+
+    func testInstallerImportRefusesACutLzmaChunk() throws {
+        let stream = try Self.stream(Self.lzmaChunk)
+        assertFailure(
+            .damaged,
+            from: try makeInstaller(files: Self.lzmaFiles, data: .lzma(stream.prefix(stream.count / 2))))
+    }
+
+    func testLzmaDecoderRefusesAStreamLongerThanTheLimit() throws {
+        let decoder = try LzmaRawDecoder(stream: try Self.stream(Self.lzmaChunk))
+        XCTAssertThrowsError(try decoder.readAll(limit: 1000)) { error in
+            XCTAssertEqual(error as? InnoSetupArchive.Failure, .damaged)
+        }
+    }
+
+    func testInstallerImportReadsTheDataFileNextToTheInstaller() throws {
+        let installer = try makeInstaller(files: Self.storedFiles, data: .separateFile)
+        let destination = tempRoot.appendingPathComponent("copy", isDirectory: true)
+
+        XCTAssertEqual(try RTPImport.copy(from: installer, to: destination), .vx)
+        XCTAssertEqual(
+            try String(
+                contentsOf: destination.appendingPathComponent("Audio/SE/Decision1.ogg"), encoding: .utf8),
+            "sound")
+    }
+
+    func testInstallerImportNeedsTheDataFileNextToTheInstaller() throws {
+        let installer = try makeInstaller(files: Self.storedFiles, data: .separateFile)
+        try FileManager.default.removeItem(
+            at: installer.deletingLastPathComponent().appendingPathComponent("Setup-1.bin"))
+        assertFailure(.missingDataFile, from: installer)
+    }
+
     // MARK: - Fake installer
+
+    private static let storedFiles: [FakeInstallerFile] = [
+        .init(path: #"{app}\Audio\SE\Decision1.ogg"#, languages: "", data: "sound"),
+        .init(path: #"{app}\Graphics\Faces\Actor1.png"#, languages: "", data: "face"),
+    ]
+
+    /// Each file is larger than one read of the reader, and the reader
+    /// skips the first file.
+    private static let lzmaFiles: [FakeInstallerFile] = [
+        .init(path: #"{app}\Game.exe"#, languages: "", data: String(repeating: "Game ", count: 14000)),
+        .init(
+            path: #"{app}\Audio\SE\Decision1.ogg"#, languages: "",
+            data: String(repeating: "Audio ", count: 12000)),
+        .init(
+            path: #"{app}\Graphics\Faces\Actor1.png"#, languages: "",
+            data: String(repeating: "Faces ", count: 12000)),
+    ]
+
+    // Swift has no LZMA encoder on Linux. These are the streams of the
+    // `lzmaFiles` chunk and of its two blocks, from Python:
+    // `bytes([0x5d]) + (1 << 16).to_bytes(4, "little") + lzma.compress(
+    // data, format=lzma.FORMAT_RAW, filters=[{"id": lzma.FILTER_LZMA1,
+    // "dict_size": 1 << 16}])`.
+    private static let lzmaChunk =
+        "XQAAAQAAI5hJpmdHLj4dO3RtCSlnaFmsE7tBaG9uoqNQQLbDhGGNvzev2r321RQPeLIfwNDS4Z84P/8Q1aYUlYDJJwHORRwuhLsJqr/5TpHmXpv3MMGW8cDyLm1NabAMA5GFWGWwe24zKxkGzu27bfPzCvtvBVHV0XzGYK+TkrKRmRf//kN4AA=="
+    private static let lzmaHeader =
+        "XQAAAQAAAG9ARoQwn4/OmCIlqYsdj6OHP0aXX8YEEe5i3fLFiLgS4DvC9FuJx+XS5+CouHkuhMxDnyOLFYkNW2Jyq2n+YgE3VvZYbXIvt4svSLFB2wulg6gKlyru8jhZAQLGDtif/5KJIoA="
+    private static let lzmaEntries =
+        "XQAAAQAAAG4At/7AWeU8oVVhzk59WMslgwq/Wetx6pGf+Qd7FmFpBHv9tbENb9rBxEoBc9vEO96lnNGts37oAyoOGY6807XN4E/bcvXr719+9ZjvJ1QeqQRvOBskGNhFbWkT9gUqfXeP///f5QAA"
+
+    private static func stream(_ base64: String) throws -> Data {
+        try XCTUnwrap(Data(base64Encoded: base64))
+    }
+
+    private enum FakeData {
+        case inside
+        case lzma(Data)
+        case separateFile
+    }
 
     private struct FakeInstallerFile {
         let path: String
@@ -270,10 +354,17 @@ final class RTPImportTests: XCTestCase {
         let data: String
     }
 
-    /// An Inno Setup 5.4.2 installer with one stored chunk. Each field
-    /// that the reader skips is zero bytes, which reads as an empty
-    /// string or a zero number.
-    private func makeInstaller(files: [FakeInstallerFile]) throws -> URL {
+    /// An Inno Setup 5.4.2 installer with one chunk. Each field that the
+    /// reader skips is zero bytes, which reads as an empty string or a
+    /// zero number.
+    private func makeInstaller(
+        files: [FakeInstallerFile], data: FakeData = .inside,
+        blockStreams: (header: Data, entries: Data)? = nil
+    ) throws -> URL {
+        var lzmaStream: Data?
+        if case .lzma(let stream) = data { lzmaStream = stream }
+        var isSeparate = false
+        if case .separateFile = data { isSeparate = true }
         var header = Data(count: 12 * 4)
         header.appendString("")
         header.append(Data(count: 17 * 4 + 32))
@@ -284,7 +375,7 @@ final class RTPImportTests: XCTestCase {
         header.append(Data(count: 32 + 28 + 8))
         header.appendU32(1)
         header.append(Data(count: 5))
-        header.append(0)
+        header.append(lzmaStream == nil ? 0 : 3)
         header.append(Data(count: 2 + 2 + 4 + 6))
         for (location, file) in files.enumerated() {
             header.append(Data(count: 4))
@@ -297,18 +388,22 @@ final class RTPImportTests: XCTestCase {
         }
 
         let contents = files.map { Data($0.data.utf8) }
-        let chunkSize = contents.reduce(0) { $0 + $1.count }
+        let chunk = Data("zlb\u{1a}".utf8) + (lzmaStream ?? contents.reduce(Data(), +))
+        let chunkSize = chunk.count - 4
         var entries = Data()
         var offset = 0
         for content in contents {
-            entries.append(Data(count: 12))
+            entries.append(Data(count: 8))
+            // A data file starts with its own 12-byte header.
+            entries.appendU32(isSeparate ? 12 : 0)
             entries.appendU64(UInt64(offset))
             entries.appendU64(UInt64(content.count))
             entries.appendU64(UInt64(chunkSize))
             var digest = FileDigest(md5: false)
             content.withUnsafeBytes { digest.update($0) }
             entries.append(digest.finalize())
-            entries.append(Data(count: 16 + 2))
+            entries.append(Data(count: 16))
+            entries.append(contentsOf: [lzmaStream == nil ? 0 : 0x80, 0])
             offset += content.count
         }
 
@@ -317,8 +412,17 @@ final class RTPImportTests: XCTestCase {
         let setup = 0x300
         var setupData = Data("Inno Setup Setup Data (5.4.2)".utf8)
         setupData.append(Data(count: 64 - setupData.count))
-        setupData.append(block(header))
-        setupData.append(block(entries))
+        if let blockStreams {
+            for (stream, plain) in [(blockStreams.header, header), (blockStreams.entries, entries)] {
+                XCTAssertEqual(
+                    try LzmaRawDecoder(stream: stream).readAll(limit: 1 << 20), plain,
+                    "The block changed, so make its stream again")
+                setupData.append(block(stream, isCompressed: true))
+            }
+        } else {
+            setupData.append(block(header))
+            setupData.append(block(entries))
+        }
         let dataOffset = setup + setupData.count
 
         var exe = Data(count: setup)
@@ -346,23 +450,28 @@ final class RTPImportTests: XCTestCase {
         table.appendU32(1)
         table.append(Data(count: 16))
         table.appendU32(UInt32(setup))
-        table.appendU32(UInt32(dataOffset))
+        table.appendU32(isSeparate ? 0 : UInt32(dataOffset))
         table.appendU32(RawDeflate.crc32(table))
         exe.replace(at: loader, with: table)
 
         exe.append(setupData)
-        exe.append(Data("zlb\u{1a}".utf8))
-        for content in contents { exe.append(content) }
-
         let url = tempRoot.appendingPathComponent("Installer-\(UUID().uuidString)/Setup.exe")
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if isSeparate {
+            var slice = Data("idska32\u{1a}".utf8)
+            slice.appendU32(UInt32(12 + chunk.count))
+            slice.append(chunk)
+            try slice.write(to: url.deletingLastPathComponent().appendingPathComponent("Setup-1.bin"))
+        } else {
+            exe.append(chunk)
+        }
         try exe.write(to: url)
         return url
     }
 
     /// A CRC-checked size and kind, then 4 KiB pieces with their own CRC.
-    private func block(_ content: Data) -> Data {
+    private func block(_ content: Data, isCompressed: Bool = false) -> Data {
         var pieces = Data()
         var start = content.startIndex
         while start < content.endIndex {
@@ -373,7 +482,7 @@ final class RTPImportTests: XCTestCase {
         }
         var sizeAndKind = Data()
         sizeAndKind.appendU32(UInt32(pieces.count))
-        sizeAndKind.append(0)
+        sizeAndKind.append(isCompressed ? 1 : 0)
         var block = Data()
         block.appendU32(RawDeflate.crc32(sizeAndKind))
         block.append(sizeAndKind)

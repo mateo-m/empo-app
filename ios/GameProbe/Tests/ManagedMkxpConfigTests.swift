@@ -383,6 +383,27 @@ final class ManagedMkxpConfigTests: XCTestCase {
         }
     }
 
+    func testOverlayStringAddsTheImportedRTPsToTheRTPsOfTheOverlay() throws {
+        let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
+        let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
+        try FileManager.default.createDirectory(at: gameDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try #"{ "RTP": ["Game.zip"] }"#
+            .write(to: gameDir.appendingPathComponent("mkxp.json"), atomically: true, encoding: .utf8)
+        try #"{ "RTP": "Extra.zip" }"#
+            .write(
+                to: ManagedMkxpConfig.overlayConfigURL(in: stateDir), atomically: true, encoding: .utf8)
+
+        let json = try XCTUnwrap(
+            ManagedMkxpConfig.overlayJSONString(
+                gameDirectory: gameDir,
+                stateDirectory: stateDir,
+                rtpFolders: ["/RTP/RPGVXAce"]
+            )
+        )
+        XCTAssertEqual(try parseOverlayJSON(json)["RTP"] as? [String], ["Extra.zip", "/RTP/RPGVXAce"])
+    }
+
     func testOverlayStringSendsNoRTPKeyWithoutImportedRTPs() throws {
         let gameDir = tempRoot.appendingPathComponent("Game", isDirectory: true)
         let stateDir = tempRoot.appendingPathComponent("EmpoState", isDirectory: true)
