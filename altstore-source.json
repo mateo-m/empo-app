@@ -23,6 +23,15 @@
       ],
       "versions": [
         {
+          "version": "0.12.5",
+          "buildVersion": "929",
+          "date": "2026-11-28",
+          "localizedDescription": "New\n• Add the end, memory, and ruby details to the game crash report\n• Bind the hm7_* library\n\nFixed\n• Send no crash report after a start error that the player saw\n• Write core log lines only to the session log\n• Center the loading screen on the closed iPhone Duo\n• Copy the files next to the www folder of a desktop MV release\n• Send background ends to sentry as logs, not issues\n• Restart the game after iOS stops it during play\n• Drop the native Win32API branch that loops under a game's own wrap\n• Log a missing Win32API call once without a write to a frozen object\n• Hide Ruby's socket classes from RGSS games on the 1.8 and 1.9 VMs\n• Build the get items adapter on the item mart adapter when the game has one\n• Pass the arguments of a game's update call to the game's update\n• Find a file whose accented name is in another unicode form with the path cache off\n• Define save_to_file in the preload so it works with the fix-up scripts off\n• Lock the decoder lock itself, not a copy of it\n• Report a main.js error when a plugin sets window.onload after it\n• Give desktop plugins the node calls and platform they need at boot\n• Give desktop plugins a sha256 crypto module and the script files of the game folder\n• Give folder entries file types when a plugin asks\n• Give plugins promise file functions\n• Give plugins a write stream that writes the file when it ends\n• Load the game again after the web content process stops during play\n\nOther changes\n• Update the core and ANGLE pins\n• Update the MV/MZ core pin to v7\n• Update the MV/MZ core pin to v8\n• Update the MV/MZ core pin to v9\n• Update the MV/MZ core pin to v10\n• Update the core pin to v32\n• Update the core pin to v33",
+          "downloadURL": "https://github.com/mateo-m/empo-app/releases/download/v0.12.5/Empo-ios.ipa",
+          "size": 102140812,
+          "minOSVersion": "17.0"
+        },
+        {
           "version": "0.12.4",
           "buildVersion": "913",
           "date": "2026-11-26",
