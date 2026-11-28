@@ -674,6 +674,7 @@ targets:
       - path: src/App/GameCoreLaunch.swift
       - path: src/Cores/CoreSetting.swift
       - path: src/App/AppInfo.swift
+      - path: src/App/GameRestartMessage.swift
       - path: GameProcess/GameCoreForwarders.c
       - path: Resources/Localizable.xcstrings
     settings:

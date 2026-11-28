@@ -63,4 +63,5 @@ enum PlayerMessage: Codable {
     case saveLoaded
     /// The engine repaired a save. The detail is "<file name>: <fault>".
     case saveRepaired(String)
+    case gameRestarted(atTitle: Bool, stop: String)
 }

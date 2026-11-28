@@ -226,6 +226,10 @@ final class GameLauncher {
         case .saveRepaired(let detail):
             session.logger.note("The engine repaired a save: \(detail)")
             ErrorReports.saveRepaired(detail, game: session.reportedGame, saveLoad: session.saveLoad)
+        case .gameRestarted(let atTitle, let stop):
+            session.logger.note(
+                "The game started again \(atTitle ? "at its title screen" : "at its resume point"): \(stop)")
+            ErrorReports.gameRestarted(atTitle: atTitle, stop: stop, game: session.reportedGame)
         }
     }
 

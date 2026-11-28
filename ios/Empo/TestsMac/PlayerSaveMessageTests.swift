@@ -23,4 +23,13 @@ final class PlayerSaveMessageTests: XCTestCase {
         }
         XCTAssertEqual(detail, "Game_2.rxdata: the @name of an RPG::AudioFile was a Float")
     }
+
+    func testGameRestartedLineKeepsTheStop() throws {
+        let line = #"{"gameRestarted":{"atTitle":true,"stop":"the web content process stopped"}}"#
+        guard case .gameRestarted(let atTitle, let stop) = try decode(line) else {
+            return XCTFail("not a restart")
+        }
+        XCTAssertTrue(atTitle)
+        XCTAssertEqual(stop, "the web content process stopped")
+    }
 }

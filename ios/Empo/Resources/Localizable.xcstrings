@@ -61697,6 +61697,122 @@
         }
       }
     },
+    "The game stopped and restarted at the title screen. Any saves you made are safe." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Spiel wurde beendet und am Titelbildschirm neu gestartet. Alle Spielstände, die du gemacht hast, sind sicher."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El juego se detuvo y se reinició en la pantalla de título. Las partidas que guardaste están a salvo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le jeu s'est arrêté et a redémarré sur l'écran titre. Les sauvegardes que tu as faites sont intactes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gioco si è interrotto ed è ripartito dalla schermata del titolo. I salvataggi che hai fatto sono al sicuro."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームが停止したため、タイトル画面から再開しました。作成したセーブデータは無事です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임이 멈춰서 타이틀 화면부터 다시 시작했어요. 저장한 세이브는 안전해요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O jogo parou e reiniciou na tela de título. Os saves que você fez estão seguros."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игра остановилась и перезапустилась с титульного экрана. Сделанные вами сохранения в порядке."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏停止了，已从标题画面重新开始。你之前的存档都没事。"
+          }
+        }
+      }
+    },
+    "The game stopped and restarted from an earlier point. You may need to replay the last few minutes." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Spiel wurde beendet und an einer früheren Stelle neu gestartet. Vielleicht musst du die letzten Minuten noch einmal spielen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El juego se detuvo y se reinició desde un punto anterior. Puede que tengas que repetir los últimos minutos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le jeu s'est arrêté et a redémarré à un point antérieur. Tu devras peut-être rejouer les dernières minutes."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il gioco si è interrotto ed è ripartito da un punto precedente. Potresti dover rigiocare gli ultimi minuti."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ゲームが停止したため、少し前の場面から再開しました。直前の数分をもう一度プレイする必要があるかもしれません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "게임이 멈춰서 이전 시점부터 다시 시작했어요. 마지막 몇 분을 다시 플레이해야 할 수도 있어요."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O jogo parou e reiniciou de um ponto anterior. Talvez você precise jogar de novo os últimos minutos."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Игра остановилась и перезапустилась с более раннего момента. Возможно, придётся заново пройти последние несколько минут."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "游戏停止了，已从之前的某个位置重新开始。你可能需要重玩最后几分钟。"
+          }
+        }
+      }
+    },
     "The game stopped responding. Close Empo from the app switcher, then reopen it." : {
       "localizations" : {
         "de" : {

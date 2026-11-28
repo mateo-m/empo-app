@@ -44,6 +44,7 @@ static Callback gGameRectChanged;
 static Callback gInfoMessage;
 static Callback gPaused;
 static Callback gResumed;
+static Callback gSaveEvent;
 
 static NSString *gGamePath;
 static int gLog = -1;
@@ -265,6 +266,14 @@ static void gameAlert(const char *message, void *userdata) {
     }
 }
 
+static void gameRestarted(int atResumePoint, const char *stop, void *userdata) {
+    if (gSaveEvent.fn) {
+        ((gamecore_SaveEventCallback)gSaveEvent.fn)(atResumePoint ? GAMECORE_SAVE_RESUMED_AFTER_STOP
+                                                                  : GAMECORE_SAVE_TITLE_AFTER_STOP,
+                                                    stop, gSaveEvent.userdata);
+    }
+}
+
 static void coreLog(const char *line, void *userdata) {
     logLine(@(line));
 }
@@ -310,6 +319,7 @@ int gamecore_run_app(int argc, char **argv) {
     mvmz_set_exit_callback(gameExited, NULL);
     mvmz_set_error_callback(gameError, NULL);
     mvmz_set_alert_callback(gameAlert, NULL);
+    mvmz_set_restart_callback(gameRestarted, NULL);
     mvmz_set_log_callback(coreLog, NULL);
     // The launcher passes Games/<name>/Game, and <name> is the game's identity.
     NSString *gameId = root.stringByDeletingLastPathComponent.lastPathComponent;
@@ -380,6 +390,7 @@ void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *user
 }
 
 void gamecore_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata) {
+    gSaveEvent = (Callback){(void *)cb, userdata};
 }
 
 void gamecore_setPausedCallback(gamecore_PausedCallback cb, void *userdata) {

@@ -201,6 +201,17 @@ enum ErrorReports {
         SentrySDK.logger.warn("The game ended while Empo was in the background.", attributes: attributes)
     }
 
+    /// `stop` has only the free memory, the memory of the app, and the
+    /// thermal state at the stop.
+    static func gameRestarted(atTitle: Bool, stop: String, game: Game?) {
+        guard SentrySDK.isEnabled else { return }
+        var attributes = ["at_title": atTitle ? "yes" : "no", "stop": stop]
+        attributes["game"] = game?.title
+        SentrySDK.logger.warn(
+            "The web content process of the game stopped, and the core started the game again.",
+            attributes: attributes)
+    }
+
     /// Apple's count of the times Empo exited in the background in one
     /// day. A report goes only for a day with a memory end, which comes
     /// from iOS. Apple says that a close from the app switcher is a
