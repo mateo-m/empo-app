@@ -38,6 +38,7 @@ enum ErrorReports {
                 options.enableAutoBreadcrumbTracking = false
                 options.enableSwizzling = false
                 options.beforeSend = beforeSend
+                options.beforeSendLog = beforeSendLog
             }
         } else if SentrySDK.isEnabled {
             SentrySDK.close()
@@ -51,6 +52,12 @@ enum ErrorReports {
         event.user = nil
         event.context?["app"]?["device_app_hash"] = nil
         return event
+    }
+
+    /// The SDK sets the user of a log to the install ID when no user is set.
+    nonisolated static func beforeSendLog(_ log: SentryLog) -> SentryLog? {
+        log.attributes["user.id"] = nil
+        return log
     }
 
     private nonisolated static let executables: Set<String> = ["Empo", "GameProcess"]
@@ -185,13 +192,13 @@ enum ErrorReports {
     static func backgroundEnd(
         _ session: BackgroundSession, endedProcess: BackgroundSession.EndedProcess, game: Game?
     ) {
-        send(
-            "The game ended while Empo was in the background.", level: .warning,
-            fingerprint: ["background-end", session.core], game: game, saveLoad: nil,
-            tags: [
-                "core": session.core, "runner": session.runner.rawValue, "game_state": session.state.rawValue,
-                "ended_process": endedProcess.rawValue,
-            ])
+        guard SentrySDK.isEnabled else { return }
+        var attributes = [
+            "core": session.core, "runner": session.runner.rawValue, "game_state": session.state.rawValue,
+            "ended_process": endedProcess.rawValue,
+        ]
+        attributes["game"] = game?.title
+        SentrySDK.logger.warn("The game ended while Empo was in the background.", attributes: attributes)
     }
 
     /// Apple's count of the times Empo exited in the background in one
@@ -200,28 +207,26 @@ enum ErrorReports {
     /// normal exit (WWDC20 "Why is my app getting killed?").
     static func backgroundExits(memoryLimit: Int, memoryPressure: Int, normal: Int) {
         guard
-            let tags = backgroundExitTags(
+            SentrySDK.isEnabled,
+            let attributes = backgroundExitAttributes(
                 memoryLimit: memoryLimit, memoryPressure: memoryPressure, normal: normal)
         else { return }
-        send(
-            "iOS ended Empo in the background to free memory.", level: .warning,
-            fingerprint: ["background-memory-exits"], game: nil, saveLoad: nil, tags: tags)
+        SentrySDK.logger.warn("iOS ended Empo in the background to free memory.", attributes: attributes)
     }
 
-    static func backgroundExitTags(
+    static func backgroundExitAttributes(
         memoryLimit: Int, memoryPressure: Int, normal: Int
-    ) -> [String: String]? {
+    ) -> [String: Int]? {
         guard memoryLimit + memoryPressure > 0 else { return nil }
         return [
-            "memory_limit_exits": String(memoryLimit),
-            "memory_pressure_exits": String(memoryPressure),
-            "normal_exits": String(normal),
+            "memory_limit_exits": memoryLimit,
+            "memory_pressure_exits": memoryPressure,
+            "normal_exits": normal,
         ]
     }
 
     private static func send(
-        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?,
-        tags: [String: String] = [:]
+        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?
     ) {
         guard SentrySDK.isEnabled else { return }
         let event = Event(level: level)
@@ -230,7 +235,6 @@ enum ErrorReports {
         let log = game.flatMap { logTail(of: $0.log) }
         let now = ContinuousClock.now
         SentrySDK.capture(event: event) { scope in
-            scope.setTags(tags)
             if let game {
                 scope.setTag(value: game.title, key: "game")
             }
