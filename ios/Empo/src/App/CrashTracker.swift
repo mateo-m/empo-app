@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
 import Foundation
+import UIKit
 
 /// Tracks unclean engine terminations via per-game marker files.
 ///
@@ -28,8 +29,31 @@ final class CrashTracker {
     /// did not come back: iOS or the player ended Empo there.
     private var backgroundEnd: BackgroundSession?
 
+    /// The detail in the marker that launch found.
+    private var lastSession: GameCrashDetail?
+
+    /// The detail that each marker write puts in the marker. Empo runs
+    /// one game at a time.
+    private(set) var session: GameCrashDetail?
+    private var sessionContainer: GameContainer?
+
     init() {
         pendingCrashRecovery = false
+        let center = NotificationCenter.default
+        center.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main
+        ) {
+            [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.session?.memoryWarning = true
+                self?.rewriteMarker()
+            }
+        }
+        center.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main)
+        {
+            [weak self] _ in
+            MainActor.assumeIsolated { self?.rewriteMarker() }
+        }
         for container in GameContainer.discover() {
             let backgroundURL = container.backgroundSessionMarkerURL
             // An update also ends Empo in the background.
@@ -45,6 +69,11 @@ final class CrashTracker {
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
             if Self.isMarkerFromCurrentInstall(at: url) {
                 pendingCrashRecovery = true
+                if let detail = FileManager.default.contents(atPath: url.path).flatMap({
+                    try? JSONDecoder().decode(GameCrashDetail.self, from: $0)
+                }) {
+                    lastSession = detail
+                }
                 // Do not break. Keep the scan, so we also notice
                 // any other stale markers from the current install.
                 // This is rare: it only occurs when multiple games
@@ -69,8 +98,10 @@ final class CrashTracker {
     /// this step, a force-quit after the alert would show the alert
     /// again on every later launch. The marker outlives the
     /// in-memory flag because no clean game exit ran to remove it.
-    func consumeRecovery() {
+    /// Returns the detail of the session that the marker recorded.
+    func consumeRecovery() -> GameCrashDetail? {
         pendingCrashRecovery = false
+        defer { lastSession = nil }
         let fm = FileManager.default
         for container in GameContainer.discover() {
             let url = container.sessionActiveMarkerURL
@@ -79,18 +110,38 @@ final class CrashTracker {
                 try? fm.removeItem(at: url)
             }
         }
+        return lastSession
     }
 
+    func beginSession(_ detail: GameCrashDetail, in container: GameContainer) {
+        session = detail
+        sessionContainer = container
+        writeMarker(for: container)
+    }
+
+    /// Each write reads the memory and the heat again, so that the
+    /// marker has the values from before the end of Empo.
     func writeMarker(for container: GameContainer) {
+        session?.resources = .read()
         container.ensureEmpoStateDirectory()
         FileManager.default.createFile(
             atPath: container.sessionActiveMarkerURL.path,
-            contents: nil
+            contents: session.flatMap { try? JSONEncoder().encode($0) }
         )
     }
 
     func removeMarker(for container: GameContainer) {
         try? FileManager.default.removeItem(at: container.sessionActiveMarkerURL)
+    }
+
+    /// A warning that comes while no marker is on disk goes in the next
+    /// write. The marker is not written again after something removed it,
+    /// so that it cannot bring back the folder of a deleted game.
+    private func rewriteMarker() {
+        guard let sessionContainer,
+            FileManager.default.fileExists(atPath: sessionContainer.sessionActiveMarkerURL.path)
+        else { return }
+        writeMarker(for: sessionContainer)
     }
 
     /// Returns the session once, and deletes the markers, so that no

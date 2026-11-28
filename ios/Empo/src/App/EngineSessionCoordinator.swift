@@ -50,6 +50,7 @@ final class EngineSessionCoordinator {
     let heldKeys = HeldKeys<KeyHolder>(send: { gamecore_injectKeyEvent($0, $1 ? 1 : 0) })
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
+    var crashDetail: GameCrashDetail? { crashTracker.session }
 
     static var crashMessage: String {
         String(localized: "The game crashed last time. Your saves are safe. Open it again to keep playing.")
@@ -159,10 +160,9 @@ final class EngineSessionCoordinator {
         runner == .gameProcess || openedCore?.canKillSession == true
     }
 
-    func consumeCrashRecovery() -> String? {
+    func consumeCrashRecovery() -> (message: String, detail: GameCrashDetail?)? {
         guard crashTracker.pendingCrashRecovery else { return nil }
-        crashTracker.consumeRecovery()
-        return Self.crashMessage
+        return (Self.crashMessage, crashTracker.consumeRecovery())
     }
 
     func configureEngine(_ input: GameSession.LaunchInput) {

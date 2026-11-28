@@ -179,10 +179,46 @@ enum ErrorReports {
         send(message, level: .error, fingerprint: error.fingerprint, game: game, saveLoad: saveLoad)
     }
 
-    static func gameCrash(game: Game?, saveLoad: SaveLoad?) {
-        send(
+    /// `detail` is nil when the crash marker of the last launch had no
+    /// detail that Empo can read.
+    static func gameCrash(game: Game?, saveLoad: SaveLoad?, end: GameCrashEnd, detail: GameCrashDetail?) {
+        send(gameCrashEvent(game: game, saveLoad: saveLoad, end: end, detail: detail), game: game)
+    }
+
+    static func gameCrashEvent(
+        game: Game?, saveLoad: SaveLoad?, end: GameCrashEnd, detail: GameCrashDetail?
+    ) -> Event {
+        let event = makeEvent(
             "The game crashed.", level: .fatal, fingerprint: ["crash", game?.title ?? ""], game: game,
             saveLoad: saveLoad)
+        var tags = event.tags ?? [:]
+        switch end {
+        case .empo:
+            tags["ended_process"] = "empo"
+        case .game:
+            tags["ended_process"] = "game"
+        case .player(let exit):
+            tags["ended_process"] = "player"
+            switch exit {
+            case .signal(let signal): tags["exit"] = "signal \(signal)"
+            case .status(let status): tags["exit"] = "status \(status)"
+            }
+        }
+        if let detail {
+            tags["runner"] = detail.runner?.rawValue
+            tags["thermal_state"] = String(describing: detail.resources.thermalState)
+            tags["memory_warning"] = detail.memoryWarning.map { $0 ? "yes" : "no" }
+            tags["ruby_setting"] = detail.ruby?.setting
+            tags["ruby_used"] = detail.ruby?.used
+            var memory: [String: Any] = [:]
+            memory["app_memory_mb"] = detail.resources.appMemoryMB
+            memory["free_memory_mb"] = detail.resources.freeMemoryMB
+            if !memory.isEmpty {
+                event.context = (event.context ?? [:]).merging(["memory": memory]) { $1 }
+            }
+        }
+        event.tags = tags
+        return event
     }
 
     /// A game that was open when Empo went to the background ended
@@ -239,22 +275,34 @@ enum ErrorReports {
     private static func send(
         _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?
     ) {
-        guard SentrySDK.isEnabled else { return }
+        send(
+            makeEvent(message, level: level, fingerprint: fingerprint, game: game, saveLoad: saveLoad),
+            game: game)
+    }
+
+    private static func makeEvent(
+        _ message: String, level: SentryLevel, fingerprint: [String], game: Game?, saveLoad: SaveLoad?
+    ) -> Event {
+        let now = ContinuousClock.now
         let event = Event(level: level)
         event.message = SentryMessage(formatted: message)
         event.fingerprint = fingerprint
+        var tags: [String: String] = [:]
+        tags["game"] = game?.title
+        if let saveLoad {
+            tags[SaveLoad.tagKey] = saveLoad.tag(at: now)
+            if let seconds = saveLoad.seconds(at: now) {
+                event.context = ["save_load": ["seconds_since_load": seconds]]
+            }
+        }
+        event.tags = tags
+        return event
+    }
+
+    private static func send(_ event: Event, game: Game?) {
+        guard SentrySDK.isEnabled else { return }
         let log = game.flatMap { logTail(of: $0.log) }
-        let now = ContinuousClock.now
         SentrySDK.capture(event: event) { scope in
-            if let game {
-                scope.setTag(value: game.title, key: "game")
-            }
-            if let saveLoad {
-                scope.setTag(value: saveLoad.tag(at: now), key: SaveLoad.tagKey)
-                if let seconds = saveLoad.seconds(at: now) {
-                    scope.setContext(value: ["seconds_since_load": seconds], key: "save_load")
-                }
-            }
             if let log {
                 scope.addAttachment(Attachment(data: log, filename: "session.log", contentType: "text/plain"))
             }
