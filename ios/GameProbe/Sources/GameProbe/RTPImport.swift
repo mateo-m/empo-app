@@ -23,8 +23,18 @@ public enum RTPImport {
 
     /// Files can put an empty folder or a file where a copy goes.
     public static func isCopy(at folder: URL) -> Bool {
-        let names = Set(FileManager.default.subdirectoryNames(at: folder).map { $0.lowercased() })
-        return names.isSuperset(of: ["audio", "graphics"])
+        let media = FileManager.default.subdirectoryNames(at: folder)
+            .filter { ["audio", "graphics"].contains($0.lowercased()) }
+        return Set(media.map { $0.lowercased() }).count == 2
+            && media.allSatisfy { holdsFile(folder.appendingPathComponent($0, isDirectory: true)) }
+    }
+
+    private static func holdsFile(_ folder: URL) -> Bool {
+        guard let enumerator = FileManager.default.enumerator(atPath: folder.path) else { return false }
+        return enumerator.contains { path in
+            guard let path = path as? String else { return false }
+            return !folder.appendingPathComponent(path).isDirectory
+        }
     }
 
     /// Reads the RTP in `source`, a folder or an installer, and writes

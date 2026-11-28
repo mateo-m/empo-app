@@ -276,6 +276,12 @@ final class RTPImportTests: XCTestCase {
         XCTAssertTrue(RTPImport.isCopy(at: copy))
         XCTAssertFalse(RTPImport.isCopy(at: try makeFolder("Empty", files: [])))
         XCTAssertFalse(RTPImport.isCopy(at: try makeFolder("OnlyAudio", files: ["Audio/SE/a.ogg"])))
+        let emptied = try makeFolder("Emptied", files: [])
+        for name in ["Audio/SE", "Graphics/Titles1"] {
+            try FileManager.default.createDirectory(
+                at: emptied.appendingPathComponent(name), withIntermediateDirectories: true)
+        }
+        XCTAssertFalse(RTPImport.isCopy(at: emptied))
         let file = tempRoot.appendingPathComponent("RPGVX")
         try Data("x".utf8).write(to: file)
         XCTAssertFalse(RTPImport.isCopy(at: file))
