@@ -142,7 +142,7 @@ public enum RTPImport {
         guard byPath.values.contains(where: { $0.parts[0].lowercased() == "audio" }),
             let package = RTPPackage.detect(graphicsFolders: Set(graphicsFolders))
         else { throw Failure.notRPGMakerFiles }
-        guard byPath.values.reduce(0, { $0 + archive.size(of: $1.file) }) <= maximumSize else {
+        guard archive.unpackedSize(of: byPath.values.map(\.file)) <= maximumSize else {
             throw Failure.notRPGMakerFiles
         }
 

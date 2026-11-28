@@ -111,8 +111,13 @@ public struct InnoSetupArchive: Sendable {
         self.version = version
     }
 
-    public func size(of file: File) -> Int {
-        entries[file.location].fileSize
+    /// The bytes that `extract` unpacks for `files`. It reads each chunk
+    /// from its start to the end of its last chosen file.
+    public func unpackedSize(of files: [File]) -> Int {
+        Dictionary(grouping: files.map { entries[$0.location] }, by: \.chunk).values.reduce(0) {
+            total, chunk in
+            total + (chunk.map { $0.fileOffset + $0.fileSize }.max() ?? 0)
+        }
     }
 
     /// Writes each file to its destination URL. Files that share one

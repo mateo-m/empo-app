@@ -239,6 +239,12 @@ final class RTPImportTests: XCTestCase {
             "en")
     }
 
+    func testInstallerImportRefusesFilesThatStartPastTheSizeLimit() throws {
+        assertFailure(
+            .notRPGMakerFiles,
+            from: try makeInstaller(files: Self.storedFiles, offsetPadding: RTPImport.maximumSize))
+    }
+
     func testInstallerImportRefusesAChangedOrCutInstaller() throws {
         let installer = try makeInstaller(files: Self.storedFiles)
         var bytes = try Data(contentsOf: installer)
@@ -402,7 +408,7 @@ final class RTPImportTests: XCTestCase {
     /// zero number.
     private func makeInstaller(
         files: [FakeInstallerFile], data: FakeData = .inside,
-        blockStreams: (header: Data, entries: Data)? = nil
+        blockStreams: (header: Data, entries: Data)? = nil, offsetPadding: Int = 0
     ) throws -> URL {
         var lzmaStream: Data?
         if case .lzma(let stream) = data { lzmaStream = stream }
@@ -439,7 +445,7 @@ final class RTPImportTests: XCTestCase {
             entries.append(Data(count: 8))
             // A data file starts with its own 12-byte header.
             entries.appendU32(isSeparate ? 12 : 0)
-            entries.appendU64(UInt64(offset))
+            entries.appendU64(UInt64(offset + offsetPadding))
             entries.appendU64(UInt64(content.count))
             entries.appendU64(UInt64(chunkSize))
             var digest = FileDigest(md5: false)
