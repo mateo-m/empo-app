@@ -132,12 +132,14 @@ typedef enum {
     // The engine repaired a broken value in a save that the game writes
     // or reads. The detail is the file name and the fault.
     GAMECORE_SAVE_REPAIRED = 1,
-    // iOS stopped the game, and the core started it again where the
-    // player was a short time before. The game state since then is gone.
-    // The detail is the log line of the stop.
+    // The web content process of the game stopped, and the core started
+    // the game again at the last point where the game could save. The
+    // game state since then is gone. The detail is the log line of the
+    // stop.
     GAMECORE_SAVE_RESUMED_AFTER_STOP = 2,
-    // iOS stopped the game, and the core started it again at its title
-    // screen. The detail is the log line of the stop.
+    // The web content process of the game stopped, and the core started
+    // the game again at its title screen. The detail is the log line of
+    // the stop.
     GAMECORE_SAVE_TITLE_AFTER_STOP = 3,
 } GameCoreSaveEvent;
 
@@ -350,8 +352,9 @@ void gamecore_signalInfoDismissed(void);
 
 void gamecore_setInfoMessageCallback(gamecore_InfoMessageCallback cb, void *userdata);
 
-// Save events (Engine -> UI). They fire on a core thread, and the game
-// does not wait. A core that does not report saves never calls it.
+// Save events (Engine -> UI). They fire on a core thread or on the main
+// thread, and the game does not wait. A core that does not report saves
+// or restarts never calls it.
 void gamecore_setSaveEventCallback(gamecore_SaveEventCallback cb, void *userdata);
 
 // Pause / Resume (UI <-> Engine).

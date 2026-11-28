@@ -201,14 +201,15 @@ enum ErrorReports {
         SentrySDK.logger.warn("The game ended while Empo was in the background.", attributes: attributes)
     }
 
-    /// iOS stopped the web content process of an MV or MZ game, and the
-    /// core started the game again. `stop` has the free memory, the memory
-    /// of the app, and the thermal state at the stop.
+    /// `stop` has only the free memory, the memory of the app, and the
+    /// thermal state at the stop.
     static func gameRestarted(atTitle: Bool, stop: String, game: Game?) {
         guard SentrySDK.isEnabled else { return }
         var attributes = ["at_title": atTitle ? "yes" : "no", "stop": stop]
         attributes["game"] = game?.title
-        SentrySDK.logger.warn("iOS stopped the game, and Empo started it again.", attributes: attributes)
+        SentrySDK.logger.warn(
+            "The web content process of the game stopped, and the core started the game again.",
+            attributes: attributes)
     }
 
     /// Apple's count of the times Empo exited in the background in one

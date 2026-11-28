@@ -343,11 +343,9 @@ final class EngineSessionCoordinator {
                     switch event {
                     case GAMECORE_SAVE_LOAD: delegate.coordinatorSaveLoaded()
                     case GAMECORE_SAVE_REPAIRED: delegate.coordinatorDidRepairSave(detail)
-                    case GAMECORE_SAVE_RESUMED_AFTER_STOP:
-                        delegate.coordinatorGameRestarted(atTitle: false, stop: detail)
-                        AppWindow.claimKey(.info)
-                    case GAMECORE_SAVE_TITLE_AFTER_STOP:
-                        delegate.coordinatorGameRestarted(atTitle: true, stop: detail)
+                    case GAMECORE_SAVE_RESUMED_AFTER_STOP, GAMECORE_SAVE_TITLE_AFTER_STOP:
+                        delegate.coordinatorGameRestarted(
+                            atTitle: event == GAMECORE_SAVE_TITLE_AFTER_STOP, stop: detail)
                         AppWindow.claimKey(.info)
                     default: break
                     }

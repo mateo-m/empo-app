@@ -186,6 +186,15 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
                 switch event {
                 case GAMECORE_SAVE_LOAD: PlayerAppDelegate.delegate(context)?.send(.saveLoaded)
                 case GAMECORE_SAVE_REPAIRED: PlayerAppDelegate.delegate(context)?.send(.saveRepaired(text))
+                case GAMECORE_SAVE_RESUMED_AFTER_STOP, GAMECORE_SAVE_TITLE_AFTER_STOP:
+                    let atTitle = event == GAMECORE_SAVE_TITLE_AFTER_STOP
+                    PlayerAppDelegate.delegate(context)?.send(.gameRestarted(atTitle: atTitle, stop: text))
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            PlayerAppDelegate.delegate(context)?.presentInfo(
+                                getGameRestartMessage(atTitle: atTitle))
+                        }
+                    }
                 default: break
                 }
             }, context)
@@ -320,6 +329,10 @@ final class PlayerAppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValida
 
     private func showInfo(_ message: String) {
         send(.info(message))
+        presentInfo(message)
+    }
+
+    private func presentInfo(_ message: String) {
         let alert = makeAlert()
         alert.messageText = launch.title
         alert.informativeText = message

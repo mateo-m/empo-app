@@ -546,16 +546,7 @@ extension AppState: EngineSessionCoordinatorDelegate {
         session.note(
             "The game started again \(atTitle ? "at its title screen" : "at its resume point"): \(stop)")
         ErrorReports.gameRestarted(atTitle: atTitle, stop: stop, game: reportedGame)
-        infoMessage =
-            atTitle
-            ? String(
-                localized:
-                    "The game stopped and restarted at the title screen. Your saves are safe. Load one to keep playing."
-            )
-            : String(
-                localized:
-                    "The game stopped and restarted from a moment ago. You may need to redo your last few steps."
-            )
+        infoMessage = getGameRestartMessage(atTitle: atTitle)
     }
 
     func coordinatorEngineDidPause(snapshot: UIImage?) {
