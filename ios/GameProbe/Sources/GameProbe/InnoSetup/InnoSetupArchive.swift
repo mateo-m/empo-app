@@ -111,13 +111,16 @@ public struct InnoSetupArchive: Sendable {
         self.version = version
     }
 
-    /// The bytes that `extract` unpacks for `files`. It reads each chunk
-    /// from its start to the end of its last chosen file.
+    /// The larger of the bytes that `extract` decompresses for `files` and
+    /// the bytes that it writes. It decompresses each chunk from its start
+    /// to the end of its last chosen file, and it writes a shared copy once
+    /// for each file.
     public func unpackedSize(of files: [File]) -> Int {
-        Dictionary(grouping: files.map { entries[$0.location] }, by: \.chunk).values.reduce(0) {
-            total, chunk in
+        let chosen = files.map { entries[$0.location] }
+        let decompressed = Dictionary(grouping: chosen, by: \.chunk).values.reduce(0) { total, chunk in
             total + (chunk.map { $0.fileOffset + $0.fileSize }.max() ?? 0)
         }
+        return max(decompressed, chosen.reduce(0) { $0 + $1.fileSize })
     }
 
     /// Writes each file to its destination URL. Files that share one

@@ -245,6 +245,15 @@ final class RTPImportTests: XCTestCase {
             from: try makeInstaller(files: Self.storedFiles, offsetPadding: RTPImport.maximumSize))
     }
 
+    func testInstallerImportRefusesFilesThatShareDataPastTheSizeLimit() throws {
+        let shared = FakeInstallerFile(
+            path: #"{app}\Audio\SE\Decision2.ogg"#, languages: "", data: "", location: 0)
+        assertFailure(
+            .notRPGMakerFiles,
+            from: try makeInstaller(
+                files: Self.storedFiles + [shared], sizePadding: RTPImport.maximumSize / 2))
+    }
+
     func testInstallerImportRefusesAChangedOrCutInstaller() throws {
         let installer = try makeInstaller(files: Self.storedFiles)
         var bytes = try Data(contentsOf: installer)
@@ -401,6 +410,7 @@ final class RTPImportTests: XCTestCase {
         let path: String
         let languages: String
         let data: String
+        var location: Int?
     }
 
     /// An Inno Setup 5.4.2 installer with one chunk. Each field that the
@@ -408,7 +418,7 @@ final class RTPImportTests: XCTestCase {
     /// zero number.
     private func makeInstaller(
         files: [FakeInstallerFile], data: FakeData = .inside,
-        blockStreams: (header: Data, entries: Data)? = nil, offsetPadding: Int = 0
+        blockStreams: (header: Data, entries: Data)? = nil, offsetPadding: Int = 0, sizePadding: Int = 0
     ) throws -> URL {
         var lzmaStream: Data?
         if case .lzma(let stream) = data { lzmaStream = stream }
@@ -432,7 +442,7 @@ final class RTPImportTests: XCTestCase {
             header.append(Data(count: 4 * 4))
             header.appendString(file.languages)
             header.append(Data(count: 3 * 4 + 20))
-            header.appendU32(UInt32(location))
+            header.appendU32(UInt32(file.location ?? location))
             header.append(Data(count: 19))
         }
 
@@ -446,7 +456,7 @@ final class RTPImportTests: XCTestCase {
             // A data file starts with its own 12-byte header.
             entries.appendU32(isSeparate ? 12 : 0)
             entries.appendU64(UInt64(offset + offsetPadding))
-            entries.appendU64(UInt64(content.count))
+            entries.appendU64(UInt64(content.count + sizePadding))
             entries.appendU64(UInt64(chunkSize))
             var digest = FileDigest(md5: false)
             content.withUnsafeBytes { digest.update($0) }
