@@ -339,6 +339,8 @@ extension InnoSetupArchive {
         return (version, isUnicode)
     }
 
+    private static let maximumBlockSize = 1 << 26
+
     /// A block is a CRC-checked size, a compression byte, then 4 KiB
     /// pieces that each carry their own CRC.
     private static func readBlock(_ installer: Data, at start: Int) throws -> (Data, Int) {
@@ -349,6 +351,7 @@ extension InnoSetupArchive {
         var sizeReader = InnoByteReader(Data(sizeAndKind))
         let storedSize = Int(try sizeReader.u32())
         let isCompressed = try sizeReader.u8() != 0
+        guard storedSize <= maximumBlockSize else { throw Failure.damaged }
         let end = reader.position + storedSize
 
         var joined = Data()
@@ -359,7 +362,7 @@ extension InnoSetupArchive {
             joined.append(piece)
         }
         guard isCompressed else { return (joined, end) }
-        return (try LzmaRawDecoder(stream: joined).readAll(limit: 1 << 26), end)
+        return (try LzmaRawDecoder(stream: joined).readAll(limit: maximumBlockSize), end)
     }
 
     private static func openSlice(next installer: URL, baseName: String) throws -> Data {
