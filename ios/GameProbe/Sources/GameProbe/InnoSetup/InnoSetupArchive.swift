@@ -76,7 +76,6 @@ public struct InnoSetupArchive: Sendable {
         try Self.skipEntries(&header, setup: setup, version: version, isUnicode: isUnicode)
 
         var files: [File] = []
-        files.reserveCapacity(setup.fileCount)
         for _ in 0..<setup.fileCount {
             if let file = try Self.readFile(&header, version: version, isUnicode: isUnicode) {
                 files.append(file)
@@ -85,7 +84,6 @@ public struct InnoSetupArchive: Sendable {
 
         var data = InnoByteReader(dataBlock)
         var entries: [DataEntry] = []
-        entries.reserveCapacity(setup.dataEntryCount)
         for _ in 0..<setup.dataEntryCount {
             entries.append(try DataEntry(&data, version: version))
         }

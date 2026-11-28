@@ -254,6 +254,10 @@ final class RTPImportTests: XCTestCase {
                 files: Self.storedFiles + [shared], sizePadding: RTPImport.maximumSize / 2))
     }
 
+    func testInstallerImportRefusesAHeaderThatCountsMoreFilesThanItHolds() throws {
+        assertFailure(.damaged, from: try makeInstaller(files: Self.storedFiles, fileCount: Int(UInt32.max)))
+    }
+
     func testInstallerImportRefusesAChangedOrCutInstaller() throws {
         let installer = try makeInstaller(files: Self.storedFiles)
         var bytes = try Data(contentsOf: installer)
@@ -418,7 +422,8 @@ final class RTPImportTests: XCTestCase {
     /// zero number.
     private func makeInstaller(
         files: [FakeInstallerFile], data: FakeData = .inside,
-        blockStreams: (header: Data, entries: Data)? = nil, offsetPadding: Int = 0, sizePadding: Int = 0
+        blockStreams: (header: Data, entries: Data)? = nil, offsetPadding: Int = 0, sizePadding: Int = 0,
+        fileCount: Int? = nil
     ) throws -> URL {
         var lzmaStream: Data?
         if case .lzma(let stream) = data { lzmaStream = stream }
@@ -428,7 +433,7 @@ final class RTPImportTests: XCTestCase {
         header.appendString("")
         header.append(Data(count: 17 * 4 + 32))
         var counts = [UInt32](repeating: 0, count: 16)
-        counts[7] = UInt32(files.count)
+        counts[7] = UInt32(fileCount ?? files.count)
         counts[8] = UInt32(files.count)
         for count in counts { header.appendU32(count) }
         header.append(Data(count: 32 + 28 + 8))
