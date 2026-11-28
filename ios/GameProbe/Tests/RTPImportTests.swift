@@ -249,6 +249,39 @@ final class RTPImportTests: XCTestCase {
         assertFailure(.damaged, from: installer)
     }
 
+    func testFolderImportKeepsNoFilesOfADamagedInstallerBeforeAGoodOne() throws {
+        let damaged = try makeInstaller(files: Self.storedFiles)
+        var bytes = try Data(contentsOf: damaged)
+        bytes[bytes.count - 1] ^= 0xff
+        try bytes.write(to: damaged)
+        let good = try makeInstaller(files: [
+            .init(path: #"{app}\Audio\SE\Decision2.ogg"#, languages: "", data: "en"),
+            .init(path: #"{app}\Graphics\Titles1\Book.png"#, languages: "", data: "png"),
+        ])
+        let folder = tempRoot.appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try FileManager.default.moveItem(
+            at: damaged.deletingLastPathComponent(), to: folder.appendingPathComponent("A"))
+        try FileManager.default.moveItem(
+            at: good.deletingLastPathComponent(), to: folder.appendingPathComponent("B"))
+        let destination = tempRoot.appendingPathComponent("copy", isDirectory: true)
+
+        XCTAssertEqual(try RTPImport.copy(from: folder, to: destination), .vxAce)
+        XCTAssertEqual(
+            relativeFiles(in: destination), ["Audio/SE/Decision2.ogg", "Graphics/Titles1/Book.png"])
+    }
+
+    func testCopyNeedsItsAudioAndGraphicsFolders() throws {
+        let copy = try makeFolder("RPGVXAce", files: ["Audio/SE/a.ogg", "Graphics/Titles1/b.png"])
+        XCTAssertTrue(RTPImport.isCopy(at: copy))
+        XCTAssertFalse(RTPImport.isCopy(at: try makeFolder("Empty", files: [])))
+        XCTAssertFalse(RTPImport.isCopy(at: try makeFolder("OnlyAudio", files: ["Audio/SE/a.ogg"])))
+        let file = tempRoot.appendingPathComponent("RPGVX")
+        try Data("x".utf8).write(to: file)
+        XCTAssertFalse(RTPImport.isCopy(at: file))
+        XCTAssertFalse(RTPImport.isCopy(at: tempRoot.appendingPathComponent("Missing")))
+    }
+
     func testInstallerImportRefusesAnInstallerWithoutAnRTP() throws {
         assertFailure(
             .notRPGMakerFiles,

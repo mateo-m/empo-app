@@ -21,6 +21,12 @@ public enum RTPImport {
     private static let folders = ["audio", "graphics", "fonts"]
     private static let languages: Set<String> = ["en", "english"]
 
+    /// Files can put an empty folder or a file where a copy goes.
+    public static func isCopy(at folder: URL) -> Bool {
+        let names = Set(FileManager.default.subdirectoryNames(at: folder).map { $0.lowercased() })
+        return names.isSuperset(of: ["audio", "graphics"])
+    }
+
     /// Reads the RTP in `source`, a folder or an installer, and writes
     /// its Audio, Graphics and Fonts folders into `destination`.
     public static func copy(from source: URL, to destination: URL) throws -> RTPPackage {
@@ -36,6 +42,8 @@ public enum RTPImport {
                 } catch let error as Failure where error == .notRPGMakerFiles {
                     continue
                 } catch let error as Failure {
+                    // A damaged installer stops after it wrote some files.
+                    try? FileManager.default.removeItem(at: destination)
                     failure = error
                 }
             }

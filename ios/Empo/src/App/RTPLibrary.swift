@@ -34,7 +34,7 @@ final class RTPLibrary {
     }
 
     nonisolated static func isInstalled(_ package: RTPPackage) -> Bool {
-        FileManager.default.fileExists(atPath: folderURL(package).path)
+        RTPImport.isCopy(at: folderURL(package))
     }
 
     /// One import or removal runs at a time, so two of them can't swap
@@ -76,6 +76,11 @@ final class RTPLibrary {
         } catch {
             NSLog("[RTP] Remove failed: %@", "\(error)")
         }
+        installed = Self.readInstalled()
+    }
+
+    /// The player can change this folder in Files while Empo runs.
+    func refreshInstalled() {
         installed = Self.readInstalled()
     }
 

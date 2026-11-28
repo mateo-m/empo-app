@@ -27,6 +27,11 @@ struct RTPFilesSections: View {
                 "Some RPG Maker XP, VX, and VX Ace games need these shared files. All your games use the same copy."
             )
         }
+        // `scenePhase` stays `.inactive` under the UIHostingController.
+        .task { library.refreshInstalled() }
+        .onReceive(NotificationCenter.default.publisher(for: didBecomeActive)) { _ in
+            library.refreshInstalled()
+        }
         .confirmationDialog(
             "Remove the \(packageToRemove?.engineName ?? "") files?",
             isPresented: Binding {
@@ -55,6 +60,12 @@ struct RTPFilesSections: View {
         }
     }
 }
+
+#if canImport(UIKit)
+private let didBecomeActive = UIApplication.didBecomeActiveNotification
+#else
+private let didBecomeActive = NSApplication.didBecomeActiveNotification
+#endif
 
 private struct RTPPackageRow: View {
     let name: String
