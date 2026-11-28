@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.12.5 - 2026-11-28
+
+### Bug Fixes
+
+- Send no crash report after a start error that the player saw (#329) ([`4f96ddf`](https://github.com/mateo-m/empo-app/commit/4f96ddf3ecbd94ffecd96ace9fd66c13e720299b))
+- Write core log lines only to the session log (#330) ([`7202359`](https://github.com/mateo-m/empo-app/commit/7202359f77f7cbd52df384a005bfe5a7146bb26c))
+- Center the loading screen on the closed iPhone Duo (#333) ([`a3fc1ab`](https://github.com/mateo-m/empo-app/commit/a3fc1ab710cac31a5638e292147686409ca03680))
+- Copy the files next to the www folder of a desktop MV release (#339) ([`39ad56a`](https://github.com/mateo-m/empo-app/commit/39ad56a4cec7cecc085c23bb52c590a69d2207e0))
+- Send background ends to sentry as logs, not issues (#340) ([`fa30a4f`](https://github.com/mateo-m/empo-app/commit/fa30a4fca422bd7e0d5e292658242cdad419dc26))
+- Restart the game after iOS stops it during play (#341) ([`11706f6`](https://github.com/mateo-m/empo-app/commit/11706f66960b5d2c9afc53c20518776a0d7c8a42))
+- Drop the native Win32API branch that loops under a game's own wrap (mateo-m/mkxp-z-apple-mobile#121) ([`aeab88e`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/aeab88efc950dd8a3c73339096a0553f8ce4293b))
+- Log a missing Win32API call once without a write to a frozen object (mateo-m/mkxp-z-apple-mobile#122) ([`36aabf9`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/36aabf9f88fd3214720dec5722affef86f484fcf))
+- Hide Ruby's socket classes from RGSS games on the 1.8 and 1.9 VMs (mateo-m/mkxp-z-apple-mobile#123) ([`a068c67`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/a068c674393339b8da25cf778f32c376e3c707ff))
+- Build the get items adapter on the item mart adapter when the game has one (mateo-m/mkxp-z-apple-mobile#125) ([`50254d3`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/50254d31050dfd1587614cd158bb35fa5d9bd728))
+- Pass the arguments of a game's update call to the game's update (mateo-m/mkxp-z-apple-mobile#126) ([`8e91a5d`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/8e91a5d53f0fa760127d43c5a4c1e97fffdd9630))
+- Find a file whose accented name is in another unicode form with the path cache off (mateo-m/mkxp-z-apple-mobile#128) ([`e3a462a`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/e3a462a038d9d9cd3c574a4803aaece6d3506007))
+- Define save_to_file in the preload so it works with the fix-up scripts off (mateo-m/mkxp-z-apple-mobile#127) ([`4ec91d7`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/4ec91d7338f4cf99ff70995895b456645a1a0211))
+- Lock the decoder lock itself, not a copy of it (mateo-m/mkxp-z-apple-mobile#129) ([`b433506`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/b4335068ab797438c0f9f356eb3245b385da5f18))
+- Report a main.js error when a plugin sets window.onload after it (mateo-m/mvmz-apple-mobile#7) ([`239f61b`](https://github.com/mateo-m/mvmz-apple-mobile/commit/239f61ba94aef0117e3cfa807bdfb4dcd8328199))
+- Give desktop plugins the node calls and platform they need at boot (mateo-m/mvmz-apple-mobile#8) ([`d328233`](https://github.com/mateo-m/mvmz-apple-mobile/commit/d328233add1f672e854cf0c9ee24183140806aa1))
+- Give desktop plugins a sha256 crypto module and the script files of the game folder (mateo-m/mvmz-apple-mobile#9) ([`bcbba84`](https://github.com/mateo-m/mvmz-apple-mobile/commit/bcbba8442d51e37f14f9b2934dead30924bae68c))
+- Give folder entries file types when a plugin asks (mateo-m/mvmz-apple-mobile#10) ([`342eb1b`](https://github.com/mateo-m/mvmz-apple-mobile/commit/342eb1beb55188fff32806acd2514db55de6c907))
+- Give plugins promise file functions (mateo-m/mvmz-apple-mobile#11) ([`810c8b6`](https://github.com/mateo-m/mvmz-apple-mobile/commit/810c8b6c94e80f76f1dc229504839b68299153a0))
+- Give plugins a write stream that writes the file when it ends (mateo-m/mvmz-apple-mobile#12) ([`07b07b9`](https://github.com/mateo-m/mvmz-apple-mobile/commit/07b07b9cdd6f774683d45d464133305dbda58418))
+- Load the game again after the web content process stops during play (mateo-m/mvmz-apple-mobile#13) ([`9cc5e15`](https://github.com/mateo-m/mvmz-apple-mobile/commit/9cc5e15d02aac132cccc162d1bfb76d537162599))
+
+### Features
+
+- Add the end, memory, and ruby details to the game crash report (#343) ([`8af11c3`](https://github.com/mateo-m/empo-app/commit/8af11c37765857b32b8b3223efca872fc27f9047))
+- Bind the hm7_* library (mateo-m/mkxp-z-apple-mobile#124) ([`eff04db`](https://github.com/mateo-m/mkxp-z-apple-mobile/commit/eff04db469f0a7b20479299410d67770c91bfe54))
+
+### Other
+
+- Update the core and ANGLE pins (#331) ([`54be5c7`](https://github.com/mateo-m/empo-app/commit/54be5c79ad3dad7d36cca84e13aa5f725e88313a))
+- Update the MV/MZ core pin to v7 (#332) ([`6c9cdad`](https://github.com/mateo-m/empo-app/commit/6c9cdadb4d06e7089e9d36bbcaf28ba1a87ecd68))
+- Update the MV/MZ core pin to v8 (#334) ([`c4d646b`](https://github.com/mateo-m/empo-app/commit/c4d646bd2b8e3ec42178273edfa97f216e97c8d2))
+- Update the MV/MZ core pin to v9 (#335) ([`4cc62f6`](https://github.com/mateo-m/empo-app/commit/4cc62f6c7d51245e96ad520b74f81f66549a3eb0))
+- Update the MV/MZ core pin to v10 (#336) ([`1085b64`](https://github.com/mateo-m/empo-app/commit/1085b64fde066adf1fc4c4e84d795e0295560804))
+- Update the core pin to v32 (#338) ([`67ecfab`](https://github.com/mateo-m/empo-app/commit/67ecfabd9e65deedb3ced1f874e6d2e9e49dcfd8))
+- Update the core pin to v33 (#342) ([`4b1f68b`](https://github.com/mateo-m/empo-app/commit/4b1f68bcbf5621464a8613db781b40fd3381efd2))
+
 ## 0.12.4 - 2026-11-26
 
 ### Bug Fixes
