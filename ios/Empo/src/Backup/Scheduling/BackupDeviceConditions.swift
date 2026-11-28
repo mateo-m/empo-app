@@ -29,13 +29,7 @@ enum BackupDeviceConditions {
     }
 
     static var thermalState: DeviceThermalState {
-        switch ProcessInfo.processInfo.thermalState {
-        case .nominal: return .nominal
-        case .fair: return .fair
-        case .serious: return .serious
-        case .critical: return .critical
-        @unknown default: return .serious
-        }
+        DeviceThermalState(ProcessInfo.processInfo.thermalState)
     }
 
     /// The name the storage notification of 7.11 uses: "iPhone" or

@@ -144,7 +144,7 @@ class AppState {
                 container: start.container,
                 userDataDir: start.userDataDirectory,
                 core: start.core,
-                settings: start.settings,
+                launchedSettings: start.launchedSettings,
                 debugLogsEnabled: AppSettings.shared.debugLogs
             )
         )
@@ -248,9 +248,9 @@ class AppState {
         if let ended = session.consumeBackgroundEnd() {
             ErrorReports.backgroundEnd(ended, endedProcess: .empo, game: reportedGame)
         }
-        if let message = session.consumeCrashRecovery() {
-            ErrorReports.gameCrash(game: reportedGame, saveLoad: nil)
-            shownError = ShownError(message: message)
+        if let recovery = session.consumeCrashRecovery() {
+            ErrorReports.gameCrash(game: reportedGame, saveLoad: nil, end: .empo, detail: recovery.detail)
+            shownError = ShownError(message: recovery.message)
         }
     }
 
@@ -463,7 +463,8 @@ extension AppState: EngineSessionCoordinatorDelegate {
         // becomes nil while an error alert already presents, SwiftUI
         // swallows the NavigationStack pop.
         if !cleanExit, !sessionShowedError, !reportedInBackground {
-            ErrorReports.gameCrash(game: reportedGame, saveLoad: saveLoad)
+            ErrorReports.gameCrash(
+                game: reportedGame, saveLoad: saveLoad, end: .game, detail: session.crashDetail)
         }
         phase = .ended(clean: cleanExit, started: phase == .playing)
         clearEndedGame()

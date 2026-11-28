@@ -17,7 +17,7 @@ enum GameSession {
         /// `Documents/Data/<org>/<app>/` tree.
         let userDataDir: URL?
         let core: any GameCore
-        let settings: GameSettings
+        let launchedSettings: LaunchedSettings
         let debugLogsEnabled: Bool
     }
 
@@ -31,12 +31,17 @@ enum GameSession {
     ) {
         let container = input.container
         let game = input.game
-        let settings = input.settings
+        let settings = input.launchedSettings.settings
         let alignment = settings.verticalAlignment ?? GameConfigDefaults.engineVerticalAlignment
         let coreSettings = input.core.launch(container)
 
-        crashTracker.writeMarker(for: container)
         let runner = EngineSessionCoordinator.shared.runner
+        crashTracker.beginSession(
+            GameCrashDetail(
+                runner: runner,
+                ruby: .init(core: input.core, launched: input.launchedSettings, coreSettings: coreSettings),
+                resources: .read(), memoryWarning: false),
+            in: container)
         sessionLogger.beginSession(
             for: game, container: container, core: input.core, debugLogsEnabled: input.debugLogsEnabled)
         GameReport.last = sessionLogger.logURL.map {

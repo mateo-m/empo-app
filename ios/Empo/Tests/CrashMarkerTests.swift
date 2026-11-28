@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Mateo M. Additional terms apply: see ADDITIONAL-TERMS.md.
 
+import UIKit
 import XCTest
 
 @testable import Empo
@@ -67,5 +68,33 @@ final class CrashMarkerTests: XCTestCase {
         closeErrorAlert()
 
         XCTAssertTrue(nextLaunchReportsACrash)
+    }
+
+    func testNextLaunchGetsTheDetailAndTheMemoryWarningFromBeforeTheEnd() {
+        let tracker = CrashTracker()
+        let ruby = GameCrashDetail.RubyVersion(setting: "auto", used: "19")
+        tracker.beginSession(
+            GameCrashDetail(runner: .gameProcess, ruby: ruby, resources: .read(), memoryWarning: false),
+            in: container)
+        NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+
+        let detail = CrashTracker().consumeRecovery()
+
+        XCTAssertEqual(detail?.runner, .gameProcess)
+        XCTAssertEqual(detail?.ruby, ruby)
+        XCTAssertEqual(detail?.memoryWarning, true)
+        XCTAssertNotNil(detail?.resources.freeMemoryMB)
+        XCTAssertNotNil(detail?.resources.appMemoryMB)
+    }
+
+    func testMemoryWarningBringsNoDeletedGameFolderBack() throws {
+        let tracker = CrashTracker()
+        tracker.beginSession(
+            GameCrashDetail(runner: .app, ruby: nil, resources: .read(), memoryWarning: false), in: container)
+        try FileManager.default.removeItem(at: container.url)
+
+        NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: container.url.path))
     }
 }

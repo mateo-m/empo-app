@@ -31,6 +31,7 @@ final class GameLauncher {
         let gameTitle: String
         let container: GameContainer
         let launchedSettings: LaunchedSettings
+        let crashRuby: GameCrashDetail.RubyVersion?
         let manifestBindings: BindingMap?
         let process: Process
         let logger: SessionLogger
@@ -42,6 +43,14 @@ final class GameLauncher {
         var saveLoad: SaveLoad?
 
         @MainActor var reportedGame: ErrorReports.Game? { logger.logURL.map { (gameTitle, $0) } }
+
+        /// No event on Mac gives the memory and the heat before the end,
+        /// so they come from the moment of the report.
+        @MainActor func reportCrash(end: GameCrashEnd) {
+            ErrorReports.gameCrash(
+                game: reportedGame, saveLoad: saveLoad, end: end,
+                detail: GameCrashDetail(runner: nil, ruby: crashRuby, resources: .read(), memoryWarning: nil))
+        }
     }
 
     private var sessions: [String: Session] = [:]
@@ -142,7 +151,9 @@ final class GameLauncher {
         logger.note("\(game.title) starts on \(start.core.framework) \(start.core.version) in Empo Player")
         sessions[game.id] = Session(
             gameID: game.id, gameTitle: game.title, container: start.container,
-            launchedSettings: start.launchedSettings, manifestBindings: manifestBindings,
+            launchedSettings: start.launchedSettings,
+            crashRuby: .init(core: start.core, launched: start.launchedSettings, coreSettings: coreSettings),
+            manifestBindings: manifestBindings,
             process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting,
             saveLoad: start.core.reportsSaveLoads ? .never : nil)
         Task { [weak self] in
@@ -218,7 +229,7 @@ final class GameLauncher {
             ErrorReports.gameError(text, game: session.reportedGame, saveLoad: session.saveLoad)
         case .error(nil):
             sessions[session.gameID]?.showedError = true
-            ErrorReports.gameCrash(game: session.reportedGame, saveLoad: session.saveLoad)
+            session.reportCrash(end: .game)
         case .info(let text):
             ErrorReports.gameMessage(text, game: session.reportedGame, saveLoad: session.saveLoad)
         case .saveLoaded:
@@ -247,7 +258,7 @@ final class GameLauncher {
         // 64: the launch data was wrong. 70: the core did not open.
         let couldNotStart = !crashed && [64, 70].contains(status)
         if !couldNotStart, !session.showedError {
-            ErrorReports.gameCrash(game: session.reportedGame, saveLoad: session.saveLoad)
+            session.reportCrash(end: .player(crashed ? .signal(status) : .status(status)))
         }
         let title =
             couldNotStart

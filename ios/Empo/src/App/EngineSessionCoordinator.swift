@@ -50,6 +50,14 @@ final class EngineSessionCoordinator {
     let heldKeys = HeldKeys<KeyHolder>(send: { gamecore_injectKeyEvent($0, $1 ? 1 : 0) })
 
     var pendingCrashRecovery: Bool { crashTracker.pendingCrashRecovery }
+    /// The game ended while Empo runs, so Empo reads the memory and the
+    /// heat at the moment of the report. The last marker write can be
+    /// from the start of a long session.
+    var crashDetail: GameCrashDetail? {
+        guard var detail = crashTracker.session else { return nil }
+        detail.resources = .read()
+        return detail
+    }
 
     static var crashMessage: String {
         String(localized: "The game crashed last time. Your saves are safe. Open it again to keep playing.")
@@ -159,10 +167,9 @@ final class EngineSessionCoordinator {
         runner == .gameProcess || openedCore?.canKillSession == true
     }
 
-    func consumeCrashRecovery() -> String? {
+    func consumeCrashRecovery() -> (message: String, detail: GameCrashDetail?)? {
         guard crashTracker.pendingCrashRecovery else { return nil }
-        crashTracker.consumeRecovery()
-        return Self.crashMessage
+        return (Self.crashMessage, crashTracker.consumeRecovery())
     }
 
     func configureEngine(_ input: GameSession.LaunchInput) {
