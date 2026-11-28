@@ -132,6 +132,13 @@ typedef enum {
     // The engine repaired a broken value in a save that the game writes
     // or reads. The detail is the file name and the fault.
     GAMECORE_SAVE_REPAIRED = 1,
+    // iOS stopped the game, and the core started it again where the
+    // player was a short time before. The game state since then is gone.
+    // The detail is the log line of the stop.
+    GAMECORE_SAVE_RESUMED_AFTER_STOP = 2,
+    // iOS stopped the game, and the core started it again at its title
+    // screen. The detail is the log line of the stop.
+    GAMECORE_SAVE_TITLE_AFTER_STOP = 3,
 } GameCoreSaveEvent;
 
 typedef void (*gamecore_SaveEventCallback)(GameCoreSaveEvent event, const char *detail, void *userdata);
