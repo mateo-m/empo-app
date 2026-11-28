@@ -75,17 +75,19 @@ public enum RTPImport {
         var files: [(url: URL, path: String)] = []
         var total = 0
         for source in sources {
-            guard
-                let enumerator = FileManager.default.enumerator(
-                    at: source, includingPropertiesForKeys: Array(keys),
-                    options: [.producesRelativePathURLs, .skipsHiddenFiles])
-            else { continue }
-            for case let file as URL in enumerator {
+            // The URL walk on Linux ignores `producesRelativePathURLs`.
+            guard let enumerator = FileManager.default.enumerator(atPath: source.path) else { continue }
+            for case let path as String in enumerator {
+                if (path as NSString).lastPathComponent.hasPrefix(".") {
+                    enumerator.skipDescendants()
+                    continue
+                }
+                let file = source.appendingPathComponent(path)
                 let values = try file.resourceValues(forKeys: keys)
                 guard values.isRegularFile == true, values.isSymbolicLink != true else { continue }
                 total += values.fileSize ?? 0
                 guard total <= maximumSize else { throw Failure.notRPGMakerFiles }
-                files.append((file, source.lastPathComponent + "/" + file.relativePath))
+                files.append((file, source.lastPathComponent + "/" + path))
             }
         }
         return files

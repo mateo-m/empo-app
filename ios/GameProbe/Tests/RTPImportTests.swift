@@ -121,7 +121,7 @@ final class RTPImportTests: XCTestCase {
             "RPGVXAce",
             files: [
                 "Audio/SE/Decision2.ogg", "Graphics/Titles1/Book.png", "Fonts/Font.ttf",
-                "Uninstall/unins000.exe", "readme.txt",
+                "Uninstall/unins000.exe", "readme.txt", "Audio/.DS_Store", "Graphics/.cache/a.png",
             ])
         let destination = tempRoot.appendingPathComponent("copy", isDirectory: true)
 
