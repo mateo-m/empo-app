@@ -178,6 +178,10 @@ final class RTPImportTests: XCTestCase {
     func testFolderImportRefusesAFolderWithoutAnRTP() throws {
         assertFailure(.notRPGMakerFiles, from: try makeFolder("Photos", files: ["a.png", "b/c.png"]))
         assertFailure(.notRPGMakerFiles, from: try makeFolder("NoAudio", files: ["Graphics/Faces/a.png"]))
+        let emptyAudio = try makeFolder("EmptyAudio", files: ["Graphics/Titles1/a.png"])
+        try FileManager.default.createDirectory(
+            at: emptyAudio.appendingPathComponent("Audio/SE"), withIntermediateDirectories: true)
+        assertFailure(.notRPGMakerFiles, from: emptyAudio)
         assertFailure(
             .notRPGMakerFiles,
             from: try makeFolder("Unknown", files: ["Audio/a.ogg", "Graphics/Other/a.png"]))

@@ -82,6 +82,10 @@ public enum RTPImport {
                 at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.copyItem(at: file.url, to: target)
         }
+        guard isCopy(at: destination) else {
+            try? FileManager.default.removeItem(at: destination)
+            return nil
+        }
         return package
     }
 
