@@ -37,4 +37,12 @@ final class GameCrashReportTests: XCTestCase {
         XCTAssertEqual(event.tags?["ended_process"], "player")
         XCTAssertEqual(event.tags?["exit"], "signal 11")
     }
+
+    func testPsdkCrashSaysTheRubyOfTheCore() {
+        let ruby = GameCrashDetail.RubyVersion(
+            core: PsdkCore(ruby: "3.0", gamesLine: ""),
+            launched: LaunchedSettings(settings: GameSettings(), core: nil), coreSettings: [])
+
+        XCTAssertEqual(ruby, GameCrashDetail.RubyVersion(setting: nil, used: "3.0"))
+    }
 }

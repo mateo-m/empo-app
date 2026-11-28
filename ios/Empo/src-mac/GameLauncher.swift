@@ -152,7 +152,7 @@ final class GameLauncher {
         sessions[game.id] = Session(
             gameID: game.id, gameTitle: game.title, container: start.container,
             launchedSettings: start.launchedSettings,
-            crashRuby: .init(launched: start.launchedSettings, coreSettings: coreSettings),
+            crashRuby: .init(core: start.core, launched: start.launchedSettings, coreSettings: coreSettings),
             manifestBindings: manifestBindings,
             process: process, logger: logger, liveChanges: liveChanges.fileHandleForWriting,
             saveLoad: start.core.reportsSaveLoads ? .never : nil)

@@ -15,15 +15,21 @@ struct GameCrashDetail: Codable, Equatable {
     var memoryWarning: Bool?
 
     struct RubyVersion: Codable, Equatable {
-        /// "auto", or the version that the game settings fix.
-        let setting: String
+        /// "auto", or the version that the game settings fix. Nil for a
+        /// core that has no Ruby setting.
+        let setting: String?
         /// The version that Empo gave the core.
         let used: String
     }
 }
 
 extension GameCrashDetail.RubyVersion {
-    @MainActor init?(launched: LaunchedSettings, coreSettings: [CoreSetting]) {
+    @MainActor init?(core: any GameCore, launched: LaunchedSettings, coreSettings: [CoreSetting]) {
+        if let psdk = core as? PsdkCore {
+            setting = nil
+            used = psdk.ruby
+            return
+        }
         guard let mkxp = launched.core as? MkxpLaunchedSettings,
             let used = coreSettings.first(where: { $0.key == GAMECORE_SETTING_RUBY_VERSION })?.value
         else { return nil }
@@ -81,9 +87,11 @@ struct DeviceResources: Codable, Equatable {
         var info = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(
             MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
+        let host = mach_host_self()
+        defer { mach_port_deallocate(mach_task_self_, host) }
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(host, HOST_VM_INFO64, $0, &count)
             }
         }
         guard result == KERN_SUCCESS else { return nil }

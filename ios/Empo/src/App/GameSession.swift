@@ -39,7 +39,7 @@ enum GameSession {
         crashTracker.beginSession(
             GameCrashDetail(
                 runner: runner,
-                ruby: .init(launched: input.launchedSettings, coreSettings: coreSettings),
+                ruby: .init(core: input.core, launched: input.launchedSettings, coreSettings: coreSettings),
                 resources: .read(), memoryWarning: false),
             in: container)
         sessionLogger.beginSession(
